@@ -1,0 +1,21 @@
+{
+  "miniprogramRoot": "miniprogram/",
+  "cloudfunctionRoot": "cloudfunctions/",
+  "compileType": "miniprogram",
+  "appid": "wxc3eaadc0de1d2056",
+  "projectname": "scanpay-ledger",
+  "libVersion": "3.4.10",
+  "setting": {
+    "es6": true,
+    "postcss": true,
+    "minified": true,
+    "urlCheck": true,
+    "enhance": true,
+    "packNpmManually": false
+  },
+  "cloudfunctionTemplateRoot": "",
+  "editorSetting": {
+    "tabIndent": "insertSpaces",
+    "tabSize": 2
+  }
+}

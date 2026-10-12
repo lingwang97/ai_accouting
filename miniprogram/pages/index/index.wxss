@@ -1,0 +1,37 @@
+.page { padding: 24rpx; }
+.hero { text-align: center; padding: 48rpx 0 24rpx; }
+.hero-title { font-size: 52rpx; font-weight: 700; }
+.hero-sub { color: #888; margin-top: 12rpx; }
+
+.scan-wrap { display: flex; justify-content: center; padding: 40rpx 0 56rpx; }
+.scan-btn {
+  width: 400rpx; height: 400rpx; border-radius: 50%;
+  background: linear-gradient(145deg, #0AD06C, #07A653);
+  box-shadow: 0 20rpx 48rpx rgba(7, 193, 96, .35);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.scan-btn-hover { transform: scale(.96); opacity: .9; }
+.scan-icon { position: relative; width: 140rpx; height: 140rpx; }
+.corner { position: absolute; width: 36rpx; height: 36rpx; border: 0 solid #fff; }
+.tl { top: 0; left: 0; border-top-width: 8rpx; border-left-width: 8rpx; border-top-left-radius: 12rpx; }
+.tr { top: 0; right: 0; border-top-width: 8rpx; border-right-width: 8rpx; border-top-right-radius: 12rpx; }
+.bl { bottom: 0; left: 0; border-bottom-width: 8rpx; border-left-width: 8rpx; border-bottom-left-radius: 12rpx; }
+.br { bottom: 0; right: 0; border-bottom-width: 8rpx; border-right-width: 8rpx; border-bottom-right-radius: 12rpx; }
+.scan-line {
+  position: absolute; left: 16rpx; right: 16rpx; top: 66rpx;
+  height: 6rpx; border-radius: 3rpx; background: #fff;
+  animation: sweep 1.8s ease-in-out infinite;
+}
+@keyframes sweep {
+  0%, 100% { transform: translateY(-44rpx); opacity: .4; }
+  50% { transform: translateY(44rpx); opacity: 1; }
+}
+.scan-text { color: #fff; font-size: 36rpx; font-weight: 600; margin-top: 28rpx; }
+
+.steps .step { display: flex; align-items: center; padding: 14rpx 0; color: #555; }
+.num {
+  width: 40rpx; height: 40rpx; line-height: 40rpx; text-align: center;
+  border-radius: 50%; background: #07C16022; color: #07C160;
+  font-size: 24rpx; font-weight: 600; margin-right: 20rpx;
+}
+.footer { text-align: center; margin-top: 16rpx; }

@@ -1,0 +1,10 @@
+.login { padding-top: 120rpx; text-align: center; }
+.logo { font-size: 120rpx; }
+.title { font-size: 44rpx; font-weight: 700; margin: 24rpx 0 8rpx; }
+.form { margin-top: 80rpx; }
+.avatar-btn { background: none; padding: 0; width: 140rpx; height: 140rpx; margin: 0 auto 32rpx; }
+.avatar { width: 140rpx; height: 140rpx; border-radius: 50%; background: #eee; }
+.input {
+  border: 2rpx solid #e5e5e5; border-radius: 12rpx;
+  padding: 20rpx; margin-bottom: 32rpx; text-align: center;
+}

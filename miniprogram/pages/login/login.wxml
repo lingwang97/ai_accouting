@@ -1,0 +1,13 @@
+<view class="container login">
+  <view class="logo">💰</view>
+  <view class="title">扫码智能记账</view>
+  <view class="muted">登录后绑定收款账户，开始记账</view>
+
+  <view class="card form">
+    <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
+      <image class="avatar" src="{{avatar || '/assets/avatar-default.png'}}" mode="aspectFill" />
+    </button>
+    <input class="input" type="nickname" placeholder="请输入昵称" value="{{nickname}}" bindinput="onNicknameInput" />
+    <button class="btn-primary" loading="{{submitting}}" bindtap="onSubmit">登录 / 注册</button>
+  </view>
+</view>

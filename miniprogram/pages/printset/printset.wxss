@@ -1,0 +1,30 @@
+.center { text-align: center; }
+.paper {
+  background: #fff; border: 2rpx solid #eee;
+  padding: 24rpx; margin: 0 auto;
+  font-family: "Courier New", monospace;
+  font-size: 24rpx; line-height: 1.7;
+  text-align: left; white-space: pre-wrap;
+  max-width: 480rpx;
+}
+.p-line.big { font-size: 34rpx; font-weight: 700; }
+.p-line.right { text-align: right; }
+.p-line.center { text-align: center; }
+.row { display: flex; align-items: center; margin-bottom: 20rpx; }
+.lbl { width: 140rpx; color: #666; }
+.flex1 { flex: 1; }
+.input { border: 2rpx solid #e5e5e5; border-radius: 12rpx; padding: 16rpx 20rpx; }
+.widths { display: flex; gap: 12rpx; }
+.filter {
+  padding: 8rpx 24rpx; border-radius: 999rpx;
+  background: #f2f3f5; color: #666; font-size: 26rpx;
+}
+.filter.on { background: #07C160; color: #fff; }
+.field-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 18rpx 0; border-bottom: 2rpx solid #f5f5f5;
+}
+.ops { display: flex; gap: 24rpx; }
+.op { color: #2B7FFF; padding: 0 8rpx; }
+.op.danger { color: #FA5151; }
+.adds { display: flex; flex-wrap: wrap; gap: 16rpx; margin-bottom: 16rpx; }

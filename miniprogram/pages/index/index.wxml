@@ -1,0 +1,26 @@
+<view class="page">
+  <view class="hero">
+    <view class="hero-title">扫码付款</view>
+    <view class="hero-sub">扫描店主的收款码，填写信息完成转账</view>
+  </view>
+
+  <view class="scan-wrap">
+    <view class="scan-btn" bindtap="onScan" hover-class="scan-btn-hover">
+      <view class="scan-icon">
+        <view class="corner tl"></view><view class="corner tr"></view>
+        <view class="corner bl"></view><view class="corner br"></view>
+        <view class="scan-line"></view>
+      </view>
+      <view class="scan-text">点击扫码</view>
+    </view>
+  </view>
+
+  <view class="card steps">
+    <view class="step"><text class="num">1</text><text>扫描店主收款码</text></view>
+    <view class="step"><text class="num">2</text><text>填写姓名和金额，确认转账</text></view>
+    <view class="step"><text class="num">3</text><text>长按收款码完成微信转账</text></view>
+    <view class="step"><text class="num">4</text><text>店主确认到账，登记完成</text></view>
+  </view>
+
+  <view class="muted footer">我是店主？去「我的」设置收款码</view>
+</view>

@@ -1,0 +1,31 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/records/records",
+    "pages/mine/mine",
+    "pages/printer/printer",
+    "pages/login/login",
+    "pages/account/account",
+    "pages/qrcode/qrcode",
+    "pages/pay/pay",
+    "pages/printset/printset",
+    "pages/export/export"
+  ],
+  "window": {
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#07C160",
+    "navigationBarTitleText": "扫码记账",
+    "navigationBarTextStyle": "white"
+  },
+  "tabBar": {
+    "color": "#999",
+    "selectedColor": "#07C160",
+    "list": [
+      { "pagePath": "pages/index/index", "text": "首页", "iconPath": "assets/tab-home.png", "selectedIconPath": "assets/tab-home-on.png" },
+      { "pagePath": "pages/records/records", "text": "账目", "iconPath": "assets/tab-record.png", "selectedIconPath": "assets/tab-record-on.png" },
+      { "pagePath": "pages/mine/mine", "text": "我的", "iconPath": "assets/tab-mine.png", "selectedIconPath": "assets/tab-mine-on.png" }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

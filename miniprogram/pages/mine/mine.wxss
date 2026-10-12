@@ -1,0 +1,43 @@
+.center { text-align: center; }
+.login-card { padding: 56rpx 28rpx; }
+.login-card .name { margin: 20rpx 0 8rpx; }
+.login-card button { margin-top: 32rpx; }
+.user-card { display: flex; align-items: center; }
+.avatar { width: 110rpx; height: 110rpx; border-radius: 50%; background: #eee; margin-right: 28rpx; }
+.avatar.big { width: 140rpx; height: 140rpx; margin: 0 auto; }
+.name { font-size: 34rpx; font-weight: 600; margin-bottom: 6rpx; }
+
+/* 待确认转账 */
+.pending-card { border: 2rpx solid #FF9F1C; }
+.pending-title { display: flex; align-items: center; }
+.pending-num {
+  margin-left: 12rpx; min-width: 36rpx; height: 36rpx; line-height: 36rpx;
+  padding: 0 10rpx; border-radius: 18rpx; text-align: center;
+  background: #FA5151; color: #fff; font-size: 22rpx;
+}
+.p-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 20rpx 0; border-top: 2rpx solid #f5f5f5;
+}
+.payer { font-weight: 600; margin-right: 16rpx; }
+.p-amount { font-size: 32rpx; }
+.p-ops { display: flex; align-items: center; gap: 20rpx; }
+.link.danger { color: #FA5151; font-size: 26rpx; }
+.btn-confirm {
+  margin: 0; padding: 0 24rpx; line-height: 60rpx; height: 60rpx;
+  font-size: 26rpx; background: #07C160; color: #fff; border-radius: 8rpx;
+}
+
+/* 今日概览 */
+.today-top { display: flex; justify-content: space-between; align-items: center; }
+.theme-tag { padding: 6rpx 16rpx; border-radius: 8rpx; font-size: 24rpx; }
+.today-sum { font-size: 60rpx; margin: 12rpx 0 4rpx; }
+
+/* 菜单 */
+.menu-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 28rpx 0; border-bottom: 2rpx solid #f5f5f5;
+}
+.menu-item:last-child { border-bottom: none; }
+.arrow { color: #bbb; }
+.logout { color: #FA5151; justify-content: center; }

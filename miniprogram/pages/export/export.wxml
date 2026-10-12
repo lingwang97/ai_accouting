@@ -1,0 +1,32 @@
+<view class="container">
+  <view class="card">
+    <view class="section-title">日期范围</view>
+    <view class="presets">
+      <view wx:for="{{presets}}" wx:key="key"
+            class="chip {{preset === item.key ? 'on' : ''}}" data-k="{{item.key}}" bindtap="onPreset">{{item.label}}</view>
+    </view>
+    <view class="range">
+      <picker mode="date" value="{{startDay}}" end="{{today}}" bindchange="onStart">
+        <view class="date-box">{{startDay}}</view>
+      </picker>
+      <text class="muted">至</text>
+      <picker mode="date" value="{{endDay}}" end="{{today}}" bindchange="onEnd">
+        <view class="date-box">{{endDay}}</view>
+      </picker>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="section-title">记账主题</view>
+    <picker range="{{themes}}" value="{{themeIdx}}" bindchange="onTheme">
+      <view class="date-box full">{{themes[themeIdx]}} <text class="arrow">▾</text></view>
+    </picker>
+  </view>
+
+  <view class="card muted desc">
+    导出内容：汇总（已到账总金额、笔数）+ 明细（时间、付款人、金额、主题、备注），仅包含已确认到账的账目。生成后可在预览页右上角「···」转发给好友或「文件传输助手」存档。
+  </view>
+
+  <button class="btn-primary" loading="{{exporting === 'pdf'}}" disabled="{{!!exporting}}" bindtap="onExportPdf">导出 PDF（适合存档打印）</button>
+  <button class="btn-plain" style="margin-top:24rpx" loading="{{exporting === 'xlsx'}}" disabled="{{!!exporting}}" bindtap="onExportXlsx">导出 Excel（适合再统计）</button>
+</view>

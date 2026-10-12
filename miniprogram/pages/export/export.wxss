@@ -1,0 +1,14 @@
+.presets { display: flex; gap: 16rpx; flex-wrap: wrap; margin-bottom: 24rpx; }
+.chip {
+  padding: 10rpx 32rpx; border-radius: 999rpx;
+  background: #f2f3f5; color: #666; font-size: 26rpx;
+}
+.chip.on { background: #07C160; color: #fff; }
+.range { display: flex; align-items: center; gap: 20rpx; }
+.date-box {
+  border: 2rpx solid #e5e5e5; border-radius: 12rpx;
+  padding: 16rpx 28rpx; min-width: 220rpx; text-align: center;
+}
+.date-box.full { text-align: left; display: flex; justify-content: space-between; }
+.arrow { color: #bbb; }
+.desc { line-height: 1.7; }

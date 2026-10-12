@@ -1,0 +1,53 @@
+<view class="container">
+  <view class="card sum-card">
+    <view class="sum-row">
+      <view>
+        <view class="muted">已到账汇总</view>
+        <view class="sum money">￥{{sum}}</view>
+        <view class="muted">{{total}} 笔<text wx:if="{{pendingCount > 0}}" class="pending-hint"> · {{pendingCount}} 笔待确认</text></view>
+      </view>
+      <view class="filters">
+        <view class="filter {{filterDay === 'today' ? 'on' : ''}}" data-v="today" bindtap="onFilterChange">今日</view>
+        <view class="filter {{filterDay === 'all' ? 'on' : ''}}" data-v="all" bindtap="onFilterChange">全部</view>
+      </view>
+    </view>
+    <view class="search-row">
+      <input class="search" placeholder="搜索付款人姓名" value="{{keyword}}" bindconfirm="onSearch" confirm-type="search" />
+      <view class="export-btn" bindtap="goExport">导出</view>
+    </view>
+  </view>
+
+  <view class="card record {{item.status}}" wx:for="{{list}}" wx:key="_id">
+    <view class="r-top">
+      <text class="payer">{{item.payerName}}</text>
+      <text class="money r-amount">￥{{item.amountStr}}</text>
+    </view>
+    <view class="muted">{{item.timeStr}}<text wx:if="{{item.remark}}"> · {{item.remark}}</text></view>
+
+    <!-- 待确认：付款方已点"我已完成转账" -->
+    <view class="r-actions" wx:if="{{item.status === 'transferred'}}">
+      <text class="badge warn">{{item.statusText}}</text>
+      <view class="flex1"></view>
+      <view class="link danger" data-idx="{{index}}" bindtap="onReject">未收到</view>
+      <button class="btn-confirm" data-idx="{{index}}" bindtap="onConfirm">确认收款</button>
+    </view>
+
+    <!-- 待转账：付款方尚未转账 -->
+    <view class="r-actions" wx:elif="{{item.status === 'pending'}}">
+      <text class="badge gray">{{item.statusText}}</text>
+      <text class="muted">付款方尚未完成转账</text>
+    </view>
+
+    <!-- 已到账 -->
+    <view class="r-actions" wx:elif="{{item.status === 'paid'}}">
+      <text class="badge ok">{{item.statusText}}</text>
+      <text class="badge {{item.printed ? 'ok' : 'warn'}}">{{item.printed ? '已打印' : '待打印'}}</text>
+      <view class="flex1"></view>
+      <view class="link" data-idx="{{index}}" bindtap="onPrint">{{item.printed ? '补打' : '打印'}}</view>
+      <view class="link danger" data-idx="{{index}}" bindtap="onVoid">作废</view>
+    </view>
+  </view>
+
+  <view class="muted center pad" wx:if="{{!loading && list.length === 0}}">暂无账目</view>
+  <view class="muted center pad" wx:if="{{loading}}">加载中…</view>
+</view>

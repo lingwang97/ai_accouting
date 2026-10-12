@@ -1,0 +1,102 @@
+<view class="container">
+  <!-- 加载失败 -->
+  <view class="card center" wx:if="{{loadErr}}">
+    <view style="font-size:80rpx">⚠️</view>
+    <view class="muted">{{loadErr}}</view>
+  </view>
+
+  <block wx:elif="{{account}}">
+    <!-- 步骤条 -->
+    <view class="steps">
+      <view class="st {{step === 'form' ? 'on' : 'done'}}">1 填写</view>
+      <view class="st-line"></view>
+      <view class="st {{step === 'transfer' ? 'on' : (step === 'form' ? '' : 'done')}}">2 转账</view>
+      <view class="st-line"></view>
+      <view class="st {{step === 'waiting' ? 'on' : (step === 'success' || step === 'failed' ? 'done' : '')}}">3 确认</view>
+    </view>
+
+    <!-- 收款方信息 -->
+    <view class="card center">
+      <view class="muted">向</view>
+      <view class="shop" style="color:{{account.theme.primary}}">{{account.accountName}}</view>
+      <view class="muted">付款 · 主题：{{account.theme.name}}</view>
+    </view>
+
+    <!-- 第 1 步：填写 -->
+    <block wx:if="{{step === 'form'}}">
+      <view class="card">
+        <view class="field">
+          <text class="label">姓名 *</text>
+          <input class="input" placeholder="请输入付款人姓名（必填）" maxlength="20" value="{{payerName}}" bindinput="onName" />
+        </view>
+        <view class="field">
+          <text class="label">金额 *</text>
+          <view class="amount-row">
+            <text class="yen">￥</text>
+            <input class="input amount" type="digit" placeholder="0.00" value="{{amount}}" bindinput="onAmount" />
+          </view>
+        </view>
+        <view class="field">
+          <text class="label">备注</text>
+          <input class="input" placeholder="选填" maxlength="50" value="{{remark}}" bindinput="onRemark" />
+        </view>
+      </view>
+      <button class="btn-primary" loading="{{submitting}}" bindtap="onConfirmTransfer">确认转账</button>
+    </block>
+
+    <!-- 第 2 步：扫收款码转账 -->
+    <block wx:if="{{step === 'transfer'}}">
+      <view class="card center">
+        <view class="pay-amount money">￥{{record.amountStr}}</view>
+        <view class="muted">付款人：{{record.payerName}}<text wx:if="{{record.remark}}"> · {{record.remark}}</text></view>
+      </view>
+      <view class="card center">
+        <view class="section-title">向下方收款码转账 ￥{{record.amountStr}}</view>
+        <image wx:if="{{payCodeUrl}}" class="paycode" src="{{payCodeUrl}}" mode="aspectFit"
+               show-menu-by-longpress="{{true}}" bindtap="onPreviewPayCode" />
+        <view wx:else class="muted">收款码加载失败，请联系收款方</view>
+        <view class="pay-ways">
+          <view>方式一：长按收款码，选择「识别图中二维码」</view>
+          <view>方式二：若无法识别，点下方按钮保存到相册，再打开微信「扫一扫」→ 右上角「相册」选择该图片</view>
+        </view>
+        <button wx:if="{{payCodeUrl}}" class="btn-plain btn-save" size="mini" bindtap="onSavePayCode">保存收款码到相册</button>
+        <view class="muted">请务必转账与上方一致的金额</view>
+      </view>
+      <button class="btn-primary" loading="{{submitting}}" bindtap="onTransferred">我已完成转账</button>
+      <button class="btn-link" bindtap="onCancel">取消本次转账</button>
+    </block>
+
+    <!-- 第 3 步：等待收款方确认 -->
+    <block wx:if="{{step === 'waiting'}}">
+      <view class="card center waiting">
+        <view class="spinner"></view>
+        <view class="ok-title">等待收款方确认到账…</view>
+        <view class="muted">{{record.payerName}} · ￥{{record.amountStr}}</view>
+        <view class="muted tip">收款方确认收到转账后，本页将自动显示登记成功，请勿关闭</view>
+      </view>
+      <button class="btn-plain" bindtap="onRefresh">刷新状态</button>
+    </block>
+
+    <!-- 成功 -->
+    <block wx:if="{{step === 'success'}}">
+      <view class="card center success">
+        <view class="ok">✅</view>
+        <view class="ok-title">转账成功，已登记</view>
+        <view class="pay-amount money">￥{{record.amountStr}}</view>
+        <view class="muted">付款人：{{record.payerName}}</view>
+        <view class="muted" wx:if="{{record.remark}}">备注：{{record.remark}}</view>
+        <view class="muted">收款方：{{account.accountName}}</view>
+      </view>
+    </block>
+
+    <!-- 失败 -->
+    <block wx:if="{{step === 'failed'}}">
+      <view class="card center success">
+        <view class="ok">❌</view>
+        <view class="ok-title">未确认到账</view>
+        <view class="muted">{{failReason}}</view>
+      </view>
+      <button class="btn-primary" bindtap="onRetry">重新付款</button>
+    </block>
+  </block>
+</view>

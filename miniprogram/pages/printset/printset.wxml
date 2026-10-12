@@ -1,0 +1,48 @@
+<view class="container">
+  <!-- 实时预览 -->
+  <view class="card center">
+    <view class="section-title">小票预览</view>
+    <view class="paper">
+      <view wx:for="{{previewLines}}" wx:key="index"
+            class="p-line {{item.big ? 'big' : ''}} {{item.right ? 'right' : ''}} {{item.center ? 'center' : ''}}">{{item.t}}</view>
+    </view>
+  </view>
+
+  <!-- 内容设置 -->
+  <view class="card">
+    <view class="section-title">内容</view>
+    <view class="row"><text class="lbl">标题</text>
+      <input class="input flex1" value="{{title}}" maxlength="30" bindinput="onTitle" /></view>
+    <view class="row"><text class="lbl">致谢语</text>
+      <input class="input flex1" value="{{thanks}}" maxlength="40" placeholder="如：谢谢惠顾" bindinput="onThanks" /></view>
+    <view class="row"><text class="lbl">分隔线</text>
+      <switch checked="{{showDivider}}" bindchange="onDivider" color="#07C160" /></view>
+    <view class="row"><text class="lbl">纸宽</text>
+      <view class="widths">
+        <view class="filter {{paperWidth === 32 ? 'on' : ''}}" data-w="32" bindtap="onWidth">58mm(32列)</view>
+        <view class="filter {{paperWidth === 48 ? 'on' : ''}}" data-w="48" bindtap="onWidth">80mm(48列)</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 字段排版 -->
+  <view class="card">
+    <view class="section-title">打印字段（已启用，可排序/移除）</view>
+    <view class="field-row" wx:for="{{fieldItems}}" wx:key="f">
+      <text>{{item.label}}</text>
+      <view class="ops">
+        <text class="op" data-f="{{item.f}}" data-dir="up" bindtap="onMove">↑</text>
+        <text class="op" data-f="{{item.f}}" data-dir="down" bindtap="onMove">↓</text>
+        <text class="op danger" data-f="{{item.f}}" bindtap="onRemoveField">移除</text>
+      </view>
+    </view>
+
+    <view class="section-title" style="margin-top:28rpx">可添加字段</view>
+    <view class="adds">
+      <view class="filter" wx:for="{{disabledItems}}" wx:key="f" data-f="{{item.f}}" bindtap="onAddField">＋ {{item.label}}</view>
+    </view>
+    <view class="muted" wx:if="{{disabledItems.length === 0}}">全部字段已启用</view>
+  </view>
+
+  <button class="btn-primary" loading="{{saving}}" bindtap="onSave">保存模板</button>
+</view>

@@ -1,0 +1,9 @@
+.center { text-align: center; }
+.qrcode-card { padding: 40rpx 28rpx; }
+.title { font-size: 36rpx; font-weight: 700; }
+.qr { width: 420rpx; height: 420rpx; margin: 20rpx auto; }
+.warn { color: #FA5151; margin: 16rpx 0; }
+.tip { margin: 16rpx 0; }
+.paycode { width: 320rpx; height: 320rpx; }
+.btns { display: flex; gap: 20rpx; }
+.btns button { flex: 1; }

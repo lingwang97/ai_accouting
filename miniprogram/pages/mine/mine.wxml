@@ -1,0 +1,69 @@
+<view class="container">
+  <!-- 未登录：付款方无需登录，店主登录后开始收款 -->
+  <view class="card center login-card" wx:if="{{!loading && !user}}">
+    <image class="avatar big" src="/assets/avatar-default.png" />
+    <view class="name">我是店主，开始收款</view>
+    <view class="muted">登录后可设置收款码、记账、打印小票</view>
+    <button class="btn-primary" bindtap="goLogin">登录 / 注册</button>
+  </view>
+
+  <block wx:if="{{user}}">
+    <!-- 用户信息 -->
+    <view class="card user-card">
+      <image class="avatar" src="{{user.avatar || '/assets/avatar-default.png'}}" mode="aspectFill" />
+      <view class="info">
+        <view class="name">{{user.nickname}}</view>
+        <view class="muted">{{account ? '收款账户：' + account.accountName : '尚未绑定收款账户'}}</view>
+      </view>
+    </view>
+
+    <!-- 未绑定收款账户 -->
+    <view class="card center" wx:if="{{!account}}">
+      <view class="section-title">还未绑定收款账户</view>
+      <view class="muted" style="margin-bottom:20rpx">上传微信收款码后即可生成专属收款码</view>
+      <button class="btn-primary" bindtap="goAccount">立即绑定</button>
+    </view>
+
+    <block wx:if="{{account}}">
+      <!-- 待确认转账（置顶） -->
+      <view class="card pending-card" wx:if="{{pending.length > 0}}">
+        <view class="section-title pending-title">🔔 待确认转账 <text class="pending-num">{{pending.length}}</text></view>
+        <view class="p-item" wx:for="{{pending}}" wx:key="_id">
+          <view class="p-info">
+            <view><text class="payer">{{item.payerName}}</text><text class="money p-amount">￥{{item.amountStr}}</text></view>
+            <view class="muted">{{item.timeStr}} 已转账<text wx:if="{{item.remark}}"> · {{item.remark}}</text></view>
+          </view>
+          <view class="p-ops">
+            <view class="link danger" data-idx="{{index}}" bindtap="onReject">未收到</view>
+            <button class="btn-confirm" data-idx="{{index}}" bindtap="onConfirm">确认收款</button>
+          </view>
+        </view>
+      </view>
+
+      <!-- 今日概览 -->
+      <view class="card today" bindtap="goRecords">
+        <view class="today-top">
+          <text class="muted">今日已到账</text>
+          <text class="theme-tag" style="background:{{account.theme.primary}}22;color:{{account.theme.primary}}" catchtap="onEditTheme">主题 · {{account.theme.name}} ✎</text>
+        </view>
+        <view class="today-sum money">￥{{todaySum}}</view>
+        <view class="muted">共 {{todayCount}} 笔 · 查看账目 ›</view>
+      </view>
+    </block>
+
+    <!-- 功能菜单 -->
+    <view class="card menu">
+      <view class="menu-item" bindtap="goQrcode" wx:if="{{account}}"><text>📱 我的收款码</text><text class="arrow">›</text></view>
+      <view class="menu-item" bindtap="onSubscribe" wx:if="{{account}}"><text>🔔 新转账微信提醒</text><text class="arrow"><text class="muted">点击开启</text> ›</text></view>
+      <view class="menu-item" bindtap="goAccount"><text>💳 收款账户与记账主题</text><text class="arrow">›</text></view>
+      <view class="menu-item" bindtap="goPrinter"><text>🖨️ 蓝牙打印机</text><text class="arrow"><text class="muted">{{printerName || '未连接'}}</text> ›</text></view>
+      <view class="menu-item" bindtap="goPrintset"><text>📝 打印格式设置</text><text class="arrow">›</text></view>
+      <view class="menu-item" bindtap="goExport" wx:if="{{account}}"><text>📤 导出账目（PDF / Excel）</text><text class="arrow">›</text></view>
+    </view>
+
+    <view class="card menu">
+      <view class="menu-item" bindtap="goTestPay" wx:if="{{account}}"><text>🧪 模拟付款方测试</text><text class="arrow">›</text></view>
+      <view class="menu-item logout" bindtap="onLogout">退出登录</view>
+    </view>
+  </block>
+</view>

@@ -1,0 +1,28 @@
+<view class="container">
+  <view class="card">
+    <view class="section-title">收款账户</view>
+    <input class="input" placeholder="账户名称（如：小店收款）" value="{{accountName}}" bindinput="onNameInput" />
+
+    <view class="section-title" style="margin-top:28rpx">微信个人收款码</view>
+    <view class="paycode-box" bindtap="onChoosePayCode">
+      <image wx:if="{{payCodeUrl}}" class="paycode" src="{{payCodeUrl}}" mode="aspectFit" />
+      <view wx:else class="paycode-empty">
+        <text style="font-size:64rpx">＋</text>
+        <text class="muted">点击上传收款码截图</text>
+      </view>
+    </view>
+    <view class="muted">在微信"收付款"页截图"二维码收款"后上传；付款方将看到此码完成转账</view>
+  </view>
+
+  <view class="card">
+    <view class="section-title">记账主题</view>
+    <input class="input" placeholder="本次记账主题（如：夜市摊）" value="{{themeName}}" bindinput="onThemeInput" />
+    <view class="colors">
+      <view wx:for="{{colors}}" wx:key="*this"
+            class="color-dot {{item === primary ? 'on' : ''}}"
+            style="background:{{item}}" data-c="{{item}}" bindtap="onPickColor" />
+    </view>
+  </view>
+
+  <button class="btn-primary" loading="{{saving || uploading}}" bindtap="onSave">保存</button>
+</view>

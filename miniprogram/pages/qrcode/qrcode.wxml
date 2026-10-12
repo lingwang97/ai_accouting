@@ -1,0 +1,17 @@
+<view class="container center">
+  <view class="card qrcode-card" wx:if="{{account}}">
+    <view class="title">{{account.accountName}}</view>
+    <view class="muted" style="margin-bottom:20rpx">主题：{{account.theme.name}}</view>
+
+    <image wx:if="{{qrUrl}}" class="qr" src="{{qrUrl}}" mode="aspectFit" />
+    <view wx:if="{{!qrUrl && errMsg}}" class="muted warn">{{errMsg}}</view>
+
+    <view class="muted tip">付款方用微信扫码 → 填写姓名金额 → 长按下方收款码完成转账</view>
+    <image wx:if="{{payCodeUrl}}" class="paycode" src="{{payCodeUrl}}" mode="aspectFit" show-menu-by-longpress="{{true}}" />
+  </view>
+
+  <view class="btns">
+    <button class="btn-plain" bindtap="onSave">保存图片</button>
+    <button class="btn-primary" open-type="share">分享给付款方</button>
+  </view>
+</view>
