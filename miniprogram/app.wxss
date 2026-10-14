@@ -29,3 +29,6 @@ page {
 .muted { color: #999; font-size: 24rpx; }
 .money { color: #FA5151; font-weight: 600; }
 .section-title { font-size: 30rpx; font-weight: 600; margin-bottom: 20rpx; }
+
+/* 自定义底部菜单占位（tab 页） */
+.tab-page { padding-bottom: calc(50px + env(safe-area-inset-bottom)); }

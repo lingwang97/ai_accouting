@@ -1,9 +1,9 @@
-<view class="container">
-  <!-- 未登录：付款方无需登录，店主登录后开始收款 -->
+<view class="container tab-page">
+  <!-- 未登录：宾客无需登录，主家登录后开始收礼 -->
   <view class="card center login-card" wx:if="{{!loading && !user}}">
     <image class="avatar big" src="/assets/avatar-default.png" />
-    <view class="name">我是店主，开始收款</view>
-    <view class="muted">登录后可设置收款码、记账、打印小票</view>
+    <view class="name">我是主家，开始收礼</view>
+    <view class="muted">登录后可创建礼簿、登记礼金、打印回执</view>
     <button class="btn-primary" bindtap="goLogin">登录 / 注册</button>
   </view>
 
@@ -13,57 +13,75 @@
       <image class="avatar" src="{{user.avatar || '/assets/avatar-default.png'}}" mode="aspectFill" />
       <view class="info">
         <view class="name">{{user.nickname}}</view>
-        <view class="muted">{{account ? '收款账户：' + account.accountName : '尚未绑定收款账户'}}</view>
+        <view class="muted">{{account ? '主家：' + account.accountName : '尚未完善主家信息'}}</view>
       </view>
     </view>
 
-    <!-- 未绑定收款账户 -->
+    <!-- 未完善主家信息 -->
     <view class="card center" wx:if="{{!account}}">
-      <view class="section-title">还未绑定收款账户</view>
-      <view class="muted" style="margin-bottom:20rpx">上传微信收款码后即可生成专属收款码</view>
-      <button class="btn-primary" bindtap="goAccount">立即绑定</button>
+      <view class="section-title">还未完善主家信息</view>
+      <view class="muted" style="margin-bottom:20rpx">填写主家称呼、上传微信收款码后即可生成礼簿码</view>
+      <button class="btn-primary" bindtap="goAccount">立即完善</button>
     </view>
 
     <block wx:if="{{account}}">
-      <!-- 待确认转账（置顶） -->
+      <!-- 待确认礼金（置顶） -->
       <view class="card pending-card" wx:if="{{pending.length > 0}}">
-        <view class="section-title pending-title">🔔 待确认转账 <text class="pending-num">{{pending.length}}</text></view>
-        <view class="p-item" wx:for="{{pending}}" wx:key="_id">
+        <view class="pending-head">
+          <view class="section-title pending-title">🔔 待确认礼金 <text class="pending-num">{{pending.length}}</text></view>
+          <view class="link" wx:if="{{pending.length > 1}}" bindtap="onToggleSelect">{{selectMode ? '取消' : '批量确认'}}</view>
+        </view>
+        <view class="p-item" wx:for="{{pending}}" wx:key="_id" wx:if="{{pendingOpen || index < PENDING_FOLD}}"
+              data-idx="{{index}}" bindtap="onPick">
+          <view class="check {{item.picked ? 'on' : ''}}" wx:if="{{selectMode}}">{{item.picked ? '✓' : ''}}</view>
           <view class="p-info">
             <view><text class="payer">{{item.payerName}}</text><text class="money p-amount">￥{{item.amountStr}}</text></view>
-            <view class="muted">{{item.timeStr}} 已转账<text wx:if="{{item.remark}}"> · {{item.remark}}</text></view>
+            <view class="muted">{{item.timeStr}} 已转账<text wx:if="{{item.relation}}"> · {{item.relation}}</text><text wx:if="{{item.proxyStr}}"> · 代 {{item.proxyStr}}</text><text wx:if="{{item.remark}}"> · {{item.remark}}</text></view>
           </view>
-          <view class="p-ops">
+          <view class="p-ops" wx:if="{{!selectMode}}">
             <view class="link danger" data-idx="{{index}}" bindtap="onReject">未收到</view>
-            <button class="btn-confirm" data-idx="{{index}}" bindtap="onConfirm">确认收款</button>
+            <button class="btn-confirm" data-idx="{{index}}" bindtap="onConfirm">确认收到</button>
           </view>
+        </view>
+        <view class="fold" wx:if="{{pending.length > PENDING_FOLD}}" bindtap="onToggleOpen">
+          {{pendingOpen ? '收起 ▲' : '展开全部 ' + pending.length + ' 份 ▼'}}
+        </view>
+        <view class="batch-bar" wx:if="{{selectMode}}">
+          <view class="link" bindtap="onPickAll">{{pickedCount === pending.length ? '全不选' : '全选'}}</view>
+          <view class="muted">已选 {{pickedCount}} 份 · ￥{{pickedSum}}</view>
+          <button class="btn-confirm" disabled="{{pickedCount === 0}}" bindtap="onConfirmPicked">确认收到</button>
         </view>
       </view>
 
       <!-- 今日概览 -->
       <view class="card today" bindtap="goRecords">
         <view class="today-top">
-          <text class="muted">今日已到账</text>
-          <text class="theme-tag" style="background:{{account.theme.primary}}22;color:{{account.theme.primary}}" catchtap="onEditTheme">主题 · {{account.theme.name}} ✎</text>
+          <text class="muted">今日收礼</text>
+          <text class="theme-tag" style="background:{{account.theme.primary}}22;color:{{account.theme.primary}}" catchtap="goBooks">{{activeBookName || '礼簿'}} ›</text>
         </view>
         <view class="today-sum money">￥{{todaySum}}</view>
-        <view class="muted">共 {{todayCount}} 笔 · 查看账目 ›</view>
+        <view class="muted">共 {{todayCount}} 份 · 查看礼簿 ›</view>
       </view>
     </block>
 
     <!-- 功能菜单 -->
     <view class="card menu">
-      <view class="menu-item" bindtap="goQrcode" wx:if="{{account}}"><text>📱 我的收款码</text><text class="arrow">›</text></view>
-      <view class="menu-item" bindtap="onSubscribe" wx:if="{{account}}"><text>🔔 新转账微信提醒</text><text class="arrow"><text class="muted">点击开启</text> ›</text></view>
-      <view class="menu-item" bindtap="goAccount"><text>💳 收款账户与记账主题</text><text class="arrow">›</text></view>
+      <view class="menu-item" bindtap="goBooks" wx:if="{{account}}"><text>📚 礼簿管理</text><text class="arrow"><text class="muted">{{activeBookName}}</text> ›</text></view>
+      <view class="menu-item" bindtap="goQrcode" wx:if="{{account}}"><text>📱 礼簿码</text><text class="arrow"><text class="muted">{{account.payMode === 'screen' ? '亮屏展示' : ''}}</text> ›</text></view>
+      <view class="menu-item" bindtap="onSwitchMode" wx:if="{{account}}"><text>🔀 收礼模式</text><text class="arrow"><text class="muted">{{payModeLabel}}</text> ›</text></view>
+      <view class="menu-item" bindtap="onSubscribe" wx:if="{{account}}"><text>🔔 新礼金微信提醒</text><text class="arrow"><text class="muted">点击开启</text> ›</text></view>
+      <view class="menu-item" bindtap="goAccount"><text>👤 主家信息与快捷礼金</text><text class="arrow">›</text></view>
       <view class="menu-item" bindtap="goPrinter"><text>🖨️ 蓝牙打印机</text><text class="arrow"><text class="muted">{{printerName || '未连接'}}</text> ›</text></view>
-      <view class="menu-item" bindtap="goPrintset"><text>📝 打印格式设置</text><text class="arrow">›</text></view>
-      <view class="menu-item" bindtap="goExport" wx:if="{{account}}"><text>📤 导出账目（PDF / Excel）</text><text class="arrow">›</text></view>
+      <view class="menu-item" bindtap="goPrintset"><text>📝 回执打印格式</text><text class="arrow">›</text></view>
+      <view class="menu-item" bindtap="goReceiptset" wx:if="{{account}}"><text>🧾 电子回执模板</text><text class="arrow"><text class="muted">宾客留存</text> ›</text></view>
+      <view class="menu-item" bindtap="goExport" wx:if="{{account}}"><text>📤 导出礼簿</text><text class="arrow"><text class="muted">礼簿 / 表格 / Excel</text> ›</text></view>
     </view>
 
     <view class="card menu">
-      <view class="menu-item" bindtap="goTestPay" wx:if="{{account}}"><text>🧪 模拟付款方测试</text><text class="arrow">›</text></view>
+      <view class="menu-item" bindtap="goTestPay" wx:if="{{account}}"><text>🧪 模拟宾客随礼</text><text class="arrow">›</text></view>
+      <view class="menu-item" bindtap="onPrivacy"><text>🔒 隐私与数据</text><text class="arrow">›</text></view>
       <view class="menu-item logout" bindtap="onLogout">退出登录</view>
     </view>
   </block>
+  <view class="version muted">{{versionText}}</view>
 </view>

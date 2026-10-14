@@ -1,0 +1,37 @@
+<view class="container">
+  <view class="card book {{item._id === activeBookId ? 'active' : ''}}" wx:for="{{list}}" wx:key="_id" data-id="{{item._id}}" bindtap="onDetail">
+    <view class="b-top">
+      <text class="b-name">{{item.name}}</text>
+      <text class="tag {{item.type}}">{{item.typeLabel}}</text>
+      <text wx:if="{{item._id === activeBookId}}" class="tag cur">当前</text>
+    </view>
+    <view class="muted">{{item.date || '未设日期'}}<text wx:if="{{item.location}}"> · {{item.location}}</text></view>
+    <view class="b-sum"><text class="money">￥{{item.sumStr}}</text><text class="muted"> · {{item.count}} 份</text></view>
+    <view class="b-ops">
+      <view class="link" wx:if="{{item._id !== activeBookId}}" data-id="{{item._id}}" catchtap="onSetActive">设为当前</view>
+      <view class="link" data-id="{{item._id}}" catchtap="onEdit">编辑</view>
+      <view class="link gray" wx:if="{{item._id !== activeBookId}}" data-id="{{item._id}}" data-archived="{{false}}" catchtap="onArchive">归档</view>
+    </view>
+  </view>
+
+  <view class="muted center pad" wx:if="{{!loading && list.length === 0}}">还没有礼簿</view>
+
+  <view class="link center archived-toggle" wx:if="{{archived.length > 0}}" bindtap="onToggleArchived">
+    {{showArchived ? '收起' : '查看'}}已归档礼簿（{{archived.length}}）
+  </view>
+  <block wx:if="{{showArchived}}">
+    <view class="card book archived" wx:for="{{archived}}" wx:key="_id" data-id="{{item._id}}" bindtap="onDetail">
+      <view class="b-top">
+        <text class="b-name">{{item.name}}</text>
+        <text class="tag">{{item.typeLabel}} · 已归档</text>
+      </view>
+      <view class="b-sum"><text class="money">￥{{item.sumStr}}</text><text class="muted"> · {{item.count}} 份</text></view>
+      <view class="b-ops">
+        <view class="link" data-id="{{item._id}}" data-archived="{{true}}" catchtap="onArchive">取消归档</view>
+      </view>
+    </view>
+  </block>
+
+  <view class="tips muted">宾客扫礼簿码随礼时，礼金记入「当前」礼簿。办新的事（如满月、乔迁）时新建一本，账目各自独立统计、导出。</view>
+  <button class="btn-primary" bindtap="onAdd">＋ 新建礼簿</button>
+</view>

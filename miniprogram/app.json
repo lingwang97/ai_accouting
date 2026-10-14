@@ -9,22 +9,53 @@
     "pages/qrcode/qrcode",
     "pages/pay/pay",
     "pages/printset/printset",
-    "pages/export/export"
+    "pages/export/export",
+    "pages/receipt/receipt",
+    "pages/receiptset/receiptset",
+    "pages/myreceipts/myreceipts",
+    "pages/books/books",
+    "pages/bookedit/bookedit",
+    "pages/bookdetail/bookdetail",
+    "pages/renqing/renqing",
+    "pages/person/person",
+    "pages/giftedit/giftedit"
   ],
   "window": {
     "backgroundTextStyle": "light",
     "navigationBarBackgroundColor": "#07C160",
-    "navigationBarTitleText": "扫码记账",
+    "navigationBarTitleText": "慧礼记",
     "navigationBarTextStyle": "white"
   },
   "tabBar": {
     "color": "#999",
     "selectedColor": "#07C160",
     "list": [
-      { "pagePath": "pages/index/index", "text": "首页", "iconPath": "assets/tab-home.png", "selectedIconPath": "assets/tab-home-on.png" },
-      { "pagePath": "pages/records/records", "text": "账目", "iconPath": "assets/tab-record.png", "selectedIconPath": "assets/tab-record-on.png" },
-      { "pagePath": "pages/mine/mine", "text": "我的", "iconPath": "assets/tab-mine.png", "selectedIconPath": "assets/tab-mine-on.png" }
-    ]
+      {
+        "pagePath": "pages/index/index",
+        "text": "首页",
+        "iconPath": "assets/tab-home.png",
+        "selectedIconPath": "assets/tab-home-on.png"
+      },
+      {
+        "pagePath": "pages/records/records",
+        "text": "礼簿",
+        "iconPath": "assets/tab-record.png",
+        "selectedIconPath": "assets/tab-record-on.png"
+      },
+      {
+        "pagePath": "pages/renqing/renqing",
+        "text": "往来",
+        "iconPath": "assets/tab-people.png",
+        "selectedIconPath": "assets/tab-people-on.png"
+      },
+      {
+        "pagePath": "pages/mine/mine",
+        "text": "我的",
+        "iconPath": "assets/tab-mine.png",
+        "selectedIconPath": "assets/tab-mine-on.png"
+      }
+    ],
+    "custom": true
   },
   "style": "v2",
   "sitemapLocation": "sitemap.json"

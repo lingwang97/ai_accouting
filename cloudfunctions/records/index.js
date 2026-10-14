@@ -6,9 +6,12 @@ const _ = db.command;
 const records = db.collection('records');
 const PENDING_TTL = 30 * 60 * 1000;
 
-/** 幂等建集合（init 未跑完时自愈） */
+/** 幂等建集合（init 未跑完时自愈；同一实例每个集合只尝试一次） */
+const colReady = {};
 async function ensureCol(name) {
+  if (colReady[name]) return;
   try { await db.createCollection(name); } catch (e) { /* 已存在则忽略 */ }
+  colReady[name] = true;
 }
 
 exports.main = async (event) => {
@@ -52,12 +55,18 @@ async function list(openid, event) {
   // 列表显示：已确认 + 待确认（transferred/pending）；汇总只算已确认 paid
   const base = { ownerOpenid: openid };
   if (event.payDay) base.payDay = String(event.payDay).slice(0, 10);
+  if (event.bookId) base.bookId = String(event.bookId).slice(0, 64);
+  if (event.relation) base.relation = String(event.relation).slice(0, 10);
+  let kw = null;
   if (event.keyword) {
-    base.payerName = db.RegExp({ regexp: escapeReg(String(event.keyword).slice(0, 20)), options: 'i' });
+    // 搜索姓名时同时匹配代随礼名单（搜"王五"能找到"李四 代 王五"）
+    const reg = db.RegExp({ regexp: escapeReg(String(event.keyword).slice(0, 20)), options: 'i' });
+    kw = _.or([{ payerName: reg }, { proxyFor: reg }]);
   }
-  const paidCond = { ...base, status: 'paid' };
-  const listCond = { ...base, status: _.in(['paid', 'transferred', 'pending']) };
-  const pendingCond = { ...base, status: 'transferred' };
+  const withKw = c => (kw ? _.and([c, kw]) : c);
+  const paidCond = withKw({ ...base, status: 'paid' });
+  const listCond = withKw({ ...base, status: _.in(['paid', 'transferred', 'pending']) });
+  const pendingCond = withKw({ ...base, status: 'transferred' });
 
   const [totalRes, pendingRes, listTotalRes, sumRes, listRes] = await Promise.all([
     records.where(paidCond).count(),

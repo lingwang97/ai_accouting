@@ -1,25 +1,38 @@
 // utils/printer.js — 打印高阶封装：模板 + ESC/POS + BLE
+// 打印样式跟礼簿走：每本礼簿可各自设置；未设置时按事由类型套用场景默认
 const ble = require('./ble.js');
 const escpos = require('./escpos.js');
 const request = require('./request.js');
+const scenes = require('./scenes.js');
 
-let tplCache = null;
+const tplCache = {}; // bookId -> 打印模板
 
-/** 取打印模板（带缓存），无则用默认模板 */
-async function getTemplate(force) {
-  if (tplCache && !force) return tplCache;
+/** 场景默认打印模板 */
+function defaultTemplate(bookType, paperWidth) {
+  return {
+    paperWidth: paperWidth === 48 ? 48 : 32,
+    fields: escpos.DEFAULT_FIELDS,
+    showDivider: true,
+    ...scenes.byType(bookType).print
+  };
+}
+
+/** 取某本礼簿的打印模板（带缓存）；bookId 为空时取当前礼簿 */
+async function getTemplate(force, bookId) {
+  const key = bookId || '_active';
+  if (tplCache[key] && !force) return tplCache[key];
   try {
-    tplCache = (await request.tplGet()).tpl; // 云函数返回 { tpl }
+    const r = await request.bookGetTpl(bookId);
+    tplCache[key] = r.printTpl || defaultTemplate(r.book.type, r.paperWidth);
   } catch (e) {
-    tplCache = {
-      paperWidth: 32,
-      fields: escpos.DEFAULT_FIELDS,
-      title: '收款凭证',
-      showDivider: true,
-      thanks: '谢谢惠顾'
-    };
+    tplCache[key] = defaultTemplate('other', 32);
   }
-  return tplCache;
+  return tplCache[key];
+}
+
+/** 修改样式后清缓存 */
+function clearTemplateCache() {
+  Object.keys(tplCache).forEach(k => delete tplCache[k]);
 }
 
 function isConnected() {
@@ -44,7 +57,7 @@ async function printRecord(record) {
   if (!(await ensureConnected())) {
     throw new Error('打印机未连接，请先到"我的 → 蓝牙打印机"连接');
   }
-  const tpl = await getTemplate();
+  const tpl = await getTemplate(false, record.bookId);
   await _writeRetry(escpos.buildReceipt(record, tpl));
   try {
     await request.markPrinted([record._id]);
@@ -74,4 +87,4 @@ async function _writeRetry(buffer) {
   }
 }
 
-module.exports = { getTemplate, isConnected, ensureConnected, printRecord, printTest };
+module.exports = { getTemplate, defaultTemplate, clearTemplateCache, isConnected, ensureConnected, printRecord, printTest };

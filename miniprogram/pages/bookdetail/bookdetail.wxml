@@ -1,0 +1,27 @@
+<view class="container" wx:if="{{book}}">
+  <view class="card head">
+    <view class="muted">{{typeLabel}} · {{book.date || '未设日期'}}<text wx:if="{{book.location}}"> · {{book.location}}</text></view>
+    <view class="sum money">￥{{sum}}</view>
+    <view class="kpis">
+      <view class="kpi"><view class="k-num">{{count}}</view><view class="muted">份</view></view>
+      <view class="kpi"><view class="k-num">{{avg}}</view><view class="muted">平均（元）</view></view>
+      <view class="kpi"><view class="k-num">{{maxAmount}}</view><view class="muted">单份最高（元）</view></view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="section-title">按关系统计</view>
+    <view class="rel" wx:for="{{byRelation}}" wx:key="relation">
+      <view class="rel-top">
+        <text>{{item.relation}}</text>
+        <text><text class="muted">{{item.count}} 份 · </text>￥{{item.sumStr}}</text>
+      </view>
+      <view class="bar-bg"><view class="bar" style="width:{{item.pct}}%"></view></view>
+    </view>
+    <view class="muted" wx:if="{{byRelation.length === 0}}">暂无已入簿的礼金</view>
+  </view>
+
+  <button class="btn-primary" bindtap="goRecords">查看礼金明细</button>
+  <button class="btn-plain" style="margin-top:24rpx" bindtap="goExport">导出本礼簿</button>
+  <button class="btn-plain" style="margin-top:24rpx" bindtap="onArchivePdf">{{book.archivePdf ? '查看存档 PDF' : '生成存档 PDF（长期保留）'}}</button>
+</view>

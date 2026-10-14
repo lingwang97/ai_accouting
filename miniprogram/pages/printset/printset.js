@@ -5,33 +5,47 @@ const printer = require('../../utils/printer.js');
 
 // 字段定义（顺序可调）
 const FIELD_LABELS = {
-  title: '标题', divider: '分隔线', payDay: '日期', time: '时间',
-  payerName: '付款人', amount: '金额', remark: '备注', thanks: '致谢语'
+  title: '标题', divider: '分隔线', theme: '事由', payDay: '日期', time: '时间',
+  payerName: '随礼人', relation: '关系', proxyFor: '代随礼', amount: '礼金', remark: '礼品/备注', thanks: '致谢语'
 };
 const label = f => FIELD_LABELS[f] || f;
 
 Page({
   data: {
     paperWidth: 32,
-    title: '收款凭证',
+    title: '礼金回执',
     thanks: '谢谢惠顾',
     showDivider: true,
     fields: [],            // 已启用字段键（有序）
     fieldItems: [],        // [{f,label}] 渲染用
     disabledItems: [],
     saving: false,
+    books: [],
+    bookIdx: 0,
     previewLines: []
   },
 
-  onLoad() {
+  async onLoad() {
+    try {
+      const { list, activeBookId } = await req.bookList();
+      const books = list.filter(b => !b.archived || b._id === activeBookId);
+      this.setData({ books, bookIdx: Math.max(0, books.findIndex(b => b._id === activeBookId)) });
+    } catch (e) { /* 未完善主家信息 */ }
     this.load();
   },
 
+  onBook(e) {
+    this.setData({ bookIdx: Number(e.detail.value) });
+    this.load();
+  },
+
+  /** 读取所选礼簿的打印样式；未自定义时按事由类型显示场景默认 */
   async load() {
-    const tpl = await printer.getTemplate(true);
+    const book = this.data.books[this.data.bookIdx];
+    const tpl = await printer.getTemplate(true, book && book._id);
     this.setData({
       paperWidth: tpl.paperWidth || 32,
-      title: tpl.title || '收款凭证',
+      title: tpl.title || '礼金回执',
       thanks: tpl.thanks || '',
       showDivider: tpl.showDivider !== false,
       fields: tpl.fields || escpos.DEFAULT_FIELDS.slice()
@@ -92,13 +106,16 @@ Page({
     const lines = [];
     for (const f of this.data.fields) {
       switch (f) {
-        case 'title': lines.push({ big: true, t: this.data.title || '收款凭证' }); break;
+        case 'title': lines.push({ big: true, t: this.data.title || '礼金回执' }); break;
+        case 'theme': lines.push({ t: '事由：张三&李四 新婚之喜' }); break;
+        case 'relation': lines.push({ t: '关系：同学' }); break;
+        case 'proxyFor': lines.push({ t: '代随礼：李四、王五' }); break;
         case 'divider': if (this.data.showDivider) lines.push({ t: '-'.repeat(w) }); break;
         case 'payDay': lines.push({ t: '日期：2026-10-10' }); break;
         case 'time': lines.push({ t: '时间：12:30' }); break;
-        case 'payerName': lines.push({ t: '付款人：张三' }); break;
+        case 'payerName': lines.push({ t: '随礼人：张三' }); break;
         case 'amount': lines.push({ big: true, right: true, t: '￥88.50' }); break;
-        case 'remark': lines.push({ t: '备注：午餐' }); break;
+        case 'remark': lines.push({ t: '礼品/备注：另送花篮一对' }); break;
         case 'thanks': if (this.data.thanks) lines.push({ center: true, t: this.data.thanks }); break;
       }
     }
@@ -112,14 +129,18 @@ Page({
     }
     this.setData({ saving: true });
     try {
-      await req.tplSave({
-        paperWidth: this.data.paperWidth,
-        fields: this.data.fields,
-        title: this.data.title,
-        showDivider: this.data.showDivider,
-        thanks: this.data.thanks
+      const book = this.data.books[this.data.bookIdx];
+      if (!book) return wx.showToast({ title: '请先创建礼簿', icon: 'none' });
+      await req.bookSaveTpl(book._id, {
+        printTpl: {
+          paperWidth: this.data.paperWidth,
+          fields: this.data.fields,
+          title: this.data.title,
+          showDivider: this.data.showDivider,
+          thanks: this.data.thanks
+        }
       });
-      await printer.getTemplate(true); // 刷新缓存
+      printer.clearTemplateCache();
       wx.showToast({ title: '已保存', icon: 'success' });
     } catch (e) { /* toast 已提示 */ } finally {
       this.setData({ saving: false });

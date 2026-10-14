@@ -1,7 +1,7 @@
 <view class="container">
   <view class="card">
-    <view class="section-title">收款账户</view>
-    <input class="input" placeholder="账户名称（如：小店收款）" value="{{accountName}}" bindinput="onNameInput" />
+    <view class="section-title">主家称呼</view>
+    <input class="input" placeholder="如：张府、王李联姻" value="{{accountName}}" bindinput="onNameInput" />
 
     <view class="section-title" style="margin-top:28rpx">微信个人收款码</view>
     <view class="paycode-box" bindtap="onChoosePayCode">
@@ -11,12 +11,15 @@
         <text class="muted">点击上传收款码截图</text>
       </view>
     </view>
-    <view class="muted">在微信"收付款"页截图"二维码收款"后上传；付款方将看到此码完成转账</view>
+    <view class="muted">在微信"收付款"页截图"二维码收款"后上传；宾客向此码转账随礼</view>
   </view>
 
   <view class="card">
-    <view class="section-title">记账主题</view>
-    <input class="input" placeholder="本次记账主题（如：夜市摊）" value="{{themeName}}" bindinput="onThemeInput" />
+    <view class="section-title">快捷礼金</view>
+    <input class="input" placeholder="用逗号分隔，如：200,500,600,800,1000,1888" value="{{quickText}}" bindinput="onQuickInput" />
+    <view class="muted" style="margin-top:12rpx">宾客随礼时可一键选择；礼簿名称请到「我的 → 礼簿管理」设置</view>
+
+    <view class="section-title" style="margin-top:28rpx">主题色</view>
     <view class="colors">
       <view wx:for="{{colors}}" wx:key="*this"
             class="color-dot {{item === primary ? 'on' : ''}}"

@@ -38,3 +38,8 @@
   font-size: 26rpx; background: #07C160; color: #fff; border-radius: 8rpx;
 }
 .pad { padding: 40rpx 0; }
+
+.book-pick { font-size: 30rpx; font-weight: 600; color: #333; margin-bottom: 8rpx; }
+.rel-btn { padding: 0 20rpx; line-height: 64rpx; border-radius: 12rpx; background: #f2f3f5; color: #666; font-size: 26rpx; white-space: nowrap; }
+.rel-btn.on { background: #07C16022; color: #07C160; }
+.declared { color: #FF9F1C; }

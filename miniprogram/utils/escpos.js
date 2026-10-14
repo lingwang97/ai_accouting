@@ -1,6 +1,7 @@
 // utils/escpos.js — ESC/POS 小票字节流构造（文档 §6.5）
 const gbk = require('./gbk.js');
 const fmt = require('./format.js');
+const receipt = require('./receipt.js');
 
 const ESC = 0x1b, GS = 0x1d;
 
@@ -29,21 +30,36 @@ function buildReceipt(record, tpl) {
   for (const f of fields) {
     switch (f) {
       case 'title':
-        bytes.push(...CMD.alignCenter, ...CMD.boldOn, ...text(tpl.title || '收款凭证'), ...CMD.feed, ...CMD.boldOff);
+        bytes.push(...CMD.alignCenter, ...CMD.boldOn, ...text(tpl.title || '礼金回执'), ...CMD.feed, ...CMD.boldOff);
         break;
       case 'divider':
         if (tpl.showDivider !== false) {
           bytes.push(...CMD.alignLeft, ...text('-'.repeat(width)), ...CMD.feed);
         }
         break;
+      case 'theme':
+        if (record.themeName) {
+          bytes.push(...CMD.alignLeft, ...text(`事由：${record.themeName}`), ...CMD.feed);
+        }
+        break;
       case 'payDay':
-        bytes.push(...CMD.alignLeft, ...text(`日期：${fmt.day(record.createdAt)}`), ...CMD.feed);
+        bytes.push(...CMD.alignLeft, ...text(`日期：${fmt.day(record.paidAt || record.createdAt)}`), ...CMD.feed);
         break;
       case 'time':
-        bytes.push(...CMD.alignLeft, ...text(`时间：${fmt.time(record.createdAt)}`), ...CMD.feed);
+        bytes.push(...CMD.alignLeft, ...text(`时间：${fmt.time(record.paidAt || record.createdAt)}`), ...CMD.feed);
         break;
       case 'payerName':
-        bytes.push(...CMD.alignLeft, ...text(`付款人：${record.payerName}`), ...CMD.feed);
+        bytes.push(...CMD.alignLeft, ...text(`随礼人：${record.payerName}`), ...CMD.feed);
+        break;
+      case 'relation':
+        if (record.relation) {
+          bytes.push(...CMD.alignLeft, ...text(`关系：${record.relation}`), ...CMD.feed);
+        }
+        break;
+      case 'proxyFor':
+        if (record.proxyFor) {
+          bytes.push(...CMD.alignLeft, ...text(`代随礼：${receipt.proxyText(record)}`), ...CMD.feed);
+        }
         break;
       case 'amount':
         bytes.push(...CMD.alignRight, ...CMD.sizeDouble, ...CMD.boldOn,
@@ -52,7 +68,7 @@ function buildReceipt(record, tpl) {
         break;
       case 'remark':
         if (record.remark) {
-          bytes.push(...CMD.alignLeft, ...text(`备注：${record.remark}`), ...CMD.feed);
+          bytes.push(...CMD.alignLeft, ...text(`礼品/备注：${record.remark}`), ...CMD.feed);
         }
         break;
       case 'thanks':
@@ -78,6 +94,6 @@ function buildTestLine() {
   return new Uint8Array(bytes).buffer;
 }
 
-const DEFAULT_FIELDS = ['title', 'divider', 'payDay', 'time', 'payerName', 'amount', 'remark', 'thanks'];
+const DEFAULT_FIELDS = ['title', 'divider', 'theme', 'payDay', 'time', 'payerName', 'proxyFor', 'amount', 'remark', 'thanks'];
 
 module.exports = { buildReceipt, buildTestLine, DEFAULT_FIELDS };

@@ -1,6 +1,7 @@
-// pages/export/export.js — 账目导出 PDF / Excel（按日期范围 + 记账主题）
+// pages/export/export.js — 礼簿导出：表格 PDF / Excel / 传统礼簿 PDF（按礼簿或日期范围）
 const req = require('../../utils/request.js');
 const fmt = require('../../utils/format.js');
+const openfile = require('../../utils/openfile.js');
 
 function presets() {
   const now = new Date();
@@ -21,23 +22,27 @@ Page({
     startDay: '',
     endDay: '',
     today: '',
-    themes: ['全部主题'],
-    themeIdx: 0,
-    exporting: ''   // '' | 'pdf' | 'xlsx'
+    books: [{ _id: '', name: '按日期范围导出' }],
+    bookIdx: 0,
+    exporting: ''   // '' | 'pdf' | 'xlsx' | 'book'
   },
 
-  onLoad() {
+  onLoad(options) {
     const list = presets();
     const month = list.find(p => p.key === 'month');
     this.setData({ presets: list, startDay: month.start, endDay: month.end, today: fmt.day(new Date()) });
-    this.loadThemes();
+    this.loadBooks(options.bookId || '');
   },
 
-  async loadThemes() {
+  /** 礼簿列表：选中某本礼簿时导出整本，不限日期 */
+  async loadBooks(bookId) {
     try {
-      const { list } = await req.recordThemes();
-      this.setData({ themes: ['全部主题', ...list] });
-    } catch (e) { /* 主题筛选可选，失败不影响导出 */ }
+      const { list, activeBookId } = await req.bookList();
+      const books = [{ _id: '', name: '按日期范围导出' }, ...list];
+      const want = bookId || activeBookId;
+      const idx = Math.max(0, books.findIndex(b => b._id === want));
+      this.setData({ books, bookIdx: idx });
+    } catch (e) { /* 礼簿可选，失败时按日期导出 */ }
   },
 
   onPreset(e) {
@@ -47,58 +52,36 @@ Page({
 
   onStart(e) { this.setData({ startDay: e.detail.value, preset: '' }); },
   onEnd(e) { this.setData({ endDay: e.detail.value, preset: '' }); },
-  onTheme(e) { this.setData({ themeIdx: Number(e.detail.value) }); },
+  onBook(e) { this.setData({ bookIdx: Number(e.detail.value) }); },
 
   onExportPdf() { this.doExport('pdf'); },
   onExportXlsx() { this.doExport('xlsx'); },
+  onExportBook() { this.doExport('book'); },
+  onBackup() { this.doExport('backup'); },
 
   /** 云端生成文件 → 下载 → 打开预览（右上角可转发/保存） */
   async doExport(format) {
     if (this.data.exporting) return;
-    const { startDay, endDay, themes, themeIdx } = this.data;
-    if (startDay > endDay) return wx.showToast({ title: '开始日期不能晚于结束日期', icon: 'none' });
+    const { startDay, endDay, books, bookIdx } = this.data;
+    const bookId = books[bookIdx] ? books[bookIdx]._id : '';
+    if (format === 'book' && !bookId) return wx.showToast({ title: '传统礼簿请选择一本礼簿整本导出', icon: 'none' });
+    if (format !== 'backup' && !bookId && startDay > endDay) return wx.showToast({ title: '开始日期不能晚于结束日期', icon: 'none' });
 
     this.setData({ exporting: format });
     wx.showLoading({ title: '正在生成…', mask: true });
     try {
-      const res = await req.exportFile({
-        format, startDay, endDay,
-        themeName: themeIdx > 0 ? themes[themeIdx] : ''
-      });
-      const filePath = await this.download(res.fileID, res.fileName);
+      const params = format === 'backup' ? { format } : (bookId ? { format, bookId } : { format, startDay, endDay });
+      const res = await req.exportFile(params);
+      const filePath = await openfile.download(res.fileID, res.fileName);
+      // 已下载到本机，立即删除云端文件，避免礼金明细通过链接外泄
+      req.exportCleanup(res.fileID).catch(() => {});
       wx.hideLoading();
-      wx.openDocument({
-        filePath,
-        fileType: format,
-        showMenu: true,   // 右上角菜单可转发给好友/文件传输助手
-        fail: () => wx.showModal({ title: '提示', content: '文件已生成，但当前设备无法预览', showCancel: false })
-      });
+      openfile.open(filePath, res.fileName);
     } catch (e) {
-      wx.hideLoading(); // 业务错误 request.js 已 toast
+      wx.hideLoading();
+      openfile.showError(e);
     } finally {
       this.setData({ exporting: '' });
     }
-  },
-
-  /** 云存储文件下载到本地，并以可读文件名保存（转发时显示该名称） */
-  download(fileID, fileName) {
-    return new Promise((resolve, reject) => {
-      wx.cloud.downloadFile({
-        fileID,
-        success: res => {
-          const target = `${wx.env.USER_DATA_PATH}/${fileName}`;
-          wx.getFileSystemManager().saveFile({
-            tempFilePath: res.tempFilePath,
-            filePath: target,
-            success: () => resolve(target),
-            fail: () => resolve(res.tempFilePath) // 存储空间不足等，退回临时路径
-          });
-        },
-        fail: () => {
-          wx.showToast({ title: '下载失败，请重试', icon: 'none' });
-          reject(new Error('download failed'));
-        }
-      });
-    });
   }
 });

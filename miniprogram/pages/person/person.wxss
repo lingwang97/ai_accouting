@@ -1,0 +1,9 @@
+.summary { display: flex; text-align: center; }
+.s-col { flex: 1; }
+.s-num { font-size: 40rpx; font-weight: 700; margin-top: 8rpx; }
+.advice { text-align: center; color: #07C160; }
+.advice.owe { color: #FA5151; }
+.i-top { display: flex; justify-content: space-between; margin-bottom: 6rpx; }
+.proxy { color: #FF9F1C; }
+.dup-tip { font-size: 24rpx; color: #FF9F1C; background: #FFF7E6; }
+.empty { padding: 0 8rpx 16rpx; }

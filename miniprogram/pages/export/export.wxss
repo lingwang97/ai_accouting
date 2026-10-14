@@ -12,3 +12,5 @@
 .date-box.full { text-align: left; display: flex; justify-content: space-between; }
 .arrow { color: #bbb; }
 .desc { line-height: 1.7; }
+.hint { text-align: center; margin: 8rpx 0 0; }
+.backup { margin-top: 40rpx; }

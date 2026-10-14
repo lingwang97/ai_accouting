@@ -1,0 +1,17 @@
+.book.active { border: 2rpx solid #07C160; }
+.book.archived { opacity: .7; }
+.b-top { display: flex; align-items: center; gap: 12rpx; margin-bottom: 8rpx; }
+.b-name { font-size: 32rpx; font-weight: 600; }
+.tag { font-size: 22rpx; padding: 2rpx 14rpx; border-radius: 999rpx; background: #f2f3f5; color: #666; }
+.tag.wedding, .tag.baby, .tag.other { background: #C8161D1A; color: #C8161D; }
+.tag.birthday, .tag.house { background: #B8860B1A; color: #B8860B; }
+.tag.funeral { background: #3333331A; color: #333; }
+.tag.cur { background: #07C160; color: #fff; }
+.b-sum { margin: 12rpx 0 4rpx; }
+.b-ops { display: flex; justify-content: flex-end; gap: 32rpx; margin-top: 8rpx; }
+.link { color: #576B95; font-size: 26rpx; }
+.link.gray { color: #999; }
+.center { text-align: center; }
+.pad { padding: 60rpx 0; }
+.archived-toggle { margin: 8rpx 0 24rpx; }
+.tips { margin: 16rpx 8rpx 28rpx; line-height: 1.6; }

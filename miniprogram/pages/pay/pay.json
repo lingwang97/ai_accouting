@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "扫码付款"
+  "navigationBarTitleText": "扫码随礼",
+  "usingComponents": {
+    "receipt-view": "/components/receipt-view/index"
+  }
 }

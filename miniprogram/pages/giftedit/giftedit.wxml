@@ -1,0 +1,42 @@
+<view class="container">
+  <view class="card">
+    <view class="field">
+      <text class="label">对方姓名 *</text>
+      <input class="input" placeholder="送给谁" maxlength="20" value="{{toName}}" data-k="toName" bindinput="onInput" />
+    </view>
+    <view class="field">
+      <text class="label">关系</text>
+      <view class="chips">
+        <view class="chip {{relation === item ? 'on' : ''}}" wx:for="{{relations}}" wx:key="*this" data-r="{{item}}" bindtap="onRelation">{{item}}</view>
+      </view>
+    </view>
+    <view class="field">
+      <text class="label">事由类型</text>
+      <view class="chips">
+        <view class="chip {{eventType === item.type ? 'on' : ''}}" wx:for="{{scenes}}" wx:key="type" data-t="{{item.type}}" bindtap="onType">{{item.label}}</view>
+      </view>
+    </view>
+    <view class="field">
+      <text class="label">事由</text>
+      <input class="input" placeholder="选填，如：王五 儿子满月" maxlength="30" value="{{event}}" data-k="event" bindinput="onInput" />
+    </view>
+    <view class="field">
+      <text class="label">金额 *</text>
+      <view class="chips">
+        <view class="chip {{amount == item ? 'on' : ''}}" wx:for="{{quick}}" wx:key="*this" data-v="{{item}}" bindtap="onQuick">{{item}}</view>
+      </view>
+      <input class="input" type="digit" placeholder="其他金额" value="{{amount}}" data-k="amount" bindinput="onInput" />
+    </view>
+    <view class="field">
+      <text class="label">日期 *</text>
+      <picker mode="date" value="{{date}}" bindchange="onDate"><view class="input">{{date}}</view></picker>
+    </view>
+    <view class="field">
+      <text class="label">备注</text>
+      <input class="input" placeholder="选填" maxlength="50" value="{{remark}}" data-k="remark" bindinput="onInput" />
+    </view>
+  </view>
+
+  <button class="btn-primary" loading="{{saving}}" bindtap="onSave">保存</button>
+  <button wx:if="{{_id}}" class="btn-del" bindtap="onDelete">删除</button>
+</view>

@@ -1,0 +1,7 @@
+.field { margin-bottom: 28rpx; }
+.label { display: block; color: #666; margin-bottom: 12rpx; }
+.input { border: 2rpx solid #e5e5e5; border-radius: 12rpx; padding: 16rpx 20rpx; }
+.chips { display: flex; flex-wrap: wrap; gap: 14rpx; margin-bottom: 14rpx; }
+.chip { padding: 8rpx 26rpx; border-radius: 999rpx; background: #f2f3f5; color: #666; font-size: 26rpx; }
+.chip.on { background: #07C160; color: #fff; }
+.btn-del { margin-top: 24rpx; background: #fff; color: #FA5151; font-size: 30rpx; }

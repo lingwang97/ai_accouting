@@ -54,6 +54,14 @@ def mine(d, c):
     d.arc(p(12, 44, 69, 100), start=180, end=360, fill=c, width=W)
 
 
+def people(d, c):
+    # 人情往来：两人并肩
+    d.ellipse(p(10, 16, 32, 38), outline=c, width=W)
+    d.arc(p(2, 46, 40, 84), start=180, end=360, fill=c, width=W)
+    d.ellipse(p(49, 16, 71, 38), outline=c, width=W)
+    d.arc(p(41, 46, 79, 84), start=180, end=360, fill=c, width=W)
+
+
 def avatar(d, _):
     # 默认头像：浅灰底 + 白色人形
     d.ellipse(p(0, 0, 81, 81), fill=(225, 225, 225, 255))
@@ -70,7 +78,7 @@ def save(name, fn, color):
 
 if __name__ == '__main__':
     os.makedirs(OUT, exist_ok=True)
-    for key, fn in (('home', home), ('record', record), ('print', printer), ('mine', mine)):
+    for key, fn in (('home', home), ('record', record), ('print', printer), ('mine', mine), ('people', people)):
         save(f'tab-{key}.png', fn, GRAY)
         save(f'tab-{key}-on.png', fn, GREEN)
     save('avatar-default.png', avatar, None)

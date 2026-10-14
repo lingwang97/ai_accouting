@@ -1,12 +1,13 @@
 // app.js — 云开发初始化与全局状态
-const MINE_TAB_INDEX = 2; // 底部"我的"菜单位置（用于待确认角标）
 
 App({
   globalData: {
     openid: '',
     user: null,
-    account: null,   // 当前用户收款账户
-    tpl: null        // 打印模板
+    account: null,   // 当前用户的主家信息
+    tpl: null,       // 打印模板
+    recordsBookId: '', // 礼簿页要筛选的礼簿（从礼簿统计页跳转时设置）
+    badge: 0           // 待确认礼金数（自定义底部菜单「我的」角标）
   },
   onLaunch() {
     if (!wx.cloud) {
@@ -17,7 +18,7 @@ App({
     this.ensureCollections();
   },
 
-  /** 刷新"我的"角标：待确认转账笔数；未绑定收款账户的用户（付款方）不显示 */
+  /** 刷新"我的"角标：待确认礼金笔数；未完善主家信息的用户（宾客）不显示 */
   refreshBadge() {
     if (!this.globalData.account) return Promise.resolve(0);
     return new Promise(resolve => {
@@ -35,11 +36,16 @@ App({
   },
 
   setBadge(n) {
-    if (n > 0) {
-      wx.setTabBarBadge({ index: MINE_TAB_INDEX, text: n > 99 ? '99+' : String(n), fail() {} });
-    } else {
-      wx.removeTabBarBadge({ index: MINE_TAB_INDEX, fail() {} });
-    }
+    this.globalData.badge = n;
+    this.refreshTabBar();
+  },
+
+  /** 刷新当前页的自定义底部菜单（登录状态、角标） */
+  refreshTabBar() {
+    const pages = getCurrentPages();
+    const page = pages[pages.length - 1];
+    const bar = page && typeof page.getTabBar === 'function' && page.getTabBar();
+    if (bar) bar.refresh();
   },
 
   /** 首次启动自动初始化数据库集合（幂等），成功后写入本地标记不再调用 */

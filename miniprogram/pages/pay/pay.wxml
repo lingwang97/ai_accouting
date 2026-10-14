@@ -8,95 +8,140 @@
   <block wx:elif="{{account}}">
     <!-- 步骤条 -->
     <view class="steps">
-      <view class="st {{step === 'form' ? 'on' : 'done'}}">1 填写</view>
+      <view class="st {{step === 'form' ? 'on' : 'done'}}">1 登记</view>
       <view class="st-line"></view>
       <view class="st {{step === 'transfer' ? 'on' : (step === 'form' ? '' : 'done')}}">2 转账</view>
       <view class="st-line"></view>
-      <view class="st {{step === 'waiting' ? 'on' : (step === 'success' || step === 'failed' ? 'done' : '')}}">3 确认</view>
+      <view class="st {{step === 'waiting' ? 'on' : (step === 'success' || step === 'failed' ? 'done' : '')}}">3 入簿</view>
     </view>
 
-    <!-- 收款方信息 -->
+    <!-- 主家与礼簿 -->
     <view class="card center">
-      <view class="muted">向</view>
+      <view class="muted">向主家</view>
       <view class="shop" style="color:{{account.theme.primary}}">{{account.accountName}}</view>
-      <view class="muted">付款 · 主题：{{account.theme.name}}</view>
+      <view class="muted" wx:if="{{account.book && account.book.name}}">{{account.book.name}}<text wx:if="{{account.book.date}}"> · {{account.book.date}}</text></view>
     </view>
 
     <!-- 第 1 步：填写 -->
     <block wx:if="{{step === 'form'}}">
       <view class="card">
         <view class="field">
-          <text class="label">姓名 *</text>
-          <input class="input" placeholder="请输入付款人姓名（必填）" maxlength="20" value="{{payerName}}" bindinput="onName" />
+          <text class="label">随礼人 *</text>
+          <input class="input" placeholder="请输入您的姓名（必填）" maxlength="20" value="{{payerName}}" bindinput="onName" />
         </view>
         <view class="field">
-          <text class="label">金额 *</text>
-          <view class="amount-row">
-            <text class="yen">￥</text>
-            <input class="input amount" type="digit" placeholder="0.00" value="{{amount}}" bindinput="onAmount" />
+          <text class="label">与主家关系</text>
+          <view class="chips">
+            <view class="chip {{relation === item ? 'on' : ''}}" wx:for="{{relations}}" wx:key="*this" data-r="{{item}}" bindtap="onRelation">{{item}}</view>
           </view>
         </view>
         <view class="field">
-          <text class="label">备注</text>
-          <input class="input" placeholder="选填" maxlength="50" value="{{remark}}" bindinput="onRemark" />
+          <text class="label">{{isFuneral ? '奠仪' : '礼金'}} *</text>
+          <view class="chips" wx:if="{{account.quickAmounts && account.quickAmounts.length}}">
+            <view class="chip {{amount == item ? 'on' : ''}}" wx:for="{{account.quickAmounts}}" wx:key="*this" data-v="{{item}}" bindtap="onQuick">{{item}}</view>
+          </view>
+          <view class="amount-row">
+            <text class="yen">￥</text>
+            <input class="input amount" type="digit" placeholder="其他金额" value="{{amount}}" bindinput="onAmount" />
+          </view>
+        </view>
+        <view class="field">
+          <text class="label">礼品/备注</text>
+          <input class="input" placeholder="选填，如：另送花篮一对" maxlength="50" value="{{remark}}" bindinput="onRemark" />
+        </view>
+        <view class="field">
+          <view class="proxy-toggle" bindtap="onToggleProxy">{{showProxy ? '－ 不代他人随礼' : '＋ 代他人随礼'}}</view>
+          <block wx:if="{{showProxy}}">
+            <view class="proxy-row" wx:for="{{proxyItems}}" wx:key="index">
+              <input class="input p-name" placeholder="被代人姓名" maxlength="10" value="{{item.name}}" data-i="{{index}}" data-k="name" bindinput="onProxyInput" />
+              <input class="input p-amt" type="digit" placeholder="金额(选填)" value="{{item.amount}}" data-i="{{index}}" data-k="amount" bindinput="onProxyInput" />
+              <text class="p-del" data-i="{{index}}" bindtap="onProxyDel">✕</text>
+            </view>
+            <view class="proxy-add" wx:if="{{proxyItems.length < 8}}" bindtap="onProxyAdd">＋ 再加一人</view>
+            <view class="muted">礼金填写总额（含代随礼）；填了每人金额，主家日后回礼更准确</view>
+          </block>
         </view>
       </view>
-      <button class="btn-primary" loading="{{submitting}}" bindtap="onConfirmTransfer">确认转账</button>
+      <button class="btn-primary" loading="{{submitting}}" bindtap="onConfirmTransfer">确认随礼</button>
     </block>
 
     <!-- 第 2 步：扫收款码转账 -->
     <block wx:if="{{step === 'transfer'}}">
       <view class="card center">
-        <view class="pay-amount money">￥{{record.amountStr}}</view>
-        <view class="muted">付款人：{{record.payerName}}<text wx:if="{{record.remark}}"> · {{record.remark}}</text></view>
+        <view class="muted">请转账</view>
+        <view class="pay-amount money big-amount">￥{{record.amountStr}}</view>
+        <view class="muted">随礼人：{{record.payerName}}<text wx:if="{{record.proxyStr}}">（代 {{record.proxyStr}}）</text></view>
       </view>
-      <view class="card center">
-        <view class="section-title">向下方收款码转账 ￥{{record.amountStr}}</view>
-        <image wx:if="{{payCodeUrl}}" class="paycode" src="{{payCodeUrl}}" mode="aspectFit"
-               show-menu-by-longpress="{{true}}" bindtap="onPreviewPayCode" />
-        <view wx:else class="muted">收款码加载失败，请联系收款方</view>
-        <view class="pay-ways">
-          <view>方式一：长按收款码，选择「识别图中二维码」</view>
-          <view>方式二：若无法识别，点下方按钮保存到相册，再打开微信「扫一扫」→ 右上角「相册」选择该图片</view>
+      <!-- 店主亮屏双码模式：用微信扫一扫扫店主屏幕/台卡 -->
+      <view class="card center" wx:if="{{account.payMode === 'screen'}}">
+        <view class="scan-icon">📷</view>
+        <view class="section-title">请用微信「扫一扫」付款</view>
+        <view class="scan-steps">
+          <view>1. 退回微信聊天列表，点右上角「＋」→「扫一扫」</view>
+          <view>2. 扫描主家屏幕（或礼簿台卡）上 <text class="em">第 2 步</text> 的收款码</view>
+          <view>3. 转账 <text class="money">￥{{record.amountStr}}</text>，完成后回到本页点下方按钮</view>
         </view>
-        <button wx:if="{{payCodeUrl}}" class="btn-plain btn-save" size="mini" bindtap="onSavePayCode">保存收款码到相册</button>
-        <view class="muted">请务必转账与上方一致的金额</view>
+        <view class="link-fold" bindtap="onToggleFallback">{{showFallback ? '收起' : '无法扫主家屏幕？在本机显示收款码'}}</view>
+      </view>
+
+      <view class="card center" wx:if="{{account.payMode !== 'screen' || showFallback}}">
+        <view class="section-title">向主家收款码转账 ￥{{record.amountStr}}</view>
+        <image wx:if="{{payCodeUrl}}" class="paycode" src="{{payCodeUrl}}" mode="aspectFit" bindtap="onPreviewPayCode" />
+        <view wx:else class="muted">收款码加载失败，请联系主家</view>
+        <view class="saved-tip" wx:if="{{codeSaved}}">✓ 收款码已存入相册</view>
+        <button wx:if="{{payCodeUrl && !codeSaved}}" class="btn-primary btn-save" bindtap="onSavePayCode">保存收款码到相册</button>
+        <view class="pay-ways">
+          <view>① 退回微信，点右上角「＋」→「扫一扫」</view>
+          <view>② 点右上角「相册」，选第一张图（收款码）</view>
+          <view>③ 转账 <text class="money">￥{{record.amountStr}}</text>，回到本页点「我已完成转账」</view>
+        </view>
+        <view class="link-fold" wx:if="{{codeSaved}}" bindtap="onSavePayCode">没找到？重新保存</view>
+        <view class="muted">微信限制：小程序内长按收款码无法直接付款。也可请主家打开「亮屏双码」，直接用扫一扫扫主家手机</view>
       </view>
       <button class="btn-primary" loading="{{submitting}}" bindtap="onTransferred">我已完成转账</button>
-      <button class="btn-link" bindtap="onCancel">取消本次转账</button>
+      <button class="btn-link" bindtap="onCancel">取消本次随礼</button>
     </block>
 
     <!-- 第 3 步：等待收款方确认 -->
     <block wx:if="{{step === 'waiting'}}">
       <view class="card center waiting">
         <view class="spinner"></view>
-        <view class="ok-title">等待收款方确认到账…</view>
+        <view class="ok-title">等待主家确认收到…</view>
         <view class="muted">{{record.payerName}} · ￥{{record.amountStr}}</view>
-        <view class="muted tip">收款方确认收到转账后，本页将自动显示登记成功，请勿关闭</view>
+        <view class="muted tip">主家确认收到后，礼金将记入礼簿，本页自动显示回执，请勿关闭</view>
       </view>
       <button class="btn-plain" bindtap="onRefresh">刷新状态</button>
     </block>
 
-    <!-- 成功 -->
+    <!-- 成功：展示付款方留存收据 -->
     <block wx:if="{{step === 'success'}}">
-      <view class="card center success">
+      <view class="card center success-head" wx:if="{{!isFuneral}}">
         <view class="ok">✅</view>
-        <view class="ok-title">转账成功，已登记</view>
-        <view class="pay-amount money">￥{{record.amountStr}}</view>
-        <view class="muted">付款人：{{record.payerName}}</view>
-        <view class="muted" wx:if="{{record.remark}}">备注：{{record.remark}}</view>
-        <view class="muted">收款方：{{account.accountName}}</view>
+        <view class="ok-title">随礼成功，已记入礼簿</view>
       </view>
+      <!-- 白事：素色、不用"成功"等字眼 -->
+      <view class="card center success-head plain" wx:else>
+        <view class="ok-title">奠仪已登记</view>
+        <view class="muted">主家已收到，谨致谢意</view>
+      </view>
+      <receipt-view wx:if="{{receiptModel}}" model="{{receiptModel}}" />
+      <view wx:else class="card center">
+        <view class="pay-amount money">￥{{record.amountStr}}</view>
+        <view class="muted">随礼人：{{record.payerName}} · 主家：{{account.accountName}}</view>
+      </view>
+      <button wx:if="{{receiptModel}}" class="btn-primary btn-receipt" loading="{{savingReceipt}}" bindtap="onSaveReceipt">保存回执到相册</button>
+      <view class="muted center tip">回执也可在首页「我的随礼记录」中随时查看</view>
     </block>
 
     <!-- 失败 -->
     <block wx:if="{{step === 'failed'}}">
       <view class="card center success">
         <view class="ok">❌</view>
-        <view class="ok-title">未确认到账</view>
+        <view class="ok-title">主家未确认收到</view>
         <view class="muted">{{failReason}}</view>
       </view>
-      <button class="btn-primary" bindtap="onRetry">重新付款</button>
+      <button class="btn-primary" bindtap="onRetry">重新随礼</button>
     </block>
   </block>
+  <canvas type="2d" id="receiptCanvas" class="offscreen"></canvas>
 </view>

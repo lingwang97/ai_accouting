@@ -28,3 +28,6 @@
 .op { color: #2B7FFF; padding: 0 8rpx; }
 .op.danger { color: #FA5151; }
 .adds { display: flex; flex-wrap: wrap; gap: 16rpx; margin-bottom: 16rpx; }
+
+.book-bar { display: flex; justify-content: space-between; align-items: center; }
+.book-pick { font-weight: 600; color: #333; }

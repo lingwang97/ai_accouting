@@ -1,10 +1,18 @@
-<view class="container">
+<view class="container tab-page">
+  <view class="card center login-tip" wx:if="{{!loggedIn}}">
+    <view class="muted">礼簿仅主家可见，请先登录</view>
+    <button class="btn-primary" style="margin-top:24rpx" bindtap="goLogin">去登录</button>
+  </view>
+  <block wx:else>
   <view class="card sum-card">
     <view class="sum-row">
       <view>
-        <view class="muted">已到账汇总</view>
+        <picker range="{{books}}" range-key="name" value="{{bookIdx}}" bindchange="onBook">
+          <view class="book-pick">{{books[bookIdx].name}} ▾</view>
+        </picker>
+        <view class="muted">礼金合计</view>
         <view class="sum money">￥{{sum}}</view>
-        <view class="muted">{{total}} 笔<text wx:if="{{pendingCount > 0}}" class="pending-hint"> · {{pendingCount}} 笔待确认</text></view>
+        <view class="muted">{{total}} 份<text wx:if="{{pendingCount > 0}}" class="pending-hint"> · {{pendingCount}} 份待确认</text></view>
       </view>
       <view class="filters">
         <view class="filter {{filterDay === 'today' ? 'on' : ''}}" data-v="today" bindtap="onFilterChange">今日</view>
@@ -12,7 +20,10 @@
       </view>
     </view>
     <view class="search-row">
-      <input class="search" placeholder="搜索付款人姓名" value="{{keyword}}" bindconfirm="onSearch" confirm-type="search" />
+      <input class="search" placeholder="搜索宾客姓名" value="{{keyword}}" bindconfirm="onSearch" confirm-type="search" />
+      <picker range="{{relations}}" value="{{relIdx}}" bindchange="onRelation">
+        <view class="rel-btn {{relIdx > 0 ? 'on' : ''}}">{{relIdx > 0 ? relations[relIdx] : '关系'}} ▾</view>
+      </picker>
       <view class="export-btn" bindtap="goExport">导出</view>
     </view>
   </view>
@@ -22,32 +33,34 @@
       <text class="payer">{{item.payerName}}</text>
       <text class="money r-amount">￥{{item.amountStr}}</text>
     </view>
-    <view class="muted">{{item.timeStr}}<text wx:if="{{item.remark}}"> · {{item.remark}}</text></view>
+    <view class="muted">{{item.timeStr}}<text wx:if="{{item.relation}}"> · {{item.relation}}</text><text wx:if="{{item.proxyStr}}"> · 代 {{item.proxyStr}}</text><text wx:if="{{item.remark}}"> · {{item.remark}}</text><text wx:if="{{item.declaredStr}}" class="declared"> · 宾客登记 ￥{{item.declaredStr}}，按实收入簿</text></view>
 
-    <!-- 待确认：付款方已点"我已完成转账" -->
+    <!-- 待确认：宾客已点"我已完成转账" -->
     <view class="r-actions" wx:if="{{item.status === 'transferred'}}">
       <text class="badge warn">{{item.statusText}}</text>
       <view class="flex1"></view>
       <view class="link danger" data-idx="{{index}}" bindtap="onReject">未收到</view>
-      <button class="btn-confirm" data-idx="{{index}}" bindtap="onConfirm">确认收款</button>
+      <button class="btn-confirm" data-idx="{{index}}" bindtap="onConfirm">确认收到</button>
     </view>
 
-    <!-- 待转账：付款方尚未转账 -->
+    <!-- 未转账：宾客已登记但尚未转账 -->
     <view class="r-actions" wx:elif="{{item.status === 'pending'}}">
       <text class="badge gray">{{item.statusText}}</text>
-      <text class="muted">付款方尚未完成转账</text>
+      <text class="muted">宾客尚未完成转账</text>
     </view>
 
-    <!-- 已到账 -->
+    <!-- 已入簿 -->
     <view class="r-actions" wx:elif="{{item.status === 'paid'}}">
       <text class="badge ok">{{item.statusText}}</text>
       <text class="badge {{item.printed ? 'ok' : 'warn'}}">{{item.printed ? '已打印' : '待打印'}}</text>
       <view class="flex1"></view>
+      <view class="link" data-id="{{item._id}}" bindtap="onReceipt">回执</view>
       <view class="link" data-idx="{{index}}" bindtap="onPrint">{{item.printed ? '补打' : '打印'}}</view>
       <view class="link danger" data-idx="{{index}}" bindtap="onVoid">作废</view>
     </view>
   </view>
 
-  <view class="muted center pad" wx:if="{{!loading && list.length === 0}}">暂无账目</view>
+  <view class="muted center pad" wx:if="{{!loading && list.length === 0}}">暂无礼金记录</view>
   <view class="muted center pad" wx:if="{{loading}}">加载中…</view>
+  </block>
 </view>

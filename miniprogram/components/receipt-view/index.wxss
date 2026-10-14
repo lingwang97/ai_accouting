@@ -1,0 +1,32 @@
+.wrap { border-radius: 16rpx; overflow: hidden; }
+.wrap.card { padding: 20rpx; }
+.paper {
+  position: relative; background: #fff; border-radius: 16rpx;
+  padding: 48rpx 40rpx 36rpx; text-align: center; overflow: hidden;
+}
+.wrap.ticket .paper { border-radius: 0; padding-top: 60rpx; padding-bottom: 60rpx; }
+.wrap.simple .paper { border: 2rpx solid #eee; }
+.edge {
+  position: absolute; left: 0; right: 0; height: 14rpx;
+  -webkit-mask: radial-gradient(circle at 15rpx 0, transparent 10rpx, #000 10.5rpx) 0 0 / 30rpx 100% repeat-x;
+}
+.edge.top { top: 0; transform: rotate(180deg); }
+.edge.bottom { bottom: 0; }
+.title { font-size: 40rpx; font-weight: 700; letter-spacing: 4rpx; }
+.bar { width: 80rpx; height: 6rpx; margin: 16rpx auto 0; border-radius: 3rpx; }
+.amount { font-size: 64rpx; font-weight: 700; color: #333; margin-top: 28rpx; }
+.paid { font-size: 24rpx; color: #999; margin-top: 4rpx; }
+.rows { margin-top: 28rpx; border-top: 2rpx dashed #ddd; border-bottom: 2rpx dashed #ddd; padding: 8rpx 0; }
+.row { display: flex; justify-content: space-between; padding: 16rpx 8rpx; font-size: 28rpx; }
+.lbl { color: #999; flex-shrink: 0; margin-right: 24rpx; }
+.val { color: #333; text-align: right; word-break: break-all; }
+.footer { font-size: 22rpx; color: #aaa; margin-top: 24rpx; }
+.stamp {
+  position: absolute; right: 36rpx; top: 150rpx; width: 170rpx; height: 170rpx;
+  border: 5rpx solid #E64340; border-radius: 50%; color: #E64340; opacity: .75;
+  transform: rotate(-15deg); display: flex; flex-direction: column; align-items: center; justify-content: center;
+  box-shadow: inset 0 0 0 6rpx #fff, inset 0 0 0 8rpx #E64340;
+}
+.stamp-name { font-size: 20rpx; font-weight: 700; max-width: 130rpx; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.stamp-text { font-size: 36rpx; font-weight: 700; margin-top: 4rpx; }
+.stamp-text.one { font-size: 60rpx; line-height: 1; }

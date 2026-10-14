@@ -1,0 +1,2 @@
+.save { margin-top: 32rpx; }
+.offscreen { position: fixed; left: -2000px; top: 0; width: 750px; height: 1400px; }

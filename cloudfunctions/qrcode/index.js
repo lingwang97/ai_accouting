@@ -13,9 +13,9 @@ exports.main = async (event) => {
     const account = (await accounts.doc(event.aid).get()).data;
     if (!account || account.ownerOpenid !== OPENID) return err('无权生成该账户二维码');
 
-    // scene 最长 32 字符：aid=xxx
-    const scene = 'aid=' + event.aid;
-    if (scene.length > 32) return err('账户 ID 过长');
+    // scene 最长 32 字符，云数据库 _id 本身就是 32 位，因此直接用 aid 作 scene（不加 "aid=" 前缀）
+    const scene = event.aid;
+    if (scene.length > 32) return err('账户 ID 过长，无法生成小程序码');
 
     const wxacode = await cloud.openapi.wxacode.getUnlimited({
       scene,

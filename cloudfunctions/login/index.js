@@ -4,9 +4,12 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const users = db.collection('users');
 
-/** 幂等建集合（init 未跑完时自愈） */
+/** 幂等建集合（init 未跑完时自愈；同一实例每个集合只尝试一次） */
+const colReady = {};
 async function ensureCol(name) {
+  if (colReady[name]) return;
   try { await db.createCollection(name); } catch (e) { /* 已存在则忽略 */ }
+  colReady[name] = true;
 }
 
 exports.main = async (event) => {

@@ -1,4 +1,11 @@
 <view class="container">
+  <!-- 样式跟礼簿走：每本礼簿各自一套 -->
+  <view class="card book-bar">
+    <text class="muted">设置礼簿</text>
+    <picker range="{{books}}" range-key="name" value="{{bookIdx}}" bindchange="onBook">
+      <view class="book-pick">{{books[bookIdx].name}} ▾</view>
+    </picker>
+  </view>
   <!-- 实时预览 -->
   <view class="card center">
     <view class="section-title">小票预览</view>

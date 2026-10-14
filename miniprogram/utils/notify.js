@@ -1,5 +1,5 @@
-// utils/notify.js — 新转账订阅消息（店主不在小程序前台时通过微信服务通知提醒）
-// 一次性订阅：店主每同意一次，可收到一条提醒，因此在常用按钮上顺带续订
+// utils/notify.js — 新礼金订阅消息（主家不在小程序前台时通过微信服务通知提醒）
+// 一次性订阅：主家每同意一次，可收到一条提醒，因此在常用按钮上顺带续订
 const { NOTIFY_TMPL_ID } = require('../config.js');
 
 const enabled = () => !!NOTIFY_TMPL_ID;

@@ -1,0 +1,21 @@
+<view class="container">
+  <view class="card">
+    <view class="section-title">礼簿名称 *</view>
+    <input class="input" placeholder="如：张三&李四 新婚之喜" maxlength="20" value="{{name}}" bindinput="onName" />
+
+    <view class="section-title gap">事由类型</view>
+    <view class="chips">
+      <view class="chip {{type === item.type ? 'on' : ''}}" wx:for="{{scenes}}" wx:key="type" data-t="{{item.type}}" bindtap="onType">{{item.label}}</view>
+    </view>
+
+    <view class="section-title gap">日期</view>
+    <picker mode="date" value="{{date}}" bindchange="onDate">
+      <view class="input picker">{{date || '选择办事日期（选填）'}}</view>
+    </picker>
+
+    <view class="section-title gap">地点</view>
+    <input class="input" placeholder="选填，如：XX 酒店" maxlength="30" value="{{location}}" bindinput="onLocation" />
+  </view>
+
+  <button class="btn-primary" loading="{{saving}}" bindtap="onSave">{{id ? '保存' : '创建礼簿'}}</button>
+</view>

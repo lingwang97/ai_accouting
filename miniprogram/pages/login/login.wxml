@@ -1,7 +1,7 @@
 <view class="container login">
-  <view class="logo">💰</view>
-  <view class="title">扫码智能记账</view>
-  <view class="muted">登录后绑定收款账户，开始记账</view>
+  <view class="logo">🧧</view>
+  <view class="title">慧礼记</view>
+  <view class="muted">记录礼尚往来，留存电子礼簿</view>
 
   <view class="card form">
     <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">

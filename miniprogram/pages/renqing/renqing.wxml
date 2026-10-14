@@ -1,0 +1,48 @@
+<view class="container tab-page">
+  <view class="card center" wx:if="{{!loggedIn}}">
+    <view class="muted">登录后可记录人情往来</view>
+    <button class="btn-primary" style="margin-top:24rpx" bindtap="goLogin">去登录</button>
+  </view>
+
+  <block wx:else>
+    <view class="seg">
+      <view class="seg-item {{tab === 'people' ? 'on' : ''}}" data-t="people" bindtap="onTab">往来名单</view>
+      <view class="seg-item {{tab === 'out' ? 'on' : ''}}" data-t="out" bindtap="onTab">我送出的礼</view>
+    </view>
+
+    <view class="search-row">
+      <input class="search" placeholder="{{tab === 'people' ? '输入姓名查往来' : '搜索对方姓名'}}" value="{{keyword}}"
+             bindinput="onKeyword" bindconfirm="onSearch" confirm-type="search" />
+      <view class="add-btn" bindtap="onAddGift">＋ 记送礼</view>
+    </view>
+
+    <!-- 往来名单 -->
+    <block wx:if="{{tab === 'people'}}">
+      <view class="card person" wx:for="{{shownPeople}}" wx:key="key" data-key="{{item.key}}" bindtap="onPerson">
+        <view class="p-top">
+          <text class="p-name">{{item.name}}<text class="muted" wx:if="{{item.dup}}"> · {{item.relation || '同名'}}{{item.nameOnly ? '（仅姓名）' : ''}}</text></text>
+          <text class="bal {{item.balance > 0 ? 'owe' : (item.balance < 0 ? 'given' : '')}}">
+            {{item.balance > 0 ? '宜回礼 ￥' + item.balanceStr : (item.balance < 0 ? '多送 ￥' + item.balanceStr : '已持平')}}
+          </text>
+        </view>
+        <view class="muted">收礼 {{item.inCount}} 次 ￥{{item.inSumStr}} · 送礼 {{item.outCount}} 次 ￥{{item.outSumStr}}</view>
+      </view>
+      <view class="muted center pad" wx:if="{{!loading && shownPeople.length === 0}}">
+        {{keyword ? '名单中没有「' + keyword + '」，按回车直接查询' : '暂无往来记录。宾客随礼入簿后会自动出现在这里，也可点「记送礼」登记你送出的礼'}}
+      </view>
+    </block>
+
+    <!-- 我送出的礼 -->
+    <block wx:else>
+      <view class="card out-sum">共送出 {{outTotal}} 笔 · <text class="money">￥{{outSum}}</text></view>
+      <view class="card gift" wx:for="{{outList}}" wx:key="_id" data-idx="{{index}}" bindtap="onEditGift">
+        <view class="p-top">
+          <text class="p-name">{{item.toName}}<text class="muted" wx:if="{{item.relation}}"> · {{item.relation}}</text><text class="auto-tag" wx:if="{{item.auto}}">扫码随礼</text></text>
+          <text class="money">￥{{item.amountStr}}</text>
+        </view>
+        <view class="muted">{{item.date}} · {{item.typeLabel}}<text wx:if="{{item.event}}"> · {{item.event}}</text></view>
+      </view>
+      <view class="muted center pad" wx:if="{{!loading && outList.length === 0}}">还没有送礼记录，点「记送礼」登记</view>
+    </block>
+  </block>
+</view>

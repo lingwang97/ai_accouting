@@ -3,7 +3,7 @@ const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 
-const COLLECTIONS = ['users', 'accounts', 'records', 'print_templates'];
+const COLLECTIONS = ['users', 'accounts', 'records', 'print_templates', 'books', 'gifts_out', 'exports'];
 
 exports.main = async () => {
   const { OPENID } = cloud.getWXContext();

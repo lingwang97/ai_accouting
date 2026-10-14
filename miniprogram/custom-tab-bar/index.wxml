@@ -1,0 +1,9 @@
+<view class="tab-bar">
+  <view class="tab {{selected === item.path ? 'on' : ''}}" wx:for="{{list}}" wx:key="path" data-path="{{item.path}}" bindtap="onTap">
+    <view class="icon-wrap">
+      <image class="icon" src="/assets/{{item.icon}}{{selected === item.path ? '-on' : ''}}.png" />
+      <text class="badge" wx:if="{{item.badge && badge}}">{{badge}}</text>
+    </view>
+    <text class="text">{{item.text}}</text>
+  </view>
+</view>

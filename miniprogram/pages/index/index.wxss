@@ -35,3 +35,5 @@
   font-size: 24rpx; font-weight: 600; margin-right: 20rpx;
 }
 .footer { text-align: center; margin-top: 16rpx; }
+
+.my-receipts { text-align: center; color: #576B95; font-size: 28rpx; padding: 16rpx 0 8rpx; }

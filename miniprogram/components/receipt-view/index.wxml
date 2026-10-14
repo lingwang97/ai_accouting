@@ -1,0 +1,27 @@
+<view wx:if="{{model}}" class="wrap {{model.style}}" style="{{model.style === 'card' ? 'background:' + model.color : ''}}">
+  <view class="paper">
+    <view wx:if="{{model.style === 'ticket'}}" class="edge top" style="background:{{model.color}}"></view>
+
+    <view class="title" style="color:{{model.style === 'simple' ? '#333' : model.color}}">{{model.title}}</view>
+    <view wx:if="{{model.style === 'simple'}}" class="bar" style="background:{{model.color}}"></view>
+
+    <view class="amount">￥{{model.amount}}</view>
+    <view class="paid">{{model.amountLabel}}</view>
+
+    <view class="rows">
+      <view class="row" wx:for="{{model.rows}}" wx:key="k">
+        <text class="lbl">{{item.label}}</text>
+        <text class="val">{{item.value}}</text>
+      </view>
+    </view>
+
+    <view wx:if="{{model.footer}}" class="footer">{{model.footer}}</view>
+
+    <view wx:if="{{model.showStamp}}" class="stamp">
+      <view class="stamp-name">{{model.stampText}}</view>
+      <view class="stamp-text {{model.stampMain.length <= 1 ? 'one' : ''}}">{{model.stampMain}}</view>
+    </view>
+
+    <view wx:if="{{model.style === 'ticket'}}" class="edge bottom" style="background:{{model.color}}"></view>
+  </view>
+</view>

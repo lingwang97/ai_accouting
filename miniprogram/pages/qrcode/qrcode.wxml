@@ -1,17 +1,43 @@
-<view class="container center">
-  <view class="card qrcode-card" wx:if="{{account}}">
+<!-- 新模式：主家亮屏双码 -->
+<view class="screen" wx:if="{{account && mode === 'screen'}}" style="background:{{account.theme.primary}}">
+  <view class="s-name">{{account.accountName}}</view>
+  <view class="s-card">
+    <view class="s-step"><text class="s-no" style="background:{{account.theme.primary}}">1</text>扫码登记姓名和礼金</view>
+    <image wx:if="{{qrUrl}}" class="s-qr" src="{{qrUrl}}" mode="aspectFit" data-url="{{qrUrl}}" bindtap="onPreview" />
+    <view wx:elif="{{errMsg}}" class="warn">{{errMsg}}</view>
+    <view wx:else class="muted s-loading">生成中…</view>
+
+    <view class="s-divider"></view>
+
+    <view class="s-step"><text class="s-no" style="background:{{account.theme.primary}}">2</text>微信「扫一扫」转账随礼</view>
+    <image wx:if="{{payCodeUrl}}" class="s-qr" src="{{payCodeUrl}}" mode="aspectFit" data-url="{{payCodeUrl}}" bindtap="onPreview" />
+    <view class="muted s-tip">转账后回到小程序点「我已完成转账」</view>
+  </view>
+  <view class="s-ops">
+    <view class="s-op" bindtap="onMakeCard">生成礼簿台卡</view>
+    <button class="s-op s-share" open-type="share">分享给宾客</button>
+  </view>
+  <view class="s-hint">屏幕已调至最亮并保持常亮，离开本页自动恢复</view>
+</view>
+
+<!-- 原模式：宾客在自己手机上付款 -->
+<view class="container center" wx:elif="{{account}}">
+  <view class="card qrcode-card">
     <view class="title">{{account.accountName}}</view>
-    <view class="muted" style="margin-bottom:20rpx">主题：{{account.theme.name}}</view>
+    <view class="muted" style="margin-bottom:20rpx">{{account.theme.name}}</view>
 
     <image wx:if="{{qrUrl}}" class="qr" src="{{qrUrl}}" mode="aspectFit" />
     <view wx:if="{{!qrUrl && errMsg}}" class="muted warn">{{errMsg}}</view>
 
-    <view class="muted tip">付款方用微信扫码 → 填写姓名金额 → 长按下方收款码完成转账</view>
-    <image wx:if="{{payCodeUrl}}" class="paycode" src="{{payCodeUrl}}" mode="aspectFit" show-menu-by-longpress="{{true}}" />
+    <view class="muted tip">宾客微信扫上方礼簿码 → 登记姓名礼金 → 按提示保存收款码，用扫一扫从相册识别转账</view>
   </view>
 
   <view class="btns">
     <button class="btn-plain" bindtap="onSave">保存图片</button>
-    <button class="btn-primary" open-type="share">分享给付款方</button>
+    <button class="btn-primary" open-type="share">分享给宾客</button>
   </view>
+  <button class="btn-plain btn-card" bindtap="onMakeCard">生成礼簿台卡（双码，可打印）</button>
 </view>
+
+<!-- 台卡离屏画布 -->
+<canvas type="2d" id="card" class="card-canvas"></canvas>

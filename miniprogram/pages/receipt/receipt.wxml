@@ -1,0 +1,8 @@
+<view class="container">
+  <view wx:if="{{errMsg}}" class="card center muted">{{errMsg}}</view>
+  <block wx:if="{{model}}">
+    <receipt-view model="{{model}}" />
+    <button class="btn-primary save" loading="{{saving}}" bindtap="onSave">保存回执到相册</button>
+  </block>
+  <canvas type="2d" id="receiptCanvas" class="offscreen"></canvas>
+</view>

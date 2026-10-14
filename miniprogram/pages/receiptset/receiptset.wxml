@@ -1,0 +1,66 @@
+<view class="container">
+  <!-- 样式跟礼簿走：每本礼簿各自一套 -->
+  <view class="card book-bar">
+    <text class="muted">设置礼簿</text>
+    <picker range="{{books}}" range-key="name" value="{{bookIdx}}" bindchange="onBook">
+      <view class="book-pick">{{books[bookIdx].name}} ▾</view>
+    </picker>
+  </view>
+  <!-- 实时预览（示例数据） -->
+  <view class="section-title">预览 <text class="muted">（示例数据）</text></view>
+  <receipt-view model="{{model}}" />
+
+  <view class="card" style="margin-top:24rpx">
+    <view class="section-title">一键套用场景 <text class="muted">（同时同步打印小票）</text></view>
+    <view class="chips">
+      <view class="chip {{sceneType === item.type ? 'on' : ''}}" wx:for="{{scenes}}" wx:key="type" data-t="{{item.type}}" bindtap="onScene">{{item.label}}</view>
+    </view>
+    <view class="muted">白事为素色、无红章、无喜庆字眼</view>
+  </view>
+
+  <view class="card">
+    <view class="section-title">样式</view>
+    <view class="row"><text class="lbl">版式</text>
+      <view class="chips">
+        <view class="chip {{tpl.style === item.v ? 'on' : ''}}" wx:for="{{styles}}" wx:key="v" data-v="{{item.v}}" bindtap="onStyle">{{item.label}}</view>
+      </view>
+    </view>
+    <view class="row"><text class="lbl">主色</text>
+      <view class="colors">
+        <view class="color {{tpl.color === item ? 'on' : ''}}" wx:for="{{colors}}" wx:key="*this" style="background:{{item}}" data-c="{{item}}" bindtap="onColor"></view>
+      </view>
+    </view>
+    <view class="row"><text class="lbl">印章</text>
+      <switch checked="{{tpl.showStamp}}" bindchange="onStamp" color="#07C160" />
+      <input wx:if="{{tpl.showStamp}}" class="input stamp-input" value="{{tpl.stamp}}" maxlength="4" placeholder="印章字，如 囍" bindinput="onStampText" />
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="section-title">文字</view>
+    <view class="row"><text class="lbl">标题</text>
+      <input class="input flex1" value="{{tpl.title}}" maxlength="20" bindinput="onTitle" /></view>
+    <view class="row"><text class="lbl">底部说明</text>
+      <input class="input flex1" value="{{tpl.footer}}" maxlength="60" placeholder="可留空" bindinput="onFooter" /></view>
+  </view>
+
+  <view class="card">
+    <view class="section-title">显示字段（可排序/移除）</view>
+    <view class="field-row" wx:for="{{fieldItems}}" wx:key="f">
+      <text>{{item.label}}</text>
+      <view class="ops">
+        <text class="op" data-f="{{item.f}}" data-dir="up" bindtap="onMove">↑</text>
+        <text class="op" data-f="{{item.f}}" data-dir="down" bindtap="onMove">↓</text>
+        <text class="op danger" data-f="{{item.f}}" bindtap="onRemoveField">移除</text>
+      </view>
+    </view>
+    <view class="section-title" style="margin-top:28rpx" wx:if="{{disabledItems.length > 0}}">可添加字段</view>
+    <view class="chips">
+      <view class="chip" wx:for="{{disabledItems}}" wx:key="f" data-f="{{item.f}}" bindtap="onAddField">＋ {{item.label}}</view>
+    </view>
+    <view class="muted">金额始终显示在收据中部</view>
+  </view>
+
+  <button class="btn-primary" loading="{{saving}}" bindtap="onSave">保存模板</button>
+  <button class="btn-link" bindtap="onReset">恢复默认</button>
+</view>
