@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "登记现金",
+  "usingComponents": {
+    "batch-list": "/components/batch-list/index"
+  }
+}

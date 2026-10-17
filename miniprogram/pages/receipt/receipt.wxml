@@ -3,6 +3,8 @@
   <block wx:if="{{model}}">
     <receipt-view model="{{model}}" />
     <button class="btn-primary save" loading="{{saving}}" bindtap="onSave">保存回执到相册</button>
+    <view class="host-cta" wx:if="{{!isHost && bookType !== 'funeral'}}" bindtap="goHostEntry">我家也要办事？免费创建电子礼簿 ›</view>
+    <ad-slot slot="receipt" book-type="{{bookType}}" />
   </block>
   <canvas type="2d" id="receiptCanvas" class="offscreen"></canvas>
 </view>

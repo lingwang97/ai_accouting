@@ -6,6 +6,7 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
 const notify = require('./notify.js');
+const { resolveCtx, handlerName, canBook, readonly } = require('./ctx.js');
 const accounts = db.collection('accounts');
 const records = db.collection('records');
 
@@ -18,107 +19,237 @@ async function ensureCol(name) {
 }
 
 exports.main = async (event) => {
+  // 预热：warmer 云函数按「系统设置」定时唤醒，保持实例常驻、减少冷启动；直接返回，不做任何读写
+  if (event && (event.action === '__warm' || event.Type === 'Timer')) return { code: 0, msg: 'warm', data: null }; // Timer：兼容之前上传过的旧预热触发器
   const { OPENID } = cloud.getWXContext();
+  if (!OPENID) return err('未获取到用户身份');
   try {
     await ensureCol('records');
+    // 收款方操作：身份只解析一次；家人共享（只读）不能做任何收款方操作
+    const OWNER_ACTIONS = ['cashEntry', 'confirm', 'confirmBatch', 'reject', 'void'];
+    const ctx = OWNER_ACTIONS.includes(event.action) ? await resolveCtx(db, OPENID) : null;
+    if (ctx && readonly(ctx)) return err('家人共享为只读，不能修改');
     switch (event.action) {
       // 付款方
       case 'create': return await create(OPENID, event);
+      case 'cashEntry': return await cashEntry(OPENID, ctx, event);
       case 'transferred': return await transferred(OPENID, event.rid, event.envVersion);
       case 'cancel': return await payerUpdate(OPENID, event.rid, [{ status: 'pending' }], 'cancelled');
       case 'status': return await status(OPENID, event.rid);
-      case 'receipt': return await receipt(OPENID, event.rid);
+      case 'receipt': return await receipt(OPENID, event.rid, event.batch === true);
       case 'myReceipts': return await myReceipts(OPENID);
       // 收款方
-      case 'confirm': return await ownerUpdate(OPENID, event.rid, ['transferred', 'pending'], 'paid', event.amount);
-      case 'confirmBatch': return await confirmBatch(OPENID, event.rids);
-      case 'reject': return await ownerUpdate(OPENID, event.rid, ['transferred', 'pending'], 'rejected');
-      case 'void': return await ownerUpdate(OPENID, event.rid, ['paid'], 'void');
+      // 主家或其记账人（权限相同）
+      // 批次录入的记录：确认 / 拒绝整批（amounts 为逐人实际金额 {rid: 金额}）
+      case 'confirm': return await groupUpdate(ctx, event.rid, ['transferred', 'pending'], 'paid', event.amount, event.amounts);
+      case 'confirmBatch': return await confirmBatch(ctx, event.rids);
+      case 'reject': return await groupUpdate(ctx, event.rid, ['transferred', 'pending'], 'rejected');
+      case 'void': return await ownerUpdate(ctx, event.rid, ['paid'], 'void');
       default: return err('未知 action');
     }
   } catch (e) {
-    return err('操作失败：' + e.message);
+    console.error('payment', event.action, e);
+    return err('操作失败，请稍后重试');
   }
 };
 
-/** 付款方发起转账：创建待转账记录，返回收款码 */
+/**
+ * 付款方发起转账：创建待转账记录，返回收款码
+ * 批次录入：items 为多位随礼人 [{name, amount, relation, remark}]，每人生成一条记录（batchId 关联），
+ * 按合计金额转一笔账，状态整批推进；第一位（batchIdx=0）为扫码人本人
+ */
 async function create(openid, event) {
   const aid = String(event.aid || '');
-  const payerName = String(event.payerName || '').trim().slice(0, 20);
-  const remark = String(event.remark || '').trim().slice(0, 50);
-  const relation = RELATIONS.includes(event.relation) ? event.relation : '';
-  const amount = Math.round(Number(event.amount) * 100) / 100;
-  // 代随礼：[{name, amount?}]，金额选填；proxyFor 为名单文本（兼容展示与旧数据）
-  const proxyItems = (Array.isArray(event.proxyItems) ? event.proxyItems : [])
-    .map(p => ({
-      name: String((p && p.name) || '').trim().slice(0, 10),
-      amount: Number(p && p.amount) > 0 ? Math.round(Number(p.amount) * 100) / 100 : null
-    }))
-    .filter((p, i, arr) => p.name && p.name !== payerName && arr.findIndex(x => x.name === p.name) === i)
-    .slice(0, 8);
-  const proxyFor = proxyItems.length
-    ? proxyItems.map(p => p.name).join('、')
-    : String(event.proxyFor || '').trim().slice(0, 40);
-  const proxyFen = proxyItems.reduce((s, p) => s + Math.round((p.amount || 0) * 100), 0);
-
   if (!validId(aid)) return err('参数错误');
-  if (!payerName) return err('请填写付款人姓名');
-  if (!Number.isFinite(amount) || amount <= 0) return err('请填写正确金额');
-  if (amount > 100000) return err('单笔金额超限');
-  if (proxyFen > Math.round(amount * 100)) return err('代随礼金额之和不能超过礼金总额');
+  const parsed = parseItems(Array.isArray(event.items) && event.items.length ? event.items
+    : [{ name: event.payerName, amount: event.amount, relation: event.relation, remark: event.remark }]);
+  if (parsed.error) return err(parsed.error);
+  const items = parsed.items;
+  const totalFen = items.reduce((t, x) => t + Math.round(x.amount * 100), 0);
+  if (totalFen > 100000 * 100) return err('单笔金额超限');
 
-  let account;
+  let account = null;
+  let fixed = null; // 「本场礼簿码」：aid 实际是礼簿 id，礼金记入这一场
   try {
     account = (await accounts.doc(aid).get()).data;
+    if (account.mergedInto) account = (await accounts.doc(account.mergedInto).get()).data; // 主家信息已合并
+    else if (account.forwardTo && !account.activeBookId) account = (await accounts.doc(account.forwardTo).get()).data; // 当前礼簿已移交
   } catch (e) {
-    return err('收款账户不存在');
+    try {
+      fixed = (await db.collection('books').doc(aid).get()).data;
+      account = (await accounts.where({ ownerOpenid: fixed.ownerOpenid }).limit(1).get()).data[0] || null;
+    } catch (e2) { /* 都不是 */ }
   }
+  if (!account) return err('收款账户不存在');
+  if (fixed && fixed.archived) return err('本场礼簿已结束');
+  const accountId = account._id;
 
-  // 防刷：同一付款人 1 分钟内最多发起 RATE_MAX 笔
+  // 防刷：同一付款人 1 分钟内最多发起 RATE_MAX 次（一个批次算一次）
   const now = new Date();
   const recent = await records.where({
     payerOpenid: openid,
     createdAt: _.gt(new Date(now.getTime() - 60 * 1000))
-  }).count();
-  if (recent.total >= RATE_MAX) return err('操作太频繁，请稍后再试');
+  }).field({ batchId: true }).limit(100).get();
+  if (new Set(recent.data.map(r => r.batchId || r._id)).size >= RATE_MAX) return err('操作太频繁，请稍后再试');
 
   const payDay = bjDay(now);
+  // 支付方式：wechat 微信转账（默认）/ cash 现金。现金不经收款码，登记后直接等待主家确认收到
+  const payMethod = event.payMethod === 'cash' ? 'cash' : 'wechat';
 
-  // 记入收礼方的当前礼簿（旧数据无礼簿时退回旧版主题名）
-  let book = null;
-  if (account.activeBookId) {
-    try { book = (await db.collection('books').doc(account.activeBookId).get()).data; } catch (e) { /* 礼簿已删除 */ }
+  // 记入本场礼簿码指定的礼簿，否则记入当前礼簿（旧数据无礼簿时退回旧版主题名）
+  const book = fixed || await activeBookOf(account);
+  const hostName = (book && book.hostName) || ''; // 机构版：本场主家
+  const base = {
+    aid: accountId,
+    hostName,
+    ownerOpenid: account.ownerOpenid,
+    payerOpenid: openid,
+    bookId: book ? book._id : '',
+    bookType: book ? book.type : 'other',
+    themeName: book ? book.name : ((account.theme && account.theme.name) || ''),
+    payMethod,
+    status: payMethod === 'cash' ? 'transferred' : 'pending',
+    ...(payMethod === 'cash' ? { transferredAt: now } : {}),
+    printed: false,
+    payDay,
+    createdAt: now
+  };
+  const { ids, batchId } = await addItems(base, items);
+  const record = {
+    _id: ids[0], aid: accountId, batchId, payMethod, status: base.status, payDay, createdAt: now,
+    payerName: batchName(items), amount: totalFen / 100,
+    remark: items.length > 1 ? '' : items[0].remark,
+    relation: items.length > 1 ? '' : items[0].relation,
+    items: items.map((x, i) => ({ _id: ids[i], name: x.payerName, amount: x.amount })),
+    accountName: hostName || account.accountName
+  };
+  if (payMethod === 'cash') {
+    await notifyOwner(ids[0], event.envVersion);
+    return ok({ record });
   }
+  // 收款码图片由主家上传，云存储默认只有上传者可读：宾客端直接换链接会失败，
+  // 这里用云函数（管理员权限）生成临时链接返回给宾客
+  let payCodeUrl = '';
+  try {
+    // 机构版：本场单独设置了收款码时，宾客的钱直接转给本场主家
+    const t = await cloud.getTempFileURL({ fileList: [{ fileID: (book && book.payCodeFileID) || account.payCodeFileID, maxAge: 2 * 3600 }] });
+    const f = t.fileList && t.fileList[0];
+    if (f && f.status === 0) payCodeUrl = f.tempFileURL;
+  } catch (e) { console.warn('收款码临时链接生成失败', e.message); }
 
-  const added = await records.add({
-    data: {
-      aid,
-      ownerOpenid: account.ownerOpenid,
-      payerOpenid: openid,
-      payerName,
-      amount,
-      remark,
-      relation,
-      proxyFor,
-      proxyItems,
-      bookId: book ? book._id : '',
-      bookType: book ? book.type : 'other',
-      themeName: book ? book.name : ((account.theme && account.theme.name) || ''),
-      status: 'pending',
-      printed: false,
-      payDay,
-      createdAt: now
-    }
-  });
   return ok({
     record: {
-      _id: added._id, aid, payerName, amount, remark, relation, proxyFor, proxyItems,
-      status: 'pending', payDay, createdAt: now,
-      accountName: account.accountName,
+      ...record,
       payMode: account.payMode || 'longpress',
-      payCodeFileID: account.payCodeFileID
+      payCodeFileID: (book && book.payCodeFileID) || account.payCodeFileID,
+      payCodeUrl
     }
   });
+}
+
+/** 校验随礼人名单：1～BATCH_PEOPLE 人，姓名必填且不重复，每人金额 > 0 */
+function parseItems(raw) {
+  if (raw.length > BATCH_PEOPLE) return { error: `批次录入最多 ${BATCH_PEOPLE} 人` };
+  const items = raw.map(p => ({
+    payerName: String((p && p.name) || '').trim().slice(0, 20),
+    amount: Math.round(Number(p && p.amount) * 100) / 100,
+    relation: RELATIONS.includes(p && p.relation) ? p.relation : '',
+    remark: String((p && p.remark) || '').trim().slice(0, 50)
+  }));
+  for (const it of items) {
+    if (!it.payerName) return { error: '请填写随礼人姓名' };
+    if (!Number.isFinite(it.amount) || it.amount <= 0) return { error: `请填写${items.length > 1 ? ' ' + it.payerName + ' 的' : '正确'}金额` };
+    if (it.amount > 100000) return { error: '单笔金额超限' };
+  }
+  if (new Set(items.map(x => x.payerName)).size !== items.length) return { error: '随礼人姓名有重复' };
+  return { items };
+}
+
+/** 按名单逐人建记录；多于 1 人时用 batchId 关联成一个批次 */
+async function addItems(base, items) {
+  const batchId = items.length > 1 ? 'B' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10) : '';
+  const ids = await Promise.all(items.map((x, i) => records.add({
+    data: { ...base, ...x, ...(batchId ? { batchId, batchIdx: i, batchSize: items.length } : {}) }
+  }).then(r => r._id)));
+  return { ids, batchId };
+}
+
+/** 批次显示名：张三 等 3 人 */
+const batchName = items => (items.length > 1 ? `${items[0].payerName} 等 ${items.length} 人` : items[0].payerName);
+
+/** 同一批次的全部记录（按录入顺序） */
+async function batchRecords(batchId, cond) {
+  const res = await records.where({ batchId, ...cond }).limit(BATCH_PEOPLE * 2).get();
+  return res.data.sort((a, b) => (a.batchIdx || 0) - (b.batchIdx || 0));
+}
+
+/** 主家当前礼簿（礼簿已删除或尚未建礼簿时为 null） */
+async function activeBookOf(account) {
+  if (!account.activeBookId) return null;
+  try { return (await db.collection('books').doc(account.activeBookId).get()).data; } catch (e) { return null; }
+}
+
+/**
+ * 主家 / 记账人在礼台直接登记现金：直接入簿（paid），无需宾客操作与确认
+ * 没有宾客的微信身份（payerOpenid 为空），人情往来按姓名归并
+ */
+async function cashEntry(openid, ctx, event) {
+  const account = ctx.account;
+  if (!account) return err('请先完善主家信息');
+
+  // 批次录入：items 为多位随礼人，每人一条记录（batchId 关联），每人各打一张小票
+  const parsed = parseItems(Array.isArray(event.items) && event.items.length ? event.items
+    : [{ name: event.payerName, amount: event.amount, relation: event.relation, remark: event.remark }]);
+  if (parsed.error) return err(parsed.error);
+  const items = parsed.items;
+  if (items.reduce((t, x) => t + Math.round(x.amount * 100), 0) > 100000 * 100) return err('单笔金额超限');
+
+  let book = null;
+  if (event.bookId) {
+    try { book = (await db.collection('books').doc(String(event.bookId)).get()).data; } catch (e) { /* 不存在 */ }
+    if (!book || book.ownerOpenid !== ctx.ownerOpenid) return err('礼簿不存在');
+    if (book.archived) return err('该礼簿已归档');
+  } else {
+    book = await activeBookOf(account);
+  }
+  if (book && !canBook(ctx, book._id)) return err('请选择你负责的场次');
+  if (!book && ctx.bookIds) return err('请选择你负责的场次');
+  const now = new Date();
+  const base = {
+    aid: account._id,
+    hostName: (book && book.hostName) || '',
+    ownerOpenid: ctx.ownerOpenid,
+    payerOpenid: '',
+    enteredBy: openid, // 主家或记账人代登记
+    handlerOpenid: openid,
+    handlerName: handlerName(ctx),
+    bookId: book ? book._id : '',
+    bookType: book ? book.type : 'other',
+    themeName: book ? book.name : ((account.theme && account.theme.name) || ''),
+    payMethod: 'cash',
+    status: 'paid',
+    printed: false,
+    payDay: bjDay(now),
+    createdAt: now,
+    transferredAt: now,
+    paidAt: now
+  };
+  const { ids, batchId } = await addItems(base, items);
+  const fen = items.reduce((t, x) => t + Math.round(x.amount * 100), 0);
+  if (book) await incBookStat(book._id, items.length, fen, now);
+  const list = items.map((x, i) => ({
+    _id: ids[i], ...base, ...x, ...(batchId ? { batchId, batchIdx: i, batchSize: items.length } : {})
+  }));
+  return ok({ record: list[0], list });
+}
+
+/** 礼簿份数与合计累加（只累加到已补算、且分界时间不晚于入簿时间的礼簿，见 books.backfillStats） */
+async function incBookStat(bookId, count, fen, paidAt) {
+  let cond = { _id: bookId, statReady: true };
+  if (paidAt) cond = _.and([cond, _.or([{ statSince: _.lte(paidAt) }, { statSince: _.exists(false) }])]);
+  try {
+    await db.collection('books').where(cond).update({ data: { statCount: _.inc(count), statFen: _.inc(fen) } });
+  } catch (e) { console.warn('礼簿合计更新失败', e.message); }
 }
 
 /** 付款方已转账：pending（或超时被自动取消的）→ transferred，并通知收款方 */
@@ -135,41 +266,83 @@ async function transferred(openid, rid, envVersion) {
  */
 async function payerUpdate(openid, rid, fromConds, to) {
   if (!validId(rid)) return err('记录不存在');
+  const cur = await getRecord(rid);
+  if (!cur) return err('记录不存在');
+  if (cur.payerOpenid !== openid) return err('无权操作');
   const data = { status: to };
   if (to === 'transferred') { data.transferredAt = new Date(); data.autoCancelled = _.remove(); }
-  const res = await records.where(_.or(fromConds.map(c => ({ _id: rid, payerOpenid: openid, ...c }))))
+  // 批次录入：同一批次一起推进
+  const key = cur.batchId ? { batchId: cur.batchId } : { _id: rid };
+  const res = await records.where(_.or(fromConds.map(c => ({ ...key, payerOpenid: openid, ...c }))))
     .update({ data });
-  if (res.stats.updated === 1) return ok({ status: to, changed: true });
+  if (res.stats.updated >= 1) return ok({ status: to, changed: true });
 
-  // 未更新：已推进过（幂等返回当前状态）或无权
+  // 未更新：已推进过（幂等返回当前状态）
   const rec = await getRecord(rid);
-  if (!rec) return err('记录不存在');
-  if (rec.payerOpenid !== openid) return err('无权操作');
-  return ok({ status: rec.status, changed: false });
+  return ok({ status: rec ? rec.status : cur.status, changed: false });
 }
 
 /** 订阅消息提醒收款方（未配置模板或店主未订阅时静默跳过） */
 async function notifyOwner(rid, envVersion) {
   if (!notify.TMPL_ID) return;
+  const rec = await getRecord(rid);
+  if (!rec) return;
+  // 主家和全部记账人都提醒（各自订阅过才会收到）
+  let to = [rec.ownerOpenid];
   try {
-    const rec = await getRecord(rid);
-    await cloud.openapi.subscribeMessage.send({
-      touser: rec.ownerOpenid,
-      templateId: notify.TMPL_ID,
-      page: 'pages/mine/mine',
-      miniprogramState: { develop: 'developer', trial: 'trial' }[envVersion] || 'formal',
-      data: notify.build(rec, bjTime(rec.transferredAt || new Date()))
-    });
-  } catch (e) {
-    console.warn('订阅消息发送失败', e.errCode, e.errMsg || e.message); // 43101=店主未订阅，正常
+    const ms = await db.collection('members').where({ aid: rec.aid }).limit(100).get();
+    // 家人共享、待主家同意的不提醒；只负责部分场次的人员只提醒本场的礼金
+    to = to.concat(ms.data
+      .filter(m => m.role !== 'viewer' && m.status !== 'pending' && !m._openid)
+      .filter(m => !Array.isArray(m.bookIds) || !m.bookIds.length || m.bookIds.includes(rec.bookId))
+      .map(m => m.memberOpenid));
+  } catch (e) { /* 尚无记账人 */ }
+  let show = rec;
+  if (rec.batchId) {
+    const all = await batchRecords(rec.batchId, { ownerOpenid: rec.ownerOpenid });
+    show = {
+      ...rec,
+      payerName: rec.payerName,
+      amount: all.reduce((t, r) => t + Math.round(r.amount * 100), 0) / 100,
+      remark: `${all.length}人一起随礼`
+    };
   }
+  const data = notify.build(show, bjTime(rec.transferredAt || new Date()));
+  await Promise.all([...new Set(to)].map(async touser => {
+    let result;
+    try {
+      await cloud.openapi.subscribeMessage.send({
+        touser,
+        templateId: notify.TMPL_ID,
+        page: 'pages/pending/pending', // 点通知直达待确认页
+        miniprogramState: { develop: 'developer', trial: 'trial' }[envVersion] || 'formal',
+        data
+      });
+      result = { ok: true, code: 0 };
+    } catch (e) {
+      // 43101=未订阅或次数用完；-604101=云函数无 subscribeMessage.send 权限；47003=模板参数不符
+      console.warn('订阅消息发送失败', e.errCode, e.errMsg || e.message);
+      result = { ok: false, code: e.errCode || -1, msg: String(e.errMsg || e.message || '').slice(0, 100) };
+    }
+    // 记下最近一次结果，「我的」页显示，便于排查收不到提醒
+    try {
+      await db.collection('users').where({ openid: touser }).update({ data: { lastNotify: { ...result, at: new Date() } } });
+    } catch (e) { /* 忽略 */ }
+  }));
+}
+
+/** 是否可查看该记录：宾客本人，或主家 / 其记账人 */
+async function canView(openid, rec) {
+  if (rec.payerOpenid === openid || rec.ownerOpenid === openid) return true;
+  const ctx = await resolveCtx(db, openid);
+  return ctx.ownerOpenid === rec.ownerOpenid && canBook(ctx, rec.bookId);
 }
 
 /** 付款方轮询状态 */
 async function status(openid, rid) {
   const rec = await getRecord(rid);
   if (!rec) return err('记录不存在');
-  if (rec.payerOpenid !== openid && rec.ownerOpenid !== openid) return err('无权查看');
+  if (!(await canView(openid, rec))) return err('无权查看');
   return ok({
     status: rec.status,
     record: {
@@ -183,11 +356,26 @@ async function status(openid, rid) {
  * 宾客留存的电子回执：已入簿记录 + 该笔礼金所属礼簿的回执样式（宾客与主家均可查看）
  * 样式跟礼簿走，主家之后改了别的礼簿的样式，不影响这本礼簿的回执
  */
-async function receipt(openid, rid) {
+async function receipt(openid, rid, batch) {
   const rec = await getRecord(rid);
   if (!rec) return err('记录不存在');
-  if (rec.payerOpenid !== openid && rec.ownerOpenid !== openid) return err('无权查看');
+  if (!(await canView(openid, rec))) return err('无权查看');
   if (rec.status !== 'paid') return err('主家确认收到后才能生成回执');
+  let out = receiptRecord(rec);
+  // 批次录入：扫码人看到一张合并回执，列出全部随礼人
+  if (batch && rec.batchId) {
+    const paid = (await batchRecords(rec.batchId, { ownerOpenid: rec.ownerOpenid })).filter(r => r.status === 'paid');
+    if (paid.length > 1) {
+      out = {
+        ...out,
+        payerName: batchName(paid),
+        amount: paid.reduce((t, r) => t + Math.round(r.amount * 100), 0) / 100,
+        relation: '',
+        remark: '',
+        batchItems: paid.map(r => ({ name: r.payerName, amount: r.amount }))
+      };
+    }
+  }
   let account = {};
   let book = null;
   try { account = (await accounts.doc(rec.aid).get()).data; } catch (e) { /* 主家已注销 */ }
@@ -195,8 +383,8 @@ async function receipt(openid, rid) {
     try { book = (await db.collection('books').doc(rec.bookId).get()).data; } catch (e) { /* 礼簿已删除 */ }
   }
   return ok({
-    record: receiptRecord(rec),
-    accountName: account.accountName || '',
+    record: out,
+    accountName: rec.hostName || (book && book.hostName) || account.accountName || '',
     tpl: (book && book.receiptTpl) || null // 为空时前端按事由类型套用场景默认样式
   });
 }
@@ -211,14 +399,15 @@ async function myReceipts(openid) {
     const acc = await accounts.where({ _id: _.in(aids) }).field({ accountName: true }).get();
     acc.data.forEach(a => { names[a._id] = a.accountName; });
   }
-  return ok({ list: res.data.map(r => ({ ...receiptRecord(r), accountName: names[r.aid] || '' })) });
+  return ok({ list: res.data.map(r => ({ ...receiptRecord(r), accountName: r.hostName || names[r.aid] || '' })) });
 }
 
 /** 收据只暴露必要字段 */
 const receiptRecord = r => ({
   _id: r._id, aid: r.aid, payerName: r.payerName, amount: r.amount, remark: r.remark,
   relation: r.relation || '', proxyFor: r.proxyFor || '', proxyItems: r.proxyItems || [],
-  bookId: r.bookId || '', bookType: r.bookType || 'other',
+  bookId: r.bookId || '', bookType: r.bookType || 'other', payMethod: r.payMethod || 'wechat',
+  handlerName: r.handlerName || '', batchId: r.batchId || '', hostName: r.hostName || '',
   themeName: r.themeName, payDay: r.payDay, createdAt: r.createdAt, paidAt: r.paidAt
 });
 
@@ -227,14 +416,14 @@ const receiptRecord = r => ({
  * 控制总耗时在云函数超时内；返回成功的记录供前端逐张打印
  */
 const BATCH_MAX = 20;
-async function confirmBatch(openid, rids) {
+async function confirmBatch(ctx, rids) {
   if (!Array.isArray(rids) || rids.length === 0 || rids.length > BATCH_MAX) return err('参数错误');
   const done = [];
   const failed = [];
   for (let i = 0; i < rids.length; i += 5) {
     const part = rids.slice(i, i + 5);
     const results = await Promise.all(part.map(rid =>
-      ownerUpdate(openid, String(rid), ['transferred', 'pending'], 'paid').catch(e => ({ code: 1, msg: e.message }))));
+      ownerUpdate(ctx, String(rid), ['transferred', 'pending'], 'paid').catch(e => ({ code: 1, msg: e.message }))));
     results.forEach((res, k) => {
       if (res.code === 0) done.push(res.data.record);
       else failed.push(part[k]);
@@ -243,11 +432,43 @@ async function confirmBatch(openid, rids) {
   return ok({ list: done, failed });
 }
 
+/**
+ * 确认 / 拒绝：批次录入的记录整批处理（逐人可按实际金额入簿），普通记录按单笔
+ * amounts：{rid: 实际金额}，未列出的按宾客登记金额
+ */
+async function groupUpdate(ctx, rid, fromList, to, actualAmount, amounts) {
+  const rec = await getRecord(rid);
+  if (!rec || !rec.batchId) return ownerUpdate(ctx, rid, fromList, to, actualAmount);
+  if (rec.ownerOpenid !== ctx.ownerOpenid || !canBook(ctx, rec.bookId)) return err('无权操作该账目');
+  const all = (await batchRecords(rec.batchId, { ownerOpenid: ctx.ownerOpenid })).filter(r => fromList.includes(r.status));
+  if (!all.length) return err('当前状态不可操作，请刷新');
+  const map = (to === 'paid' && amounts && typeof amounts === 'object') ? amounts : {};
+  for (const r of all) {
+    const v = map[r._id];
+    if (v !== undefined && v !== null && !(Number(v) > 0 && Number(v) <= 100000)) return err(`${r.payerName} 的实际金额不正确`);
+  }
+  const results = await Promise.all(all.map(r => ownerUpdate(ctx, r._id, fromList, to, map[r._id])
+    .catch(e => ({ code: 1, msg: e.message }))));
+  const list = results.filter(x => x.code === 0).map(x => x.data.record);
+  if (!list.length) return err(results[0].msg);
+  return ok({ rid, status: to, record: list[0], list, failed: all.length - list.length });
+}
+
 /** 收款方确认到账 / 拒绝 / 作废（带状态条件原子更新） */
-async function ownerUpdate(openid, rid, fromList, to, actualAmount) {
+async function ownerUpdate(ctx, rid, fromList, to, actualAmount) {
   if (!validId(rid)) return err('记录不存在');
+  const openid = ctx.ownerOpenid; // 数据属于主家，记账人代为操作
+  if (ctx.bookIds) {
+    const r0 = await getRecord(rid);
+    if (!r0 || !canBook(ctx, r0.bookId)) return err('该礼金不在你负责的场次');
+  }
   const data = { status: to };
-  if (to === 'paid') data.paidAt = new Date();
+  if (to === 'paid') {
+    data.paidAt = new Date();
+    // 记账人：实际确认这笔礼金的人（回执、小票上显示）
+    data.handlerOpenid = (ctx.user && ctx.user.openid) || '';
+    data.handlerName = handlerName(ctx);
+  }
   // 主家按实际到账金额入簿：保留宾客原登记金额备查
   if (to === 'paid' && actualAmount !== undefined && actualAmount !== null) {
     const amt = Math.round(Number(actualAmount) * 100) / 100;
@@ -268,20 +489,10 @@ async function ownerUpdate(openid, rid, fromList, to, actualAmount) {
   if (!rec) return err('记录不存在');
   if (rec.ownerOpenid !== openid) return err('无权操作该账目');
   if (res.stats.updated !== 1) return err('当前状态不可操作，请刷新');
-  // 礼簿份数与合计累加：入簿 +1，作废 -1
-  // 入簿只累加到已完成补算、且分界时间不晚于本笔入簿时间的礼簿（之前的由补算统计，见 books.backfillStats）
+  // 礼簿份数与合计累加：入簿 +1，作废 -1（旧版创建的礼簿没有 statSince，照常累加）
   if (rec.bookId && (to === 'paid' || to === 'void')) {
     const sign = to === 'paid' ? 1 : -1;
-    let cond = { _id: rec.bookId, statReady: true };
-    if (to === 'paid') {
-      // 旧版创建的礼簿没有 statSince，照常累加
-      cond = _.and([cond, _.or([{ statSince: _.lte(rec.paidAt) }, { statSince: _.exists(false) }])]);
-    }
-    try {
-      await db.collection('books').where(cond).update({
-        data: { statCount: _.inc(sign), statFen: _.inc(sign * Math.round(rec.amount * 100)) }
-      });
-    } catch (e) { console.warn('礼簿合计更新失败', e.message); }
+    await incBookStat(rec.bookId, sign, sign * Math.round(rec.amount * 100), to === 'paid' ? rec.paidAt : null);
   }
   return ok({ rid, status: to, record: rec });
 }
@@ -296,6 +507,7 @@ async function getRecord(rid) {
 }
 
 const RATE_MAX = 3;
+const BATCH_PEOPLE = 10; // 批次录入最多人数
 const RELATIONS = ['亲戚', '朋友', '同事', '同学', '邻里', '其他'];
 
 /** 云函数运行在 UTC，日期统一按北京时间（UTC+8） */

@@ -3,6 +3,7 @@ const req = require('../../utils/request.js');
 const fmt = require('../../utils/format.js');
 const scenes = require('../../utils/scenes.js');
 const openfile = require('../../utils/openfile.js');
+const theme = require('../../utils/theme.js');
 
 Page({
   data: {
@@ -13,14 +14,21 @@ Page({
     count: 0,
     avg: '0.00',
     maxAmount: '0.00',
-    byRelation: []
+    byRelation: [],
+    orgMode: false,
+    readonly: true    // 家人共享：只读（身份读取前先按只读显示）
   },
 
-  onLoad(options) {
+  async onLoad(options) {
+    const app = getApp();
     this.setData({ id: options.id });
+    const role = await app.ensureRole(); // 冷启动时 role 为空，先读取身份
+    const acc = app.globalData.account;
+    this.setData({ orgMode: !!(acc && acc.orgMode) && role !== 'viewer', readonly: role === 'viewer' });
   },
 
   async onShow() {
+    theme.apply(this); // 主题色跟当前礼簿事由走
     try {
       const s = await req.bookStats(this.data.id);
       const total = s.sum || 0;
@@ -31,6 +39,10 @@ Page({
         count: s.count,
         avg: fmt.money(s.count ? total / s.count : 0),
         maxAmount: fmt.money(s.maxAmount),
+        wechatSum: fmt.money(s.byMethod ? s.byMethod.wechat.sum : 0),
+        wechatCount: s.byMethod ? s.byMethod.wechat.count : 0,
+        cashSum: fmt.money(s.byMethod ? s.byMethod.cash.sum : 0),
+        cashCount: s.byMethod ? s.byMethod.cash.count : 0,
         byRelation: s.byRelation.map(r => ({
           ...r,
           sumStr: fmt.money(r.sum),
@@ -42,6 +54,11 @@ Page({
   },
 
   /** 礼簿页按本礼簿筛选 */
+  /** 机构版：本场礼簿码（同一天多场同时办时，宾客扫哪场的码就记到哪场） */
+  goBookQr() {
+    wx.navigateTo({ url: `/pages/qrcode/qrcode?bookId=${this.data.id}` });
+  },
+
   goRecords() {
     getApp().globalData.recordsBookId = this.data.id;
     wx.switchTab({ url: '/pages/records/records' });

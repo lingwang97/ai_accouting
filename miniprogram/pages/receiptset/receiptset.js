@@ -3,6 +3,7 @@ const req = require('../../utils/request.js');
 const receipt = require('../../utils/receipt.js');
 const scenes = require('../../utils/scenes.js');
 const printer = require('../../utils/printer.js');
+const theme = require('../../utils/theme.js');
 
 const COLORS = ['#C8161D', '#B8860B', '#C9A227', '#FF7A45', '#07C160', '#333333'];
 const ALL_FIELDS = Object.keys(receipt.FIELD_LABELS);
@@ -23,14 +24,19 @@ Page({
     saving: false
   },
 
-  async onLoad() {
+  onShow() {
+    theme.apply(this); // 主题色跟当前礼簿事由走
+  },
+
+  async onLoad(options) {
     try {
       const [{ account }, { list, activeBookId }] = await Promise.all([req.accountGet(), req.bookList()]);
       const books = list.filter(b => !b.archived || b._id === activeBookId);
+      const want = options.bookId || activeBookId; // 从「打印小票」切换过来时沿用所选礼簿
       this.setData({
         accountName: (account && account.accountName) || receipt.SAMPLE.accountName,
         books,
-        bookIdx: Math.max(0, books.findIndex(b => b._id === activeBookId))
+        bookIdx: Math.max(0, books.findIndex(b => b._id === want))
       });
       await this.loadTpl();
     } catch (e) {
@@ -45,6 +51,13 @@ Page({
     const r = await req.bookGetTpl(book._id);
     this.setData({ sceneType: '', tpl: receipt.DEFAULT_TPL });
     this.update(receipt.normalizeTpl(r.receiptTpl, book.type));
+  },
+
+  /** 切到「打印小票」 */
+  onStyleTab(e) {
+    if (e.currentTarget.dataset.t !== 'print') return;
+    const b = this.data.books[this.data.bookIdx];
+    wx.redirectTo({ url: '/pages/printset/printset' + (b ? '?bookId=' + b._id : '') });
   },
 
   onBook(e) {

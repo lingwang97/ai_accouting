@@ -1,48 +1,39 @@
-// pages/mine/mine.js — 我的：主家工作台（待确认礼金、今日收礼、礼簿与收礼设置）
+// pages/mine/mine.js — 我的：身份与设置（日常操作在「工作台」）
+// 分组：收礼设置（主家信息、记账人、机构模式）/ 打印与回执 / 数据；礼簿码在工作台「出示礼簿码」
 const req = require('../../utils/request.js');
-const fmt = require('../../utils/format.js');
-const confirm = require('../../utils/confirm.js');
-const receipt = require('../../utils/receipt.js');
-const notify = require('../../utils/notify.js');
+const theme = require('../../utils/theme.js');
+const cache = require('../../utils/cache.js');
+const plan = require('../../utils/plan.js');
 
 const { VERSION } = require('../../config.js');
 
-const POLL_MS = 5000;
-const PENDING_FOLD = 3; // 待确认礼金默认显示条数，超过折叠
-const PAY_MODES = [
-  { v: 'screen', label: '亮屏双码' },   // 主家出示屏幕，宾客扫码登记后用微信扫一扫转账
-  { v: 'longpress', label: '宾客手机付款' } // 宾客保存收款码后用扫一扫从相册识别（原模式）
-];
 const LOGOUT_KEY = 'logged_out'; // 主动退出标记，login 页登录成功后清除
 
 Page({
   data: {
     user: null,
     account: null,
-    pending: [],
-    todaySum: '0.00',
-    todayCount: 0,
+    role: 'none',       // owner 主家本人 | clerk 记账人
+    restricted: false,  // 只负责部分场次的记账人或家人共享：不显示主家信息等管理入口
+    readonly: false,    // 家人共享：只读
+    identities: [],
     printerName: '',
-    payModeLabel: '',
     versionText: versionText(),
-    PENDING_FOLD,
-    pendingOpen: false,
-    selectMode: false,
-    pickedCount: 0,
-    pickedSum: '0.00',
-    activeBookName: '',
+    themeStyle: '',
+    isAdmin: false,
+    planText: '',       // 当前套餐（专业版显示到期日）
+    orgAllowed: false,  // 已开通机构版（或已在使用机构模式）
     loading: true
   },
 
   onShow() {
-    getApp().refreshTabBar();
+    theme.apply(this);
+    // 先显示上次的数据，避免白屏
+    if (!this.data.user) {
+      const c = cache.get('mine');
+      if (c && !wx.getStorageSync(LOGOUT_KEY)) this.setData({ ...c, loading: false }); // 冷启动时 globalData.user 尚未恢复
+    }
     this.refresh();
-    this._timer = setInterval(() => this.refreshPending(true), POLL_MS);
-  },
-  onHide() { this.clearTimer(); },
-  onUnload() { this.clearTimer(); },
-  clearTimer() {
-    if (this._timer) { clearInterval(this._timer); this._timer = null; }
   },
 
   async refresh() {
@@ -51,6 +42,9 @@ Page({
     this.setData({ printerName: (saved && saved.name) || '' });
     try {
       // 恢复登录态（重启小程序后 globalData 为空）；主动退出过则不自动恢复
+      if (!app.globalData.user && !wx.getStorageSync(LOGOUT_KEY)) {
+        await app.loginReady;
+      }
       if (!app.globalData.user && !wx.getStorageSync(LOGOUT_KEY)) {
         const { openid, user } = await req.loginCheck();
         app.globalData.openid = openid;
@@ -62,139 +56,122 @@ Page({
         return;
       }
 
-      const { account } = await req.accountGet();
+      const { account, role, identities, restricted, readonly } = await req.accountGet();
       app.globalData.account = account;
+      app.globalData.role = role;
+      theme.setAccount(account);
+      theme.apply(this);
       app._accountChecked = true;
-      this.setData({ account, payModeLabel: modeLabel(account) });
-      if (account) {
-        // 首次进入会自动用旧版主题名建一本默认礼簿
-        req.bookList().then(({ list, activeBookId }) => {
-          const b = list.find(x => x._id === activeBookId);
-          this.setData({ activeBookName: b ? b.name : '' });
-        }).catch(() => {});
-        const res = await req.recordList({ page: 1, pageSize: 1, payDay: fmt.day(new Date()) });
-        this.setData({ todaySum: fmt.money(res.sum), todayCount: res.total });
-        await this.refreshPending(false);
-      }
+      const view = {
+        account, role, identities: identities || [],
+        restricted: !!restricted, readonly: !!readonly
+      };
+      this.setData(view);
+      cache.set('mine', { user: app.globalData.user, ...view });
+      app.refreshTabBar();
+      plan.load(true).then(p => this.setData({
+        isAdmin: !!p.isAdmin,
+        orgAllowed: !!(p.features && p.features.org) || !!(account && account.orgMode),
+        planText: p.plan && p.plan !== 'free' ? `${p.name}${p.expiresAt ? ' · 到期 ' + require('../../utils/format.js').day(p.expiresAt) : ''}` : ''
+      }));
     } catch (e) { /* toast 已提示 */ } finally {
       this.setData({ loading: false });
     }
   },
 
-  /** 刷新待确认列表与角标；silent=true 时有新转账才震动 */
-  async refreshPending(silent) {
-    if (!this.data.account) return;
+  goMembers() { wx.navigateTo({ url: '/pages/members/members' }); },
+  goAdmin() { wx.navigateTo({ url: '/pages/admin/admin' }); },
+  noop() {},
+
+  // —— 机构模式：婚庆公司、宴会厅等一个账号办多场 ——
+  async onOrgSwitch(e) {
+    const on = e.detail.value;
+    const a = this.data.account;
+    if (!on) return this.saveOrg(false, a.orgName);
+    // 打开时填写机构名称（默认沿用已填的或主家称呼）
+    const name = await askOrgName(a.orgName || a.accountName);
+    if (name === null) return this.setData({ 'account.orgMode': false }); // 取消：开关复位
+    this.saveOrg(true, name);
+  },
+
+  /** 点「机构模式」这一行：修改机构名称 */
+  async onOrgName() {
+    const a = this.data.account;
+    if (!a || !a.orgMode) return;
+    const name = await askOrgName(a.orgName || a.accountName);
+    if (name !== null) this.saveOrg(true, name);
+  },
+
+  async saveOrg(on, orgName) {
     try {
-      const { list } = await req.recordPending();
-      if (silent && list.length > this.data.pending.length) wx.vibrateShort({ type: 'heavy' });
-      // 保留已勾选状态（轮询刷新不打断批量选择）
-      const picked = new Set(this.data.pending.filter(r => r.picked).map(r => r._id));
-      this.setData({
-        pending: list.map(r => ({
-          ...r,
-          amountStr: fmt.money(r.amount),
-          proxyStr: receipt.proxyText(r),
-          timeStr: fmt.time(r.transferredAt || r.createdAt),
-          picked: picked.has(r._id)
-        }))
-      });
-      if (!list.length) this.setData({ selectMode: false });
-      this.updatePicked();
-      getApp().setBadge(list.length);
-    } catch (e) { /* 静默 */ }
-  },
-
-  async onConfirm(e) {
-    const record = this.data.pending[e.currentTarget.dataset.idx];
-    if (await confirm.confirmTransfer(record)) this.refresh();
-  },
-
-  /** 展开 / 收起 */
-  onToggleOpen() { this.setData({ pendingOpen: !this.data.pendingOpen }); },
-
-  /** 进入 / 退出批量确认（进入时自动展开） */
-  onToggleSelect() {
-    const on = !this.data.selectMode;
-    this.setData({
-      selectMode: on,
-      pendingOpen: on || this.data.pendingOpen,
-      pending: this.data.pending.map(r => ({ ...r, picked: false }))
-    });
-    this.updatePicked();
-  },
-
-  onPick(e) {
-    if (!this.data.selectMode) return;
-    const i = e.currentTarget.dataset.idx;
-    this.setData({ [`pending[${i}].picked`]: !this.data.pending[i].picked });
-    this.updatePicked();
-  },
-
-  onPickAll() {
-    const all = this.data.pickedCount !== this.data.pending.length;
-    this.setData({ pending: this.data.pending.map(r => ({ ...r, picked: all })) });
-    this.updatePicked();
-  },
-
-  updatePicked() {
-    const picked = this.data.pending.filter(r => r.picked);
-    const fen = picked.reduce((s, r) => s + Math.round(r.amount * 100), 0);
-    this.setData({ pickedCount: picked.length, pickedSum: fmt.money(fen / 100) });
-  },
-
-  async onConfirmPicked() {
-    const picked = this.data.pending.filter(r => r.picked);
-    if (!picked.length) return;
-    if (await confirm.confirmBatch(picked)) {
-      this.setData({ selectMode: false });
-      this.refresh();
+      const r = await req.setOrgMode(on, orgName);
+      const account = { ...this.data.account, orgMode: r.orgMode, orgName: r.orgName };
+      getApp().globalData.account = account;
+      this.setData({ account });
+      cache.clear(); // 工作台入口随模式变化
+      wx.showToast({ title: on ? '已开启机构模式' : '已关闭机构模式', icon: 'none' });
+    } catch (err) {
+      this.setData({ 'account.orgMode': !on }); // 失败复位（request.js 已提示原因）
     }
   },
 
-  async onReject(e) {
-    const record = this.data.pending[e.currentTarget.dataset.idx];
-    if (await confirm.rejectTransfer(record)) this.refreshPending(false);
-  },
-
-  /** 切换收款模式（新旧两种工作模式） */
-  onSwitchMode() {
-    const a = this.data.account;
-    if (!a) return this.goAccount();
-    wx.showActionSheet({
-      itemList: PAY_MODES.map(m => (m.v === (a.payMode || 'longpress') ? '✓ ' : '') + m.label),
-      success: async res => {
-        const mode = PAY_MODES[res.tapIndex];
-        if (mode.v === (a.payMode || 'longpress')) return;
-        try {
-          const { account } = await req.accountSave({
-            accountName: a.accountName,
-            payCodeFileID: a.payCodeFileID,
-            theme: a.theme,
-            payMode: mode.v
-          });
-          getApp().globalData.account = account;
-          this.setData({ account, payModeLabel: modeLabel(account) });
-          wx.showToast({ title: '已切换为' + mode.label, icon: 'none' });
-        } catch (err) { /* toast 已提示 */ }
-      }
+  /** 长按版本号：显示本人 openid（配置管理员、排查问题用） */
+  async onShowOpenid() {
+    const app = getApp();
+    let openid = app.globalData.openid || '';
+    if (!openid) {
+      try {
+        openid = (await req.loginCheck()).openid || '';
+        app.globalData.openid = openid;
+      } catch (e) { /* toast 已提示 */ }
+    }
+    if (!openid) return;
+    wx.showModal({
+      title: '我的 openid',
+      content: openid,
+      confirmText: '复制',
+      success: res => res.confirm && wx.setClipboardData({ data: openid })
     });
   },
 
-  goBooks() { wx.navigateTo({ url: '/pages/books/books' }); },
+  /** 转发给好友 / 分享到朋友圈：落地首页（宾客扫码随礼，主家创建礼簿） */
+  onShareAppMessage() {
+    return { title: '慧礼记｜扫码随礼、自动记账、人情往来一本清', path: '/pages/index/index' };
+  },
+  onShareTimeline() {
+    return { title: '慧礼记｜办事收礼，扫码随礼自动记账' };
+  },
+
+  /** 切换身份：自己的主家 / 为某位主家记账 */
+  onSwitchIdentity() {
+    const list = this.data.identities;
+    const hasOwn = list.some(x => x.role === 'owner');
+    const items = list.map(x => (x.aid === (this.data.account && this.data.account._id) ? '✓ ' : '') +
+      (x.role === 'owner' ? `我的礼簿（${x.name}）` : (x.role === 'viewer' ? `查看「${x.name}」的礼簿（家人共享）` : `为「${x.name}」记账`)));
+    if (!hasOwn) items.push('＋ 新建我自己的礼簿');
+    wx.showActionSheet({
+      itemList: items,
+      success: async res => {
+        // 记账人自己办事：填写自己的主家信息、上传自己的收款码
+        if (res.tapIndex === list.length) return wx.navigateTo({ url: '/pages/account/account?own=1' });
+        const target = list[res.tapIndex];
+        if (!target || (this.data.account && target.aid === this.data.account._id)) return;
+        try {
+          await req.identitySwitch(target.aid);
+          getApp().resetIdentity();
+          wx.showToast({ title: '已切换', icon: 'success' });
+          this.refresh();
+        } catch (e) { /* toast 已提示 */ }
+      }
+    });
+  },
 
   goLogin() { wx.navigateTo({ url: '/pages/login/login' }); },
   goAccount() { wx.navigateTo({ url: '/pages/account/account' }); },
   goQrcode() { wx.navigateTo({ url: '/pages/qrcode/qrcode' }); },
   goPrinter() { wx.navigateTo({ url: '/pages/printer/printer' }); },
-  goPrintset() { wx.navigateTo({ url: '/pages/printset/printset' }); },
-  goReceiptset() { wx.navigateTo({ url: '/pages/receiptset/receiptset' }); },
+  goStyle() { wx.navigateTo({ url: '/pages/receiptset/receiptset' }); },
   goExport() { wx.navigateTo({ url: '/pages/export/export' }); },
-  goRecords() { wx.switchTab({ url: '/pages/records/records' }); },
-
-  /** 收款方自己模拟付款方，单机联调用 */
-  goTestPay() {
-    wx.navigateTo({ url: `/pages/pay/pay?aid=${this.data.account._id}` });
-  },
 
   /** 隐私与数据：查看说明 / 清除我的全部数据（注销） */
   onPrivacy() {
@@ -247,18 +224,14 @@ Page({
   onLogout() {
     const app = getApp();
     app.globalData.user = null;
-    app.globalData.account = null;
-    app._accountChecked = false;
-    app.setBadge(0); // 同时刷新底部菜单，隐藏「礼簿」
+    // 清主家信息、角色、缓存、套餐、打印模板，并刷新底部菜单（「工作台」变回「首页」）
+    app.resetIdentity();
+    theme.setAccount(null); // 主题色恢复默认（含本地存储）
     try { wx.setStorageSync(LOGOUT_KEY, true); } catch (e) { /* 忽略 */ }
-    this.setData({ user: null, account: null, pending: [] });
+    this.setData({ user: null, account: null, role: 'none', restricted: false, readonly: false, isAdmin: false, planText: '' });
+    theme.apply(this);
   }
 });
-
-function modeLabel(a) {
-  const m = PAY_MODES.find(x => x.v === ((a && a.payMode) || 'longpress'));
-  return m ? m.label : '';
-}
 
 /** 版本号；开发版 / 体验版附加标识，便于测试时区分 */
 function versionText() {
@@ -266,4 +239,19 @@ function versionText() {
   try { env = wx.getAccountInfoSync().miniProgram.envVersion; } catch (e) { /* 默认正式版 */ }
   const tag = { develop: ' 开发版', trial: ' 体验版' }[env] || '';
   return `慧礼记 v${VERSION}${tag}`;
+}
+
+/** 输入机构名称；取消返回 null */
+function askOrgName(def) {
+  return new Promise(resolve => {
+    wx.showModal({
+      title: '机构名称',
+      editable: true,
+      content: def || '',
+      placeholderText: '如：喜来登宴会厅',
+      confirmText: '确定',
+      success: res => resolve(res.confirm ? String(res.content || '').trim() : null),
+      fail: () => resolve(null)
+    });
+  });
 }

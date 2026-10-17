@@ -1,0 +1,50 @@
+<view class="container" style="{{themeStyle}}">
+  <picker wx:if="{{books.length}}" range="{{books}}" range-key="name" value="{{bookIdx}}" bindchange="onPickBook">
+    <view class="book-tip muted">记入场次：<text class="book-name">{{books[bookIdx].name}} ▾</text> · 入簿即生效，自动打印回执</view>
+  </picker>
+  <view wx:else class="book-tip muted">记入当前礼簿：<text class="book-name">{{bookName || '默认礼簿'}}</text> · 入簿即生效，自动打印回执</view>
+
+  <view class="card batch-switch">
+    <view>
+      <view>批次录入</view>
+      <view class="muted">一次登记多位随礼人，每人单独入簿、各打一张小票</view>
+    </view>
+    <switch checked="{{batchMode}}" bindchange="onBatchMode" color="#C8161D" />
+  </view>
+  <view class="card">
+    <batch-list wx:if="{{batchMode}}" id="batch" quick="{{quick}}" bindchange="onBatchChange" />
+    <block wx:else>
+      <view class="field">
+        <text class="label">随礼人 *</text>
+        <input class="input" placeholder="宾客姓名" maxlength="20" value="{{payerName}}" data-k="payerName" bindinput="onInput" />
+      </view>
+      <view class="field">
+        <text class="label">关系</text>
+        <view class="chips">
+          <view class="chip {{relation === item ? 'on' : ''}}" wx:for="{{relations}}" wx:key="*this" data-r="{{item}}" bindtap="onRelation">{{item}}</view>
+        </view>
+      </view>
+      <view class="field">
+        <text class="label">现金金额 *</text>
+        <view class="chips">
+          <view class="chip {{amount == item ? 'on' : ''}}" wx:for="{{quick}}" wx:key="*this" data-v="{{item}}" bindtap="onQuick">{{item}}</view>
+        </view>
+        <input class="input" type="digit" placeholder="其他金额" value="{{amount}}" data-k="amount" bindinput="onInput" />
+      </view>
+      <view class="field">
+        <text class="label">礼品/备注</text>
+        <input class="input" placeholder="选填，如：另送花篮一对" maxlength="50" value="{{remark}}" data-k="remark" bindinput="onInput" />
+      </view>
+    </block>
+  </view>
+
+  <button class="btn-primary" loading="{{saving}}" bindtap="onSave">{{batchMode ? '全部入簿，登记下一批' : '入簿，登记下一位'}}</button>
+
+  <view class="done" wx:if="{{done.length}}">
+    <view class="section-title">本次已登记 {{doneCount}} 份 · 现金 ￥{{doneSum}}</view>
+    <view class="done-item" wx:for="{{done}}" wx:key="_id" data-id="{{item._id}}" bindtap="onReceipt">
+      <text>{{item.payerName}}</text>
+      <text class="money">￥{{item.amountStr}}</text>
+    </view>
+  </view>
+</view>

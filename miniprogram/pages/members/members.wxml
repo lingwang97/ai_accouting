@@ -1,0 +1,111 @@
+<view class="container" style="{{themeStyle}}">
+  <view class="card intro muted">
+    记账人可以帮主家记账：查看礼簿、确认收礼、登记现金、打印回执、导出等，与主家权限相同；回执和小票上显示各自的"记账人姓名 / 礼台编号"，点「改名」可修改；
+    "清除数据"和"人情往来"只属于各自本人。回执和小票上会同时显示主家与记账人。
+  </view>
+
+  <view class="card join" wx:if="{{joins.length}}">
+    <view class="section-title">申请加入（{{joins.length}}）</view>
+    <view class="row" wx:for="{{joins}}" wx:key="_id">
+      <image class="avatar" src="{{item.avatar || '/assets/avatar-default.png'}}" mode="aspectFill" />
+      <view class="name">{{item.name}}<text class="tag">{{item.role === 'viewer' ? '家人共享' : '记账人'}}</text>
+        <view class="muted small" wx:if="{{item.nickname && item.nickname !== item.name}}">微信：{{item.nickname}}</view>
+        <view class="muted small" wx:if="{{item.booksText}}">查看：{{item.booksText}}</view>
+        <view class="muted small">{{item.from ? '「' + item.from + '」的邀请卡 · ' : ''}}{{item.timeStr}}</view>
+      </view>
+      <view class="link" data-idx="{{index}}" data-ok="{{true}}" bindtap="onJoin">同意</view>
+      <view class="link danger" data-idx="{{index}}" data-ok="{{false}}" bindtap="onJoin">拒绝</view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="section-title">主家</view>
+    <view class="row" wx:if="{{owner}}">
+      <image class="avatar" src="{{owner.avatar || '/assets/avatar-default.png'}}" mode="aspectFill" />
+      <view class="name">{{owner.name}}<text class="tag" wx:if="{{owner.me}}">我</text>
+        <view class="muted small" wx:if="{{owner.nickname && owner.nickname !== owner.name}}">微信：{{owner.nickname}}</view>
+      </view>
+      <view class="link" wx:if="{{owner.me}}" data-owner="{{true}}" bindtap="onRename">改名</view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="section-title">记账人（{{list.length}}）</view>
+    <view class="row" wx:for="{{list}}" wx:key="_id">
+      <image class="avatar" src="{{item.avatar || '/assets/avatar-default.png'}}" mode="aspectFill" />
+      <view class="name">{{item.name}}<text class="tag" wx:if="{{item.me}}">我</text><text class="tag" wx:if="{{orgMode && item.title}}">{{item.title}}</text>
+        <view class="muted small" wx:if="{{item.nickname && item.nickname !== item.name}}">微信：{{item.nickname}}</view>
+        <view class="muted small" wx:if="{{orgMode}}">负责：{{item.booksText}}</view>
+        <view class="muted small" wx:elif="{{item.timeStr}}">{{item.timeStr}} 加入</view>
+      </view>
+      <view class="link" wx:if="{{item.me || canManage}}" data-idx="{{index}}" bindtap="onRename">改名</view>
+      <view class="link" wx:if="{{orgMode && canManage}}" data-idx="{{index}}" bindtap="onEditMember">设置</view>
+      <view class="link danger" wx:if="{{!item.me && canManage}}" data-idx="{{index}}" bindtap="onRemove">移除</view>
+    </view>
+    <view class="muted" wx:if="{{!loading && list.length === 0}}">还没有记账人</view>
+  </view>
+
+  <button wx:if="{{canManage}}" class="btn-primary" open-type="share" data-type="clerk" disabled="{{!clerkToken}}">邀请记账人（发给微信好友）</button>
+  <view class="muted hint">对方打开卡片、登录后点「接受邀请」，经主家同意后加入。邀请 7 天内有效，每张最多 5 人使用；移交卡片仅限一人使用。</view>
+
+  <block wx:if="{{role === 'owner'}}">
+    <view class="card transfer">
+      <view class="section-title">移交给主家</view>
+      <view class="muted">礼簿是你替别人建的？可以把选中的礼簿（含全部礼金记录、回执样式、存档）移交给真正的主家，没选的留在你这里。</view>
+      <button wx:if="{{!showPicker}}" class="btn-plain" style="margin-top:20rpx" bindtap="onPickBooks">选择要移交的礼簿</button>
+
+      <block wx:if="{{showPicker}}">
+        <view class="pick-head">
+          <text class="muted">选择礼簿</text>
+          <text class="link" bindtap="onPickAll">全选 / 全不选</text>
+        </view>
+        <view class="book-row {{item.on ? 'on' : ''}}" wx:for="{{books}}" wx:key="_id" data-i="{{index}}" bindtap="onToggleBook">
+          <view class="check {{item.on ? 'on' : ''}}">{{item.on ? '✓' : ''}}</view>
+          <view class="b-info">
+            <view>{{item.name}}<text class="muted small"> · {{item.typeLabel}}<text wx:if="{{item.archived}}"> · 已归档</text></text></view>
+            <view class="muted small">{{item.count}} 份 · ￥{{item.sumStr}}</view>
+          </view>
+        </view>
+        <view class="stay-row">
+          <view>
+            <view>移交后继续为对方记账</view>
+            <view class="muted small">你会成为对方的记账人，可随时退出</view>
+          </view>
+          <switch checked="{{stayClerk}}" bindchange="onStayClerk" color="#C8161D" />
+        </view>
+
+        <button wx:if="{{!transferToken}}" class="btn-primary" style="margin-top:20rpx" bindtap="onMakeTransfer">生成移交卡片</button>
+        <block wx:else>
+          <view class="transfer-desc">{{transferDesc}}</view>
+          <button class="btn-primary" open-type="share" data-type="transfer">发给主家本人</button>
+        </block>
+        <view class="link center cancel" bindtap="onCancelPick">取消</view>
+      </block>
+    </view>
+  </block>
+
+  <button wx:if="{{role === 'clerk'}}" class="btn-leave" bindtap="onLeave">退出，不再为这位主家记账</button>
+
+  <!-- 机构版：岗位与负责场次 -->
+  <view class="mask" wx:if="{{editor}}">
+    <view class="editor">
+      <view class="ed-title">设置「{{editor.name}}」</view>
+      <view class="muted">岗位</view>
+      <view class="chips">
+        <view class="chip {{editor.title === item ? 'on' : ''}}" wx:for="{{titles}}" wx:key="*this" data-t="{{item}}" bindtap="onEdTitle">{{item}}</view>
+      </view>
+      <view class="muted" style="margin-top:20rpx">负责场次（不选 = 全部场次）</view>
+      <scroll-view scroll-y class="ed-list">
+        <view class="book-row {{item.on ? 'on' : ''}}" wx:for="{{editor.books}}" wx:key="_id" data-i="{{index}}" bindtap="onEdBook">
+          <view class="check {{item.on ? 'on' : ''}}">{{item.on ? '✓' : ''}}</view>
+          <view class="b-info">{{item.name}}<text class="muted small" wx:if="{{item.date}}"> · {{item.date}}</text></view>
+        </view>
+      </scroll-view>
+      <view class="muted small">只负责部分场次的人员：只能看到、确认、登记这些场次的礼金，不能修改主家信息、礼簿和人员</view>
+      <view class="ed-ops">
+        <button class="ed-btn" bindtap="onEdCancel">取消</button>
+        <button class="ed-btn ok" bindtap="onEdSave">保存</button>
+      </view>
+    </view>
+  </view>
+</view>

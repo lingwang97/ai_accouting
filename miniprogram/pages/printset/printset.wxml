@@ -1,4 +1,9 @@
-<view class="container">
+<view class="container" style="{{themeStyle}}">
+  <!-- 回执样式：电子回执 / 打印小票（两页互相切换，带上当前礼簿） -->
+  <view class="style-seg">
+    <view class="style-item {{'print' === 'receipt' ? 'on' : ''}}" data-t="receipt" bindtap="onStyleTab">电子回执</view>
+    <view class="style-item {{'print' === 'print' ? 'on' : ''}}" data-t="print" bindtap="onStyleTab">打印小票</view>
+  </view>
   <!-- 样式跟礼簿走：每本礼簿各自一套 -->
   <view class="card book-bar">
     <text class="muted">设置礼簿</text>
@@ -23,7 +28,10 @@
     <view class="row"><text class="lbl">致谢语</text>
       <input class="input flex1" value="{{thanks}}" maxlength="40" placeholder="如：谢谢惠顾" bindinput="onThanks" /></view>
     <view class="row"><text class="lbl">分隔线</text>
-      <switch checked="{{showDivider}}" bindchange="onDivider" color="#07C160" /></view>
+      <switch checked="{{showDivider}}" bindchange="onDivider" color="#C8161D" /></view>
+    <view class="row"><text class="lbl">推广语</text>
+      <text class="muted flex1">底部打印"微信搜索「慧礼记」"（白事不打印）</text>
+      <switch checked="{{promo}}" bindchange="onPromo" color="#C8161D" /></view>
     <view class="row"><text class="lbl">纸宽</text>
       <view class="widths">
         <view class="filter {{paperWidth === 32 ? 'on' : ''}}" data-w="32" bindtap="onWidth">58mm(32列)</view>

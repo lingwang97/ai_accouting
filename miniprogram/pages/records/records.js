@@ -5,6 +5,8 @@ const scenes = require('../../utils/scenes.js');
 const receiptUtil = require('../../utils/receipt.js');
 const printer = require('../../utils/printer.js');
 const confirm = require('../../utils/confirm.js');
+const theme = require('../../utils/theme.js');
+const cache = require('../../utils/cache.js');
 
 const PAGE_SIZE = 20;
 const POLL_MS = 5000; // 页面停留时自动刷新待确认转账
@@ -22,39 +24,120 @@ Page({
     page: 1,
     hasMore: true,
     loading: false,
-    filterDay: 'today',   // today | all
+    filterDay: 'all',     // all 全部（默认）| today 今日
     keyword: '',
     books: [{ _id: '', name: '全部礼簿' }],
     bookIdx: 0,
     relations: ['全部关系', ...scenes.RELATIONS],
     relIdx: 0,
     loggedIn: true,
+    readonly: false,  // 家人共享：只读
     busy: false
   },
 
   async onShow() {
-    getApp().refreshTabBar();
-    if (!getApp().globalData.user) {
+    this._hidden = false;
+    theme.apply(this); // 主题色跟当前礼簿事由走
+    const app = getApp();
+    app.refreshTabBar();
+    await app.loginReady;
+    if (!app.globalData.user) {
       this.setData({ loggedIn: false, list: [] });
       return;
     }
-    this.setData({ loggedIn: true });
-    await this.loadBooks();
-    this.reload();
+    // 切换过身份：丢弃上一身份的礼簿与明细，重新加载
+    if (this._idVer !== app.globalData.identityVer) {
+      if (this._idVer !== undefined) {
+        this._booksAt = 0;
+        this._bookPicked = false;
+        this.setData({ books: [{ _id: '', name: '全部礼簿' }], bookIdx: 0, list: [] });
+      }
+      this._idVer = app.globalData.identityVer;
+    }
+    // 冷启动时 role 为空：先读取身份，避免家人共享看到操作按钮
+    const role = await app.ensureRole();
+    this.setData({ loggedIn: true, readonly: role === 'viewer' });
+    // 礼簿下拉：首次进入先用缓存，网络结果回来后再校正；之后每分钟最多重新拉一次
+    let booksP = null;
+    if (app.globalData.activeBookChanged) {
+      // 在工作台 / 礼簿管理切换了当前礼簿：重新拉礼簿并选中新的当前礼簿（不保留之前的手动选择）
+      app.globalData.activeBookChanged = false;
+      this._bookPicked = false;
+      if (this._booksAt) {
+        await this.loadBooks();
+        this.setData({ list: [] });
+      }
+    }
+    if (!this._booksAt) {
+      const cb = cache.get('books');
+      if (cb) this.applyBooks(cb);
+      booksP = this.loadBooks();
+      if (!cb) await booksP;
+    } else if (app.globalData.recordsBookId) {
+      await this.loadBooks(); // 从礼簿统计页跳来：先选中指定礼簿
+      this.setData({ list: [] });
+    } else if (Date.now() - this._booksAt > 60 * 1000) {
+      booksP = this.loadBooks();
+    }
+    const before = this.selectedBookId();
+    this.refreshFirst();
+    if (booksP) booksP.then(() => { if (this.selectedBookId() !== before) this.reload(); });
+    this.clearTimer();
+    if (this._hidden) return; // 加载期间已离开本页：不再启动轮询
     this._timer = setInterval(() => this.silentRefresh(), POLL_MS);
   },
 
-  onHide() { this.clearTimer(); },
-  onUnload() { this.clearTimer(); },
+  selectedBookId() {
+    const b = this.data.books[this.data.bookIdx];
+    return b ? b._id : '';
+  },
+
+  onHide() { this._hidden = true; this.clearTimer(); },
+  onUnload() { this._hidden = true; this.clearTimer(); },
 
   clearTimer() {
     if (this._timer) { clearInterval(this._timer); this._timer = null; }
   },
 
+  /** 筛选条件变化：清空后重新加载（有该条件的缓存时先显示缓存） */
   reload() {
     this._notified = false;
     this.setData({ page: 1, list: [], hasMore: true });
-    this.load();
+    this.refreshFirst();
+  },
+
+  /**
+   * 刷新第一页：列表为空时先显示该筛选条件的缓存；网络结果回来后整体替换（不先清空，避免白屏闪烁）
+   * 只缓存无关键字的查询
+   */
+  async refreshFirst() {
+    const params = this.buildParams(1);
+    const key = params.keyword ? '' : 'rec_' + JSON.stringify(params);
+    if (key && !this.data.list.length) {
+      const c = cache.get(key);
+      if (c) this.applyFirst(c);
+    }
+    this.setData({ loading: true });
+    try {
+      const res = await req.recordList(params);
+      if (JSON.stringify(this.buildParams(1)) !== JSON.stringify(params)) return; // 期间筛选已变
+      this.applyFirst(res);
+      if (key) cache.set(key, res);
+    } catch (e) { /* toast 已提示 */ } finally {
+      this.setData({ loading: false });
+    }
+  },
+
+  applyFirst(res) {
+    this._listTotal = res.listTotal;
+    this.setData({
+      list: res.list.map(decorate),
+      sum: fmt.money(res.sum),
+      total: res.total,
+      pendingCount: res.pendingCount,
+      page: 2,
+      hasMore: res.list.length < res.listTotal
+    });
   },
 
   /** 后台静默刷新首页数据（有新待确认转账时提醒） */
@@ -91,19 +174,27 @@ Page({
         app._accountChecked = true;
       }
       if (!app.globalData.account) return; // 宾客没有礼簿
-      const { list, activeBookId } = await req.bookList();
-      const books = [{ _id: '', name: '全部礼簿' }, ...list];
-      const pick = app.globalData.recordsBookId;
-      app.globalData.recordsBookId = '';
-      let want = activeBookId;
-      if (pick) {
-        want = pick;
-        this._bookPicked = true;
-      } else if (this._bookPicked) {
-        want = this.data.books[this.data.bookIdx]._id; // 保留用户手动选择
-      }
-      this.setData({ books, bookIdx: Math.max(0, books.findIndex(b => b._id === want)) });
+      const res = await req.bookList();
+      this._booksAt = Date.now();
+      cache.set('books', res);
+      this.applyBooks(res);
     } catch (e) { /* 未完善主家信息时不显示礼簿 */ }
+  },
+
+  applyBooks({ list, activeBookId }) {
+    const app = getApp();
+    // 机构模式：显示「本场主家 · 礼簿名」
+    const books = [{ _id: '', name: '全部礼簿' }, ...list.map(b => ({ ...b, name: b.hostName ? `${b.hostName} · ${b.name}` : b.name }))];
+    const pick = app.globalData.recordsBookId;
+    app.globalData.recordsBookId = '';
+    let want = activeBookId;
+    if (pick) {
+      want = pick;
+      this._bookPicked = true;
+    } else if (this._bookPicked) {
+      want = this.data.books[this.data.bookIdx]._id; // 保留用户手动选择
+    }
+    this.setData({ books, bookIdx: Math.max(0, books.findIndex(b => b._id === want)) });
   },
 
   onBook(e) {
@@ -166,6 +257,9 @@ Page({
   /** 确认收款：核对微信到账后点击 → 付款方页面显示成功 → 自动打印（需求 e） */
   async onConfirm(e) {
     const record = this.data.list[e.currentTarget.dataset.idx];
+    // 批次录入：需整批核对，到待确认页处理
+    if (record.batchId) return wx.navigateTo({ url: '/pages/pending/pending' });
+    if (this.data.busy) return;
     this.setData({ busy: true });
     try {
       if (await confirm.confirmTransfer(record)) this.reload();
@@ -177,11 +271,21 @@ Page({
   /** 未收到款 */
   async onReject(e) {
     const record = this.data.list[e.currentTarget.dataset.idx];
-    if (await confirm.rejectTransfer(record)) this.reload();
+    if (record.batchId) return wx.navigateTo({ url: '/pages/pending/pending' });
+    if (this.data.busy) return;
+    this.setData({ busy: true });
+    try {
+      if (await confirm.rejectTransfer(record)) this.reload();
+    } finally {
+      this.setData({ busy: false });
+    }
   },
 
   /** 查看付款方留存收据 */
   onReceipt(e) { wx.navigateTo({ url: `/pages/receipt/receipt?rid=${e.currentTarget.dataset.id}` }); },
+
+  goCash() { wx.navigateTo({ url: '/pages/cash/cash' }); },
+  goBooks() { wx.navigateTo({ url: '/pages/books/books' }); },
 
   goLogin() { wx.switchTab({ url: '/pages/mine/mine' }); },
 

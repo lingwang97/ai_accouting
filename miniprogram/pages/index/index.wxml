@@ -1,27 +1,145 @@
-<view class="page tab-page">
-  <view class="hero">
-    <view class="hero-title">扫码随礼</view>
-    <view class="hero-sub">扫描主家的礼簿码，登记姓名礼金，完成随礼</view>
-  </view>
+<view class="page tab-page" style="{{themeStyle}}">
+  <!-- ===== 工作台：主家 / 记账人 ===== -->
+  <block wx:if="{{mode === 'host'}}">
+    <view class="role-line ro" wx:if="{{readonly}}">只读 · 家人共享「{{account.accountName}}」的礼簿</view>
+    <view class="role-line" wx:elif="{{account.orgMode}}">机构 · {{account.orgName || account.accountName}}<text wx:if="{{role === 'clerk'}}"> · 礼台人员</text></view>
+    <view class="role-line" wx:elif="{{role === 'clerk'}}">记账人 · 为「{{account.accountName}}」记账</view>
 
-  <view class="scan-wrap">
-    <view class="scan-btn" bindtap="onScan" hover-class="scan-btn-hover">
-      <view class="scan-icon">
-        <view class="corner tl"></view><view class="corner tr"></view>
-        <view class="corner bl"></view><view class="corner br"></view>
-        <view class="scan-line"></view>
-      </view>
-      <view class="scan-text">点击扫码</view>
+    <view class="warn-card" wx:if="{{role === 'owner' && account.payCodeCheck}}" bindtap="goAccount">
+      <block wx:if="{{account.payCodeBy}}">记账人「{{account.payCodeBy}}」提交了新的收款码，你确认采用后才生效 ›</block>
+      <block wx:else>礼簿已移交给你，请确认收款码是你本人的微信收款码 ›</block>
     </view>
-  </view>
+    <view class="warn-card" wx:if="{{role === 'owner' && joinCount}}" bindtap="goMembers">有 {{joinCount}} 人通过邀请卡申请加入，请确认 ›</view>
 
-  <view class="card steps">
-    <view class="step"><text class="num">1</text><text>扫描主家礼簿码</text></view>
-    <view class="step"><text class="num">2</text><text>填写姓名和礼金，确认随礼</text></view>
-    <view class="step"><text class="num">3</text><text>按提示向主家收款码转账</text></view>
-    <view class="step"><text class="num">4</text><text>主家确认收到，礼金入簿并生成回执</text></view>
-  </view>
+    <!-- 当前礼簿 -->
+    <view class="book-card" bindtap="goRecords">
+      <view class="bc-top">
+        <view class="bc-title" catchtap="{{restricted ? '' : 'onSwitchBook'}}">
+          <view class="bc-name">{{book ? (book.hostName ? book.hostName + ' · ' + book.name : book.name) : '我的礼簿'}}</view>
+          <view class="bc-meta" wx:if="{{book}}">{{book.typeLabel}}<text wx:if="{{book.date}}"> · {{book.date}}</text></view>
+        </view>
+        <view class="bc-switch-btn" wx:if="{{!restricted}}" hover-class="bc-switch-hover" catchtap="onSwitchBook">⇅ 切换礼簿</view>
+      </view>
+      <view class="bc-label">礼金合计</view>
+      <view class="bc-sum">￥{{book ? book.sumStr : '0.00'}}</view>
+      <view class="bc-foot">
+        <text>{{book ? book.count : 0}} 份</text>
+        <text>今日 ￥{{todaySum}} · {{todayCount}} 份</text>
+        <text>明细 ›</text>
+      </view>
+    </view>
 
-  <view class="my-receipts" bindtap="goMyReceipts">🧾 我的随礼记录 ›</view>
-  <view class="muted footer">我是主家？去「我的」创建礼簿</view>
+    <!-- 提醒未开启（家人共享不提醒） -->
+    <view class="tip-bar" wx:if="{{notifyTip && !readonly}}" bindtap="onSubscribe">
+      <image class="tip-icon" src="/assets/icons/bell-r.svg" />
+      <text class="tip-text">{{notifyTip}}</text>
+      <text class="tip-go">开启 ›</text>
+    </view>
+
+    <!-- 家人共享：只读入口 -->
+    <view class="grid" wx:if="{{readonly}}">
+      <view class="g-item" hover-class="g-hover" bindtap="goRecords">
+        <view class="g-icon"><image src="/assets/icons/book-w.svg" /></view>
+        <view class="g-title">礼金明细</view>
+        <view class="g-sub">查看、搜索</view>
+      </view>
+      <view class="g-item" hover-class="g-hover" bindtap="goReconcile">
+        <view class="g-icon"><image src="/assets/icons/receipt-w.svg" /></view>
+        <view class="g-title">一键对账</view>
+        <view class="g-sub">按方式汇总</view>
+      </view>
+      <view class="g-item" hover-class="g-hover" bindtap="goBookDetail">
+        <view class="g-icon"><image src="/assets/icons/layers-w.svg" /></view>
+        <view class="g-title">礼簿统计</view>
+        <view class="g-sub">按关系、方式</view>
+      </view>
+      <view class="g-item" hover-class="g-hover" bindtap="goBooks">
+        <view class="g-icon"><image src="/assets/icons/export-w.svg" /></view>
+        <view class="g-title">导出</view>
+        <view class="g-sub">PDF / Excel</view>
+      </view>
+    </view>
+
+    <!-- 四个常用操作 -->
+    <view class="grid" wx:else>
+      <view class="g-item" hover-class="g-hover" bindtap="goQrcode">
+        <view class="g-icon"><image src="/assets/icons/qrcode-w.svg" /></view>
+        <view class="g-title">出示礼簿码</view>
+        <view class="g-sub">双码展示 · 台卡</view>
+      </view>
+      <view class="g-item" hover-class="g-hover" bindtap="goPending">
+        <view class="g-icon"><image src="/assets/icons/check-w.svg" /><text class="g-badge" wx:if="{{pendingCount > 0}}">{{pendingCount}}</text></view>
+        <view class="g-title">待确认</view>
+        <view class="g-sub {{pendingCount > 0 ? 'hot' : ''}}">{{pendingCount > 0 ? pendingCount + ' 份 ￥' + pendingSum : '暂无'}}</view>
+      </view>
+      <view class="g-item" hover-class="g-hover" bindtap="goCash">
+        <view class="g-icon"><image src="/assets/icons/cash-w.svg" /></view>
+        <view class="g-title">登记现金</view>
+        <view class="g-sub">礼台记账</view>
+      </view>
+      <view class="g-item" hover-class="g-hover" bindtap="goPrinter">
+        <view class="g-icon"><image src="/assets/icons/printer-w.svg" /></view>
+        <view class="g-title">打印机</view>
+        <view class="g-sub {{printerName ? 'ok' : ''}}">{{printerName ? '已连接' : '未连接'}}</view>
+      </view>
+    </view>
+
+    <!-- 次常用 -->
+    <view class="card links" wx:if="{{!readonly}}">
+      <view class="link-item" bindtap="goReconcile"><image src="/assets/icons/receipt-m.svg" /><text>一键对账</text></view>
+      <view class="link-item" bindtap="goBooks"><image src="/assets/icons/book-m.svg" /><text>{{account.orgMode ? '场次管理' : '礼簿管理'}}</text></view>
+      <view class="link-item" wx:if="{{account.orgMode}}" bindtap="goOrgSummary"><image src="/assets/icons/layers-m.svg" /><text>场次汇总</text></view>
+    </view>
+    <ad-slot slot="workbench" book-type="{{book ? book.type : ''}}" />
+  </block>
+
+  <!-- ===== 加载中骨架（首次打开、没有缓存时） ===== -->
+  <block wx:elif="{{mode === 'loading'}}">
+    <view class="sk sk-book"></view>
+    <view class="grid">
+      <view class="g-item sk-item" wx:for="{{[1, 2, 3, 4]}}" wx:key="*this">
+        <view class="sk sk-icon"></view>
+        <view class="sk sk-line"></view>
+        <view class="sk sk-line short"></view>
+      </view>
+    </view>
+    <view class="sk sk-bar"></view>
+  </block>
+
+  <!-- ===== 首页：宾客 / 未登录 ===== -->
+  <block wx:elif="{{mode === 'guest'}}">
+    <view class="hero">
+      <view class="hero-title">扫码随礼</view>
+      <view class="hero-sub">扫描主家的礼簿码，登记姓名礼金，完成随礼</view>
+    </view>
+
+    <view class="scan-wrap">
+      <view class="scan-btn" bindtap="onScan" hover-class="scan-btn-hover">
+        <view class="scan-icon">
+          <view class="corner tl"></view><view class="corner tr"></view>
+          <view class="corner bl"></view><view class="corner br"></view>
+          <view class="scan-line"></view>
+        </view>
+        <view class="scan-text">点击扫码</view>
+      </view>
+    </view>
+
+    <view class="card steps">
+      <view class="step"><text class="num">1</text><text>扫描主家礼簿码</text></view>
+      <view class="step"><text class="num">2</text><text>填写姓名和礼金，确认随礼</text></view>
+      <view class="step"><text class="num">3</text><text>按提示向主家收款码转账</text></view>
+      <view class="step"><text class="num">4</text><text>主家确认收到，礼金入簿并生成回执</text></view>
+    </view>
+
+    <view class="my-receipts" bindtap="goMyReceipts">我的随礼记录 ›</view>
+
+    <view class="card host-entry">
+      <view>
+        <view class="he-title">我是主家，要办事收礼</view>
+        <view class="muted">创建礼簿，宾客扫码随礼自动记账、打印回执</view>
+      </view>
+      <button wx:if="{{loggedIn}}" class="btn-primary he-btn" bindtap="goAccount">创建礼簿</button>
+      <button wx:else class="btn-primary he-btn" bindtap="goLogin">登录</button>
+    </view>
+  </block>
 </view>

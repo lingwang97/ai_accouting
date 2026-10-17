@@ -22,14 +22,14 @@
 /* 步骤条 */
 .steps { display: flex; align-items: center; justify-content: center; margin-bottom: 24rpx; }
 .st { font-size: 24rpx; color: #bbb; padding: 6rpx 16rpx; border-radius: 999rpx; background: #fff; }
-.st.on { color: #fff; background: #07C160; }
-.st.done { color: #07C160; }
+.st.on { color: #fff; background: var(--primary); }
+.st.done { color: var(--primary); }
 .st-line { width: 40rpx; height: 2rpx; background: #ddd; margin: 0 8rpx; }
 
 /* 等待动画 */
 .spinner {
   width: 80rpx; height: 80rpx; margin: 0 auto 16rpx;
-  border: 6rpx solid #e5e5e5; border-top-color: #07C160;
+  border: 6rpx solid #e5e5e5; border-top-color: var(--primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -39,20 +39,19 @@
 .btn-save { margin: 20rpx 0 8rpx; }
 .chips { display: flex; flex-wrap: wrap; gap: 14rpx; margin-bottom: 14rpx; }
 .chip { padding: 8rpx 26rpx; border-radius: 999rpx; background: #f2f3f5; color: #666; font-size: 26rpx; }
-.chip.on { background: #07C160; color: #fff; }
-.proxy-row { display: flex; align-items: center; gap: 12rpx; margin-bottom: 12rpx; }
-.p-name { flex: 3; }
-.p-amt { flex: 2; }
-.p-del { color: #999; padding: 0 8rpx; }
-.proxy-add { color: #576B95; font-size: 26rpx; margin-bottom: 8rpx; }
+.chip.on { background: var(--primary); color: #fff; }
 .success-head.plain .ok-title { color: #333; }
-.proxy-toggle { color: #576B95; font-size: 26rpx; padding: 8rpx 0 12rpx; }
 .scan-icon { font-size: 80rpx; }
 .scan-steps { text-align: left; font-size: 28rpx; color: #333; line-height: 2; margin: 8rpx 0 20rpx; }
-.scan-steps .em { color: #07C160; font-weight: 600; }
+.scan-steps .em { color: var(--primary); font-weight: 600; }
 .link-fold { color: #576B95; font-size: 26rpx; padding-top: 8rpx; }
 .success-head { padding: 28rpx; }
 .btn-receipt { margin-top: 28rpx; }
 .offscreen { position: fixed; left: -2000px; top: 0; width: 750px; height: 1400px; }
 .big-amount { font-size: 72rpx; margin: 8rpx 0; }
-.saved-tip { color: #07C160; font-size: 28rpx; margin: 16rpx 0 4rpx; }
+.saved-tip { color: var(--primary); font-size: 28rpx; margin: 16rpx 0 4rpx; }
+.cash-tip { color: #FF9F1C; font-size: 30rpx; font-weight: 600; margin: 16rpx 0; }
+.batch-switch { display: flex; justify-content: space-between; align-items: center; gap: 24rpx; }
+.pay-method { margin-top: 28rpx; }
+.items { font-size: 24rpx; line-height: 1.6; margin-top: 8rpx; }
+.host-cta { margin: 24rpx 0; padding: 22rpx 24rpx; background: var(--primary-soft); color: var(--primary); border-radius: 12rpx; font-size: 26rpx; line-height: 1.6; text-align: center; }

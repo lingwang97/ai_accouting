@@ -4,6 +4,7 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
 const records = db.collection('records');
+const { resolveCtx, canBook, readonly } = require('./ctx.js');
 const PENDING_TTL = 30 * 60 * 1000;
 
 /** 幂等建集合（init 未跑完时自愈；同一实例每个集合只尝试一次） */
@@ -15,31 +16,55 @@ async function ensureCol(name) {
 }
 
 exports.main = async (event) => {
+  // 预热：warmer 云函数按「系统设置」定时唤醒，保持实例常驻、减少冷启动；直接返回，不做任何读写
+  if (event && (event.action === '__warm' || event.Type === 'Timer')) return { code: 0, msg: 'warm', data: null }; // Timer：兼容之前上传过的旧预热触发器
   const { OPENID } = cloud.getWXContext();
+  if (!OPENID) return err('未获取到用户身份');
   try {
     await ensureCol('records');
-    if (event.action === 'list' || event.action === 'pending') await expirePending(OPENID);
+    // 记账人代主家操作：数据一律按主家
+    const ctx = await resolveCtx(db, OPENID);
+    const OWNER = ctx.ownerOpenid;
+    // 只读家人不触发写操作
+    if (['list', 'pending', 'dashboard', 'pendingStat'].includes(event.action) && !readonly(ctx) && ctx.account) await expirePending(OWNER);
     switch (event.action) {
+      case 'dashboard':
+        return await dashboard(ctx);
+      case 'orgSummary':
+        return await orgSummary(ctx, event);
+      case 'reconcile':
+        return await reconcile(ctx, event);
       case 'list':
-        return await list(OPENID, event);
+        return await list(OWNER, event, ctx);
       case 'detail':
-        return await detail(OPENID, event.rid);
+        return await detail(OWNER, event.rid, ctx);
       case 'markPrinted':
-        return await markPrinted(OPENID, event.rids);
+        if (readonly(ctx)) return err('家人共享为只读');
+        return await markPrinted(OWNER, event.rids, ctx);
       case 'pending':
-        return await pending(OPENID);
+        return await pending(OWNER, ctx);
+      case 'pendingStat':
+        return await pendingStat(OWNER, ctx);
       case 'themes':
-        return await themes(OPENID);
+        return await themes(OWNER);
       default:
         return err('未知 action');
     }
   } catch (e) {
-    return err('查询失败：' + e.message);
+    console.error('records', event.action, e);
+    return err('查询失败，请稍后重试');
   }
 };
 
-/** 超过 PENDING_TTL 仍未转账的记录自动取消（惰性执行，付款方之后仍可补点「已转账」） */
+/**
+ * 超过 PENDING_TTL 仍未转账的记录自动取消（惰性执行，付款方之后仍可补点「已转账」）
+ * 是写操作，同一实例内每位主家每分钟最多执行一次，避免拖慢每次查询
+ */
+const expiredAt = new Map();
 async function expirePending(openid) {
+  const last = expiredAt.get(openid) || 0;
+  if (Date.now() - last < 60 * 1000) return;
+  expiredAt.set(openid, Date.now());
   await records.where({
     ownerOpenid: openid,
     status: 'pending',
@@ -47,8 +72,214 @@ async function expirePending(openid) {
   }).update({ data: { status: 'cancelled', autoCancelled: true } });
 }
 
+/**
+ * 工作台一次取齐：主家信息与身份、当前礼簿合计、今日收礼、待确认（原先前端要依次调 4 次）
+ * 当前礼簿尚未建立或尚未补算合计时 needBooks=true，前端再调 books.list（会自动建默认礼簿、补算）
+ */
+async function dashboard(ctx) {
+  const account = ctx.account;
+  const lastNotify = (ctx.user && ctx.user.lastNotify) || null;
+  if (!account) return ok({ account: null, role: ctx.role, lastNotify });
+  const owner = ctx.ownerOpenid;
+  const today = bjDay(new Date());
+  const scope = ctx.bookIds ? { bookId: _.in(ctx.bookIds) } : {};
+  const activeId = canBook(ctx, account.activeBookId) ? account.activeBookId : (ctx.bookIds ? ctx.bookIds[0] : '');
+  const pendCond = { ownerOpenid: owner, status: 'transferred', ...scope };
+  const [bookRes, todayRes, pendRes, pendCount, joinRes] = await Promise.all([
+    activeId ? db.collection('books').doc(activeId).get().catch(() => null) : null,
+    records.aggregate()
+      .match({ ownerOpenid: owner, status: 'paid', payDay: today, ...scope })
+      .group({ _id: null, count: _.aggregate.sum(1), fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) })
+      .end(),
+    // 待确认份数与合计：计数 + 聚合（不受单次查询 100 条限制）
+    records.aggregate().match(pendCond)
+      .group({ _id: null, fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) })
+      .end(),
+    records.where(pendCond).count(),
+    // 主家：通过邀请卡申请加入、待同意的人数
+    ctx.role === 'owner' ? db.collection('members').where({ aid: account._id, status: 'pending' }).count() : null
+  ]);
+  const b = bookRes && bookRes.data;
+  const book = b && b.ownerOpenid === owner && b.statReady
+    ? { _id: b._id, name: b.name, type: b.type, date: b.date || '', hostName: b.hostName || '', count: b.statCount || 0, sum: (b.statFen || 0) / 100 }
+    : null;
+  const t = (todayRes.list && todayRes.list[0]) || { count: 0, fen: 0 };
+  const pendFen = Math.round(((pendRes.list && pendRes.list[0]) || { fen: 0 }).fen);
+  // 返回给前端的主家信息去掉内部字段；只负责部分场次的人员与家人看不到收款码文件
+  const { ownerOpenid, transferredFrom, transferPending, pendingPayCode, _openid, ...shown } = account;
+  if (ctx.bookIds) { delete shown.payCodeFileID; delete shown.payCodeBy; }
+  return ok({
+    account: { ...shown, hasPendingPayCode: !!pendingPayCode },
+    role: ctx.role,
+    restricted: !!ctx.bookIds,
+    readonly: readonly(ctx),
+    lastNotify,
+    book,
+    needBooks: !book,
+    today: { count: t.count, sum: Math.round(t.fen) / 100 },
+    pending: { count: pendCount.total, sum: pendFen / 100 },
+    pendingMembers: joinRes ? joinRes.total : 0
+  });
+}
+
+/**
+ * 机构版：多场次汇总。每场（礼簿）的份数、合计、待确认、现金 / 微信分项，以及每位礼台人员的登记与确认
+ * event.month：'YYYY-MM' 只看该月办事日期的场次；空为全部
+ */
+async function orgSummary(ctx, event) {
+  if (!ctx.account) return err('请先完善主家信息');
+  const owner = ctx.ownerOpenid;
+  const month = /^\d{4}-\d{2}$/.test(String(event.month || '')) ? event.month : '';
+  let books = (await db.collection('books').where({ ownerOpenid: owner }).orderBy('date', 'desc').limit(1000).get()).data
+    .filter(b => canBook(ctx, b._id));
+  if (month) books = books.filter(b => String(b.date || '').startsWith(month));
+  if (!books.length) return ok({ list: [], total: { count: 0, sum: 0, pending: 0 }, staff: [] });
+  const ids = books.map(b => b._id);
+  const fenOf = _.aggregate.sum(_.aggregate.multiply(['$amount', 100]));
+  const [byBook, byStaff, members] = await Promise.all([
+    records.aggregate()
+      .match({ ownerOpenid: owner, bookId: _.in(ids), status: _.in(['paid', 'transferred']) })
+      .group({ _id: { bookId: '$bookId', status: '$status', method: '$payMethod' }, count: _.aggregate.sum(1), fen: fenOf })
+      .limit(1000).end(),
+    records.aggregate()
+      .match({ ownerOpenid: owner, bookId: _.in(ids), status: 'paid' })
+      .group({ _id: { bookId: '$bookId', handler: '$handlerOpenid' }, name: _.aggregate.first('$handlerName'), count: _.aggregate.sum(1), fen: fenOf })
+      .limit(1000).end(),
+    db.collection('members').where({ aid: ctx.account._id }).limit(100).get()
+  ]);
+  members.data = members.data.filter(m => m.status !== 'pending'); // 待主家同意的不算
+  const users = {};
+  const openids = members.data.map(m => m.memberOpenid);
+  if (openids.length) {
+    (await db.collection('users').where({ openid: _.in(openids) }).field({ openid: true, nickname: true }).get())
+      .data.forEach(u => { users[u.openid] = u.nickname; });
+  }
+  const row = {};
+  books.forEach(b => {
+    row[b._id] = {
+      _id: b._id, name: b.name, type: b.type, date: b.date || '', hostName: b.hostName || '', archived: !!b.archived,
+      count: 0, fen: 0, pending: 0, cashFen: 0, wechatFen: 0, staff: [],
+      // 负责本场的礼台人员（未指定场次的人员负责全部）
+      onDuty: members.data.filter(m => !m.bookIds || !m.bookIds.length || m.bookIds.includes(b._id))
+        .map(m => ({ name: users[m.memberOpenid] || '记账人', title: m.title || '' }))
+    };
+  });
+  (byBook.list || []).forEach(g => {
+    const r = row[g._id.bookId];
+    if (!r) return;
+    if (g._id.status === 'transferred') { r.pending += g.count; return; }
+    r.count += g.count;
+    r.fen += Math.round(g.fen);
+    if (g._id.method === 'cash') r.cashFen += Math.round(g.fen); else r.wechatFen += Math.round(g.fen);
+  });
+  const staffTotal = {};
+  (byStaff.list || []).forEach(g => {
+    const r = row[g._id.bookId];
+    const name = g.name || (g._id.handler ? users[g._id.handler] : '') || '主家（早期记录）';
+    if (r) r.staff.push({ name, count: g.count, sum: Math.round(g.fen) / 100 });
+    const k = g._id.handler || name;
+    staffTotal[k] = staffTotal[k] || { name, count: 0, fen: 0 };
+    staffTotal[k].count += g.count;
+    staffTotal[k].fen += Math.round(g.fen);
+  });
+  const list = books.map(b => {
+    const r = row[b._id];
+    return { ...r, sum: r.fen / 100, cash: r.cashFen / 100, wechat: r.wechatFen / 100 };
+  });
+  return ok({
+    list,
+    total: {
+      count: list.reduce((t, r) => t + r.count, 0),
+      sum: list.reduce((t, r) => t + r.fen, 0) / 100,
+      pending: list.reduce((t, r) => t + r.pending, 0)
+    },
+    staff: Object.values(staffTotal).map(x => ({ name: x.name, count: x.count, sum: x.fen / 100 })).sort((a, b) => b.sum - a.sum)
+  });
+}
+
+/**
+ * 一键对账：某本礼簿（默认当前礼簿）按状态、支付方式、记账人汇总；event.day 只看某天
+ * 现金分两类：宾客自报现金（宾客登记后主家确认）、礼台登记现金（主家 / 记账人直接录入，payerOpenid 为空）
+ */
+async function reconcile(ctx, event) {
+  const account = ctx.account;
+  if (!account) return err('请先完善主家信息');
+  const owner = ctx.ownerOpenid;
+  let bookId = String(event.bookId || '') || account.activeBookId || '';
+  if (ctx.bookIds && !canBook(ctx, bookId)) bookId = ctx.bookIds[0];
+  if (!bookId) return err('还没有礼簿');
+  let book;
+  try { book = (await db.collection('books').doc(bookId).get()).data; } catch (e) { return err('礼簿不存在'); }
+  if (book.ownerOpenid !== owner || !canBook(ctx, bookId)) return err('礼簿不存在');
+
+  const base = { ownerOpenid: owner, bookId };
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(event.day || ''))) base.payDay = event.day;
+  const fenOf = _.aggregate.sum(_.aggregate.multiply(['$amount', 100]));
+  const [byStatus, deskCash, diff, byHandler] = await Promise.all([
+    records.aggregate().match(base)
+      .group({ _id: { status: '$status', method: '$payMethod' }, count: _.aggregate.sum(1), fen: fenOf })
+      .limit(100).end(),
+    records.aggregate().match({ ...base, status: 'paid', payMethod: 'cash', payerOpenid: '' })
+      .group({ _id: null, count: _.aggregate.sum(1), fen: fenOf }).end(),
+    // 按实际到账入簿：宾客登记金额与实收不一致的
+    records.aggregate().match({ ...base, status: 'paid', declaredAmount: _.exists(true) })
+      .group({ _id: null, count: _.aggregate.sum(1), fen: fenOf, declaredFen: _.aggregate.sum(_.aggregate.multiply(['$declaredAmount', 100])) })
+      .end(),
+    records.aggregate().match({ ...base, status: 'paid' })
+      .group({ _id: { handler: '$handlerOpenid', method: '$payMethod' }, name: _.aggregate.first('$handlerName'), count: _.aggregate.sum(1), fen: fenOf })
+      .limit(200).end()
+  ]);
+
+  const z = () => ({ count: 0, fen: 0 });
+  const s = { paid: z(), wechat: z(), cash: z(), transferred: z(), pending: z(), rejected: z(), void: z(), cancelled: z() };
+  (byStatus.list || []).forEach(g => {
+    const st = g._id.status;
+    const add = (k) => { s[k].count += g.count; s[k].fen += Math.round(g.fen); };
+    if (st === 'paid') {
+      add('paid');
+      add(g._id.method === 'cash' ? 'cash' : 'wechat');
+    } else if (s[st]) {
+      add(st);
+    }
+  });
+  const desk = (deskCash.list && deskCash.list[0]) || { count: 0, fen: 0 };
+  const d = (diff.list && diff.list[0]) || { count: 0, fen: 0, declaredFen: 0 };
+  const hs = {};
+  (byHandler.list || []).forEach(g => {
+    const k = g._id.handler || '_';
+    hs[k] = hs[k] || { name: g.name || (g._id.handler ? '记账人' : '主家（早期记录）'), count: 0, fen: 0, cashCount: 0, cashFen: 0 };
+    hs[k].count += g.count;
+    hs[k].fen += Math.round(g.fen);
+    if (g._id.method === 'cash') { hs[k].cashCount += g.count; hs[k].cashFen += Math.round(g.fen); }
+  });
+  const y = x => ({ count: x.count, sum: Math.round(x.fen) / 100 });
+  return ok({
+    book: { _id: book._id, name: book.name, type: book.type, date: book.date || '', hostName: book.hostName || '' },
+    day: base.payDay || '',
+    paid: y(s.paid),
+    wechat: y(s.wechat),
+    cash: y(s.cash),
+    deskCash: y(desk),
+    guestCash: { count: s.cash.count - desk.count, sum: Math.round(s.cash.fen - desk.fen) / 100 },
+    transferred: y(s.transferred),
+    pending: y(s.pending),
+    rejected: y(s.rejected),
+    void: y(s.void),
+    diff: { count: d.count, declared: Math.round(d.declaredFen) / 100, actual: Math.round(d.fen) / 100, gap: Math.round(d.fen - d.declaredFen) / 100 },
+    handlers: Object.values(hs).map(h => ({ name: h.name, count: h.count, sum: h.fen / 100, cashCount: h.cashCount, cashSum: h.cashFen / 100 }))
+      .sort((a, b) => b.sum - a.sum)
+  });
+}
+
+/** 云函数运行在 UTC，日期按北京时间（UTC+8） */
+function bjDay(d) {
+  const t = new Date(new Date(d).getTime() + 8 * 3600 * 1000);
+  const p = n => (n < 10 ? '0' + n : '' + n);
+  return `${t.getUTCFullYear()}-${p(t.getUTCMonth() + 1)}-${p(t.getUTCDate())}`;
+}
+
 /** 分页 + 全量汇总；按日/关键词筛选 */
-async function list(openid, event) {
+async function list(openid, event, ctx) {
   const page = Math.max(1, Number(event.page) || 1);
   const pageSize = Math.min(50, Math.max(1, Number(event.pageSize) || 20));
 
@@ -56,6 +287,11 @@ async function list(openid, event) {
   const base = { ownerOpenid: openid };
   if (event.payDay) base.payDay = String(event.payDay).slice(0, 10);
   if (event.bookId) base.bookId = String(event.bookId).slice(0, 64);
+  // 礼台人员只看负责的场次
+  if (ctx.bookIds) {
+    if (base.bookId && !canBook(ctx, base.bookId)) base.bookId = '__none__';
+    else if (!base.bookId) base.bookId = _.in(ctx.bookIds);
+  }
   if (event.relation) base.relation = String(event.relation).slice(0, 10);
   let kw = null;
   if (event.keyword) {
@@ -85,7 +321,7 @@ async function list(openid, event) {
 
   const totalFen = (sumRes.list && sumRes.list[0] && sumRes.list[0].totalFen) || 0;
   return ok({
-    list: listRes.data,
+    list: listRes.data.map(strip),
     total: totalRes.total,          // 已确认笔数
     pendingCount: pendingRes.total, // 待确认笔数
     listTotal: listTotalRes.total,  // 列表总条数（分页用）
@@ -95,27 +331,52 @@ async function list(openid, event) {
   });
 }
 
-async function detail(openid, rid) {
+async function detail(openid, rid, ctx) {
   if (!/^[a-zA-Z0-9_-]{1,64}$/.test(String(rid || ''))) return err('参数错误');
   const rec = (await records.doc(rid).get()).data;
-  if (!rec || rec.ownerOpenid !== openid) return err('无权查看');
-  return ok({ record: rec });
+  if (!rec || rec.ownerOpenid !== openid || !canBook(ctx, rec.bookId)) return err('无权查看');
+  return ok({ record: strip(rec) });
 }
 
-/** 打印成功回写：只允许收款方标记自己的账目 */
-async function markPrinted(openid, rids) {
+/** 打印成功回写：只允许收款方标记自己的账目（只负责部分场次的人员限于负责的场次） */
+async function markPrinted(openid, rids, ctx) {
   if (!Array.isArray(rids) || rids.length === 0 || rids.length > 50) return err('参数错误');
-  const res = await records.where({ ownerOpenid: openid, _id: _.in(rids) })
+  const ids = rids.map(String).filter(s => /^[a-zA-Z0-9_-]{1,64}$/.test(s));
+  if (!ids.length) return err('参数错误');
+  const cond = { ownerOpenid: openid, _id: _.in(ids) };
+  if (ctx.bookIds) cond.bookId = _.in(ctx.bookIds);
+  const res = await records.where(cond)
     .update({ data: { printed: true } });
   return ok({ updated: res.stats.updated });
 }
 
 /** 待收款方确认的转账（"我的"页置顶 + 角标） */
-async function pending(openid) {
-  const res = await records.where({ ownerOpenid: openid, status: 'transferred' })
-    .orderBy('createdAt', 'desc').limit(50).get();
-  return ok({ list: res.data, count: res.data.length });
+async function pending(openid, ctx) {
+  const cond = { ownerOpenid: openid, status: 'transferred' };
+  if (ctx.bookIds) cond.bookId = _.in(ctx.bookIds);
+  const [res, cnt] = await Promise.all([
+    records.where(cond).orderBy('createdAt', 'desc').limit(100).get(),
+    records.where(cond).count()
+  ]);
+  return ok({ list: res.data.map(strip), count: cnt.total });
 }
+
+/** 待确认份数与合计（工作台轮询用，只做计数 + 聚合） */
+async function pendingStat(openid, ctx) {
+  if (!ctx.account) return ok({ count: 0, sum: 0 });
+  const cond = { ownerOpenid: openid, status: 'transferred' };
+  if (ctx.bookIds) cond.bookId = _.in(ctx.bookIds);
+  const [cnt, agg] = await Promise.all([
+    records.where(cond).count(),
+    records.aggregate().match(cond)
+      .group({ _id: null, fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) })
+      .end()
+  ]);
+  return ok({ count: cnt.total, sum: Math.round(((agg.list && agg.list[0]) || { fen: 0 }).fen) / 100 });
+}
+
+/** 返回给前端的账目去掉宾客与经办人的 openid（前端用不到） */
+const strip = ({ payerOpenid, handlerOpenid, enteredBy, _openid, ...r }) => r;
 
 /** 出现过的记账主题（导出筛选用） */
 async function themes(openid) {

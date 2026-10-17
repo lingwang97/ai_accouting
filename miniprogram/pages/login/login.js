@@ -31,7 +31,11 @@ Page({
       app.globalData.user = data.user;
       try { wx.removeStorageSync('logged_out'); } catch (e) { /* 忽略 */ }
       wx.showToast({ title: data.isNew ? '注册成功' : '欢迎回来', icon: 'success' });
-      setTimeout(() => wx.switchTab({ url: '/pages/mine/mine' }), 600);
+      const token = app.globalData.pendingInvite;
+      setTimeout(() => {
+        if (token) wx.redirectTo({ url: `/pages/invite/invite?token=${token}` });
+        else wx.switchTab({ url: '/pages/mine/mine' });
+      }, 600);
     } catch (e) {
       // request.js 已 toast
     } finally {

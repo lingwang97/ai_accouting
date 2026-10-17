@@ -2,6 +2,7 @@
 const req = require('../../utils/request.js');
 const fmt = require('../../utils/format.js');
 const openfile = require('../../utils/openfile.js');
+const theme = require('../../utils/theme.js');
 
 function presets() {
   const now = new Date();
@@ -25,6 +26,10 @@ Page({
     books: [{ _id: '', name: '按日期范围导出' }],
     bookIdx: 0,
     exporting: ''   // '' | 'pdf' | 'xlsx' | 'book'
+  },
+
+  onShow() {
+    theme.apply(this); // 主题色跟当前礼簿事由走
   },
 
   onLoad(options) {

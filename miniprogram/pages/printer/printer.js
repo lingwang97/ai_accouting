@@ -1,6 +1,7 @@
 // pages/printer/printer.js — 蓝牙打印机管理（UC6）
 const ble = require('../../utils/ble.js');
 const printer = require('../../utils/printer.js');
+const theme = require('../../utils/theme.js');
 
 Page({
   data: {
@@ -13,16 +14,19 @@ Page({
   },
 
   onShow() {
+    theme.apply(this); // 主题色跟当前礼簿事由走
     this.setData({ savedDevice: ble.loadDevice(), connected: printer.isConnected() });
   },
 
   onHide() {
     ble.stopDiscovery();
+    ble.offFound();
     this.setData({ discovering: false });
   },
 
   onUnload() {
     ble.stopDiscovery();
+    ble.offFound();
   },
 
   toggleShowAll() {

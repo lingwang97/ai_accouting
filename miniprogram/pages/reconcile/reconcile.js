@@ -1,0 +1,174 @@
+// pages/reconcile/reconcile.js — 一键对账：当前礼簿（可切换）按支付方式、状态、记账人汇总，可复制对账单 / 保存图片
+const req = require('../../utils/request.js');
+const fmt = require('../../utils/format.js');
+const theme = require('../../utils/theme.js');
+const receipt = require('../../utils/receipt.js');
+
+Page({
+  data: {
+    books: [],        // 可选礼簿（含已归档）
+    bookIdx: 0,
+    range: 'all',     // all 全部 | today 今日
+    r: null,          // 对账结果（已格式化）
+    loading: true,
+    saving: false,
+    themeStyle: ''
+  },
+
+  async onLoad(options) {
+    try {
+      const { list, activeBookId } = await req.bookList();
+      const books = list.map(b => ({ _id: b._id, name: b.hostName ? `${b.hostName} · ${b.name}` : b.name }));
+      const want = options.bookId || activeBookId;
+      this.setData({ books, bookIdx: Math.max(0, books.findIndex(b => b._id === want)) });
+    } catch (e) { /* toast 已提示 */ }
+    this.load();
+  },
+
+  onShow() { theme.apply(this); },
+
+  onPullDownRefresh() {
+    this.load().then(() => wx.stopPullDownRefresh());
+  },
+
+  async load() {
+    const b = this.data.books[this.data.bookIdx];
+    this.setData({ loading: true });
+    try {
+      const day = this.data.range === 'today' ? fmt.day(new Date()) : '';
+      const r = await req.reconcile(b ? b._id : '', day);
+      const m = x => ({ count: x.count, sumStr: fmt.money(x.sum) });
+      this.setData({
+        r: {
+          ...r,
+          bookTitle: r.book.hostName ? `${r.book.hostName} · ${r.book.name}` : r.book.name,
+          paid: m(r.paid), wechat: m(r.wechat), cash: m(r.cash), deskCash: m(r.deskCash), guestCash: m(r.guestCash),
+          transferred: m(r.transferred), pending: m(r.pending), rejected: m(r.rejected), void: m(r.void),
+          diff: { ...r.diff, declaredStr: fmt.money(r.diff.declared), actualStr: fmt.money(r.diff.actual), gapStr: fmt.money(Math.abs(r.diff.gap)) },
+          handlers: r.handlers.map(h => ({ ...h, sumStr: fmt.money(h.sum), cashSumStr: fmt.money(h.cashSum) })),
+          at: fmt.dateTime(new Date())
+        }
+      });
+    } catch (e) {
+      this.setData({ r: null });
+    } finally {
+      this.setData({ loading: false });
+    }
+  },
+
+  onBook(e) {
+    this.setData({ bookIdx: Number(e.detail.value) });
+    this.load();
+  },
+
+  onRange(e) {
+    this.setData({ range: e.currentTarget.dataset.v });
+    this.load();
+  },
+
+  goPending() {
+    if (getApp().globalData.role === 'viewer') return wx.showToast({ title: '家人共享为只读，由主家确认', icon: 'none' });
+    wx.navigateTo({ url: '/pages/pending/pending' });
+  },
+
+  /** 对账单文字（复制、画图共用） */
+  lines() {
+    const r = this.data.r;
+    const out = [
+      `【对账单】${r.bookTitle}`,
+      `范围：${this.data.range === 'today' ? '今日 ' + fmt.day(new Date()) : '全部'}　生成：${r.at}`,
+      `已入簿：${r.paid.count} 份，￥${r.paid.sumStr}`,
+      `· 微信转账：${r.wechat.count} 份，￥${r.wechat.sumStr}`,
+      `· 现金合计：${r.cash.count} 份，￥${r.cash.sumStr}`,
+      `　- 礼台登记现金：${r.deskCash.count} 份，￥${r.deskCash.sumStr}`,
+      `　- 宾客自报现金：${r.guestCash.count} 份，￥${r.guestCash.sumStr}`
+    ];
+    if (r.transferred.count) out.push(`待确认：${r.transferred.count} 份，￥${r.transferred.sumStr}`);
+    if (r.pending.count) out.push(`宾客未转账：${r.pending.count} 份，￥${r.pending.sumStr}`);
+    if (r.rejected.count) out.push(`未收到（已拒绝）：${r.rejected.count} 份，￥${r.rejected.sumStr}`);
+    if (r.diff.count) out.push(`按实收入簿：${r.diff.count} 份，宾客登记 ￥${r.diff.declaredStr}，实收 ￥${r.diff.actualStr}（${r.diff.gap < 0 ? '少' : '多'} ￥${r.diff.gapStr}）`);
+    if (r.void.count) out.push(`已作废：${r.void.count} 份，￥${r.void.sumStr}`);
+    if (r.handlers.length) {
+      out.push('按记账人：');
+      r.handlers.forEach(h => out.push(`· ${h.name}：${h.count} 份 ￥${h.sumStr}${h.cashCount ? `（其中现金 ${h.cashCount} 份 ￥${h.cashSumStr}）` : ''}`));
+    }
+    return out;
+  },
+
+  onCopy() {
+    if (!this.data.r) return;
+    wx.setClipboardData({ data: this.lines().join('\n'), success: () => wx.showToast({ title: '已复制，可粘贴到微信', icon: 'none' }) });
+  },
+
+  /** 对账单保存为图片（底部附小程序码，发到家族群顺带引流） */
+  async onSaveImage() {
+    if (!this.data.r || this.data.saving) return;
+    this.setData({ saving: true });
+    const lines = this.lines();
+    const codeUrl = (await receipt.withAppCode({})).appCode || '';
+    wx.createSelectorQuery().select('#reconCanvas').fields({ node: true }).exec(async res => {
+      try {
+        const canvas = res && res[0] && res[0].node;
+        if (!canvas) throw new Error('画布未就绪');
+        const code = await loadImage(canvas, codeUrl);
+        const W = 750;
+        const LH = 52;
+        const CODE = code ? 220 : 0;
+        const H = 80 + lines.length * LH + 60 + CODE;
+        canvas.width = W;
+        canvas.height = H;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = theme.current().primary;
+        ctx.fillRect(0, 0, W, 12);
+        ctx.textBaseline = 'middle';
+        lines.forEach((t, i) => {
+          ctx.fillStyle = i === 0 ? '#222222' : '#444444';
+          ctx.font = i === 0 ? 'bold 34px sans-serif' : '28px sans-serif';
+          ctx.fillText(t, 40, 70 + i * LH, W - 80);
+        });
+        if (code) {
+          const y = 80 + lines.length * LH + 30;
+          ctx.drawImage(code, 40, y, 150, 150);
+          ctx.fillStyle = '#999999';
+          ctx.font = '24px sans-serif';
+          ctx.fillText('慧礼记 · 扫码随礼自动记账、一键对账', 210, y + 60);
+          ctx.fillText('长按识别小程序码，免费创建电子礼簿', 210, y + 100);
+        }
+        wx.canvasToTempFilePath({
+          canvas,
+          fileType: 'png',
+          success: r => wx.saveImageToPhotosAlbum({
+            filePath: r.tempFilePath,
+            success: () => wx.showToast({ title: '已保存到相册', icon: 'success' }),
+            fail: e => { if (!/cancel/i.test((e && e.errMsg) || '')) wx.showToast({ title: '保存失败，请允许保存到相册', icon: 'none' }); },
+            complete: () => this.setData({ saving: false })
+          }),
+          fail: () => { wx.showToast({ title: '生成图片失败', icon: 'none' }); this.setData({ saving: false }); }
+        });
+      } catch (e) {
+        wx.showToast({ title: '生成图片失败', icon: 'none' });
+        this.setData({ saving: false });
+      }
+    });
+  }
+});
+
+/** 下载并加载小程序码；失败返回 null（对账单照常生成） */
+function loadImage(canvas, url) {
+  if (!url) return Promise.resolve(null);
+  return new Promise(resolve => {
+    wx.downloadFile({
+      url,
+      success: r => {
+        if (r.statusCode !== 200) return resolve(null);
+        const img = canvas.createImage();
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = r.tempFilePath;
+      },
+      fail: () => resolve(null)
+    });
+  });
+}

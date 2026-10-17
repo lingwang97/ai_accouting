@@ -1,4 +1,4 @@
-<view class="container">
+<view class="container" style="{{themeStyle}}">
   <view class="card">
     <view class="section-title">礼簿名称 *</view>
     <input class="input" placeholder="如：张三&李四 新婚之喜" maxlength="20" value="{{name}}" bindinput="onName" />
@@ -15,6 +15,19 @@
 
     <view class="section-title gap">地点</view>
     <input class="input" placeholder="选填，如：XX 酒店" maxlength="30" value="{{location}}" bindinput="onLocation" />
+  </view>
+
+  <view class="card" wx:if="{{orgMode}}">
+    <view class="section-title">本场主家称呼</view>
+    <input class="input" placeholder="如：张府（宾客页、回执、小票显示）" maxlength="20" value="{{hostName}}" bindinput="onHostName" />
+    <view class="section-title gap">本场收款码</view>
+    <view class="muted" style="margin-bottom:16rpx">上传本场主家的微信收款码，宾客的钱直接转给主家；不上传则用机构的收款码</view>
+    <image wx:if="{{payCodePreview}}" class="paycode" src="{{payCodePreview}}" mode="aspectFit" />
+    <view wx:elif="{{hasPayCode}}" class="muted">✓ 已设置本场收款码</view>
+    <view class="pc-ops">
+      <button class="btn-plain pc-btn" loading="{{uploading}}" bindtap="onChoosePayCode">{{hasPayCode || payCodePreview ? '更换收款码' : '上传收款码'}}</button>
+      <text class="link" wx:if="{{hasPayCode || payCodePreview}}" bindtap="onClearPayCode">清除</text>
+    </view>
   </view>
 
   <button class="btn-primary" loading="{{saving}}" bindtap="onSave">{{id ? '保存' : '创建礼簿'}}</button>

@@ -1,6 +1,6 @@
-<view class="container tab-page">
+<view class="container tab-page" style="{{themeStyle}}">
   <view class="card center" wx:if="{{!loggedIn}}">
-    <view class="muted">登录后可记录人情往来</view>
+    <view class="muted">人情往来仅本人可见，请先登录</view>
     <button class="btn-primary" style="margin-top:24rpx" bindtap="goLogin">去登录</button>
   </view>
 
@@ -8,12 +8,13 @@
     <view class="seg">
       <view class="seg-item {{tab === 'people' ? 'on' : ''}}" data-t="people" bindtap="onTab">往来名单</view>
       <view class="seg-item {{tab === 'out' ? 'on' : ''}}" data-t="out" bindtap="onTab">我送出的礼</view>
+      <view class="seg-item {{tab === 'receipts' ? 'on' : ''}}" data-t="receipts" bindtap="onTab">随礼回执</view>
     </view>
 
     <view class="search-row">
-      <input class="search" placeholder="{{tab === 'people' ? '输入姓名查往来' : '搜索对方姓名'}}" value="{{keyword}}"
+      <input class="search" placeholder="{{tab === 'people' ? '输入姓名查往来' : (tab === 'receipts' ? '搜索主家 / 礼簿' : '搜索对方姓名')}}" value="{{keyword}}"
              bindinput="onKeyword" bindconfirm="onSearch" confirm-type="search" />
-      <view class="add-btn" bindtap="onAddGift">＋ 记送礼</view>
+      <view class="add-btn" wx:if="{{tab !== 'receipts'}}" bindtap="onAddGift">＋ 记送礼</view>
     </view>
 
     <!-- 往来名单 -->
@@ -30,6 +31,18 @@
       <view class="muted center pad" wx:if="{{!loading && shownPeople.length === 0}}">
         {{keyword ? '名单中没有「' + keyword + '」，按回车直接查询' : '暂无往来记录。宾客随礼入簿后会自动出现在这里，也可点「记送礼」登记你送出的礼'}}
       </view>
+    </block>
+
+    <!-- 随礼回执：扫码随礼、主家确认后的电子回执 -->
+    <block wx:elif="{{tab === 'receipts'}}">
+      <view class="card gift" wx:for="{{shownReceipts}}" wx:key="_id" data-id="{{item._id}}" bindtap="onOpenReceipt">
+        <view class="p-top">
+          <text class="p-name">{{item.accountName || '主家'}}<text class="muted" wx:if="{{item.themeName}}"> · {{item.themeName}}</text></text>
+          <text class="money">￥{{item.amountStr}}</text>
+        </view>
+        <view class="muted">{{item.timeStr}} · 随礼人 {{item.payerName}}<text class="link-r"> 查看回执 ›</text></view>
+      </view>
+      <view class="muted center pad" wx:if="{{!loading && shownReceipts.length === 0}}">{{keyword ? '没有找到「' + keyword + '」' : '扫码随礼、主家确认收到后，电子回执会出现在这里'}}</view>
     </block>
 
     <!-- 我送出的礼 -->

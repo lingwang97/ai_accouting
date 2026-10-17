@@ -1,85 +1,53 @@
-"""生成 tabBar 图标（81x81 透明底 PNG），4 倍超采样抗锯齿。
+"""生成线性图标（SVG，图标路径取自 Feather Icons，MIT 许可），按颜色输出多份到 miniprogram/assets/icons/
+
+小程序 <image> 不能给 SVG 改色，所以每种颜色各输出一份：{name}-{variant}.svg
 用法：python tools/gen_icons.py
 """
 import os
-from PIL import Image, ImageDraw
 
-S = 81            # 输出尺寸（微信推荐 81x81）
-K = 4             # 超采样倍数
-W = 6 * K         # 线宽
-OUT = os.path.join(os.path.dirname(__file__), '..', 'miniprogram', 'assets')
+ROOT = os.path.join(os.path.dirname(__file__), '..', 'miniprogram', 'assets', 'icons')
 
-GRAY = (153, 153, 153, 255)
-GREEN = (7, 193, 96, 255)
+COLORS = {
+    'm': '#555555',  # 菜单
+    'g': '#999999',  # 底部菜单未选中
+    'r': '#C8161D',  # 主题红（喜事等）
+    'd': '#4A4A4A',  # 白事素灰
+    'w': '#FFFFFF',  # 彩色底上的白色图标
+    # 主家可选的主题色（底部菜单选中图标随主题色）
+    'n': '#07C160',
+    'y': '#B8860B',
+    'b': '#2B7FFF',
+    'k': '#333333',
+}
 
+ICONS = {
+    'home': '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
+    'book': '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
+    'people': '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    'user': '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+    'qrcode': '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>',
+    'check': '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+    'cash': '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>',
+    'printer': '<polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>',
+    'export': '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+    'receipt': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
+    'lock': '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+    'bell': '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+    'scan': '<path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/>',
+    'gift': '<polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>',
+    'layers': '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
+}
 
-def canvas():
-    img = Image.new('RGBA', (S * K, S * K), (0, 0, 0, 0))
-    return img, ImageDraw.Draw(img)
+# 底部菜单只需要的颜色
+TAB_ICONS = {'home', 'book', 'people', 'user'}
 
-
-def p(*xy):
-    """81 坐标系 -> 超采样坐标"""
-    return [v * K for v in xy]
-
-
-def home(d, c):
-    # 屋顶 + 房身 + 门
-    d.line(p(10, 38, 40.5, 12, 71, 38), fill=c, width=W, joint='curve')
-    d.rounded_rectangle(p(18, 34, 63, 69), radius=4 * K, outline=c, width=W)
-    d.rounded_rectangle(p(34, 48, 47, 69), radius=2 * K, outline=c, width=W)
-
-
-def record(d, c):
-    # 账本 + 三行条目
-    d.rounded_rectangle(p(16, 10, 65, 71), radius=7 * K, outline=c, width=W)
-    for y in (27, 40.5, 54):
-        d.ellipse(p(25, y - 3, 31, y + 3), fill=c)
-        d.line(p(37, y, 56, y), fill=c, width=W)
-
-
-def printer(d, c):
-    # 纸张 + 机身 + 出纸
-    d.rectangle(p(24, 10, 57, 28), outline=c, width=W)
-    d.rounded_rectangle(p(10, 28, 71, 56), radius=6 * K, outline=c, width=W)
-    d.rectangle(p(24, 46, 57, 71), outline=c, width=W)
-    d.line(p(31, 56, 50, 56), fill=c, width=W // 2 * 1)
-    d.line(p(31, 63, 45, 63), fill=c, width=W // 2 * 1)
-    d.ellipse(p(59, 35, 64, 40), fill=c)
-
-
-def mine(d, c):
-    # 头 + 肩
-    d.ellipse(p(26, 10, 55, 39), outline=c, width=W)
-    d.arc(p(12, 44, 69, 100), start=180, end=360, fill=c, width=W)
-
-
-def people(d, c):
-    # 人情往来：两人并肩
-    d.ellipse(p(10, 16, 32, 38), outline=c, width=W)
-    d.arc(p(2, 46, 40, 84), start=180, end=360, fill=c, width=W)
-    d.ellipse(p(49, 16, 71, 38), outline=c, width=W)
-    d.arc(p(41, 46, 79, 84), start=180, end=360, fill=c, width=W)
-
-
-def avatar(d, _):
-    # 默认头像：浅灰底 + 白色人形
-    d.ellipse(p(0, 0, 81, 81), fill=(225, 225, 225, 255))
-    d.ellipse(p(27, 16, 54, 43), fill=(255, 255, 255, 255))
-    d.pieslice(p(14, 48, 67, 101), start=180, end=360, fill=(255, 255, 255, 255))
-
-
-def save(name, fn, color):
-    img, d = canvas()
-    fn(d, color)
-    img = img.resize((S, S), Image.LANCZOS)
-    img.save(os.path.join(OUT, name), optimize=True)
-
-
-if __name__ == '__main__':
-    os.makedirs(OUT, exist_ok=True)
-    for key, fn in (('home', home), ('record', record), ('print', printer), ('mine', mine), ('people', people)):
-        save(f'tab-{key}.png', fn, GRAY)
-        save(f'tab-{key}-on.png', fn, GREEN)
-    save('avatar-default.png', avatar, None)
-    print('icons ->', os.path.abspath(OUT))
+os.makedirs(ROOT, exist_ok=True)
+n = 0
+for name, body in ICONS.items():
+    for v, color in COLORS.items():
+        svg = ('<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" '
+               f'stroke="{color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">{body}</svg>')
+        with open(os.path.join(ROOT, f'{name}-{v}.svg'), 'w', encoding='utf-8', newline='\n') as f:
+            f.write(svg)
+        n += 1
+print('generated', n, 'icons')

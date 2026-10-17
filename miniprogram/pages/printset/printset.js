@@ -2,6 +2,7 @@
 const req = require('../../utils/request.js');
 const escpos = require('../../utils/escpos.js');
 const printer = require('../../utils/printer.js');
+const theme = require('../../utils/theme.js');
 
 // 字段定义（顺序可调）
 const FIELD_LABELS = {
@@ -16,6 +17,7 @@ Page({
     title: '礼金回执',
     thanks: '谢谢惠顾',
     showDivider: true,
+    promo: true,        // 小票底部推广语
     fields: [],            // 已启用字段键（有序）
     fieldItems: [],        // [{f,label}] 渲染用
     disabledItems: [],
@@ -25,13 +27,25 @@ Page({
     previewLines: []
   },
 
-  async onLoad() {
+  onShow() {
+    theme.apply(this); // 主题色跟当前礼簿事由走
+  },
+
+  async onLoad(options) {
     try {
       const { list, activeBookId } = await req.bookList();
       const books = list.filter(b => !b.archived || b._id === activeBookId);
-      this.setData({ books, bookIdx: Math.max(0, books.findIndex(b => b._id === activeBookId)) });
+      const want = options.bookId || activeBookId; // 从「电子回执」切换过来时沿用所选礼簿
+      this.setData({ books, bookIdx: Math.max(0, books.findIndex(b => b._id === want)) });
     } catch (e) { /* 未完善主家信息 */ }
     this.load();
+  },
+
+  /** 切到「电子回执」 */
+  onStyleTab(e) {
+    if (e.currentTarget.dataset.t !== 'receipt') return;
+    const b = this.data.books[this.data.bookIdx];
+    wx.redirectTo({ url: '/pages/receiptset/receiptset' + (b ? '?bookId=' + b._id : '') });
   },
 
   onBook(e) {
@@ -48,6 +62,7 @@ Page({
       title: tpl.title || '礼金回执',
       thanks: tpl.thanks || '',
       showDivider: tpl.showDivider !== false,
+      promo: tpl.promo !== false,
       fields: tpl.fields || escpos.DEFAULT_FIELDS.slice()
     }, () => this.refresh());
   },
@@ -69,6 +84,9 @@ Page({
   },
   onDivider(e) {
     this.setData({ showDivider: e.detail.value }, () => this.buildPreview());
+  },
+  onPromo(e) {
+    this.setData({ promo: e.detail.value }, () => this.buildPreview());
   },
   onWidth(e) {
     this.setData({ paperWidth: Number(e.currentTarget.dataset.w) }, () => this.buildPreview());
@@ -119,6 +137,7 @@ Page({
         case 'thanks': if (this.data.thanks) lines.push({ center: true, t: this.data.thanks }); break;
       }
     }
+    if (this.data.promo) lines.push({ center: true, t: '微信搜索「慧礼记」记礼金·查往来' });
     this.setData({ previewLines: lines });
   },
 
@@ -137,6 +156,7 @@ Page({
           fields: this.data.fields,
           title: this.data.title,
           showDivider: this.data.showDivider,
+          promo: this.data.promo,
           thanks: this.data.thanks
         }
       });

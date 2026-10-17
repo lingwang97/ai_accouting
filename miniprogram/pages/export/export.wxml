@@ -1,4 +1,4 @@
-<view class="container">
+<view class="container" style="{{themeStyle}}">
   <view class="card">
     <view class="section-title">导出范围</view>
     <picker range="{{books}}" range-key="name" value="{{bookIdx}}" bindchange="onBook">
@@ -37,4 +37,5 @@
     <view class="muted">把全部礼簿、礼金明细和送礼记录导出为一个 Excel，建议定期发到「文件传输助手」保存。</view>
     <button class="btn-plain" style="margin-top:20rpx" loading="{{exporting === 'backup'}}" disabled="{{!!exporting}}" bindtap="onBackup">备份全部数据</button>
   </view>
+  <ad-slot slot="exportDone" book-type="{{books[bookIdx].type || ''}}" />
 </view>

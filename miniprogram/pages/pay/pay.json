@@ -1,6 +1,7 @@
 {
   "navigationBarTitleText": "扫码随礼",
   "usingComponents": {
-    "receipt-view": "/components/receipt-view/index"
+    "receipt-view": "/components/receipt-view/index",
+    "batch-list": "/components/batch-list/index"
   }
 }

@@ -30,3 +30,6 @@
 .stamp-name { font-size: 20rpx; font-weight: 700; max-width: 130rpx; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .stamp-text { font-size: 36rpx; font-weight: 700; margin-top: 4rpx; }
 .stamp-text.one { font-size: 60rpx; line-height: 1; }
+.app-code { margin-top: 28rpx; }
+.app-code-img { width: 180rpx; height: 180rpx; display: block; margin: 0 auto; }
+.app-code-tip { font-size: 22rpx; color: #999; margin-top: 8rpx; }

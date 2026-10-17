@@ -1,4 +1,9 @@
-<view class="container">
+<view class="container" style="{{themeStyle}}">
+  <!-- 回执样式：电子回执 / 打印小票（两页互相切换，带上当前礼簿） -->
+  <view class="style-seg">
+    <view class="style-item {{'receipt' === 'receipt' ? 'on' : ''}}" data-t="receipt" bindtap="onStyleTab">电子回执</view>
+    <view class="style-item {{'receipt' === 'print' ? 'on' : ''}}" data-t="print" bindtap="onStyleTab">打印小票</view>
+  </view>
   <!-- 样式跟礼簿走：每本礼簿各自一套 -->
   <view class="card book-bar">
     <text class="muted">设置礼簿</text>
@@ -31,7 +36,7 @@
       </view>
     </view>
     <view class="row"><text class="lbl">印章</text>
-      <switch checked="{{tpl.showStamp}}" bindchange="onStamp" color="#07C160" />
+      <switch checked="{{tpl.showStamp}}" bindchange="onStamp" color="#C8161D" />
       <input wx:if="{{tpl.showStamp}}" class="input stamp-input" value="{{tpl.stamp}}" maxlength="4" placeholder="印章字，如 囍" bindinput="onStampText" />
     </view>
   </view>

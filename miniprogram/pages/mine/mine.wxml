@@ -1,4 +1,4 @@
-<view class="container tab-page">
+<view class="container tab-page" style="{{themeStyle}}">
   <!-- 未登录：宾客无需登录，主家登录后开始收礼 -->
   <view class="card center login-card" wx:if="{{!loading && !user}}">
     <image class="avatar big" src="/assets/avatar-default.png" />
@@ -8,13 +8,15 @@
   </view>
 
   <block wx:if="{{user}}">
-    <!-- 用户信息 -->
+    <!-- 用户信息与身份 -->
     <view class="card user-card">
       <image class="avatar" src="{{user.avatar || '/assets/avatar-default.png'}}" mode="aspectFill" />
       <view class="info">
         <view class="name">{{user.nickname}}</view>
-        <view class="muted">{{account ? '主家：' + account.accountName : '尚未完善主家信息'}}</view>
+        <view class="muted">{{account ? (role === 'clerk' ? '记账人 · 为「' + account.accountName + '」记账' : (role === 'viewer' ? '家人共享 · 查看「' + account.accountName + '」的礼簿' : '主家：' + account.accountName)) : '尚未完善主家信息'}}</view>
+        <view class="plan-tag" wx:if="{{planText}}">{{planText}}</view>
       </view>
+      <view class="switch-id" wx:if="{{identities.length > 1 || role === 'clerk' || role === 'viewer'}}" bindtap="onSwitchIdentity">切换身份 ›</view>
     </view>
 
     <!-- 未完善主家信息 -->
@@ -24,64 +26,58 @@
       <button class="btn-primary" bindtap="goAccount">立即完善</button>
     </view>
 
-    <block wx:if="{{account}}">
-      <!-- 待确认礼金（置顶） -->
-      <view class="card pending-card" wx:if="{{pending.length > 0}}">
-        <view class="pending-head">
-          <view class="section-title pending-title">🔔 待确认礼金 <text class="pending-num">{{pending.length}}</text></view>
-          <view class="link" wx:if="{{pending.length > 1}}" bindtap="onToggleSelect">{{selectMode ? '取消' : '批量确认'}}</view>
-        </view>
-        <view class="p-item" wx:for="{{pending}}" wx:key="_id" wx:if="{{pendingOpen || index < PENDING_FOLD}}"
-              data-idx="{{index}}" bindtap="onPick">
-          <view class="check {{item.picked ? 'on' : ''}}" wx:if="{{selectMode}}">{{item.picked ? '✓' : ''}}</view>
-          <view class="p-info">
-            <view><text class="payer">{{item.payerName}}</text><text class="money p-amount">￥{{item.amountStr}}</text></view>
-            <view class="muted">{{item.timeStr}} 已转账<text wx:if="{{item.relation}}"> · {{item.relation}}</text><text wx:if="{{item.proxyStr}}"> · 代 {{item.proxyStr}}</text><text wx:if="{{item.remark}}"> · {{item.remark}}</text></view>
-          </view>
-          <view class="p-ops" wx:if="{{!selectMode}}">
-            <view class="link danger" data-idx="{{index}}" bindtap="onReject">未收到</view>
-            <button class="btn-confirm" data-idx="{{index}}" bindtap="onConfirm">确认收到</button>
-          </view>
-        </view>
-        <view class="fold" wx:if="{{pending.length > PENDING_FOLD}}" bindtap="onToggleOpen">
-          {{pendingOpen ? '收起 ▲' : '展开全部 ' + pending.length + ' 份 ▼'}}
-        </view>
-        <view class="batch-bar" wx:if="{{selectMode}}">
-          <view class="link" bindtap="onPickAll">{{pickedCount === pending.length ? '全不选' : '全选'}}</view>
-          <view class="muted">已选 {{pickedCount}} 份 · ￥{{pickedSum}}</view>
-          <button class="btn-confirm" disabled="{{pickedCount === 0}}" bindtap="onConfirmPicked">确认收到</button>
-        </view>
+    <block wx:if="{{role !== 'viewer'}}">
+    <view class="group-title">收礼设置</view>
+    <view class="card menu">
+      <view class="menu-item" bindtap="goAccount" wx:if="{{!restricted}}">
+        <image class="mi-icon" src="/assets/icons/user-m.svg" /><text class="mi-text">主家信息与收款码</text><text class="arrow">›</text>
       </view>
-
-      <!-- 今日概览 -->
-      <view class="card today" bindtap="goRecords">
-        <view class="today-top">
-          <text class="muted">今日收礼</text>
-          <text class="theme-tag" style="background:{{account.theme.primary}}22;color:{{account.theme.primary}}" catchtap="goBooks">{{activeBookName || '礼簿'}} ›</text>
+      <view class="menu-item" bindtap="goMembers" wx:if="{{account}}">
+        <image class="mi-icon" src="/assets/icons/people-m.svg" /><text class="mi-text">{{account.orgMode ? '礼台人员' : '记账人'}}</text><text class="arrow"><text class="muted">邀请 / 移交主家</text> ›</text>
+      </view>
+      <view class="menu-item" wx:if="{{account && orgAllowed && role === 'owner'}}" bindtap="onOrgName">
+        <image class="mi-icon" src="/assets/icons/layers-m.svg" />
+        <view class="mi-text">
+          <view>机构模式</view>
+          <view class="muted">{{account.orgMode ? (account.orgName || '点此填写机构名称') : '一个账号办多场，每场单独设主家与收款码'}}</view>
         </view>
-        <view class="today-sum money">￥{{todaySum}}</view>
-        <view class="muted">共 {{todayCount}} 份 · 查看礼簿 ›</view>
+        <switch checked="{{account.orgMode}}" catchtap="noop" bindchange="onOrgSwitch" color="#C8161D" />
+      </view>
+    </view>
+
+    </block>
+    <view class="group-title">打印与回执</view>
+    <view class="card menu">
+      <view class="menu-item" bindtap="goPrinter">
+        <image class="mi-icon" src="/assets/icons/printer-m.svg" /><text class="mi-text">蓝牙打印机</text><text class="arrow"><text class="muted">{{printerName || '未连接'}}</text> ›</text>
+      </view>
+      <view class="menu-item" bindtap="goStyle" wx:if="{{account && !readonly}}">
+        <image class="mi-icon" src="/assets/icons/receipt-m.svg" /><text class="mi-text">回执样式</text><text class="arrow"><text class="muted">电子回执 / 打印小票</text> ›</text>
+      </view>
+    </view>
+
+    <view class="group-title">数据</view>
+    <view class="card menu">
+      <view class="menu-item" bindtap="goExport" wx:if="{{account && role !== 'viewer'}}">
+        <image class="mi-icon" src="/assets/icons/export-m.svg" /><text class="mi-text">导出与备份</text><text class="arrow">›</text>
+      </view>
+      <view class="menu-item" bindtap="onPrivacy">
+        <image class="mi-icon" src="/assets/icons/lock-m.svg" /><text class="mi-text">隐私与数据</text><text class="arrow">›</text>
+      </view>
+    </view>
+
+    <block wx:if="{{isAdmin}}">
+      <view class="group-title">管理员</view>
+      <view class="card menu">
+        <view class="menu-item" bindtap="goAdmin">
+          <image class="mi-icon" src="/assets/icons/layers-m.svg" /><text class="mi-text">系统设置</text><text class="arrow"><text class="muted">预热 / 套餐</text> ›</text>
+        </view>
       </view>
     </block>
 
-    <!-- 功能菜单 -->
     <view class="card menu">
-      <view class="menu-item" bindtap="goBooks" wx:if="{{account}}"><text>📚 礼簿管理</text><text class="arrow"><text class="muted">{{activeBookName}}</text> ›</text></view>
-      <view class="menu-item" bindtap="goQrcode" wx:if="{{account}}"><text>📱 礼簿码</text><text class="arrow"><text class="muted">{{account.payMode === 'screen' ? '亮屏展示' : ''}}</text> ›</text></view>
-      <view class="menu-item" bindtap="onSwitchMode" wx:if="{{account}}"><text>🔀 收礼模式</text><text class="arrow"><text class="muted">{{payModeLabel}}</text> ›</text></view>
-      <view class="menu-item" bindtap="onSubscribe" wx:if="{{account}}"><text>🔔 新礼金微信提醒</text><text class="arrow"><text class="muted">点击开启</text> ›</text></view>
-      <view class="menu-item" bindtap="goAccount"><text>👤 主家信息与快捷礼金</text><text class="arrow">›</text></view>
-      <view class="menu-item" bindtap="goPrinter"><text>🖨️ 蓝牙打印机</text><text class="arrow"><text class="muted">{{printerName || '未连接'}}</text> ›</text></view>
-      <view class="menu-item" bindtap="goPrintset"><text>📝 回执打印格式</text><text class="arrow">›</text></view>
-      <view class="menu-item" bindtap="goReceiptset" wx:if="{{account}}"><text>🧾 电子回执模板</text><text class="arrow"><text class="muted">宾客留存</text> ›</text></view>
-      <view class="menu-item" bindtap="goExport" wx:if="{{account}}"><text>📤 导出礼簿</text><text class="arrow"><text class="muted">礼簿 / 表格 / Excel</text> ›</text></view>
-    </view>
-
-    <view class="card menu">
-      <view class="menu-item" bindtap="goTestPay" wx:if="{{account}}"><text>🧪 模拟宾客随礼</text><text class="arrow">›</text></view>
-      <view class="menu-item" bindtap="onPrivacy"><text>🔒 隐私与数据</text><text class="arrow">›</text></view>
       <view class="menu-item logout" bindtap="onLogout">退出登录</view>
     </view>
   </block>
-  <view class="version muted">{{versionText}}</view>
+  <view class="version muted" bindlongpress="onShowOpenid">{{versionText}}</view>
 </view>

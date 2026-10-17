@@ -13,12 +13,16 @@ async function ensureCol(name) {
 }
 
 exports.main = async (event) => {
+  // 预热：warmer 云函数按「系统设置」定时唤醒，保持实例常驻、减少冷启动；直接返回，不做任何读写
+  if (event && (event.action === '__warm' || event.Type === 'Timer')) return { code: 0, msg: 'warm', data: null }; // Timer：兼容之前上传过的旧预热触发器
   const { OPENID } = cloud.getWXContext();
+  if (!OPENID) return err('未获取到用户身份');
   const userInfo = event.userInfo || {};
 
   try {
     await ensureCol('users');
-    const found = await users.where({ openid: OPENID }).limit(1).get();
+    // 只认云函数写入的用户记录（客户端直接写库伪造的带 _openid，忽略）
+    const found = await users.where({ openid: OPENID, _openid: db.command.exists(false) }).limit(1).get();
     // 静默检查登录态：已注册返回用户，未注册返回 null（不创建，付款方无需注册）
     if (event.action === 'check') {
       return ok({ openid: OPENID, user: found.data[0] || null });
@@ -32,8 +36,15 @@ exports.main = async (event) => {
         createdAt: now,
         lastLoginAt: now
       };
-      const added = await users.add({ data: user });
-      return ok({ openid: OPENID, user: { _id: added._id, ...user }, isNew: true });
+      // 文档 id 用 openid：并发首次登录只会建一条，重复的 add 报错后读回已建的
+      try {
+        await users.add({ data: { _id: OPENID, ...user } });
+      } catch (e) {
+        const again = await users.where({ openid: OPENID, _openid: db.command.exists(false) }).limit(1).get();
+        if (again.data[0]) return ok({ openid: OPENID, user: again.data[0], isNew: false });
+        throw e;
+      }
+      return ok({ openid: OPENID, user: { _id: OPENID, ...user }, isNew: true });
     }
     const u = found.data[0];
     await users.doc(u._id).update({

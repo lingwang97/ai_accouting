@@ -2,6 +2,9 @@
 // 样式按礼簿设置（「我的 → 电子回执模板」，与蓝牙打印格式独立），存于 books.receiptTpl；未设置时按事由类型套用场景默认
 const fmt = require('./format.js');
 const scenes = require('./scenes.js');
+const req = require('./request.js');
+
+const APP_CODE_TIP = '扫码使用慧礼记 · 记礼金、查往来';
 
 const FIELD_LABELS = {
   receiptNo: '回执编号',
@@ -111,21 +114,49 @@ function buildModel(record, tpl, accountName) {
     remark: record.remark || '',
     paidAt: fmt.dateTime(record.paidAt || record.createdAt)
   };
-  const rows = t.fields
+  let rows = t.fields
     .filter(k => FIELD_LABELS[k] && values[k])
     .map(k => ({ k, label: FIELD_LABELS[k], value: values[k] }));
+  // 批次录入的合并回执：随礼人一行一位，带各自金额
+  if (record.batchItems && record.batchItems.length > 1) {
+    const at = rows.findIndex(x => x.k === 'payerName');
+    const people = record.batchItems.map((p, i) => ({
+      k: 'payer' + i, label: i === 0 ? '随礼人' : '', value: `${p.name}  ￥${fmt.money(p.amount)}`
+    }));
+    rows = at >= 0 ? rows.slice(0, at).concat(people, rows.slice(at + 1)) : rows.concat(people);
+  }
+  // 记账人：实际确认 / 登记这笔礼金的人，紧跟在「主家」之后显示（没有主家行时放在最前）
+  if (record.handlerName) {
+    const at = rows.findIndex(x => x.k === 'payee');
+    rows.splice(at >= 0 ? at + 1 : 0, 0, { k: 'handler', label: '记账人', value: record.handlerName });
+  }
   return {
     title: t.title || DEFAULT_TPL.title,
     color: t.color,
     style: t.style,
     amount: fmt.money(record.amount),
-    amountLabel: record.bookType === 'funeral' ? '奠仪' : '礼金',
+    amountLabel: (record.bookType === 'funeral' ? '奠仪' : '礼金') + (record.payMethod === 'cash' ? '（现金）' : ''),
     rows,
     showStamp: t.showStamp,
     stampMain: t.stamp || '谨收',
     stampText: accountName || '主家',
     footer: t.footer
   };
+}
+
+/** 给回执附上小程序码（链接当天有效，缓存在内存）；失败返回原模型 */
+let appCodeCache = null;
+async function withAppCode(model) {
+  if (!model) return model;
+  try {
+    if (!appCodeCache || appCodeCache.expires < Date.now()) {
+      const { url } = await req.appCode();
+      appCodeCache = { url, expires: Date.now() + 12 * 3600 * 1000 };
+    }
+    return { ...model, appCode: appCodeCache.url, appCodeTip: APP_CODE_TIP };
+  } catch (e) {
+    return model;
+  }
 }
 
 // —— 保存为图片（canvas 2D 按模型重绘，样式与组件保持一致） ——
@@ -143,17 +174,52 @@ function toImage(selector, model) {
       try {
         const canvas = res && res[0] && res[0].node;
         if (!canvas) return reject(new Error('画布未就绪'));
-        const H = 420 + model.rows.length * ROW_H + (model.footer ? 110 : 40);
-        canvas.width = W;
-        canvas.height = H;
-        const ctx = canvas.getContext('2d');
-        draw(ctx, model, H);
-        wx.canvasToTempFilePath({ canvas, fileType: 'png', success: r => resolve(r.tempFilePath), fail: reject });
+        loadImage(canvas, model.appCode).then(code => {
+          const H = 420 + model.rows.length * ROW_H + (model.footer ? 110 : 40) + (code ? CODE_H : 0);
+          canvas.width = W;
+          canvas.height = H;
+          const ctx = canvas.getContext('2d');
+          draw(ctx, model, H);
+          if (code) drawAppCode(ctx, code, model.appCodeTip, H);
+          wx.canvasToTempFilePath({ canvas, fileType: 'png', success: r => resolve(r.tempFilePath), fail: reject });
+        }).catch(reject);
       } catch (e) {
         reject(e);
       }
     });
   });
+}
+
+const CODE_H = 260; // 底部小程序码区域高度
+const CODE_SIZE = 170;
+
+/** 下载并加载小程序码图片；没有或失败时返回 null（回执照常生成） */
+function loadImage(canvas, url) {
+  if (!url) return Promise.resolve(null);
+  return new Promise(resolve => {
+    wx.downloadFile({
+      url,
+      success: r => {
+        if (r.statusCode !== 200) return resolve(null);
+        const img = canvas.createImage();
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = r.tempFilePath;
+      },
+      fail: () => resolve(null)
+    });
+  });
+}
+
+function drawAppCode(ctx, img, tip, H) {
+  const bottom = H - 40;
+  const y = bottom - CODE_H + 20;
+  ctx.drawImage(img, (W - CODE_SIZE) / 2, y, CODE_SIZE, CODE_SIZE);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#999999';
+  ctx.font = '22px sans-serif';
+  ctx.fillText(tip || '', W / 2, y + CODE_SIZE + 30);
 }
 
 function draw(ctx, m, H) {
@@ -301,5 +367,5 @@ function saveImage(filePath) {
 
 module.exports = {
   FIELD_LABELS, STYLES, DEFAULT_TPL, SAMPLE,
-  normalizeTpl, amountUpper, receiptNo, proxyText, buildModel, toImage, saveImage
+  normalizeTpl, amountUpper, receiptNo, proxyText, buildModel, toImage, saveImage, withAppCode
 };

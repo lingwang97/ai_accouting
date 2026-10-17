@@ -1,0 +1,68 @@
+<view class="container" style="{{themeStyle}}">
+  <view class="card head">
+    <picker range="{{books}}" range-key="name" value="{{bookIdx}}" bindchange="onBook">
+      <view class="book-pick">{{books[bookIdx].name || '当前礼簿'}} ▾</view>
+    </picker>
+    <view class="seg">
+      <view class="seg-item {{range === 'all' ? 'on' : ''}}" data-v="all" bindtap="onRange">全部</view>
+      <view class="seg-item {{range === 'today' ? 'on' : ''}}" data-v="today" bindtap="onRange">今日</view>
+    </view>
+  </view>
+
+  <block wx:if="{{r}}">
+    <!-- 总览 -->
+    <view class="card total">
+      <view class="muted">已入簿</view>
+      <view class="t-sum money">￥{{r.paid.sumStr}}</view>
+      <view class="muted">{{r.paid.count}} 份</view>
+    </view>
+
+    <!-- 按支付方式 -->
+    <view class="card">
+      <view class="section-title">按支付方式</view>
+      <view class="row"><text>微信转账</text><text><text class="muted">{{r.wechat.count}} 份 · </text>￥{{r.wechat.sumStr}}</text></view>
+      <view class="row"><text>现金合计</text><text><text class="muted">{{r.cash.count}} 份 · </text>￥{{r.cash.sumStr}}</text></view>
+      <view class="row sub"><text>礼台登记现金</text><text><text class="muted">{{r.deskCash.count}} 份 · </text>￥{{r.deskCash.sumStr}}</text></view>
+      <view class="row sub"><text>宾客自报现金</text><text><text class="muted">{{r.guestCash.count}} 份 · </text>￥{{r.guestCash.sumStr}}</text></view>
+      <view class="muted small tip">点钞时以"现金合计"为准；微信转账可与微信收款记录核对</view>
+    </view>
+
+    <!-- 待处理 -->
+    <view class="card" wx:if="{{r.transferred.count || r.pending.count || r.rejected.count}}">
+      <view class="section-title">待处理</view>
+      <view class="row hot" wx:if="{{r.transferred.count}}" bindtap="goPending"><text>待确认 ›</text><text>{{r.transferred.count}} 份 · ￥{{r.transferred.sumStr}}</text></view>
+      <view class="row" wx:if="{{r.pending.count}}"><text>宾客未转账</text><text><text class="muted">{{r.pending.count}} 份 · </text>￥{{r.pending.sumStr}}</text></view>
+      <view class="row" wx:if="{{r.rejected.count}}"><text>未收到（已拒绝）</text><text><text class="muted">{{r.rejected.count}} 份 · </text>￥{{r.rejected.sumStr}}</text></view>
+    </view>
+
+    <!-- 差异 -->
+    <view class="card" wx:if="{{r.diff.count || r.void.count}}">
+      <view class="section-title">差异</view>
+      <view wx:if="{{r.diff.count}}">
+        <view class="row"><text>按实收入簿</text><text class="muted">{{r.diff.count}} 份</text></view>
+        <view class="row sub"><text>宾客登记</text><text>￥{{r.diff.declaredStr}}</text></view>
+        <view class="row sub"><text>实际收到</text><text>￥{{r.diff.actualStr}}</text></view>
+        <view class="row sub"><text>差额</text><text class="{{r.diff.gap < 0 ? 'hot' : ''}}">{{r.diff.gap < 0 ? '少' : '多'}} ￥{{r.diff.gapStr}}</text></view>
+      </view>
+      <view class="row" wx:if="{{r.void.count}}"><text>已作废</text><text><text class="muted">{{r.void.count}} 份 · </text>￥{{r.void.sumStr}}</text></view>
+    </view>
+
+    <!-- 按记账人 -->
+    <view class="card" wx:if="{{r.handlers.length}}">
+      <view class="section-title">按记账人</view>
+      <view class="h-row" wx:for="{{r.handlers}}" wx:key="name">
+        <view class="row"><text>{{item.name}}</text><text><text class="muted">{{item.count}} 份 · </text>￥{{item.sumStr}}</text></view>
+        <view class="muted small" wx:if="{{item.cashCount}}">其中现金 {{item.cashCount}} 份 · ￥{{item.cashSumStr}}</view>
+      </view>
+    </view>
+
+    <view class="muted center small">生成时间 {{r.at}}</view>
+    <view class="ops">
+      <button class="btn-plain op" bindtap="onSaveImage" loading="{{saving}}">保存图片</button>
+      <button class="btn-primary op" bindtap="onCopy">复制对账单</button>
+    </view>
+  </block>
+
+  <view class="muted center pad" wx:if="{{!loading && !r}}">暂无可对账的礼簿</view>
+  <canvas type="2d" id="reconCanvas" class="offscreen"></canvas>
+</view>

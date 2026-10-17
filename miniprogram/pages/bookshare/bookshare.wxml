@@ -1,0 +1,55 @@
+<view class="container" style="{{themeStyle}}">
+  <view class="card intro muted">
+    把礼簿共享给家人：家人可以查看礼簿明细、合计、统计、对账和导出，<text class="em">但不能确认、登记、修改任何数据</text>，也不会收到新礼金提醒。
+  </view>
+
+  <view class="section-title">选择要共享的礼簿</view>
+  <view class="card">
+    <view class="book-row {{item.on ? 'on' : ''}}" wx:for="{{books}}" wx:key="_id" data-i="{{index}}" bindtap="onToggle">
+      <view class="check {{item.on ? 'on' : ''}}">{{item.on ? '✓' : ''}}</view>
+      <view class="b-info">
+        <view>{{item.title}}<text class="muted small" wx:if="{{item.archived}}"> · 已归档</text></view>
+        <view class="muted small">{{item.count}} 份 · ￥{{item.sumStr}}</view>
+      </view>
+    </view>
+    <view class="muted center" wx:if="{{!loading && books.length === 0}}">还没有礼簿</view>
+  </view>
+
+  <button wx:if="{{!token}}" class="btn-primary" bindtap="onMake">生成共享卡片</button>
+  <block wx:else>
+    <view class="share-desc">{{shareDesc}}</view>
+    <button class="btn-primary" open-type="share">发给家人（微信好友 / 家庭群）</button>
+  </block>
+  <view class="muted hint">卡片 7 天内有效，每张最多 5 人使用；家人打开、登录后点「接受共享」，你在工作台同意后即可查看</view>
+
+  <view class="section-title" style="margin-top:36rpx">已共享的家人（{{viewers.length}}）</view>
+  <view class="card">
+    <view class="v-row" wx:for="{{viewers}}" wx:key="_id">
+      <image class="avatar" src="{{item.avatar || '/assets/avatar-default.png'}}" mode="aspectFill" />
+      <view class="v-info">
+        <view>{{item.name}}</view>
+        <view class="muted small">可查看：{{item.booksText}}</view>
+      </view>
+      <view class="link" data-idx="{{index}}" bindtap="onEditViewer">修改</view>
+      <view class="link danger" data-idx="{{index}}" bindtap="onRemoveViewer">取消共享</view>
+    </view>
+    <view class="muted center" wx:if="{{!loading && viewers.length === 0}}">还没有共享给家人</view>
+  </view>
+
+  <!-- 修改共享范围 -->
+  <view class="mask" wx:if="{{editor}}">
+    <view class="editor">
+      <view class="ed-title">「{{editor.name}}」可查看的礼簿</view>
+      <scroll-view scroll-y class="ed-list">
+        <view class="book-row {{item.on ? 'on' : ''}}" wx:for="{{editor.books}}" wx:key="_id" data-i="{{index}}" bindtap="onEdBook">
+          <view class="check {{item.on ? 'on' : ''}}">{{item.on ? '✓' : ''}}</view>
+          <view class="b-info">{{item.title}}</view>
+        </view>
+      </scroll-view>
+      <view class="ed-ops">
+        <button class="ed-btn" bindtap="onEdCancel">取消</button>
+        <button class="ed-btn ok" bindtap="onEdSave">保存</button>
+      </view>
+    </view>
+  </view>
+</view>

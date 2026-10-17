@@ -1,18 +1,23 @@
 // custom-tab-bar — 自定义底部菜单
-// 「礼簿」只对已登录的主家显示；宾客（未登录）只看到 首页 / 往来 / 我的
-// 原生 tabBar 无法单独隐藏某一项，因此改为自定义；「我的」待确认角标也在此绘制
+// 四个菜单始终显示；「礼簿」「往来」未登录时页面内提示登录，登录后才显示数据
+// 第一个菜单：主家 / 记账人为「工作台」（待确认角标画在这里），宾客为「首页」
+// 选中颜色跟礼簿事由走（喜事红、白事灰，见 utils/theme.js）
+const theme = require('../utils/theme.js');
+
 const TABS = [
-  { path: 'pages/index/index', text: '首页', icon: 'tab-home' },
-  { path: 'pages/records/records', text: '礼簿', icon: 'tab-record', loginOnly: true },
-  { path: 'pages/renqing/renqing', text: '往来', icon: 'tab-people' },
-  { path: 'pages/mine/mine', text: '我的', icon: 'tab-mine', badge: true }
+  { path: 'pages/index/index', text: '首页', hostText: '工作台', icon: 'home', badge: true },
+  { path: 'pages/records/records', text: '礼簿', icon: 'book' },
+  { path: 'pages/renqing/renqing', text: '往来', icon: 'people' },
+  { path: 'pages/mine/mine', text: '我的', icon: 'user' }
 ];
 
 Component({
   data: {
     list: [],
     selected: '',
-    badge: ''
+    badge: '',
+    color: '#C8161D',
+    iconOn: 'r'
   },
 
   lifetimes: {
@@ -20,17 +25,20 @@ Component({
   },
 
   methods: {
-    /** 按登录状态与角标数刷新（各 tab 页 onShow、登录/退出、角标变化时调用） */
+    /** 按登录状态、身份与角标数刷新（各 tab 页 onShow、登录/退出、角标变化时调用） */
     refresh() {
       const app = getApp();
-      const loggedIn = !!(app && app.globalData.user);
+      const isHost = !!(app && app.globalData.user && app.globalData.account);
       const pages = getCurrentPages();
       const cur = pages.length ? pages[pages.length - 1].route : '';
       const n = (app && app.globalData.badge) || 0;
+      const t = theme.current();
       this.setData({
-        list: TABS.filter(t => !t.loginOnly || loggedIn),
+        list: TABS.map(x => ({ ...x, label: isHost && x.hostText ? x.hostText : x.text })),
         selected: cur,
-        badge: n > 0 ? (n > 99 ? '99+' : String(n)) : ''
+        badge: n > 0 ? (n > 99 ? '99+' : String(n)) : '',
+        color: t.primary,
+        iconOn: t.icon
       });
     },
 

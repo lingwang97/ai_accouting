@@ -22,7 +22,7 @@
 .s-loading { padding: 160rpx 0; }
 .s-divider { border-top: 2rpx dashed #ddd; margin: 24rpx 0; }
 .s-tip { margin-top: 8rpx; }
-.s-ops { display: flex; gap: 20rpx; margin-top: 28rpx; }
+.s-ops { display: flex; gap: 16rpx; margin-top: 28rpx; }
 .s-op {
   flex: 1; margin: 0; padding: 0; line-height: 80rpx; font-size: 28rpx; border-radius: 12rpx;
   background: rgba(255, 255, 255, .2); color: #fff; border: 2rpx solid rgba(255, 255, 255, .6);
@@ -32,3 +32,7 @@
 
 /* 台卡画布放到屏幕外 */
 .card-canvas { position: fixed; left: -2000px; top: 0; width: 750px; height: 1240px; }
+
+.try { text-align: center; color: #576B95; font-size: 26rpx; padding: 28rpx 0 8rpx; }
+.s-try { color: rgba(255, 255, 255, .9); }
+.s-book { color: rgba(255, 255, 255, .85); font-size: 28rpx; margin: -16rpx 0 24rpx; }

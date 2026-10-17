@@ -3,10 +3,11 @@ const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 
-const COLLECTIONS = ['users', 'accounts', 'records', 'print_templates', 'books', 'gifts_out', 'exports'];
+const COLLECTIONS = ['users', 'accounts', 'records', 'print_templates', 'books', 'gifts_out', 'exports', 'members', 'invites', 'settings', 'subscriptions'];
 
 exports.main = async () => {
   const { OPENID } = cloud.getWXContext();
+  if (!OPENID) return { code: 1, msg: '未获取到用户身份', data: null };
   const created = [], existed = [];
 
   for (const name of COLLECTIONS) {
@@ -19,7 +20,7 @@ exports.main = async () => {
     }
   }
 
-  // 权限说明：云函数不受集合权限限制，控制台权限保持默认"仅创建者可读写"即可
+  // 权限说明：云函数不受集合权限限制；控制台须把全部集合设为「所有用户不可读写」（前端不直连数据库）
   return {
     code: 0, msg: 'ok',
     data: { openid: OPENID, created, existed }

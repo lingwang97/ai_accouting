@@ -1,5 +1,8 @@
 /* app.wxss — 全局样式 */
+/* 主题色：喜事等为中国红，白事素灰（页面根节点按礼簿类型覆盖，见 utils/theme.js） */
 page {
+  --primary: #C8161D;
+  --primary-soft: rgba(200, 22, 29, .1);
   background: #F4F5F7;
   font-size: 28rpx;
   color: #333;
@@ -13,7 +16,7 @@ page {
   box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
 }
 .btn-primary {
-  background: #07C160;
+  background: var(--primary);
   color: #fff;
   border-radius: 12rpx;
   font-size: 32rpx;
@@ -21,8 +24,8 @@ page {
 .btn-primary[disabled] { opacity: .5; }
 .btn-plain {
   background: #fff;
-  color: #07C160;
-  border: 2rpx solid #07C160;
+  color: var(--primary);
+  border: 2rpx solid var(--primary);
   border-radius: 12rpx;
   font-size: 30rpx;
 }

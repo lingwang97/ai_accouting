@@ -1,0 +1,43 @@
+<view class="container center">
+  <view class="card box">
+    <view class="seal"><view class="seal-inner">礼</view></view>
+
+    <block wx:if="{{info}}">
+      <view class="title" wx:if="{{info.type === 'transfer'}}">「{{info.accountName}}」的{{info.full ? '' : ' ' + info.books.length + ' 本'}}礼簿移交给你</view>
+      <view class="title" wx:elif="{{info.type === 'viewer'}}">「{{info.accountName}}」共享礼簿给你查看</view>
+      <view class="title" wx:else>邀请你为「{{info.accountName}}」记账</view>
+      <view class="muted from" wx:if="{{info.fromName}}">来自：{{info.fromName}}</view>
+      <block wx:if="{{info.type === 'transfer'}}">
+        <view class="books" wx:if="{{info.books.length}}">
+          <view class="bk" wx:for="{{info.books}}" wx:key="index"><text>{{item.name}}</text><text class="muted">{{item.count}} 份 · ￥{{item.sum}}</text></view>
+        </view>
+        <view class="desc muted">
+          {{info.full ? '接收后，主家信息、全部礼簿和礼金记录都归你所有，已印好的礼簿码继续有效。' : '接收后，以上礼簿和礼金记录归你所有。'}}{{info.stayClerk ? '对方会成为你的记账人，可继续帮你记账。' : ''}}
+          接收后请确认收款码是你自己的微信收款码。
+        </view>
+      </block>
+      <block wx:elif="{{info.type === 'viewer'}}">
+        <view class="books" wx:if="{{info.books.length}}">
+          <view class="bk" wx:for="{{info.books}}" wx:key="index"><text>{{item.name}}</text><text class="muted">{{item.count}} 份 · ￥{{item.sum}}</text></view>
+        </view>
+        <view class="desc muted">主家同意后可以查看以上礼簿的明细、合计、统计、对账和导出；只能查看，不能修改。</view>
+      </block>
+      <view class="desc muted" wx:else>
+        主家同意后成为记账人，可以查看礼簿、确认收礼、登记现金、打印回执、导出。
+      </view>
+    </block>
+
+    <view class="err" wx:if="{{errMsg}}">{{errMsg}}</view>
+
+    <block wx:if="{{info && !errMsg}}">
+      <view class="dn" wx:if="{{loggedIn && info.type === 'clerk'}}">
+        <view class="dn-label">记账人姓名 / 礼台编号</view>
+        <input class="dn-input" placeholder="如：李华、礼台1号，回执和小票上显示" maxlength="12" value="{{displayName}}" bindinput="onDisplayName" />
+      </view>
+      <button wx:if="{{!loggedIn}}" class="btn-primary" bindtap="goLogin">登录后接受</button>
+      <button wx:else class="btn-primary" loading="{{accepting}}" bindtap="onAccept">
+        {{info.type === 'transfer' ? '确认接收' : (info.type === 'viewer' ? '接受共享' : '接受邀请')}}
+      </button>
+    </block>
+  </view>
+</view>

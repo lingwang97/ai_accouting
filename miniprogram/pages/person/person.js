@@ -2,6 +2,7 @@
 const req = require('../../utils/request.js');
 const fmt = require('../../utils/format.js');
 const scenes = require('../../utils/scenes.js');
+const theme = require('../../utils/theme.js');
 
 Page({
   data: {
@@ -23,7 +24,10 @@ Page({
     this.setData({ key });
   },
 
-  onShow() { this.load(); },
+  onShow() {
+    theme.apply(this); // 主题色跟当前礼簿事由走
+    this.load();
+  },
 
   async load() {
     try {

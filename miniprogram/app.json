@@ -18,17 +18,25 @@
     "pages/bookdetail/bookdetail",
     "pages/renqing/renqing",
     "pages/person/person",
-    "pages/giftedit/giftedit"
+    "pages/giftedit/giftedit",
+    "pages/pending/pending",
+    "pages/cash/cash",
+    "pages/members/members",
+    "pages/invite/invite",
+    "pages/admin/admin",
+    "pages/orgsummary/orgsummary",
+    "pages/reconcile/reconcile",
+    "pages/bookshare/bookshare"
   ],
   "window": {
     "backgroundTextStyle": "light",
-    "navigationBarBackgroundColor": "#07C160",
+    "navigationBarBackgroundColor": "#C8161D",
     "navigationBarTitleText": "慧礼记",
     "navigationBarTextStyle": "white"
   },
   "tabBar": {
     "color": "#999",
-    "selectedColor": "#07C160",
+    "selectedColor": "#C8161D",
     "list": [
       {
         "pagePath": "pages/index/index",
@@ -58,5 +66,9 @@
     "custom": true
   },
   "style": "v2",
-  "sitemapLocation": "sitemap.json"
+  "lazyCodeLoading": "requiredComponents",
+  "sitemapLocation": "sitemap.json",
+  "usingComponents": {
+    "ad-slot": "/components/ad-slot/index"
+  }
 }

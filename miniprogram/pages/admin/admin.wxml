@@ -1,0 +1,103 @@
+<view class="container" style="{{themeStyle}}">
+  <view class="card center muted" wx:if="{{loaded && !warmup}}">无管理员权限，或加载失败</view>
+
+  <block wx:if="{{warmup}}">
+    <view class="section-title">预热（减少云函数冷启动）</view>
+    <view class="card">
+      <view class="row between">
+        <view>
+          <view>启用预热</view>
+          <view class="muted">定时唤醒常用云函数，打开小程序更快</view>
+        </view>
+        <switch checked="{{warmup.enabled}}" bindchange="onEnabled" color="#C8161D" />
+      </view>
+
+      <block wx:if="{{warmup.enabled}}">
+        <view class="label">模式</view>
+        <view class="chips">
+          <view class="chip {{warmup.mode === 'always' ? 'on' : ''}}" data-v="always" bindtap="onMode">始终预热</view>
+          <view class="chip {{warmup.mode === 'paid' ? 'on' : ''}}" data-v="paid" bindtap="onMode">仅有付费用户时</view>
+        </view>
+
+        <view class="label">间隔</view>
+        <view class="chips">
+          <view class="chip {{warmup.intervalMin === item ? 'on' : ''}}" wx:for="{{intervals}}" wx:key="*this" data-v="{{item}}" bindtap="onInterval">{{item}} 分钟</view>
+        </view>
+
+        <view class="label">预热的云函数</view>
+        <view class="chips">
+          <view class="chip {{item.on ? 'on' : ''}}" wx:for="{{funcs}}" wx:key="name" data-i="{{index}}" bindtap="onFunc">{{item.label}}</view>
+        </view>
+      </block>
+
+      <view class="status muted">上次运行：{{statusText}}</view>
+      <button class="btn-primary save" loading="{{saving}}" bindtap="onSaveWarmup">保存预热设置</button>
+    </view>
+
+    <view class="section-title">广告位（流量主）</view>
+    <view class="card" wx:if="{{ads}}">
+      <view class="row between">
+        <view>
+          <view>展示广告</view>
+          <view class="muted small">需先在小程序后台开通流量主，并创建 Banner 广告单元</view>
+        </view>
+        <switch checked="{{ads.enabled}}" bindchange="onAdsEnabled" color="#C8161D" />
+      </view>
+      <view class="label">广告单元 ID</view>
+      <input class="input" placeholder="adunit-xxxxxxxx" value="{{ads.bannerUnit}}" bindinput="onAdsUnit" />
+      <view class="label">展示位置</view>
+      <view class="chips">
+        <view class="chip {{item.on ? 'on' : ''}}" wx:for="{{adSlots}}" wx:key="key" data-i="{{index}}" bindtap="onAdSlot">{{item.label}}</view>
+      </view>
+      <view class="row between" style="margin-top:24rpx">
+        <view>白事礼簿相关页面不展示</view>
+        <switch checked="{{ads.hideFuneral}}" bindchange="onAdsFuneral" color="#C8161D" />
+      </view>
+      <view class="row between" style="margin-top:16rpx">
+        <view>付费套餐用户不展示</view>
+        <switch checked="{{ads.paidHide}}" bindchange="onAdsPaid" color="#C8161D" />
+      </view>
+      <button class="btn-primary save" bindtap="onSaveAds">保存广告设置</button>
+    </view>
+
+    <view class="section-title">数据库索引</view>
+    <view class="card">
+      <view class="muted small tip">一键创建 15 条查询索引（已存在的自动跳过），记录多了以后礼簿、工作台依旧很快。首次使用需在云开发控制台 → 云函数 → system → 配置 → 环境变量 添加 WX_APPSECRET（小程序后台 → 开发管理 → AppSecret）。</view>
+      <button class="btn-primary save" loading="{{indexing}}" bindtap="onIndexes">一键创建 / 检查索引</button>
+      <view class="idx-sum" wx:if="{{indexSummary}}">{{indexSummary}}</view>
+      <view class="idx-row" wx:for="{{indexResults}}" wx:key="name">
+        <text>{{item.col}} · {{item.name}}</text>
+        <text class="{{item.ok ? 'ok' : 'bad'}}">{{item.ok ? (item.existed ? '已存在' : '已创建') : item.msg}}</text>
+      </view>
+    </view>
+
+    <view class="section-title">套餐与订阅（预留）</view>
+    <view class="card">
+      <view class="plan" wx:for="{{plans}}" wx:key="key">
+        <view class="plan-name">{{item.name}} <text class="muted">（{{item.key}}）</text></view>
+        <view class="muted small">{{item.featuresText}}</view>
+      </view>
+      <view class="muted small tip">目前所有功能对免费版开放，不做限制；套餐定义可在云数据库 settings 集合的 plans 记录中修改。</view>
+
+      <view class="label">手动开通 / 延期</view>
+      <view class="row" style="margin-top:0">
+        <input class="input flex1" placeholder="搜索主家称呼 / 机构名称" value="{{hostKeyword}}" bindinput="onHostKeyword" bindconfirm="onFindHosts" />
+        <button class="btn-plain find-btn" bindtap="onFindHosts">搜索</button>
+      </view>
+      <view class="host {{hostIdx === index ? 'on' : ''}}" wx:for="{{hosts}}" wx:key="ownerOpenid" data-i="{{index}}" bindtap="onPickHost">
+        <view>{{item.accountName}}<text class="muted small" wx:if="{{item.orgName}}"> · {{item.orgName}}</text></view>
+        <view class="muted small">{{item.planName}}<text wx:if="{{item.expiresStr}}">，到期 {{item.expiresStr}}</text></view>
+      </view>
+      <view class="muted small" style="margin:12rpx 0">也可直接填 openid（对方在「我的」长按版本号查看）</view>
+      <input class="input" placeholder="主家 openid" value="{{subOpenid}}" bindinput="onSubOpenid" />
+      <view class="row">
+        <picker range="{{plans}}" range-key="name" value="{{planIdx}}" bindchange="onPlan">
+          <view class="input picker">{{plans[planIdx].name}} ▾</view>
+        </picker>
+        <input class="input days" type="number" placeholder="天数" value="{{subDays}}" bindinput="onSubDays" />
+        <text class="muted">天</text>
+      </view>
+      <button class="btn-plain save" bindtap="onSetPlan">确定</button>
+    </view>
+  </block>
+</view>

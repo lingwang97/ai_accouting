@@ -1,4 +1,4 @@
-<view class="container">
+<view class="container" style="{{themeStyle}}">
   <view class="card">
     <view class="section-title">已保存打印机</view>
     <block wx:if="{{savedDevice}}">

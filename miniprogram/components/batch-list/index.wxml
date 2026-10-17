@@ -1,0 +1,23 @@
+<view class="bl">
+  <view class="row" wx:for="{{rows}}" wx:for-index="ri" wx:key="ri">
+    <view class="row-head">
+      <text class="no">第 {{ri + 1}} 位<text class="tag" wx:if="{{ri === 0 && firstLabel}}">{{firstLabel}}</text></text>
+      <text class="del" wx:if="{{rows.length > 1}}" data-i="{{ri}}" bindtap="onDel">删除</text>
+    </view>
+    <view class="line">
+      <input class="input name" placeholder="姓名 *" maxlength="20" value="{{item.name}}" data-i="{{ri}}" data-k="name" bindinput="onInput" />
+      <input class="input amt" type="digit" placeholder="金额 *" value="{{item.amount}}" data-i="{{ri}}" data-k="amount" bindinput="onInput" />
+    </view>
+    <view class="chips" wx:if="{{quick.length}}">
+      <view class="chip {{item.amount == q ? 'on' : ''}}" wx:for="{{quick}}" wx:for-item="q" wx:key="*this" data-i="{{ri}}" data-v="{{q}}" bindtap="onQuick">{{q}}</view>
+    </view>
+    <view class="line">
+      <picker class="rel" range="{{relations}}" data-i="{{ri}}" bindchange="onRelation">
+        <view class="input rel-val {{item.relation ? '' : 'ph'}}">{{item.relation || '关系'}} ▾</view>
+      </picker>
+      <input class="input remark" placeholder="礼品/备注（选填）" maxlength="50" value="{{item.remark}}" data-i="{{ri}}" data-k="remark" bindinput="onInput" />
+    </view>
+  </view>
+  <view class="add" wx:if="{{rows.length < max}}" bindtap="onAdd">＋ 再加一位</view>
+  <view class="total">共 <text class="num">{{count}}</text> 人 · 合计 <text class="money">￥{{totalStr}}</text></view>
+</view>

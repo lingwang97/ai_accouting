@@ -1,12 +1,22 @@
 <view class="container login">
-  <view class="logo">🧧</view>
+  <!-- 印章式标识：中性墨色，喜事、白事都适用 -->
+  <view class="seal">
+    <view class="seal-inner">礼</view>
+  </view>
   <view class="title">慧礼记</view>
-  <view class="muted">记录礼尚往来，留存电子礼簿</view>
+  <view class="slogan">礼尚往来 · 笔笔有据</view>
+
+  <view class="points">
+    <view class="point"><text class="tick">✓</text>电子礼簿</view>
+    <view class="point"><text class="tick">✓</text>往来查询</view>
+    <view class="point"><text class="tick">✓</text>回执留存</view>
+  </view>
 
   <view class="card form">
     <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
       <image class="avatar" src="{{avatar || '/assets/avatar-default.png'}}" mode="aspectFill" />
     </button>
+    <view class="muted avatar-tip">点击设置头像</view>
     <input class="input" type="nickname" placeholder="请输入昵称" value="{{nickname}}" bindinput="onNicknameInput" />
     <button class="btn-primary" loading="{{submitting}}" bindtap="onSubmit">登录 / 注册</button>
   </view>

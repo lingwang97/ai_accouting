@@ -36,14 +36,24 @@ function stopDiscovery() {
 }
 
 function onFound(cb) {
-  wx.onBluetoothDeviceFound(res => cb(res.devices || []));
+  offFound(); // 每次扫描都会注册，先移除旧的监听
+  wx.onBluetoothDeviceFound(res => cb((res.devices || []).map(slim)));
+}
+
+/** 只留页面与连接用到的字段，去掉 advertisData 等 ArrayBuffer，减少 setData 传输 */
+function slim(d) {
+  return { name: d.name, deviceId: d.deviceId, RSSI: d.RSSI };
+}
+
+function offFound() {
+  try { wx.offBluetoothDeviceFound(); } catch (e) { /* 低版本无此接口 */ }
 }
 
 /** 当前已发现的设备列表 */
 function getDevices() {
   return new Promise(resolve => {
     wx.getBluetoothDevices({
-      success: res => resolve(res.devices || []),
+      success: res => resolve((res.devices || []).map(slim)),
       fail: () => resolve([])
     });
   });
@@ -165,7 +175,7 @@ async function reconnectSaved() {
 
 module.exports = {
   PRINTER_PREFIX, state,
-  openAdapter, startDiscovery, stopDiscovery, onFound, getDevices, isPrinterLike,
+  openAdapter, startDiscovery, stopDiscovery, onFound, offFound, getDevices, isPrinterLike,
   connect, disconnect, writeBuffer,
   saveDevice, loadDevice, reconnectSaved, sleep
 };

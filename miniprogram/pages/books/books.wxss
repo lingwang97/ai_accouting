@@ -1,17 +1,55 @@
-.book.active { border: 2rpx solid #07C160; }
-.book.archived { opacity: .7; }
+.page { padding: 24rpx 24rpx calc(180rpx + env(safe-area-inset-bottom)); }
+.book-tip { margin: 0 8rpx 20rpx; line-height: 1.6; }
+
+/* 当前礼簿 */
+.cur-card {
+  background: var(--primary); color: #fff; border-radius: 24rpx; padding: 32rpx;
+  box-shadow: 0 12rpx 32rpx rgba(0, 0, 0, .12); margin-bottom: 28rpx;
+}
+.cc-top { display: flex; justify-content: space-between; align-items: center; }
+.cc-tag { font-size: 22rpx; background: rgba(255, 255, 255, .22); border-radius: 999rpx; padding: 4rpx 16rpx; }
+.cc-type { font-size: 24rpx; opacity: .85; }
+.cc-name { font-size: 36rpx; font-weight: 700; margin-top: 20rpx; }
+.cc-sum { font-size: 64rpx; font-weight: 700; margin-top: 12rpx; }
+.cc-count { font-size: 24rpx; opacity: .85; }
+.cc-ops { display: flex; gap: 16rpx; margin-top: 28rpx; }
+.cc-op {
+  flex: 1; text-align: center; padding: 16rpx 0; border-radius: 12rpx; font-size: 28rpx;
+  background: rgba(255, 255, 255, .18); border: 2rpx solid rgba(255, 255, 255, .5);
+}
+
+/* 其他礼簿 */
+.group-title { font-size: 24rpx; color: #999; margin: 8rpx 12rpx 12rpx; }
+.book.archived { opacity: .75; }
 .b-top { display: flex; align-items: center; gap: 12rpx; margin-bottom: 8rpx; }
-.b-name { font-size: 32rpx; font-weight: 600; }
-.tag { font-size: 22rpx; padding: 2rpx 14rpx; border-radius: 999rpx; background: #f2f3f5; color: #666; }
+.b-name { font-size: 32rpx; font-weight: 600; flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.tag { font-size: 22rpx; padding: 2rpx 14rpx; border-radius: 999rpx; background: #f2f3f5; color: #666; flex-shrink: 0; }
 .tag.wedding, .tag.baby, .tag.other { background: #C8161D1A; color: #C8161D; }
 .tag.birthday, .tag.house { background: #B8860B1A; color: #B8860B; }
 .tag.funeral { background: #3333331A; color: #333; }
-.tag.cur { background: #07C160; color: #fff; }
-.b-sum { margin: 12rpx 0 4rpx; }
-.b-ops { display: flex; justify-content: flex-end; gap: 32rpx; margin-top: 8rpx; }
-.link { color: #576B95; font-size: 26rpx; }
-.link.gray { color: #999; }
+.b-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 16rpx; }
+.b-ops { display: flex; align-items: center; gap: 20rpx; }
+.op-btn { font-size: 24rpx; color: var(--primary); border: 2rpx solid var(--primary); border-radius: 999rpx; padding: 6rpx 20rpx; }
+.op-link { font-size: 24rpx; color: #576B95; }
+.op-link.gray { color: #999; }
+
+.fold { text-align: center; color: #576B95; font-size: 26rpx; padding: 16rpx 0 24rpx; }
+.more-export { text-align: center; color: #999; font-size: 24rpx; padding: 8rpx 0 24rpx; }
 .center { text-align: center; }
 .pad { padding: 60rpx 0; }
-.archived-toggle { margin: 8rpx 0 24rpx; }
-.tips { margin: 16rpx 8rpx 28rpx; line-height: 1.6; }
+
+.bottom-bar {
+  position: fixed; left: 0; right: 0; bottom: 0; background: #fff;
+  padding: 20rpx 24rpx calc(20rpx + env(safe-area-inset-bottom)); box-shadow: 0 -2rpx 12rpx rgba(0, 0, 0, .06);
+}
+/* 底部并排按钮：各占一半，新建实心、共享描边 */
+.bottom-bar { display: flex; gap: 20rpx; }
+.bb-btn {
+  flex: 1; height: 88rpx; border-radius: 16rpx; font-size: 30rpx; font-weight: 600;
+  display: flex; align-items: center; justify-content: center; gap: 10rpx; box-sizing: border-box;
+}
+.bb-btn.solid { background: var(--primary); color: #fff; }
+.bb-btn.outline { background: #fff; color: var(--primary); border: 2rpx solid var(--primary); }
+.bb-hover { opacity: .8; }
+.bb-plus { font-size: 34rpx; line-height: 1; }
+.bb-icon { width: 36rpx; height: 36rpx; }

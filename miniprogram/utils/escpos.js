@@ -26,11 +26,16 @@ function buildReceipt(record, tpl) {
   const width = tpl.paperWidth || 32;
   const fields = tpl.fields || DEFAULT_FIELDS;
   const bytes = [...CMD.init];
+  // 主家与记账人：紧跟标题；模板去掉了标题时放在最前
+  const who = [record.accountName ? `主家：${record.accountName}` : '', record.handlerName ? `记账：${record.handlerName}` : '']
+    .filter(Boolean).join('  ');
+  if (who && !fields.includes('title')) bytes.push(...CMD.alignCenter, ...text(who), ...CMD.feed);
 
   for (const f of fields) {
     switch (f) {
       case 'title':
         bytes.push(...CMD.alignCenter, ...CMD.boldOn, ...text(tpl.title || '礼金回执'), ...CMD.feed, ...CMD.boldOff);
+        if (who) bytes.push(...CMD.alignCenter, ...text(who), ...CMD.feed);
         break;
       case 'divider':
         if (tpl.showDivider !== false) {
@@ -65,6 +70,7 @@ function buildReceipt(record, tpl) {
         bytes.push(...CMD.alignRight, ...CMD.sizeDouble, ...CMD.boldOn,
           ...text(`￥${fmt.money(record.amount)}`), ...CMD.feed,
           ...CMD.sizeNormal, ...CMD.boldOff);
+        if (record.payMethod === 'cash') bytes.push(...CMD.alignRight, ...text('（现金）'), ...CMD.feed);
         break;
       case 'remark':
         if (record.remark) {
@@ -79,6 +85,10 @@ function buildReceipt(record, tpl) {
     }
   }
 
+  // 底部推广语：白事不打印；「回执样式 → 打印小票」里可关闭
+  if (tpl.promo !== false && record.bookType !== 'funeral') {
+    bytes.push(...CMD.alignCenter, ...text('微信搜索「慧礼记」记礼金·查往来'), ...CMD.feed);
+  }
   bytes.push(...CMD.feed, ...CMD.feed, ...CMD.cut);
   return new Uint8Array(bytes).buffer;
 }

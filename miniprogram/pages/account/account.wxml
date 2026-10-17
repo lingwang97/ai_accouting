@@ -1,7 +1,27 @@
-<view class="container">
+<view class="container" style="{{themeStyle}}">
+  <!-- 主家：记账人提交的收款码，采用后才生效 -->
+  <view class="card review" wx:for="{{reviews}}" wx:key="target">
+    <view class="section-title">待确认的收款码 · {{item.name}}</view>
+    <view class="muted">记账人「{{item.by}}」提交了新的收款码。请核对是否为你本人的微信收款码，采用后宾客随礼转到新收款码。</view>
+    <view class="rv-imgs">
+      <view class="rv-col">
+        <image class="rv-img" src="{{item.curUrl}}" mode="aspectFit" data-url="{{item.curUrl}}" bindtap="onPreview" />
+        <view class="muted small">当前</view>
+      </view>
+      <view class="rv-col">
+        <image class="rv-img new" src="{{item.url}}" mode="aspectFit" data-url="{{item.url}}" bindtap="onPreview" />
+        <view class="muted small">新提交</view>
+      </view>
+    </view>
+    <view class="rv-ops">
+      <view class="rv-btn" data-idx="{{index}}" data-ok="{{false}}" bindtap="onDecide">驳回</view>
+      <view class="rv-btn solid" data-idx="{{index}}" data-ok="{{true}}" bindtap="onDecide">采用</view>
+    </view>
+  </view>
+
   <view class="card">
     <view class="section-title">主家称呼</view>
-    <input class="input" placeholder="如：张府、王李联姻" value="{{accountName}}" bindinput="onNameInput" />
+    <input class="input" placeholder="建议真实姓名,如：张三" value="{{accountName}}" bindinput="onNameInput" />
 
     <view class="section-title" style="margin-top:28rpx">微信个人收款码</view>
     <view class="paycode-box" bindtap="onChoosePayCode">
@@ -12,14 +32,15 @@
       </view>
     </view>
     <view class="muted">在微信"收付款"页截图"二维码收款"后上传；宾客向此码转账随礼</view>
+    <view class="pending-note" wx:if="{{pendingNote}}">已提交的新收款码待主家确认，确认前宾客仍转到原收款码</view>
   </view>
 
   <view class="card">
     <view class="section-title">快捷礼金</view>
     <input class="input" placeholder="用逗号分隔，如：200,500,600,800,1000,1888" value="{{quickText}}" bindinput="onQuickInput" />
-    <view class="muted" style="margin-top:12rpx">宾客随礼时可一键选择；礼簿名称请到「我的 → 礼簿管理」设置</view>
+    <view class="muted" style="margin-top:12rpx">宾客随礼时可一键选择，清空后不显示快捷金额<text class="link-inline" wx:if="{{quickText}}" bindtap="onClearQuick">清空</text>；礼簿名称请到「我的 → 礼簿管理」设置</view>
 
-    <view class="section-title" style="margin-top:28rpx">主题色</view>
+    <view class="section-title" style="margin-top:28rpx">主题色 <text class="muted">（工作台、按钮、宾客随礼页、礼簿码与台卡的主色；白事礼簿自动素灰）</text></view>
     <view class="colors">
       <view wx:for="{{colors}}" wx:key="*this"
             class="color-dot {{item === primary ? 'on' : ''}}"
@@ -28,4 +49,5 @@
   </view>
 
   <button class="btn-primary" loading="{{saving || uploading}}" bindtap="onSave">保存</button>
+  <view class="clear-form" bindtap="onClearForm">清空重填</view>
 </view>

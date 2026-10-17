@@ -1,5 +1,6 @@
 // pages/account/account.js — 主家信息：称呼、微信收款码、主题色、快捷礼金
 const req = require('../../utils/request.js');
+const theme = require('../../utils/theme.js');
 
 const PRESET_COLORS = ['#C8161D', '#07C160', '#B8860B', '#2B7FFF', '#333333'];
 const DEFAULT_QUICK = [200, 500, 600, 800, 1000, 1888];
@@ -14,27 +15,76 @@ Page({
     quickText: DEFAULT_QUICK.join(','),
     colors: PRESET_COLORS,
     saving: false,
-    uploading: false
+    uploading: false,
+    reviews: [],         // 主家：记账人提交、待确认的收款码
+    pendingNote: false   // 记账人：已提交的新收款码待主家确认
   },
 
-  onLoad() {
+  onShow() {
+    theme.apply(this); // 主题色跟当前礼簿事由走
+  },
+
+  onLoad(options) {
+    // own=1：记账人新建自己的主家信息（不修改正在记账的主家）
+    this._own = options.own === '1';
+    if (this._own) wx.setNavigationBarTitle({ title: '新建我自己的礼簿' });
     this.load();
   },
 
   async load() {
     try {
-      const { account } = await req.accountGet();
+      if (this._own) return; // 新建：空白表单
+      const { account, role } = await req.accountGet(true);
       if (!account) return;
+      this._role = role;
+      this.setData({ pendingNote: role !== 'owner' && !!account.hasPendingPayCode });
+      if (role === 'owner' && account.payCodeCheck) this.loadReviews();
+      this._saved = account; // 已保存的主家信息（开关即时保存时使用）
       this.setData({
         accountName: account.accountName,
         payCodeFileID: account.payCodeFileID,
         themeName: account.theme.name,
-        primary: account.theme.primary,
-        quickText: ((account.quickAmounts && account.quickAmounts.length) ? account.quickAmounts : DEFAULT_QUICK).join(',')
+        primary: account.theme.chosen ? account.theme.primary : '#C8161D',
+        quickText: (Array.isArray(account.quickAmounts) ? account.quickAmounts : DEFAULT_QUICK).join(',')
       });
-      const url = await this.getTempUrl(account.payCodeFileID);
+      // 记账人读不到主家上传的图片，优先用云函数生成的链接
+      const url = account.payCodeUrl || await this.getTempUrl(account.payCodeFileID);
       this.setData({ payCodeUrl: url });
     } catch (e) { /* toast 已提示 */ }
+  },
+
+  /** 主家：记账人提交的收款码（主家信息 / 本场收款码），核对后采用或驳回 */
+  async loadReviews() {
+    try {
+      const { list } = await req.payCodeReviews();
+      this.setData({ reviews: list || [] });
+    } catch (e) { /* toast 已提示 */ }
+  },
+
+  onDecide(e) {
+    const { idx, ok } = e.currentTarget.dataset;
+    const r = this.data.reviews[idx];
+    if (!r) return;
+    wx.showModal({
+      title: ok ? '采用新收款码' : '驳回',
+      content: ok ? `确认这是你本人的微信收款码？采用后宾客随礼将转到这个收款码（${r.name}）。` : '驳回后继续使用原收款码。',
+      confirmText: ok ? '采用' : '驳回',
+      success: async res => {
+        if (!res.confirm) return;
+        try {
+          await req.payCodeDecide(r.target, ok);
+          wx.showToast({ title: ok ? '已采用' : '已驳回', icon: 'success' });
+          require('../../utils/cache.js').set('dashboard', null);
+          this.load();
+          this.setData({ reviews: this.data.reviews.filter((x, i) => i !== idx) });
+        } catch (err) { /* toast 已提示 */ }
+      }
+    });
+  },
+
+  onPreview(e) {
+    const url = e.currentTarget.dataset.url;
+    if (url) wx.previewImage({ urls: [url] });
   },
 
   getTempUrl(fileID) {
@@ -49,6 +99,19 @@ Page({
 
   onNameInput(e) { this.setData({ accountName: e.detail.value }); },
   onQuickInput(e) { this.setData({ quickText: e.detail.value }); },
+  /** 清空重填：清掉页面上的内容，填好后点「保存」生效（未保存前不影响已有信息） */
+  onClearForm() {
+    wx.showModal({
+      title: '清空重填',
+      content: '清空主家称呼、收款码和快捷礼金后重新填写，点「保存」后才生效。',
+      confirmText: '清空',
+      success: res => {
+        if (!res.confirm) return;
+        this.setData({ accountName: '', payCodeUrl: '', payCodeFileID: '', quickText: '', primary: PRESET_COLORS[0] });
+      }
+    });
+  },
+  onClearQuick() { this.setData({ quickText: '' }); },
   onPickColor(e) { this.setData({ primary: e.currentTarget.dataset.c }); },
 
   /** 上传微信个人收款码图片（文档 §6.2） */
@@ -83,14 +146,28 @@ Page({
 
     this.setData({ saving: true });
     try {
-      const { account } = await req.accountSave({
+      const { account, pendingPayCode } = await req.accountSave({
         accountName: name,
         payCodeFileID: this.data.payCodeFileID,
-        theme: { name: this.data.themeName || '我的礼簿', primary: this.data.primary },
-        quickAmounts
+        theme: { name: this.data.themeName || '我的礼簿', primary: this.data.primary, chosen: true },
+        quickAmounts,
+        confirmPayCode: true, // 主家在本页核对后保存：解除收款码提醒
+        own: this._own || undefined
       });
+      if (this._own) {
+        getApp().resetIdentity(); // 已切换到自己的身份
+        this._own = false;
+      }
+      this._saved = account;
       getApp().globalData.account = account;
-      wx.showToast({ title: '保存成功', icon: 'success' });
+      theme.setAccount(account); // 主题色立即生效
+      theme.apply(this);
+      if (pendingPayCode) {
+        this.setData({ pendingNote: true });
+        wx.showModal({ title: '已提交主家确认', content: '收款码关系到礼金转到谁的账户：主家确认采用后才生效，确认前宾客仍转到原收款码。', showCancel: false });
+      } else {
+        wx.showToast({ title: '保存成功', icon: 'success' });
+      }
     } catch (e) { /* toast 已提示 */ } finally {
       this.setData({ saving: false });
     }

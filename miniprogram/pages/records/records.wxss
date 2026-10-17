@@ -6,7 +6,7 @@
   padding: 8rpx 24rpx; border-radius: 999rpx;
   background: #f2f3f5; color: #666; font-size: 26rpx;
 }
-.filter.on { background: #07C160; color: #fff; }
+.filter.on { background: var(--primary); color: #fff; }
 .search-row { display: flex; align-items: center; gap: 16rpx; margin-top: 20rpx; }
 .search {
   flex: 1; background: #f2f3f5;
@@ -14,7 +14,7 @@
 }
 .export-btn {
   padding: 14rpx 28rpx; border-radius: 999rpx;
-  border: 2rpx solid #07C160; color: #07C160; font-size: 26rpx;
+  border: 2rpx solid var(--primary); color: var(--primary); font-size: 26rpx;
 }
 .record.transferred { border-left: 8rpx solid #FF9F1C; }
 .record.pending { opacity: .7; }
@@ -41,5 +41,14 @@
 
 .book-pick { font-size: 30rpx; font-weight: 600; color: #333; margin-bottom: 8rpx; }
 .rel-btn { padding: 0 20rpx; line-height: 64rpx; border-radius: 12rpx; background: #f2f3f5; color: #666; font-size: 26rpx; white-space: nowrap; }
-.rel-btn.on { background: #07C16022; color: #07C160; }
+.rel-btn.on { background: var(--primary-soft); color: var(--primary); }
 .declared { color: #FF9F1C; }
+.cash-tag { font-size: 22rpx; color: #FF9F1C; background: #FFF7E6; border-radius: 6rpx; padding: 2rpx 10rpx; margin-right: 12rpx; }
+.cash-entry { margin-top: 20rpx; text-align: center; padding: 18rpx 0; border-radius: 12rpx; border: 2rpx dashed #FF9F1C; color: #FF9F1C; font-size: 28rpx; }
+.book-manage { font-size: 24rpx; color: #576B95; }
+
+/* 骨架屏 */
+.sk { background: linear-gradient(90deg, #ECECEC 25%, #F5F5F5 50%, #ECECEC 75%); background-size: 400% 100%; animation: sk 1.4s ease infinite; border-radius: 10rpx; }
+@keyframes sk { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+.sk-l1 { height: 34rpx; width: 55%; margin-bottom: 18rpx; }
+.sk-l2 { height: 24rpx; width: 80%; }

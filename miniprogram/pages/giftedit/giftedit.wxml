@@ -1,4 +1,4 @@
-<view class="container">
+<view class="container" style="{{themeStyle}}">
   <view class="card">
     <view class="field">
       <text class="label">对方姓名 *</text>

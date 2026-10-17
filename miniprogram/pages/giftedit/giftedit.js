@@ -2,6 +2,7 @@
 const req = require('../../utils/request.js');
 const fmt = require('../../utils/format.js');
 const scenes = require('../../utils/scenes.js');
+const theme = require('../../utils/theme.js');
 
 const QUICK = [200, 500, 600, 800, 1000, 1888];
 
@@ -20,6 +21,10 @@ Page({
     scenes: scenes.SCENES.map(s => ({ type: s.type, label: s.label })),
     quick: QUICK,
     saving: false
+  },
+
+  onShow() {
+    theme.apply(this); // 主题色跟当前礼簿事由走
   },
 
   onLoad(options) {

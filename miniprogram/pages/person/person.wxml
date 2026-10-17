@@ -1,4 +1,4 @@
-<view class="container">
+<view class="container" style="{{themeStyle}}">
   <view class="card summary">
     <view class="s-col">
       <view class="muted">收到 TA 的礼</view>

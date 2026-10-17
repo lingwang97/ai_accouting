@@ -19,7 +19,10 @@ async function ensureCol(name) {
 }
 
 exports.main = async (event) => {
+  // 预热：warmer 云函数按「系统设置」定时唤醒，保持实例常驻、减少冷启动；直接返回，不做任何读写
+  if (event && event.action === '__warm') return { code: 0, msg: 'warm', data: null };
   const { OPENID } = cloud.getWXContext();
+  if (!OPENID) return err('未获取到用户身份');
   try {
     await ensureCol('gifts_out');
     switch (event.action) {
@@ -66,9 +69,11 @@ async function outList(openid, event) {
 async function autoGiven(openid) {
   const recs = await fetchAll(records, { payerOpenid: openid, status: 'paid' }, {
     aid: true, ownerOpenid: true, amount: true, proxyItems: true, proxyFor: true,
-    relation: true, remark: true, themeName: true, bookType: true, payDay: true, paidAt: true, createdAt: true
+    relation: true, remark: true, themeName: true, bookType: true, payDay: true, paidAt: true, createdAt: true,
+    batchIdx: true
   });
-  const mine = recs.filter(r => r.ownerOpenid !== openid); // 主家自己"模拟宾客随礼"的测试数据不算
+  // 主家自己"模拟宾客随礼"的测试数据不算；批次录入只算第一位（扫码人本人），其余是别人的礼
+  const mine = recs.filter(r => r.ownerOpenid !== openid && !(r.batchIdx > 0));
   const aids = [...new Set(mine.map(r => r.aid))];
   const names = {};
   for (let i = 0; i < aids.length; i += 100) {
@@ -184,14 +189,20 @@ async function buildPersons(openid) {
     const knownFen = items.reduce((t, x) => t + Math.round((x.amount || 0) * 100), 0);
     const unknownNames = items.filter(x => !(x.amount > 0)).map(x => x.name);
 
-    const payer = get(`o:${r.payerOpenid || ''}:${norm(r.payerName)}`, r.payerName);
-    if (r.relation) payer.relation = r.relation;
-    payer.received.push({
+    const payerEntry = {
       ...base,
       amount: (Math.round(r.amount * 100) - knownFen) / 100,
       counted: true,
       withProxy: unknownNames.join('、') // 含代随礼（未拆分金额）的人
-    });
+    };
+    if (r.payerOpenid) {
+      const payer = get(`o:${r.payerOpenid}:${norm(r.payerName)}`, r.payerName);
+      if (r.relation) payer.relation = r.relation;
+      payer.received.push(payerEntry);
+    } else {
+      // 主家代登记的现金礼没有宾客微信身份：按姓名归并
+      pending.push({ name: r.payerName, entry: payerEntry, side: 'received' });
+    }
     for (const x of items) {
       pending.push({
         name: x.name,

@@ -3,4 +3,8 @@
 .gap { margin-top: 32rpx; }
 .chips { display: flex; flex-wrap: wrap; gap: 16rpx; }
 .chip { padding: 10rpx 30rpx; border-radius: 999rpx; background: #f2f3f5; color: #666; font-size: 28rpx; }
-.chip.on { background: #07C160; color: #fff; }
+.chip.on { background: var(--primary); color: #fff; }
+.paycode { width: 320rpx; height: 320rpx; display: block; margin: 0 auto 16rpx; }
+.pc-ops { display: flex; align-items: center; gap: 24rpx; }
+.pc-btn { flex: 1; }
+.link { color: #FA5151; font-size: 28rpx; }

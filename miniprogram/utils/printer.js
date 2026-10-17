@@ -58,6 +58,13 @@ async function printRecord(record) {
     throw new Error('打印机未连接，请先到"我的 → 蓝牙打印机"连接');
   }
   const tpl = await getTemplate(false, record.bookId);
+  // 小票上显示主家称呼；记账人取这笔礼金的确认人（刚确认时本地还没有，用当前登录人）
+  const app = getApp();
+  record = {
+    ...record,
+    accountName: record.hostName || record.accountName || (app.globalData.account && app.globalData.account.accountName) || '',
+    handlerName: record.handlerName || (app.globalData.user && app.globalData.user.nickname) || ''
+  };
   await _writeRetry(escpos.buildReceipt(record, tpl));
   try {
     await request.markPrinted([record._id]);

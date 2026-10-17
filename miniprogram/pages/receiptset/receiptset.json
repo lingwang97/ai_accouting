@@ -1,4 +1,4 @@
 {
-  "navigationBarTitleText": "电子回执模板",
+  "navigationBarTitleText": "回执样式",
   "usingComponents": { "receipt-view": "/components/receipt-view/index" }
 }

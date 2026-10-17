@@ -1,24 +1,32 @@
-// utils/confirm.js — 主家确认/拒绝礼金（礼簿页与"我的"页共用）
+// utils/confirm.js — 主家确认/拒绝礼金（礼簿页与待确认页共用）
+// 批次录入的礼金以"组"处理：group.records 为同一批次的多位随礼人，确认 / 拒绝整批，金额不符时逐人改金额
 const req = require('./request.js');
 const printer = require('./printer.js');
 const fmt = require('./format.js');
 const notify = require('./notify.js');
 const receipt = require('./receipt.js');
 
-/** 确认收到 → 自动打印；金额不符时可按实际到账入簿。返回是否已确认 */
+/**
+ * 确认收到 → 自动打印；金额不符时可按实际到账入簿。返回是否已确认
+ * 批次（record.records 多于 1 人）选「金额不符」时返回 'edit'，由页面打开逐人改金额
+ */
 function confirmTransfer(record) {
   notify.renewSilently(); // 在点击中顺带续订下一笔提醒
   const amount = fmt.money(record.amount);
-  const who = `${record.payerName}${record.proxyFor ? '（代 ' + receipt.proxyText(record) + '）' : ''}`;
+  const isBatch = isGroup(record);
+  const who = isBatch
+    ? `${record.payerName}（${record.records.map(r => r.payerName + ' ￥' + fmt.money(r.amount)).join('、')}）`
+    : `${record.payerName}${record.proxyFor ? '（代 ' + receipt.proxyText(record) + '）' : ''}`;
+  const cash = record.payMethod === 'cash';
   return new Promise(resolve => {
     wx.showModal({
-      title: `宾客登记 ￥${amount}`,
-      content: `请核对微信收到 ${who} 的转账金额是否为 ￥${amount}`,
+      title: `${cash ? '现金' : '宾客登记'} ￥${amount}`,
+      content: cash ? `请清点 ${who} 交来的现金是否为 ￥${amount}` : `请核对微信收到 ${who} 的转账金额是否为 ￥${amount}`,
       confirmText: '一致入簿', // 按钮文字最多 4 个字，超出弹窗会直接失败
       cancelText: '金额不符',
       success: res => {
         if (res.confirm) return resolve(doConfirm(record));
-        if (res.cancel) return resolve(askActual(record));
+        if (res.cancel) return resolve(isBatch ? 'edit' : askActual(record));
         resolve(false);
       },
       fail: () => resolve(false)
@@ -52,13 +60,28 @@ async function doConfirm(record, actual) {
   try {
     const r = await req.payConfirm(record._id, actual);
     wx.showToast({ title: actual ? `已按 ￥${fmt.money(actual)} 入簿` : '已记入礼簿', icon: 'success' });
-    await autoPrint(r.record || { ...record, amount: actual || record.amount });
+    await autoPrint(r.list || [r.record || { ...record, amount: actual || record.amount }]);
     getApp().refreshBadge();
     return true;
   } catch (e) {
     return false; // request.js 已 toast
   }
 }
+
+/** 批次按逐人实际金额入簿：amounts 为 {rid: 金额}，只需列出与登记不一致的 */
+async function confirmGroupAmounts(group, amounts) {
+  try {
+    const r = await req.payConfirm(group._id, undefined, amounts);
+    wx.showToast({ title: '已按实际金额入簿', icon: 'success' });
+    await autoPrint(r.list || [r.record]);
+    getApp().refreshBadge();
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+const isGroup = r => !!(r && r.records && r.records.length > 1);
 
 /** 批量确认收到 → 逐张自动打印；返回成功笔数 */
 const BATCH = 20; // 与云函数 payment.confirmBatch 单次上限一致
@@ -118,7 +141,7 @@ function rejectTransfer(record) {
   return new Promise(resolve => {
     wx.showModal({
       title: '未收到礼金',
-      content: `确定未收到 ${record.payerName} 的 ￥${amount} ？宾客将看到"主家未确认收到"`,
+      content: `确定未收到 ${record.payerName} 的 ￥${amount} ？${isGroup(record) ? '整批都将标记为未收到，' : ''}宾客将看到"主家未确认收到"`,
       confirmColor: '#FA5151',
       success: async res => {
         if (!res.confirm) return resolve(false);
@@ -136,14 +159,14 @@ function rejectTransfer(record) {
   });
 }
 
-/** 确认后自动打印；打印机未连接时仅提示，不阻断确认流程 */
-async function autoPrint(record) {
+/** 确认后自动打印（批次每人一张）；打印机未连接时仅提示，不阻断确认流程 */
+async function autoPrint(list) {
   if (!(await printer.ensureConnected())) {
     wx.showToast({ title: '打印机未连接，可在礼簿页补打', icon: 'none' });
     return false;
   }
   try {
-    await printer.printRecord({ ...record, status: 'paid' });
+    for (const record of list) await printer.printRecord({ ...record, status: 'paid' });
     return true;
   } catch (e) {
     wx.showToast({ title: '自动打印失败，可在礼簿页补打', icon: 'none' });
@@ -151,4 +174,11 @@ async function autoPrint(record) {
   }
 }
 
-module.exports = { confirmTransfer, confirmBatch, rejectTransfer };
+module.exports = {
+  confirmTransfer,
+  confirmDirect: doConfirm,       // 不弹核对框直接入簿（逐笔大字模式，卡片上已显示金额）
+  askActualAmount: askActual,     // 金额不符：输入实际到账金额入簿
+  confirmGroupAmounts,            // 批次：逐人按实际金额入簿
+  confirmBatch,
+  rejectTransfer
+};

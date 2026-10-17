@@ -19,7 +19,7 @@
   padding: 8rpx 24rpx; border-radius: 999rpx;
   background: #f2f3f5; color: #666; font-size: 26rpx;
 }
-.filter.on { background: #07C160; color: #fff; }
+.filter.on { background: var(--primary); color: #fff; }
 .field-row {
   display: flex; justify-content: space-between; align-items: center;
   padding: 18rpx 0; border-bottom: 2rpx solid #f5f5f5;
@@ -31,3 +31,8 @@
 
 .book-bar { display: flex; justify-content: space-between; align-items: center; }
 .book-pick { font-weight: 600; color: #333; }
+
+/* 电子回执 / 打印小票 切换 */
+.style-seg { display: flex; background: #fff; border-radius: 12rpx; padding: 6rpx; margin-bottom: 24rpx; }
+.style-item { flex: 1; text-align: center; padding: 16rpx 0; border-radius: 10rpx; font-size: 28rpx; color: #666; }
+.style-item.on { background: var(--primary); color: #fff; font-weight: 600; }

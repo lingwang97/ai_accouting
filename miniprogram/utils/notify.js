@@ -1,13 +1,29 @@
 // utils/notify.js — 新礼金订阅消息（主家不在小程序前台时通过微信服务通知提醒）
-// 一次性订阅：主家每同意一次，可收到一条提醒，因此在常用按钮上顺带续订
+// 一次性订阅：每同意一次可收到一条提醒。勾选「总是保持以上选择」后再次申请不弹窗，
+// 因此在「确认收到」等点击中顺带续订，保证下一笔还能收到
 const { NOTIFY_TMPL_ID } = require('../config.js');
 
 const enabled = () => !!NOTIFY_TMPL_ID;
+let always = false; // 已勾选"总是保持"并同意：可在点击中静默续订
+const ON_KEY = 'notify_on_at'; // 本机最近一次同意订阅的时间
+
+/** 读取订阅设置（异步，结果缓存给 renewSilently 用） */
+function refresh() {
+  if (!enabled()) return;
+  wx.getSetting({
+    withSubscriptions: true,
+    success: res => {
+      const s = res.subscriptionsSetting || {};
+      always = !!(s.mainSwitch && s.itemSettings && s.itemSettings[NOTIFY_TMPL_ID] === 'accept');
+    }
+  });
+}
+refresh();
 
 /** 主动订阅（必须在点击事件中直接调用）；返回是否同意 */
 function subscribe() {
   if (!enabled()) {
-    wx.showToast({ title: '提醒模板未配置', icon: 'none' });
+    wx.showModal({ title: '提醒暂未开通', content: '新礼金微信提醒尚未配置消息模板，暂时无法开启。', showCancel: false });
     return Promise.resolve(false);
   }
   return new Promise(resolve => {
@@ -15,29 +31,42 @@ function subscribe() {
       tmplIds: [NOTIFY_TMPL_ID],
       success: res => {
         const ok = res[NOTIFY_TMPL_ID] === 'accept';
-        wx.showToast({ title: ok ? '已开启下一笔提醒' : '未开启提醒', icon: ok ? 'success' : 'none' });
+        if (ok) { try { wx.setStorageSync(ON_KEY, Date.now()); } catch (e) { /* 忽略 */ } }
+        refresh();
         resolve(ok);
       },
-      fail: () => resolve(false)
+      fail: e => {
+        wx.showToast({ title: '开启失败：' + ((e && e.errMsg) || ''), icon: 'none' });
+        resolve(false);
+      }
     });
   });
 }
 
 /**
- * 静默续订：仅当店主已勾选"总是保持以上选择"且同意时调用（此时不弹窗），
- * 在"确认收款"等点击中调用，每确认一笔补一次提醒额度。
+ * 静默续订：必须在用户点击的同步调用链中执行（不能放在异步回调里，否则微信会拒绝），
+ * 仅当已勾选"总是保持以上选择"时调用，此时不弹窗，每确认一笔补一次提醒额度
  */
 function renewSilently() {
-  if (!enabled()) return;
-  wx.getSetting({
-    withSubscriptions: true,
-    success: res => {
-      const s = res.subscriptionsSetting || {};
-      if (s.mainSwitch && s.itemSettings && s.itemSettings[NOTIFY_TMPL_ID] === 'accept') {
-        wx.requestSubscribeMessage({ tmplIds: [NOTIFY_TMPL_ID], fail() {} });
-      }
-    }
-  });
+  if (!enabled() || !always) return;
+  wx.requestSubscribeMessage({ tmplIds: [NOTIFY_TMPL_ID], fail() {} });
 }
 
-module.exports = { enabled, subscribe, renewSilently };
+/**
+ * 工作台 / 待确认页的提示文字；不需要提示时返回 ''
+ * lastNotify 为云函数记录的最近一次发送结果（account.get 返回）
+ */
+function tipText(lastNotify) {
+  if (!enabled()) return '';
+  let onAt = 0;
+  try { onAt = Number(wx.getStorageSync(ON_KEY)) || 0; } catch (e) { /* 忽略 */ }
+  const at = lastNotify && lastNotify.at ? new Date(lastNotify.at).getTime() : 0;
+  if (onAt > at) return ''; // 刚开启过，还没有新的发送结果
+  if (!lastNotify) return '开启新礼金微信提醒，宾客转账后第一时间知道';
+  if (lastNotify.ok) return '';
+  if (lastNotify.code === 43101) return '新礼金提醒次数已用完，点此重新开启';
+  if (String(lastNotify.code) === '-604101') return '新礼金提醒发送失败：云函数无发送权限，请联系开发者';
+  return `新礼金提醒上次发送失败（${lastNotify.code}），点此重新开启`;
+}
+
+module.exports = { enabled, subscribe, renewSilently, refresh, tipText };

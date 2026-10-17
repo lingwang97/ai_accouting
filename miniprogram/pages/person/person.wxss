@@ -1,7 +1,7 @@
 .summary { display: flex; text-align: center; }
 .s-col { flex: 1; }
 .s-num { font-size: 40rpx; font-weight: 700; margin-top: 8rpx; }
-.advice { text-align: center; color: #07C160; }
+.advice { text-align: center; color: var(--primary); }
 .advice.owe { color: #FA5151; }
 .i-top { display: flex; justify-content: space-between; margin-bottom: 6rpx; }
 .proxy { color: #FF9F1C; }

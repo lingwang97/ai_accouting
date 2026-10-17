@@ -4,9 +4,21 @@ const req = require('../../utils/request.js');
 const fmt = require('../../utils/format.js');
 const receipt = require('../../utils/receipt.js');
 const scenes = require('../../utils/scenes.js');
+const batch = require('../../utils/batch.js');
+const theme = require('../../utils/theme.js');
 
 const POLL_MS = 3000;
 const POLL_MAX = 200; // 约 10 分钟
+
+/** 页面展示用：金额文本、批次名单 */
+function viewRecord(r) {
+  const items = r.items || [];
+  return {
+    ...r,
+    amountStr: fmt.money(r.amount),
+    itemsStr: items.length > 1 ? items.map(x => `${x.name} ￥${fmt.money(x.amount)}`).join('、') : ''
+  };
+}
 
 Page({
   data: {
@@ -18,15 +30,17 @@ Page({
     amount: '',
     remark: '',
     relation: '',
-    proxyItems: [{ name: '', amount: '' }], // 代随礼：每人姓名 + 金额（选填）
-    showProxy: false,
+    batchMode: false,  // 批次录入：一次登记多位随礼人，按合计转一笔账
+    batchRows: [],
+    payMethod: 'wechat', // wechat 微信转账 | cash 现金（跳过收款码与转账步骤）
     relations: scenes.RELATIONS,
     isFuneral: false,
     submitting: false,
     record: null,
     payCodeUrl: '',
     failReason: '',
-    showFallback: false, // 亮屏模式下：在本机显示收款码（备用）
+    onsite: true,        // 在现场（扫码进入）：扫主家屏幕 / 台卡上的收款码；不在现场（转发链接进入）：存相册识别
+    showFallback: false, // 在现场时：在本机显示收款码（备用）
     codeSaved: false,    // 宾客手机付款：收款码是否已存入相册
     receiptModel: null,  // 到账后的留存收据
     savingReceipt: false
@@ -44,7 +58,7 @@ Page({
       this.setData({ loadErr: '二维码无效，请联系收款方' });
       return;
     }
-    this.setData({ aid });
+    this.setData({ aid, onsite: isOnsite(options) });
     this.loadAccount(aid);
   },
 
@@ -64,7 +78,9 @@ Page({
   async loadAccount(aid) {
     try {
       const { account } = await req.accountGetByAid(aid);
-      this.setData({ account, isFuneral: !!(account.book && account.book.type === 'funeral') });
+      const t = theme.forType(account.book && account.book.type, account.theme && account.theme.chosen ? account.theme.primary : '');
+      this.setData({ account, isFuneral: !!(account.book && account.book.type === 'funeral'), themeStyle: theme.styleOf(t) });
+      wx.setNavigationBarColor({ frontColor: '#ffffff', backgroundColor: t.primary, fail() {} });
       wx.setNavigationBarTitle({ title: `向「${account.accountName}」随礼` });
     } catch (e) {
       this.setData({ loadErr: '礼簿码无效或主家已停用' });
@@ -74,72 +90,54 @@ Page({
   onName(e) { this.setData({ payerName: e.detail.value }); },
   onAmount(e) { this.setData({ amount: e.detail.value }); },
   onRemark(e) { this.setData({ remark: e.detail.value }); },
-  onProxyInput(e) {
-    const { i, k } = e.currentTarget.dataset;
-    this.setData({ [`proxyItems[${i}].${k}`]: e.detail.value });
-  },
-  onProxyAdd() { this.setData({ proxyItems: this.data.proxyItems.concat({ name: '', amount: '' }) }); },
-  onProxyDel(e) {
-    const items = this.data.proxyItems.filter((x, i) => i !== Number(e.currentTarget.dataset.i));
-    this.setData({ proxyItems: items.length ? items : [{ name: '', amount: '' }] });
-  },
+  onBatchMode(e) { this.setData({ batchMode: e.detail.value }); },
+  onBatchChange(e) { this._batchRows = e.detail.rows; },
   onQuick(e) { this.setData({ amount: String(e.currentTarget.dataset.v) }); },
   onRelation(e) {
     const r = e.currentTarget.dataset.r;
     this.setData({ relation: this.data.relation === r ? '' : r });
   },
-  onToggleProxy() { this.setData({ showProxy: !this.data.showProxy }); },
+  onPayMethod(e) { this.setData({ payMethod: e.currentTarget.dataset.m }); },
 
   /** 第 1 步：确认转账 → 创建待转账记录，进入转账步骤 */
   async onConfirmTransfer() {
     if (this.data.submitting) return;
-    const name = (this.data.payerName || '').trim();
-    const amount = Number(this.data.amount);
-    if (!name) return wx.showToast({ title: '请填写随礼人姓名', icon: 'none' });
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return wx.showToast({ title: '请选择或填写礼金', icon: 'none' });
-    }
-
-    const proxyItems = [];
-    if (this.data.showProxy) {
-      for (const p of this.data.proxyItems) {
-        const pName = (p.name || '').trim();
-        const raw = String(p.amount || '').trim();
-        if (!pName && !raw) continue; // 空行忽略
-        if (!pName) return wx.showToast({ title: '请填写被代随礼人姓名', icon: 'none' });
-        if (raw && !(Number(raw) > 0)) return wx.showToast({ title: `${pName} 的金额不正确`, icon: 'none' });
-        if (pName === name) return wx.showToast({ title: '被代随礼人不能是自己', icon: 'none' });
-        if (proxyItems.some(x => x.name === pName)) return wx.showToast({ title: `${pName} 重复填写`, icon: 'none' });
-        proxyItems.push({ name: pName, amount: raw ? Math.round(Number(raw) * 100) / 100 : null });
+    let payload;
+    if (this.data.batchMode) {
+      // 批次录入：多位随礼人，按合计金额转一笔账
+      const v = batch.validate(this._batchRows);
+      if (v.error) return wx.showToast({ title: v.error, icon: 'none' });
+      payload = { items: v.items };
+    } else {
+      const name = (this.data.payerName || '').trim();
+      const amount = Number(this.data.amount);
+      if (!name) return wx.showToast({ title: '请填写随礼人姓名', icon: 'none' });
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return wx.showToast({ title: '请选择或填写礼金', icon: 'none' });
       }
-    }
-    const proxyFen = proxyItems.reduce((s, p) => s + Math.round((p.amount || 0) * 100), 0);
-    if (proxyFen > Math.round(amount * 100)) {
-      return wx.showToast({ title: '代随礼金额之和超过礼金总额', icon: 'none' });
+      payload = { payerName: name, amount, remark: this.data.remark, relation: this.data.relation };
     }
 
     this.setData({ submitting: true });
     try {
-      const { record } = await req.payCreate({
-        aid: this.data.aid,
-        payerName: name,
-        amount,
-        remark: this.data.remark,
-        relation: this.data.relation,
-        proxyItems
-      });
-      const payCodeUrl = record.payCodeFileID ? await this.getTempUrl(record.payCodeFileID) : '';
+      const { record } = await req.payCreate({ aid: this.data.aid, ...payload, payMethod: this.data.payMethod });
+      // 现金：不经收款码与转账，直接等待主家确认收到
+      if (record.payMethod === 'cash') {
+        this.setData({ record: viewRecord(record), step: 'waiting' });
+        this.startPoll();
+        return;
+      }
+      // 优先用云函数生成的临时链接（宾客无权直接读取主家上传的图片）
+      const payCodeUrl = record.payCodeUrl || (record.payCodeFileID ? await this.getTempUrl(record.payCodeFileID) : '');
       this.setData({
-        record: { ...record, amountStr: fmt.money(record.amount), proxyStr: receipt.proxyText(record) },
+        record: viewRecord(record),
         payCodeUrl,
         showFallback: false,
-        'account.payMode': record.payMode || this.data.account.payMode,
         codeSaved: false,
         step: 'transfer'
       });
-      // 宾客手机付款：自动把收款码存入相册并弹出引导，省去手动保存
-      const mode = record.payMode || this.data.account.payMode;
-      if (mode !== 'screen' && payCodeUrl && (await this.savePayCode(true))) this.showScanGuide();
+      // 不在现场：自动把收款码存入相册并弹出引导，省去手动保存
+      if (!this.data.onsite && payCodeUrl && (await this.savePayCode(true))) this.showScanGuide();
     } catch (e) { /* toast 已提示 */ } finally {
       this.setData({ submitting: false });
     }
@@ -147,6 +145,13 @@ Page({
 
   onToggleFallback() {
     this.setData({ showFallback: !this.data.showFallback });
+  },
+
+  /** 判断错了时一键切换：在现场 ⇄ 不在现场 */
+  async onSwitchOnsite() {
+    const onsite = !this.data.onsite;
+    this.setData({ onsite, showFallback: false });
+    if (!onsite && this.data.payCodeUrl && !this.data.codeSaved && (await this.savePayCode(true))) this.showScanGuide();
   },
 
   /** 第 2 步：付款方转账完成 → 等待收款方确认 */
@@ -194,10 +199,12 @@ Page({
 
   async poll() {
     if (!this.data.record) return;
+    if (this._polling) return; // 网络慢时上一次查询未返回，不重叠
     if (++this._pollCount > POLL_MAX) {
       this.stopPoll();
       return;
     }
+    this._polling = true;
     try {
       const { status } = await req.payStatus(this.data.record._id);
       if (status === 'paid') {
@@ -209,14 +216,19 @@ Page({
         this.stopPoll();
         this.setData({ step: 'failed', failReason: '主家未收到该笔转账，请与主家核实' });
       }
-    } catch (e) { /* 网络抖动，下次再试 */ }
+    } catch (e) { /* 网络抖动，下次再试 */ } finally {
+      this._polling = false;
+    }
   },
 
   /** 收款方确认后加载留存收据（失败时退回简单成功页） */
   async loadReceipt() {
     try {
-      const { record, accountName, tpl } = await req.receiptGet(this.data.record._id);
-      this.setData({ receiptModel: receipt.buildModel(record, tpl, accountName) });
+      // 批次录入：一张合并回执列出全部随礼人
+      const { record, accountName, tpl } = await req.receiptGet(this.data.record._id, true);
+      const model = receipt.buildModel(record, tpl, accountName);
+      this.setData({ receiptModel: model });
+      this.setData({ receiptModel: await receipt.withAppCode(model) }); // 小程序码后补，不拖慢回执显示
     } catch (e) { /* 保留简单成功页 */ }
   },
 
@@ -233,13 +245,16 @@ Page({
     }
   },
 
+  /** 宾客转化：我家也要办事收礼 → 首页（登录后创建礼簿） */
+  goHostEntry() { wx.switchTab({ url: '/pages/index/index' }); },
+
   /** 手动刷新（超时后） */
   onRefresh() {
     this.startPoll();
   },
 
   onRetry() {
-    this.setData({ step: 'form', record: null, payCodeUrl: '', failReason: '', receiptModel: null });
+    this.setData({ step: 'form', record: null, payCodeUrl: '', failReason: '', receiptModel: null, payMethod: 'wechat' });
   },
 
   getTempUrl(fileID) {
@@ -277,10 +292,22 @@ Page({
           success: res => res.confirm && wx.openSetting()
         });
       } else {
-        wx.showToast({ title: '保存失败，可截屏后扫码', icon: 'none' });
+        // 下载被拦截等：打开大图，长按「保存图片」（系统预览不受下载域名限制）
+        this.saveByPreview();
       }
       return false;
     }
+  },
+
+  /** 备用保存方式：大图预览中长按保存 */
+  saveByPreview() {
+    wx.showModal({
+      title: '请长按保存收款码',
+      content: '即将打开收款码大图，请长按图片选择「保存图片」，再用微信扫一扫 → 相册识别转账',
+      confirmText: '打开大图',
+      showCancel: false,
+      success: () => wx.previewImage({ urls: [this.data.payCodeUrl], showmenu: true })
+    });
   },
 
   /** 保存成功后的转账引导 */
@@ -300,3 +327,15 @@ Page({
     }
   }
 });
+
+/**
+ * 是否在现场：点聊天里的转发卡片进入视为不在现场；扫码进入（扫主家屏幕、台卡、印刷的礼簿码，
+ * 或首页「扫码随礼」）及其他方式都按在现场处理。判断错了页面上可一键切换
+ */
+const SHARE_SCENES = [1007, 1008, 1036, 1044, 1048, 1049, 1073, 1074]; // 单聊 / 群聊卡片、长按识别聊天图片里的码、App 分享等
+function isOnsite(options) {
+  if (options.via === 'scan') return true;
+  let scene = 0;
+  try { scene = (wx.getEnterOptionsSync() || {}).scene; } catch (e) { /* 低版本 */ }
+  return !SHARE_SCENES.includes(scene);
+}

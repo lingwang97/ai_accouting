@@ -9,4 +9,6 @@
   </view>
   <view class="muted center pad" wx:if="{{!loading && list.length === 0}}">暂无随礼记录，主家确认收到后自动生成回执</view>
   <view class="muted center pad" wx:if="{{loading}}">加载中…</view>
+  <view class="host-cta" wx:if="{{!loading}}" bindtap="goHostEntry">我家也要办事？免费创建电子礼簿，宾客扫码随礼自动记账 ›</view>
+  <ad-slot slot="myreceipts" />
 </view>

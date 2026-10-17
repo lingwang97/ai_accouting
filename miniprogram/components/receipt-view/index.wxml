@@ -17,6 +17,11 @@
 
     <view wx:if="{{model.footer}}" class="footer">{{model.footer}}</view>
 
+    <view wx:if="{{model.appCode}}" class="app-code">
+      <image class="app-code-img" src="{{model.appCode}}" mode="aspectFit" show-menu-by-longpress />
+      <view class="app-code-tip">{{model.appCodeTip}}</view>
+    </view>
+
     <view wx:if="{{model.showStamp}}" class="stamp">
       <view class="stamp-name">{{model.stampText}}</view>
       <view class="stamp-text {{model.stampMain.length <= 1 ? 'one' : ''}}">{{model.stampMain}}</view>
