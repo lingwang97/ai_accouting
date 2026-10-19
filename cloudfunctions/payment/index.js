@@ -111,7 +111,7 @@ async function create(openid, event) {
     });
   }
   items.forEach(x => { if (x.nameTag && !x.nameTagBy) x.nameTagBy = 'guest'; }); // 宾客自己填的区分信息（小票、回执上可印）
-  const needTag = await sameNameOthers(account.ownerOpenid, openid, items.filter(x => !x.nameTag).map(x => x.payerName));
+  const needTag = await sameNameOthers(account.ownerOpenid, openid, items.map((x, i) => ({ name: x.payerName, self: i === 0, tagged: !!x.nameTag })));
   if (needTag.length) return ok({ needTag });
 
 
@@ -194,12 +194,25 @@ async function sameNameQuota(openid) {
 }
 
 /** 主家礼簿里，与这些姓名同名、但不是该宾客扫码登记的记录所用的姓名 */
-async function sameNameOthers(ownerOpenid, openid, names) {
-  if (!names.length) return [];
+/**
+ * 需要填区分信息的姓名：主家礼簿里已有同名、但不是"同一个人"的记录（任何状态，作废的除外）
+ * 同一个人 = 同一个微信扫码登记、且同为本人（批次第 1 位 / 单人）或同为代登记的家人（批次第 2 位起）；
+ * 礼台登记的、其他宾客的、本人代登记的同名家人，都算别人
+ * people：[{ name, self（是否扫码人本人）, tagged（已填区分信息） }]
+ */
+async function sameNameOthers(ownerOpenid, openid, people) {
+  const todo = people.filter(p => !p.tagged);
+  if (!todo.length) return [];
   const res = await records.where({
-    ownerOpenid, payerName: _.in(names), payerOpenid: _.neq(openid), status: _.in(['paid', 'transferred', 'pending'])
-  }).field({ payerName: true }).limit(100).get();
-  return [...new Set(res.data.map(r => r.payerName))];
+    ownerOpenid, payerName: _.in(todo.map(p => p.name)), status: _.neq('void')
+  }).field({ payerName: true, payerOpenid: true, batchIdx: true }).limit(500).get();
+  const out = todo.filter(p => res.data.some(r => {
+    if (r.payerName !== p.name) return false;
+    const sameScanner = r.payerOpenid === openid;
+    const rSelf = !(r.batchIdx > 0);
+    return !(sameScanner && rSelf === p.self);
+  })).map(p => p.name);
+  return [...new Set(out)];
 }
 
 /**
