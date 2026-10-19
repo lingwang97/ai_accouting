@@ -65,7 +65,10 @@ Page({
       this.setData({ loadErr: '二维码无效，请联系收款方' });
       return;
     }
-    this.setData({ aid, onsite: isOnsite(options) });
+    // 一律先引导「扫一扫」扫主家屏幕 / 台卡上的收款码，扫不到再存相册转账；
+    // 从聊天里的卡片、图片进入（多半不在现场）时，同时展开「存相册」方式，但不自动保存
+    this._remote = !isOnsite(options);
+    this.setData({ aid, onsite: true });
     this.loadAccount(aid);
   },
 
@@ -156,12 +159,10 @@ Page({
       this.setData({
         record: viewRecord(record),
         payCodeUrl,
-        showFallback: false,
+        showFallback: !!this._remote,
         codeSaved: false,
         step: 'transfer'
       });
-      // 不在现场：自动把收款码存入相册并弹出引导，省去手动保存
-      if (!this.data.onsite && payCodeUrl && (await this.savePayCode(true))) this.showScanGuide();
     } catch (e) { /* toast 已提示 */ } finally {
       this.setData({ submitting: false });
     }

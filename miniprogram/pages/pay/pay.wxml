@@ -93,7 +93,7 @@
           <view class="sr-item"><text class="sr-num">②</text>扫台卡收款码</view>
           <view class="sr-item"><text class="sr-num">③</text>回来点完成</view>
         </view>
-        <view class="link-fold" bindtap="onToggleFallback">{{showFallback ? '收起' : '看不到收款码？存到相册转账'}}</view>
+        <view class="link-fold" bindtap="onToggleFallback">{{showFallback ? '收起' : '扫不到收款码？存到相册转账'}}</view>
       </view>
 
       <!-- 不在现场（或在现场看不到收款码）：存相册后用扫一扫识别 -->
@@ -109,7 +109,7 @@
           <view class="sr-item"><text class="sr-num">③</text>回来点完成</view>
         </view>
         <view class="link-fold" wx:if="{{codeSaved}}" bindtap="onSavePayCode">没找到？重新保存</view>
-        <view class="muted">免费版限制：小程序内长按收款码无法直接付款</view>
+        <view class="muted">微信限制：小程序内长按收款码无法直接付款</view>
         <view class="link-fold" wx:if="{{!onsite}}" bindtap="onSwitchOnsite">在现场？直接扫主家屏幕或台卡上的收款码</view>
       </view>
       <button class="btn-primary" loading="{{submitting}}" bindtap="onTransferred">我已完成转账</button>
