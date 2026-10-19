@@ -48,6 +48,12 @@ exports.main = async (event) => {
         return await pendingStat(OWNER, ctx);
       case 'themes':
         return await themes(OWNER);
+      // 同名区分：礼台记账前查礼簿里同名的人；给某位宾客设区分备注
+      case 'nameCheck':
+        return await nameCheck(ctx, event.names);
+      case 'setNameTag':
+        if (!can(ctx, 'desk') && !can(ctx, 'confirm')) return err('无权修改');
+        return await setNameTag(ctx, event.rid, event.tag);
       default:
         return err('未知 action');
     }
@@ -392,6 +398,49 @@ async function pendingStat(openid, ctx) {
       .end()
   ]);
   return ok({ count: cnt.total, sum: Math.round(((agg.list && agg.list[0]) || { fen: 0 }).fen) / 100 });
+}
+
+/**
+ * 礼簿（主家全部礼簿，受限记账人为负责的礼簿）里同名的人：按 微信身份 / 区分备注 / 指定的人 分组
+ * 返回 { 姓名: [{ key, tag, scanned, relation, count, lastDay }] }，只返回有记录的姓名
+ */
+async function nameCheck(ctx, names) {
+  if (!ctx.account) return ok({ map: {} });
+  const list = (Array.isArray(names) ? names : []).map(s => String(s || '').trim().slice(0, 20)).filter(Boolean).slice(0, 10);
+  if (!list.length) return ok({ map: {} });
+  const cond = { ownerOpenid: ctx.ownerOpenid, payerName: _.in(list), status: _.in(['paid', 'transferred']) };
+  if (ctx.bookIds) cond.bookId = _.in(ctx.bookIds);
+  const res = await records.aggregate().match(cond)
+    .group({
+      _id: { name: '$payerName', openid: '$payerOpenid', tag: '$nameTag', pk: '$personKey' },
+      count: _.aggregate.sum(1), relation: _.aggregate.first('$relation'), lastDay: _.aggregate.max('$payDay')
+    })
+    .limit(500).end();
+  const norm = s => String(s || '').replace(/[\s\u3000]/g, '');
+  const map = {};
+  (res.list || []).forEach(g => {
+    const { name, openid, tag, pk } = g._id;
+    const key = pk || (openid ? `o:${openid}:${norm(name)}` : `n:${norm(name)}${tag ? '#' + tag : ''}`);
+    const arr = (map[name] = map[name] || []);
+    const same = arr.find(x => x.key === key);
+    if (same) { same.count += g.count; return; }
+    arr.push({ key, tag: tag || '', scanned: !!openid, relation: g.relation || '', count: g.count, lastDay: g.lastDay || '' });
+  });
+  return ok({ map });
+}
+
+/** 给宾客设区分备注：扫码宾客按微信身份改主家全部同名记录，礼台登记的只改这一条 */
+async function setNameTag(ctx, rid, tag) {
+  if (!/^[a-zA-Z0-9_-]{1,64}$/.test(String(rid || ''))) return err('参数错误');
+  const t = String(tag || '').trim().replace(/[#:\s]/g, '').slice(0, 12);
+  const rec = (await records.where({ _id: rid, ownerOpenid: ctx.ownerOpenid }).limit(1).get()).data[0];
+  if (!rec || !canBook(ctx, rec.bookId)) return err('记录不存在');
+  if (rec.payerOpenid && !rec.personKey) {
+    await records.where({ ownerOpenid: ctx.ownerOpenid, payerOpenid: rec.payerOpenid, payerName: rec.payerName }).update({ data: { nameTag: t } });
+  } else {
+    await records.doc(rid).update({ data: { nameTag: t } });
+  }
+  return ok({ tag: t });
 }
 
 /** 返回给前端的账目去掉宾客与经办人的 openid（前端用不到） */

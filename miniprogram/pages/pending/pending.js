@@ -6,6 +6,7 @@ const receipt = require('../../utils/receipt.js');
 const notify = require('../../utils/notify.js');
 const theme = require('../../utils/theme.js');
 const perm = require('../../utils/perm.js');
+const samename = require('../../utils/samename.js');
 
 const POLL_MS = 5000;
 const MODE_KEY = 'pending_mode'; // 记住上次使用的处理方式
@@ -217,7 +218,7 @@ Page({
     this.setData({
       editor: {
         group: g,
-        rows: g.records.map(r => ({ _id: r._id, name: r.payerName, declared: fmt.money(r.amount), value: String(r.amount) })),
+        rows: g.records.map(r => ({ _id: r._id, name: r.nameStr, declared: fmt.money(r.amount), value: String(r.amount) })),
         sumStr: g.amountStr
       }
     });
@@ -308,8 +309,9 @@ function groupRecords(list) {
       methodLabel: mixed ? '转账+现金' : (first.payMethod === 'cash' ? '现金' : '转账'),
       wechatSumStr: fmt.money((fen - cashFen) / 100),
       cashSumStr: fmt.money(cashFen / 100),
-      records: recs.map(r => ({ ...r, amountStr: fmt.money(r.amount) })),
+      records: recs.map(r => ({ ...r, amountStr: fmt.money(r.amount), nameStr: samename.nameStr(r.payerName, r.nameTag) })),
       payerName: batch ? `${first.payerName} 等 ${recs.length} 人` : first.payerName,
+      nameStr: batch ? `${samename.nameStr(first.payerName, first.nameTag)} 等 ${recs.length} 人` : samename.nameStr(first.payerName, first.nameTag),
       amount: fen / 100,
       amountStr: fmt.money(fen / 100),
       relation: batch ? '' : first.relation,

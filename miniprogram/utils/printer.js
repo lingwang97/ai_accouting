@@ -62,6 +62,7 @@ async function printRecord(record) {
   const app = getApp();
   record = {
     ...record,
+    payerName: record.nameTag ? `${record.payerName}（${record.nameTag}）` : record.payerName, // 同名区分备注
     accountName: record.hostName || record.accountName || (app.globalData.account && app.globalData.account.accountName) || '',
     handlerName: record.handlerName || (app.globalData.user && app.globalData.user.nickname) || ''
   };

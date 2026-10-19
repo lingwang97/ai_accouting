@@ -106,7 +106,7 @@ function buildModel(record, tpl, accountName) {
   const values = {
     receiptNo: receiptNo(record),
     payee: accountName || '',
-    payerName: record.payerName,
+    payerName: record.nameTag ? `${record.payerName}（${record.nameTag}）` : record.payerName, // 同名区分备注
     relation: record.relation || '',
     proxyFor: proxyText(record),
     amountUpper: amountUpper(record.amount),

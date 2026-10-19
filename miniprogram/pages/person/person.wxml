@@ -9,7 +9,15 @@
       <view class="s-num">￥{{givenSum}}</view>
     </view>
   </view>
-  <view class="card dup-tip" wx:if="{{dup}}">有同名的往来人，这里只显示{{byWx ? '这一位（按微信身份区分）' : '仅按姓名登记的记录'}}</view>
+  <view class="card same-tip" wx:if="{{same.length}}">
+    <view class="same-txt">还有 {{same.length}} 位同名：{{sameStr}}</view>
+    <view class="btn btn-sm btn-outline" bindtap="onMerge">合并为同一人</view>
+  </view>
+  <view class="card same-tip" wx:if="{{merged.length}}">
+    <view class="same-txt">已合并 {{merged.length}} 位同名</view>
+    <view class="link" bindtap="onUnmerge">取消合并</view>
+  </view>
+  <view class="card dup-tip" wx:if="{{dup && !same.length}}">有同名的往来人，这里只显示{{byWx ? '这一位（按微信身份区分）' : '仅按姓名登记的记录'}}</view>
   <view class="card advice {{balance > 0 ? 'owe' : ''}}">
     <text wx:if="{{balance > 0}}">收多于送 ￥{{balanceStr}}，TA 家有事时宜回礼</text>
     <text wx:elif="{{balance < 0}}">已多送 ￥{{balanceStr}}</text>
@@ -22,6 +30,7 @@
     <view class="muted">{{item.date}}<text wx:if="{{item.relation}}"> · {{item.relation}}</text>
       <text wx:if="{{item.viaProxy}}" class="proxy"> · 由 {{item.viaProxy}} 代随</text>
       <text wx:if="{{item.withProxy}}" class="proxy"> · 含代 {{item.withProxy}} 的礼金</text></view>
+    <view class="move-row" wx:if="{{item.movable}}"><text class="link" data-side="received" data-idx="{{index}}" catchtap="onMove">不是TA ›</text></view>
   </view>
   <view class="muted empty" wx:if="{{!loading && received.length === 0}}">暂无</view>
 
@@ -29,6 +38,7 @@
   <view class="card item" wx:for="{{given}}" wx:key="_id" data-idx="{{index}}" bindtap="onEditGift">
     <view class="i-top"><text class="i-name">{{item.event || item.typeLabel}}</text><text class="money i-amt">￥{{item.amountStr}}</text></view>
     <view class="muted">{{item.date}} · {{item.typeLabel}}<text wx:if="{{item.auto}}" class="proxy"> · 扫码随礼</text><text wx:if="{{item.remark}}"> · {{item.remark}}</text></view>
+    <view class="move-row" wx:if="{{item.movable}}"><text class="link" data-side="given" data-idx="{{index}}" catchtap="onMove">不是TA ›</text></view>
   </view>
   <view class="muted empty" wx:if="{{!loading && given.length === 0}}">暂无</view>
 

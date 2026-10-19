@@ -31,7 +31,7 @@
     <view class="item {{item.picked ? 'picked' : ''}}" wx:for="{{shown}}" wx:key="_id" data-id="{{item._id}}" bindtap="onPick">
       <view class="check {{item.picked ? 'on' : ''}}" wx:if="{{selectMode}}">{{item.picked ? '✓' : ''}}</view>
       <view class="info">
-        <view class="name-row"><text class="payer">{{item.payerName}}</text><text class="money amt">￥{{item.amountStr}}</text><text class="cash-tag" wx:if="{{item.mixed}}">转账+现金</text><text class="cash-tag" wx:elif="{{item.payMethod === 'cash'}}">💵 现金</text></view>
+        <view class="name-row"><text class="payer">{{item.nameStr}}</text><text class="money amt">￥{{item.amountStr}}</text><text class="cash-tag" wx:if="{{item.mixed}}">转账+现金</text><text class="cash-tag" wx:elif="{{item.payMethod === 'cash'}}">💵 现金</text></view>
         <view class="muted">{{item.timeStr}} {{item.mixed ? '转账+现金' : (item.payMethod === 'cash' ? '宾客现金' : '已转账')}}<text wx:if="{{item.relation}}"> · {{item.relation}}</text><text wx:if="{{item.proxyStr}}"> · 代 {{item.proxyStr}}</text><text wx:if="{{item.remark}}"> · {{item.remark}}</text></view>
         <view class="muted" wx:if="{{item.mixed}}">转账 ￥{{item.wechatSumStr}} · 现金 ￥{{item.cashSumStr}}</view>
       </view>
@@ -56,7 +56,7 @@
     <view class="card-mode" wx:if="{{current}}">
       <view class="remain">还剩 {{total}} 笔 · 按到账先后</view>
       <view class="big-card">
-        <view class="big-name">{{current.payerName}}</view>
+        <view class="big-name">{{current.nameStr}}</view>
         <view class="big-amount">￥{{current.amountStr}}</view>
         <view class="big-cash" wx:if="{{current.mixed}}">转账+现金：转账 ￥{{current.wechatSumStr}} · 现金 ￥{{current.cashSumStr}}</view>
         <view class="big-cash" wx:elif="{{current.payMethod === 'cash'}}">💵 现金，请当面清点</view>
@@ -65,7 +65,7 @@
         <view class="big-meta" wx:if="{{current.remark}}">礼品/备注：{{current.remark}}</view>
         <view class="batch-rows big" wx:if="{{current.batch}}">
           <view class="batch-row" wx:for="{{current.records}}" wx:for-item="r" wx:key="_id">
-            <text>{{r.payerName}}<text class="muted" wx:if="{{r.relation}}"> · {{r.relation}}</text><text class="pm-tag {{r.payMethod === 'cash' ? 'cash' : ''}}" wx:if="{{current.mixed}}">{{r.payMethod === 'cash' ? '现金' : '转账'}}</text></text>
+            <text>{{r.nameStr}}<text class="muted" wx:if="{{r.relation}}"> · {{r.relation}}</text><text class="pm-tag {{r.payMethod === 'cash' ? 'cash' : ''}}" wx:if="{{current.mixed}}">{{r.payMethod === 'cash' ? '现金' : '转账'}}</text></text>
             <text class="money">￥{{r.amountStr}}</text>
           </view>
         </view>
@@ -88,7 +88,7 @@
       <scroll-view scroll-y class="sh-list">
         <view class="sh-row" wx:for="{{sheet.records}}" wx:for-item="r" wx:key="_id">
           <view class="sh-info">
-            <view class="sh-name"><text class="sh-nm">{{r.payerName}}</text><text class="pm-tag {{r.payMethod === 'cash' ? 'cash' : ''}}">{{r.payMethod === 'cash' ? '现金' : '转账'}}</text></view>
+            <view class="sh-name"><text class="sh-nm">{{r.nameStr}}</text><text class="pm-tag {{r.payMethod === 'cash' ? 'cash' : ''}}">{{r.payMethod === 'cash' ? '现金' : '转账'}}</text></view>
             <view class="muted small" wx:if="{{r.relation || r.remark}}">{{r.relation}}<text wx:if="{{r.relation && r.remark}}"> · </text>{{r.remark}}</view>
           </view>
           <text class="money sh-amt">￥{{r.amountStr}}</text>
@@ -108,7 +108,7 @@
   <view class="mask" wx:if="{{editor}}">
     <view class="sheet">
       <view class="sheet-title">按实际金额入簿</view>
-      <view class="muted ed-tip">{{editor.group.payerName}} · 宾客登记合计 ￥{{editor.group.amountStr}}</view>
+      <view class="muted ed-tip">{{editor.group.nameStr}} · 宾客登记合计 ￥{{editor.group.amountStr}}</view>
       <scroll-view scroll-y class="ed-list">
         <view class="ed-row" wx:for="{{editor.rows}}" wx:key="_id">
           <view class="ed-name"><view class="ed-nm">{{item.name}}</view><view class="muted small">登记 ￥{{item.declared}}</view></view>

@@ -41,7 +41,7 @@
 
   <view class="card record {{item.status}}" wx:for="{{list}}" wx:key="_id">
     <view class="r-top">
-      <text class="payer">{{item.payerName}}</text>
+      <text class="payer">{{item.nameStr}}</text>
       <text class="r-right"><text class="cash-tag" wx:if="{{item.payMethod === 'cash'}}">现金</text><text class="money r-amount">￥{{item.amountStr}}</text></text>
     </view>
     <view class="muted">{{item.timeStr}}<text wx:if="{{item.relation}}"> · {{item.relation}}</text><text wx:if="{{item.proxyStr}}"> · 代 {{item.proxyStr}}</text><text wx:if="{{item.batchId}}"> · 批次录入</text><text wx:if="{{item.remark}}"> · {{item.remark}}</text><text wx:if="{{item.declaredStr}}" class="declared"> · 宾客登记 ￥{{item.declaredStr}}，按实收入簿</text></view>
@@ -67,6 +67,7 @@
       <text class="badge ok">{{item.statusText}}</text>
       <text class="badge {{item.printed ? 'ok' : 'warn'}}" wx:if="{{!readonly && pm.show}}">{{item.printed ? '已打印' : '待打印'}}</text>
       <view class="flex1"></view>
+      <view class="link" wx:if="{{!readonly && pm.tag}}" data-idx="{{index}}" bindtap="onNameTag">区分备注</view>
       <view class="link" data-id="{{item._id}}" bindtap="onReceipt">回执</view>
       <view class="link" wx:if="{{!readonly && pm.show}}" data-idx="{{index}}" bindtap="onPrint">{{item.printed ? '补打' : '打印'}}</view>
       <view class="link danger" wx:if="{{!readonly && pm.void}}" data-idx="{{index}}" bindtap="onVoid">作废</view>

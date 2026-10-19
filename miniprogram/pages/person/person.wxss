@@ -10,3 +10,8 @@
 .proxy { color: #FF9F1C; }
 .dup-tip { font-size: 24rpx; color: #FF9F1C; background: #FFF7E6; }
 .empty { padding: 0 8rpx 16rpx; text-align: left; }
+/* 同名区分：同名提示 / 已合并 */
+.same-tip { display: flex; align-items: center; justify-content: space-between; font-size: 26rpx; }
+.same-txt { flex: 1; min-width: 0; margin-right: 16rpx; color: var(--text-3); }
+.move-row { text-align: right; margin-top: 4rpx; }
+.move-row .link { font-size: 24rpx; }

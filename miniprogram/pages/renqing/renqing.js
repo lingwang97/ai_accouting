@@ -3,6 +3,7 @@ const req = require('../../utils/request.js');
 const fmt = require('../../utils/format.js');
 const scenes = require('../../utils/scenes.js');
 const theme = require('../../utils/theme.js');
+const samename = require('../../utils/samename.js');
 
 Page({
   data: {
@@ -47,6 +48,7 @@ Page({
         const people = list.map(p => ({
           ...p,
           nameOnly: p.key.indexOf('n:') === 0,
+          label: p.label || p.name,
           inSumStr: fmt.money(p.inSum),
           outSumStr: fmt.money(p.outSum),
           balanceStr: fmt.money(Math.abs(p.balance))
@@ -76,7 +78,7 @@ Page({
 
   filterPeople() {
     const k = (this.data.keyword || '').trim();
-    this.setData({ shownPeople: k ? this.data.people.filter(p => p.name.includes(k)) : this.data.people });
+    this.setData({ shownPeople: k ? this.data.people.filter(p => p.label.includes(k)) : this.data.people });
   },
 
   /** 随礼回执按主家 / 随礼人 / 礼簿名筛选 */
@@ -174,7 +176,10 @@ Page({
       ...r,
       amountStr: fmt.money(r.amount),
       typeLabel: scenes.label(r.bookType),
-      methodStr: r.payMethod === 'cash' ? '现金' : '微信'
+      methodStr: r.payMethod === 'cash' ? '现金' : '微信',
+      nameStr: samename.nameStr(r.payerName, r.nameTag),
+      // 往来人：有区分备注按 n:姓名#备注，否则按姓名（唯一同名时服务端直接返回该宾客）
+      personKey: r.key || ('n:' + r.payerName + (r.nameTag ? '#' + r.nameTag : '')) // 服务端算好的往来人 key
     }));
     const patch = { inPage: page, inTotal: res.total, inSum: fmt.money(res.sum) };
     if (page === 1) patch.inList = rows;
@@ -188,7 +193,7 @@ Page({
   onInMore() {
     if (this.data.inList.length < this.data.inTotal) this.loadIn(this.data.inPage + 1).catch(() => {});
   },
-  onInPerson(e) { this.openPerson('n:' + e.currentTarget.dataset.name); },
+  onInPerson(e) { this.openPerson(e.currentTarget.dataset.key); },
 
   /** key：o:微信身份:姓名 或 n:姓名（只输入姓名查询时） */
   openPerson(key) {

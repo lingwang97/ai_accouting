@@ -36,7 +36,7 @@
     <block wx:if="{{tab === 'people'}}">
       <view class="card person" wx:for="{{shownPeople}}" wx:key="key" data-key="{{item.key}}" bindtap="onPerson">
         <view class="p-top">
-          <text class="p-name">{{item.name}}<text class="muted" wx:if="{{item.dup}}"> · {{item.relation || '同名'}}{{item.nameOnly ? '（仅姓名）' : ''}}</text></text>
+          <text class="p-name">{{item.label}}<text class="muted" wx:if="{{item.dup && item.relation}}"> · {{item.relation}}</text></text>
           <text class="bal {{item.balance > 0 ? 'owe' : (item.balance < 0 ? 'given' : '')}}">
             {{item.balance > 0 ? '宜回礼 ￥' + item.balanceStr : (item.balance < 0 ? '多送 ￥' + item.balanceStr : '已持平')}}
           </text>
@@ -51,9 +51,9 @@
     <!-- 我收到的礼：本人礼簿里已入簿的礼金 -->
     <block wx:elif="{{tab === 'in'}}">
       <view class="card out-sum">共收到 {{inTotal}} 笔 · <text class="money">￥{{inSum}}</text></view>
-      <view class="card gift" wx:for="{{inList}}" wx:key="_id" data-name="{{item.payerName}}" bindtap="onInPerson">
+      <view class="card gift" wx:for="{{inList}}" wx:key="_id" data-key="{{item.personKey}}" bindtap="onInPerson">
         <view class="p-top">
-          <text class="p-name">{{item.payerName}}<text class="muted" wx:if="{{item.relation}}"> · {{item.relation}}</text></text>
+          <text class="p-name">{{item.nameStr}}<text class="muted" wx:if="{{item.relation}}"> · {{item.relation}}</text></text>
           <text class="money">￥{{item.amountStr}}</text>
         </view>
         <view class="muted">{{item.payDay}} · {{item.typeLabel}}<text wx:if="{{item.themeName}}"> · {{item.themeName}}</text> · {{item.methodStr}}<text wx:if="{{item.remark}}"> · {{item.remark}}</text><text class="link-r" data-name="{{item.payerName}}" data-amount="{{item.amountStr}}" catchtap="onInRemind"> 办事提醒 ›</text></view>

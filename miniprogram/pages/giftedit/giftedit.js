@@ -3,6 +3,7 @@ const req = require('../../utils/request.js');
 const fmt = require('../../utils/format.js');
 const scenes = require('../../utils/scenes.js');
 const theme = require('../../utils/theme.js');
+const samename = require('../../utils/samename.js');
 
 const QUICK = [200, 500, 600, 800, 1000, 1888];
 
@@ -65,8 +66,11 @@ Page({
     if (!(Number(d.amount) > 0)) return wx.showToast({ title: '请填写正确金额', icon: 'none' });
     this.setData({ saving: true });
     try {
+      // 新登记且未指定对方身份：已有同名往来人时先确认是哪一位（取消即中止）
+      const who = d._id || d.toKey ? {} : await this.pickSameName(d.toName.trim());
+      if (!who) return;
       await req.outSave({
-        _id: d._id || undefined, toName: d.toName.trim(), toKey: d.toKey, relation: d.relation, event: d.event,
+        _id: d._id || undefined, toName: d.toName.trim(), toKey: who.toKey || d.toKey, toTag: who.toTag || undefined, relation: d.relation, event: d.event,
         eventType: d.eventType, amount: Number(d.amount), date: d.date, remark: d.remark
       });
       wx.showToast({ title: '已保存', icon: 'success' });
@@ -74,6 +78,39 @@ Page({
     } catch (e) { /* toast 已提示 */ } finally {
       this.setData({ saving: false });
     }
+  },
+
+  /**
+   * 同名区分：返回 { toKey } / { toTag } / {}（没有同名或查询失败），取消返回 null
+   * 只有一位仅按姓名登记的同名人时，也问一下是否同一人
+   */
+  async pickSameName(name) {
+    let list = [];
+    try {
+      list = (await req.rqNameCheck(name)).list || [];
+    } catch (e) { return {}; }
+    if (!list.length) return {};
+    if (list.length === 1 && !list[0].tag && !list[0].scanned) {
+      const same = await new Promise(resolve => wx.showModal({
+        title: '同名提醒',
+        content: `已有「${name}」，是同一人吗？`,
+        confirmText: '是同一人',
+        cancelText: '新的一位',
+        success: res => resolve(res.confirm ? 1 : (res.cancel ? 0 : -1)),
+        fail: () => resolve(-1)
+      }));
+      if (same < 0) return null;
+      if (same) return { toKey: list[0].key };
+      const tag = await samename.askTag(name);
+      return tag ? { toTag: tag } : null;
+    }
+    const people = list.map(p => ({
+      ...p,
+      label: [p.label && p.label !== name ? p.label : `${name}（${p.tag || (p.scanned ? '扫码' : '未区分')}）`, p.relation].filter(Boolean).join(' · ')
+    }));
+    const r = await samename.choose(name, people);
+    if (!r) return null;
+    return r.person ? { toKey: r.person.key } : { toTag: r.tag };
   },
 
   onDelete() {

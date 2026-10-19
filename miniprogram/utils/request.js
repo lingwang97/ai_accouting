@@ -82,6 +82,14 @@ module.exports = {
   exportCleanup: fileID => call('export', { action: 'cleanup', fileID }),
   exportPurge: () => call('export', { action: 'purge' }),
   inList: d => call('renqing', { action: 'inList', ...d }),
+  // 同名区分：人情往来里同名的人、合并 / 取消合并、把某条记录移到别的人
+  rqNameCheck: name => call('renqing', { action: 'nameCheck', name }, { silent: true }),
+  rqMerge: (from, to) => call('renqing', { action: 'merge', from, to }),
+  rqUnmerge: from => call('renqing', { action: 'unmerge', from }),
+  rqMoveEntry: d => call('renqing', { action: 'moveEntry', ...d }),
+  // 礼簿里同名的宾客（礼台记账前选择是哪一位）、给宾客设区分备注
+  bookNameCheck: names => call('records', { action: 'nameCheck', names }, { silent: true }),
+  setNameTag: (rid, tag) => call('records', { action: 'setNameTag', rid, tag }),
   // 亲友办事提醒
   remindList: () => call('renqing', { action: 'remindList' }),
   remindSave: (remind, subscribed) => call('renqing', { action: 'remindSave', remind, subscribed: !!subscribed, envVersion: envVersion() }),

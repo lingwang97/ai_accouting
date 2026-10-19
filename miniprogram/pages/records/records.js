@@ -8,6 +8,7 @@ const confirm = require('../../utils/confirm.js');
 const theme = require('../../utils/theme.js');
 const cache = require('../../utils/cache.js');
 const perm = require('../../utils/perm.js');
+const samename = require('../../utils/samename.js');
 
 const PAGE_SIZE = 20;
 const POLL_MS = 5000; // 页面停留时自动刷新待确认转账
@@ -58,7 +59,9 @@ Page({
     }
     // 冷启动时 role 为空：先读取身份，避免家人共享看到操作按钮
     const role = await app.ensureRole();
-    this.setData({ loggedIn: true, readonly: role === 'viewer', pm: perm.current() });
+    const pm = perm.current();
+    pm.tag = pm.desk || pm.confirm; // 设区分备注
+    this.setData({ loggedIn: true, readonly: role === 'viewer', pm });
     // 礼簿下拉：首次进入先用缓存，网络结果回来后再校正；之后每分钟最多重新拉一次
     let booksP = null;
     if (app.globalData.activeBookChanged) {
@@ -316,6 +319,25 @@ Page({
     }
   },
 
+  /** 设区分备注：区分同名宾客（扫码宾客改其全部记录，礼台登记的只改这一条） */
+  onNameTag(e) {
+    const record = this.data.list[e.currentTarget.dataset.idx];
+    wx.showModal({
+      title: '区分备注',
+      content: record.nameTag || '',
+      editable: true,
+      placeholderText: '如：李村、公司同事（留空即清除）',
+      success: async res => {
+        if (!res.confirm) return;
+        try {
+          await req.setNameTag(record._id, samename.cleanTag(res.content));
+          wx.showToast({ title: '已保存', icon: 'success' });
+          this.reload();
+        } catch (err) { /* toast 已提示 */ }
+      }
+    });
+  },
+
   /** 作废错误账目（文档 §8） */
   onVoid(e) {
     const idx = e.currentTarget.dataset.idx;
@@ -339,6 +361,7 @@ function decorate(r) {
   return {
     ...r,
     amountStr: fmt.money(r.amount),
+    nameStr: samename.nameStr(r.payerName, r.nameTag),
     proxyStr: receiptUtil.proxyText(r),
     declaredStr: r.declaredAmount ? fmt.money(r.declaredAmount) : '',
     timeStr: fmt.dateTime(r.createdAt),

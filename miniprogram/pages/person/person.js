@@ -3,12 +3,24 @@ const req = require('../../utils/request.js');
 const fmt = require('../../utils/format.js');
 const scenes = require('../../utils/scenes.js');
 const theme = require('../../utils/theme.js');
+const samename = require('../../utils/samename.js');
+
+/** 往来人 key 显示为姓名：o:身份:张伟 → 张伟（扫码）；n:张伟#李村 → 张伟（李村） */
+function keyName(k) {
+  if (k.indexOf('o:') === 0) return k.split(':').slice(2).join(':') + '（扫码）';
+  const [name, tag] = k.slice(2).split('#');
+  return samename.nameStr(name, tag);
+}
 
 Page({
   data: {
     key: '',
     name: '',
+    label: '',
     dup: false,
+    same: [],      // 其他同名的人 [{ key, label }]
+    sameStr: '',
+    merged: [],    // 已合并到此人的 key
     received: [],
     given: [],
     receivedSum: '0.00',
@@ -33,10 +45,16 @@ Page({
     try {
       const r = await req.rqQuery(this.data.key);
       const deco = x => ({ ...x, amountStr: fmt.money(x.amount), typeLabel: scenes.label(x.eventType) });
-      wx.setNavigationBarTitle({ title: `与 ${r.name} 的往来` });
+      const label = r.label || r.name;
+      wx.setNavigationBarTitle({ title: `与 ${label} 的往来` });
+      const same = r.same || [];
       this.setData({
         key: r.key,
         name: r.name,
+        label,
+        same,
+        sameStr: same.slice(0, 3).map(x => x.label).join('、') + (same.length > 3 ? '…' : ''),
+        merged: r.merged || [],
         dup: r.dup,
         byWx: r.key.indexOf('o:') === 0,
         received: r.received.map(deco),
@@ -51,9 +69,57 @@ Page({
     }
   },
 
-  /** 给此人记一笔送礼（回礼） */
+  // —— 同名区分：合并 / 取消合并 / 移动记录 ——
+  /** 与同名的另一位合并为同一人，合并后跳到合并后的人 */
+  async onMerge() {
+    const same = this.data.same.slice(0, samename.SHEET_MAX);
+    const idx = await samename.sheet(same.map(x => x.label), '合并到哪一位？');
+    if (idx < 0) return;
+    const to = same[idx];
+    const ok = await new Promise(resolve => wx.showModal({
+      title: '合并为同一人',
+      content: '合并后两人的往来记录合并统计，可随时取消合并',
+      confirmText: '合并',
+      success: res => resolve(res.confirm),
+      fail: () => resolve(false)
+    }));
+    if (!ok) return;
+    try {
+      await req.rqMerge(this.data.key, to.key);
+      wx.showToast({ title: '已合并', icon: 'success' });
+      wx.redirectTo({ url: `/pages/person/person?key=${encodeURIComponent(to.key)}` });
+    } catch (e) { /* toast 已提示 */ }
+  },
+
+  /** 取消合并：选一位已合并进来的人，恢复单独统计 */
+  async onUnmerge() {
+    const merged = this.data.merged.slice(0, samename.SHEET_MAX);
+    const idx = await samename.sheet(merged.map(keyName), '取消合并哪一位？');
+    if (idx < 0) return;
+    try {
+      await req.rqUnmerge(merged[idx]);
+      wx.showToast({ title: '已取消合并', icon: 'success' });
+      this.load();
+    } catch (e) { /* toast 已提示 */ }
+  },
+
+  /** 不是 TA：把这条记录移到同名的另一位，或新的一位（填区分备注） */
+  async onMove(e) {
+    const { side, idx } = e.currentTarget.dataset;
+    const entry = this.data[side][idx];
+    if (!entry) return;
+    const r = await samename.choose(this.data.name, this.data.same);
+    if (!r) return;
+    try {
+      await req.rqMoveEntry(r.person ? { side, id: entry._id, to: r.person.key } : { side, id: entry._id, tag: r.tag });
+      wx.showToast({ title: '已移动', icon: 'success' });
+      this.load();
+    } catch (err) { /* toast 已提示 */ }
+  },
+
+  /** 给此人记一笔送礼（回礼）：带上此人 key，避免同名混淆 */
   onAddGift() {
-    const key = this.data.key.startsWith('o:') ? this.data.key : '';
+    const key = this.data.key;
     wx.navigateTo({ url: `/pages/giftedit/giftedit?toName=${encodeURIComponent(this.data.name)}&toKey=${encodeURIComponent(key)}` });
   },
 

@@ -334,6 +334,8 @@ const COLS = [ // 合计宽度 515，不超过 595.28 - 80（按用户要求不�
   { key: 'remark', title: '礼品/备注', w: 153 }
 ];
 // 「转账+现金」批次的记录标「混」，礼台登记的微信标「礼台」
+// 礼品/备注：同名的宾客附上区分备注
+const remarkOf = r => [String(r.remark || '').trim(), r.nameTag ? `同名区分：${r.nameTag}` : ''].filter(Boolean).join('；');
 const methodText = r => (r.payMethod === 'cash' ? '现金' : (r.deskEntry && !r.payerOpenid ? '微信(礼台)' : '微信')) + (r.batchPay === 'mixed' ? '·混' : '');
 
 /** 按整本礼簿导出时标题已含礼簿名，不再重复「礼簿」列，宽度并入礼品/备注；按日期跨礼簿导出时保留 */
@@ -387,7 +389,7 @@ function buildPdf(rows, meta) {
         method: methodText(r),
         amount: Number(r.amount).toFixed(2),
         themeName: r.themeName || '',
-        remark: r.remark || ''
+        remark: remarkOf(r)
       };
       drawRow(doc, y, cells, '#333', cols);
       y += ROW_H;
@@ -462,7 +464,7 @@ async function buildXlsx(rows, meta) {
 
   rows.forEach((r, i) => {
     const row = [i + 1, guestText(r), r.relation || '', methodText(r), Number(r.amount)];
-    ws.addRow(withBook ? row.concat(r.themeName || '', r.remark || '') : row.concat(r.remark || ''));
+    ws.addRow(withBook ? row.concat(r.themeName || '', remarkOf(r)) : row.concat(remarkOf(r)));
   });
 
   // 合计行：SUM 公式落在「礼金」列（E 列）
@@ -685,7 +687,7 @@ function drawEntry(doc, r, i, slot, pal) {
   doc.fontSize(8).fillColor(pal.sub).text(`￥${fmtAmount(r.amount)}`, x, divider2 - 13, { width: w, align: 'center', lineBreak: false });
 
   // 礼品/备注栏：小字竖排，放不下时分两小列
-  const remark = String(r.remark || '').trim();
+  const remark = remarkOf(r);
   if (remark) drawSmall(doc, tokenize(remark), x, divider2 + 6, bottom - 4, w, pal, pSize, pLH);
 }
 
@@ -803,7 +805,7 @@ async function buildBackup({ records, books, gifts }) {
   loose.forEach(r => ordered.push([NO_BOOK, r]));
   ordered.forEach(([name, r], i) => {
     ws2.addRow([i + 1, name, fmtDateTime(r.paidAt || r.createdAt), r.payerName || '', proxyText(r),
-      r.relation || '', methodText(r), Number(r.amount), r.remark || '']);
+      r.relation || '', methodText(r), Number(r.amount), remarkOf(r)]);
   });
   totalStyle(ws2.addRow(['', '合计', `${ordered.length} 份`, '', '', '', '', sumCell('H', ordered.length, centsSum(records)), '']));
   ws2.getColumn(8).numFmt = '#,##0.00';

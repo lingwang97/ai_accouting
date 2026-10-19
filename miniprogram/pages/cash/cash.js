@@ -7,6 +7,7 @@ const printer = require('../../utils/printer.js');
 const batch = require('../../utils/batch.js');
 const theme = require('../../utils/theme.js');
 const perm = require('../../utils/perm.js');
+const samename = require('../../utils/samename.js');
 
 const DEFAULT_QUICK = [200, 500, 600, 800, 1000, 1888];
 const DONE_MAX = 20; // 本次已登记列表最多显示的份数
@@ -97,11 +98,13 @@ Page({
 
     this.setData({ saving: true });
     try {
+      // 同名区分：礼簿里已有同名宾客时，逐个确认是哪一位（取消即中止，不提示）
+      if (!(await this.pickSameName(payload))) return;
       const b = this.data.books[this.data.bookIdx];
       if (this.data.books.length && b) payload.bookId = b._id;
       payload.payMethod = this.data.payMethod;
       const { record, list } = await req.cashEntry(payload);
-      const added = (list && list.length ? list : [record]).map(r => ({ ...r, amountStr: fmt.money(r.amount) }));
+      const added = (list && list.length ? list : [record]).map(r => ({ ...r, amountStr: fmt.money(r.amount), nameStr: samename.nameStr(r.payerName, r.nameTag) }));
       const done = added.slice().reverse().concat(this.data.done).slice(0, DONE_MAX);
       this._doneFen = (this._doneFen || 0) + added.reduce((s, r) => s + Math.round(r.amount * 100), 0);
       added.forEach(r => { r.methodStr = r.payMethod === 'cash' ? '现金' : '微信'; });
@@ -116,6 +119,34 @@ Page({
     } catch (e) { /* toast 已提示 */ } finally {
       this.setData({ saving: false });
     }
+  },
+
+  /**
+   * 同名区分：查询礼簿里已有的同名宾客，逐个选择「是哪一位」或「新的一位」并填区分备注
+   * 选中已有 → personKey + tag；新的一位 → tag。返回 false 表示用户取消；查询失败（网络）按无备注继续
+   */
+  async pickSameName(payload) {
+    const items = payload.items || [payload];
+    const nameOf = it => it.name || it.payerName;
+    let map = {};
+    try {
+      map = (await req.bookNameCheck(items.map(nameOf))).map || {};
+    } catch (e) { return true; }
+    for (const it of items) {
+      const name = nameOf(it);
+      const people = (map[name] || []).slice().sort((a, b) => String(b.lastDay).localeCompare(String(a.lastDay)));
+      if (!people.length) continue;
+      people.forEach(p => { p.label = [`${name}（${p.tag || (p.scanned ? '扫码' : '未区分')}）`, p.relation, `${p.count}笔`].filter(Boolean).join(' · '); });
+      const r = await samename.choose(name, people);
+      if (!r) return false;
+      if (r.person) {
+        it.personKey = r.person.key;
+        it.tag = r.person.tag;
+      } else {
+        it.tag = r.tag;
+      }
+    }
+    return true;
   },
 
   /** 自动打印回执（批次每人一张）；打印机未连接只提示，不影响登记 */

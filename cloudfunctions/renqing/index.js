@@ -36,6 +36,11 @@ exports.main = async (event) => {
       case 'outDelete': return await outDelete(OPENID, event.id);
       case 'query': return await query(OPENID, event.key || (event.name ? 'n:' + event.name : ''));
       case 'people': return await people(OPENID);
+      // 同名区分：登记前查同名的人、合并为同一人 / 取消合并、把某条记录移到别的人
+      case 'nameCheck': return await nameCheck(OPENID, event.name);
+      case 'merge': return await merge(OPENID, String(event.from || ''), String(event.to || ''));
+      case 'unmerge': return await unmerge(OPENID, String(event.from || ''));
+      case 'moveEntry': return await moveEntry(OPENID, event);
       default: return err('未知 action');
     }
   } catch (e) {
@@ -58,11 +63,15 @@ async function inList(openid, event) {
     records.aggregate().match(cond)
       .group({ _id: null, fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) }).end(),
     records.where(cond).orderBy('paidAt', 'desc').skip((page - 1) * pageSize).limit(pageSize)
-      .field({ payerName: true, relation: true, amount: true, themeName: true, bookType: true, payDay: true, payMethod: true, remark: true, proxyFor: true, paidAt: true })
+      .field({ payerName: true, nameTag: true, personKey: true, payerOpenid: true, relation: true, amount: true, themeName: true, bookType: true, payDay: true, payMethod: true, remark: true, proxyFor: true, paidAt: true })
       .get()
   ]);
   return ok({
-    list: res.data,
+    // key：点开往来明细用（与往来对比的人一致）；不返回宾客 openid
+    list: res.data.map(({ payerOpenid, personKey, ...r }) => ({
+      ...r,
+      key: KEY_RE.test(personKey || '') ? personKey : (payerOpenid ? `o:${payerOpenid}:${norm(r.payerName)}` : nameKey(r.payerName, r.nameTag))
+    })),
     total: cnt.total,
     sum: Math.round(((sum.list && sum.list[0]) || { fen: 0 }).fen) / 100,
     page,
@@ -205,8 +214,9 @@ async function outSave(openid, g) {
   const amount = Math.round(Number(g.amount) * 100) / 100;
   const data = {
     toName: String(g.toName || '').trim().slice(0, 20),
-    // 从往来明细页登记时带上对方身份，避免同名混淆
-    toKey: /^o:[\w-]*:.{1,20}$/.test(String(g.toKey || '')) ? String(g.toKey) : '',
+    // 从往来明细页登记、或登记时选了同名的某一位：带上对方身份（o: 微信身份 / n: 姓名#区分备注），避免同名混淆
+    toKey: KEY_RE.test(String(g.toKey || '')) ? String(g.toKey) : '',
+    toTag: cleanTag(g.toTag),
     relation: String(g.relation || '').trim().slice(0, 10),
     event: String(g.event || '').trim().slice(0, 30),
     eventType: TYPES.includes(g.eventType) ? g.eventType : 'other',
@@ -255,25 +265,31 @@ async function fetchAll(col, cond, fields) {
 
 /** 汇总全部往来，返回 { persons: Map<key, person> } */
 async function buildPersons(openid) {
+  let aliases = {};
   const [recs, gifts, auto] = await Promise.all([
     fetchAll(records, { ownerOpenid: openid, status: 'paid' }, {
-      payerOpenid: true, payerName: true, amount: true, proxyFor: true, proxyItems: true,
+      payerOpenid: true, payerName: true, amount: true, proxyFor: true, proxyItems: true, nameTag: true, personKey: true,
       relation: true, remark: true, themeName: true, bookType: true, payDay: true, createdAt: true
     }),
     fetchAll(giftsOut, { ownerOpenid: openid }, {
-      toName: true, toKey: true, relation: true, event: true, eventType: true, amount: true, date: true, remark: true
+      toName: true, toKey: true, toTag: true, relation: true, event: true, eventType: true, amount: true, date: true, remark: true
     }),
-    autoGiven(openid)
-  ]);
+    autoGiven(openid),
+    aliasMap(openid)
+  ]).then(([a, b, c, d]) => { aliases = d; return [a, b, c]; });
 
+  // 一个人 = 微信身份（o:openid:姓名）或 姓名 + 区分备注（n:姓名#备注）；主家合并过的按合并后的人归集
   const persons = new Map();
-  const get = (key, name) => {
+  const get = (key, name, tag) => {
+    key = resolveAlias(aliases, key);
     if (!persons.has(key)) {
-      persons.set(key, { key, name, relation: '', received: [], given: [] });
+      persons.set(key, { key, name, tag: '', relation: '', received: [], given: [], merged: [] });
     }
-    return persons.get(key);
+    const p = persons.get(key);
+    if (tag && !p.tag) p.tag = tag;
+    return p;
   };
-  const pending = []; // 只有姓名的条目，待并入同名宾客
+  const pending = []; // 只有姓名（未区分）的条目
 
   for (const r of recs) {
     const base = {
@@ -292,12 +308,14 @@ async function buildPersons(openid) {
       counted: true,
       withProxy: unknownNames.join('、') // 含代随礼（未拆分金额）的人
     };
-    if (r.payerOpenid) {
-      const payer = get(`o:${r.payerOpenid}:${norm(r.payerName)}`, r.payerName);
+    payerEntry.movable = true; // 本人礼簿的记录：可以移到同名的另一个人
+    const pk = KEY_RE.test(r.personKey || '') ? r.personKey : '';
+    if (pk || r.payerOpenid || r.nameTag) {
+      const payer = get(pk || (r.payerOpenid ? `o:${r.payerOpenid}:${norm(r.payerName)}` : nameKey(r.payerName, r.nameTag)), r.payerName, r.nameTag);
       if (r.relation) payer.relation = r.relation;
       payer.received.push(payerEntry);
     } else {
-      // 主家代登记的现金礼没有宾客微信身份：按姓名归并
+      // 礼台登记、没有区分备注的：按姓名归为一人（不再自动并入同名的扫码宾客，改为提示合并）
       pending.push({ name: r.payerName, entry: payerEntry, side: 'received' });
     }
     for (const x of items) {
@@ -316,11 +334,10 @@ async function buildPersons(openid) {
   for (const g of gifts) {
     const entry = {
       _id: g._id, date: g.date, event: g.event, eventType: g.eventType,
-      relation: g.relation, remark: g.remark, amount: g.amount, counted: true
+      relation: g.relation, remark: g.remark, amount: g.amount, counted: true, movable: true
     };
-    if (g.toKey && g.toKey.startsWith('o:')) {
-      const p = get(g.toKey, g.toName);
-      p.given.push(entry);
+    if (KEY_RE.test(g.toKey || '') || g.toTag) {
+      get(KEY_RE.test(g.toKey || '') ? g.toKey : nameKey(g.toName, g.toTag), g.toName, g.toTag).given.push(entry);
     } else {
       pending.push({ name: g.toName, entry, side: 'given' });
     }
@@ -336,18 +353,13 @@ async function buildPersons(openid) {
     (same || get(g.toKey, g.toName)).given.push(entry);
   }
 
-  // 只有姓名的条目：同名宾客唯一时并入，否则归到"姓名"这个人
-  const byName = {};
-  for (const p of persons.values()) {
-    const n = norm(p.name);
-    (byName[n] = byName[n] || []).push(p);
-  }
-  for (const x of pending) {
-    const n = norm(x.name);
-    const same = byName[n] || [];
-    const p = same.length === 1 ? same[0] : get(`n:${n}`, x.name);
-    p[x.side].push(x.entry);
-  }
+  // 只有姓名的条目：归到"姓名"这个人（主家可在往来明细里合并 / 移动）
+  for (const x of pending) get(nameKey(x.name, ''), x.name)[x.side].push(x.entry);
+  // 记下被合并进来的人（可取消合并）
+  Object.keys(aliases).forEach(from => {
+    const p = persons.get(resolveAlias(aliases, from));
+    if (p) p.merged.push(from);
+  });
 
   // 统计 + 同名标记
   const counts = {};
@@ -364,8 +376,86 @@ async function buildPersons(openid) {
       balance: (inFen - outFen) / 100, // 正数：收多于送，日后宜回礼
       dup: counts[norm(p.name)] > 1
     });
+    p.label = labelOf(p);
   }
   return persons;
+}
+
+// —— 同名区分 ——
+const KEY_RE = /^(o:[\w-]{1,64}:|n:)[^\s]{1,40}$/;
+const cleanTag = s => String(s || '').trim().replace(/[#:\s]/g, '').slice(0, 12);
+const nameKey = (name, tag) => `n:${norm(name)}${cleanTag(tag) ? '#' + cleanTag(tag) : ''}`;
+/** 显示名：同名时带区分备注；扫码宾客没有备注时标"扫码" */
+const labelOf = p => p.name + (p.tag ? `（${p.tag}）` : (p.dup ? (p.key.startsWith('o:') ? '（扫码）' : '（未区分）') : ''));
+
+function resolveAlias(aliases, key) {
+  for (let i = 0; i < 5 && aliases[key]; i++) key = aliases[key];
+  return key;
+}
+
+async function aliasMap(openid) {
+  await ensureCol('person_alias');
+  const res = await db.collection('person_alias').where({ ownerOpenid: openid }).limit(1000).get();
+  const map = {};
+  res.data.forEach(a => { map[a.from] = a.to; });
+  return map;
+}
+
+/** 同名的人（登记送礼前选择是哪一位） */
+async function nameCheck(openid, name) {
+  const n = norm(String(name || '').slice(0, 20));
+  if (!n) return ok({ list: [] });
+  const persons = await buildPersons(openid);
+  const list = [...persons.values()].filter(p => norm(p.name) === n)
+    .map(p => ({ key: p.key, label: p.label, tag: p.tag, relation: p.relation, inSum: p.inSum, outSum: p.outSum, scanned: p.key.startsWith('o:') }));
+  return ok({ list });
+}
+
+/** 合并为同一人：from 的往来都算到 to 名下（只能合并同名的人） */
+async function merge(openid, from, to) {
+  if (!KEY_RE.test(from) || !KEY_RE.test(to) || from === to) return err('参数错误');
+  const persons = await buildPersons(openid);
+  const a = persons.get(from);
+  const b = persons.get(to);
+  if (!a || !b) return err('往来人不存在');
+  if (norm(a.name) !== norm(b.name)) return err('只能合并同名的人');
+  const col = db.collection('person_alias');
+  // 已合并到 from 的，一并改到 to
+  await col.where({ ownerOpenid: openid, to: from }).update({ data: { to } });
+  await col.where({ ownerOpenid: openid, from }).remove();
+  await col.add({ data: { ownerOpenid: openid, from, to, createdAt: new Date() } });
+  return ok({ key: to });
+}
+
+async function unmerge(openid, from) {
+  await ensureCol('person_alias');
+  const res = await db.collection('person_alias').where({ ownerOpenid: openid, from }).remove();
+  if (!res.stats.removed) return err('没有合并记录');
+  return ok({ key: from });
+}
+
+/**
+ * 把一条记录移到别的人：to 为已有的人（同名），或 tag 为新的区分备注（新的一位）
+ * side=received：本人礼簿的礼金（改 personKey / nameTag）；side=given：手动登记的送礼（改 toKey / toTag）
+ */
+async function moveEntry(openid, e) {
+  const id = String(e.id || '');
+  if (!/^[a-zA-Z0-9_-]{1,64}$/.test(id)) return err('这条记录不能移动');
+  const to = String(e.to || '');
+  const tag = cleanTag(e.tag);
+  if (!KEY_RE.test(to) && !tag) return err('请选择移到哪一位，或填写区分备注');
+  if (e.side === 'given') {
+    const g = (await giftsOut.where({ _id: id, ownerOpenid: openid }).limit(1).get()).data[0];
+    if (!g) return err('记录不存在');
+    const data = KEY_RE.test(to) ? { toKey: to, toTag: to.startsWith('n:') ? cleanTag(to.split('#')[1]) : '' } : { toKey: nameKey(g.toName, tag), toTag: tag };
+    await giftsOut.doc(id).update({ data });
+    return ok({ key: data.toKey });
+  }
+  const r = (await records.where({ _id: id, ownerOpenid: openid }).limit(1).get()).data[0];
+  if (!r) return err('记录不存在');
+  const data = KEY_RE.test(to) ? { personKey: to, nameTag: to.startsWith('n:') ? cleanTag(to.split('#')[1]) : (r.nameTag || '') } : { personKey: nameKey(r.payerName, tag), nameTag: tag };
+  await records.doc(id).update({ data });
+  return ok({ key: data.personKey });
 }
 
 /** 往来人名单（按往来次数排序，最多 300 人） */
@@ -393,9 +483,16 @@ async function query(openid, key) {
   }
   if (!p) return err('未找到该往来人');
   const byDate = (a, b) => String(b.date).localeCompare(String(a.date));
+  // 同名的其他人：提示"可能是同一人"，可合并；移动记录时可选
+  const same = [...persons.values()].filter(x => x.key !== p.key && norm(x.name) === norm(p.name))
+    .map(x => ({ key: x.key, label: x.label }));
   return ok({
     key: p.key,
     name: p.name,
+    label: p.label || p.name,
+    tag: p.tag || '',
+    same,
+    merged: p.merged || [],
     relation: p.relation,
     dup: p.dup,
     received: p.received.sort(byDate),

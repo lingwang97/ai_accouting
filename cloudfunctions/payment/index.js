@@ -163,22 +163,26 @@ async function create(openid, event) {
 /**
  * 校验随礼人名单：1～BATCH_PEOPLE 人，姓名必填且不重复，每人金额 > 0
  * mixed=true（批次「转账+现金」）：每人各自的支付方式 p.method（wechat / cash）
+ * desk=true（礼台记账）：接受同名区分 p.tag / p.personKey（宾客自助随礼不接受）
  */
-function parseItems(raw, mixed) {
+function parseItems(raw, mixed, desk) {
   if (raw.length > BATCH_PEOPLE) return { error: `批次录入最多 ${BATCH_PEOPLE} 人` };
   const items = raw.map(p => ({
     payerName: String((p && p.name) || '').trim().slice(0, 20),
     amount: Math.round(Number(p && p.amount) * 100) / 100,
     relation: RELATIONS.includes(p && p.relation) ? p.relation : '',
     remark: String((p && p.remark) || '').trim().slice(0, 50),
-    ...(mixed ? { payMethod: p && p.method === 'cash' ? 'cash' : 'wechat' } : {})
+    ...(mixed ? { payMethod: p && p.method === 'cash' ? 'cash' : 'wechat' } : {}),
+    // 同名区分（礼台记账时选择）：区分备注、或指定为礼簿里已有的某一位
+    ...(desk && p && p.tag ? { nameTag: String(p.tag).trim().replace(/[#:\s]/g, '').slice(0, 12) } : {}),
+    ...(desk && p && /^(o:[\w-]{1,64}:|n:)[^\s]{1,40}$/.test(String(p.personKey || '')) ? { personKey: String(p.personKey) } : {})
   }));
   for (const it of items) {
     if (!it.payerName) return { error: '请填写随礼人姓名' };
     if (!Number.isFinite(it.amount) || it.amount <= 0) return { error: `请填写${items.length > 1 ? ' ' + it.payerName + ' 的' : '正确'}金额` };
     if (it.amount > 100000) return { error: '单笔金额超限' };
   }
-  if (new Set(items.map(x => x.payerName)).size !== items.length) return { error: '随礼人姓名有重复' };
+  if (new Set(items.map(x => x.payerName + '#' + (x.nameTag || ''))).size !== items.length) return { error: '随礼人姓名有重复' };
   return { items };
 }
 
@@ -227,7 +231,7 @@ async function cashEntry(openid, ctx, event) {
   if (method === 'mixed' && !multi) method = 'cash';
   // 批次录入：items 为多位随礼人，每人一条记录（batchId 关联），每人各打一张小票
   const parsed = parseItems(Array.isArray(event.items) && event.items.length ? event.items
-    : [{ name: event.payerName, amount: event.amount, relation: event.relation, remark: event.remark }], method === 'mixed');
+    : [{ name: event.payerName, amount: event.amount, relation: event.relation, remark: event.remark, tag: event.tag, personKey: event.personKey }], method === 'mixed', true);
   if (parsed.error) return err(parsed.error);
   const items = parsed.items;
   if (items.reduce((t, x) => t + Math.round(x.amount * 100), 0) > 100000 * 100) return err('单笔金额超限');

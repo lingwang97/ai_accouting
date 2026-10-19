@@ -53,7 +53,7 @@
   <view class="done" wx:if="{{done.length}}">
     <view class="section-title">本次已登记 {{doneCount}} 份 · 合计 ￥{{doneSum}}</view>
     <view class="done-item" wx:for="{{done}}" wx:key="_id" data-id="{{item._id}}" bindtap="onReceipt">
-      <text>{{item.payerName}}<text class="muted"> · {{item.methodStr}}</text></text>
+      <text>{{item.nameStr}}<text class="muted"> · {{item.methodStr}}</text></text>
       <text class="money">￥{{item.amountStr}}</text>
     </view>
   </view>
