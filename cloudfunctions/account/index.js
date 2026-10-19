@@ -9,6 +9,7 @@ const members = db.collection('members');
 const invites = db.collection('invites');
 const { resolveCtx, restricted, readonly, trusted, can, PERMS, ALL_PERMS, DEFAULT_PERMS, cleanPerms } = require('./ctx.js');
 const P = require('./plans.js');
+const Purge = require('./purge.js');
 const TITLES = ['', '礼台', '收银', '主管']; // 机构版礼台人员岗位
 const INVITE_TTL = 7 * 24 * 3600 * 1000; // 邀请 7 天内有效
 const INVITE_USES = 5;  // 记账人 / 家人共享邀请卡：每张最多几人使用（默认）
@@ -914,34 +915,11 @@ const publicBook = b => ({ _id: b._id, name: b.name, type: b.type, date: b.date 
  */
 async function purge(openid, confirm) {
   if (confirm !== 'DELETE') return err('参数错误');
-  const removeAll = async (name, cond) => {
-    let total = 0;
-    try { await db.createCollection(name); } catch (e) { /* 已存在 */ }
-    for (let i = 0; i < 50; i++) {
-      const res = await db.collection(name).where(cond).remove();
-      total += res.stats.removed;
-      if (!res.stats.removed) break;
-    }
-    return total;
-  };
-  const found = await accounts.where({ ownerOpenid: openid }).limit(1).get();
-  const acc = found.data[0];
-  // 只删本人上传的收款码（移交来的收款码可能是原主家的文件）
-  if (acc && ownPayCode(acc.payCodeFileID, openid)) {
-    try { await cloud.deleteFile({ fileList: [acc.payCodeFileID] }); } catch (e) { /* 文件已不存在 */ }
-  }
-  const removed = {
-    records: await removeAll('records', { ownerOpenid: openid }),
-    books: await removeAll('books', { ownerOpenid: openid }),
-    gifts_out: await removeAll('gifts_out', { ownerOpenid: openid }),
-    reminders: await removeAll('reminders', { ownerOpenid: openid }),
-    print_templates: await removeAll('print_templates', { ownerOpenid: openid }),
-    accounts: await removeAll('accounts', { ownerOpenid: openid }),
-    members: (await removeAll('members', { ownerOpenid: openid })) + (await removeAll('members', { memberOpenid: openid })),
-    merged: await removeAll('accounts', { ownerOpenid: 'merged:' + openid }),
-    users: await removeAll('users', { openid })
-  };
-  return ok({ removed });
+  // 与管理员「数据清除」共用（tools/cloud-shared/purge.js）；用户自己注销时保留套餐开通记录
+  const res = await Purge.run(db, cloud, openid, { ownPayCode });
+  const removed = {};
+  res.removed.forEach(r => { removed[r.label] = r.count; });
+  return ok({ removed, files: res.files });
 }
 
 /** 付款方用：只返回公开字段 */

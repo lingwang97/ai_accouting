@@ -58,6 +58,9 @@ exports.main = async (event) => {
       return ok({ deleted: await cleanupExpired() });
     }
 
+    // 管理员清除账户前的备份：由 system 云函数发起，用一次性口令确认（settings.admin_backup）
+    if (event.action === 'adminBackup') return await adminBackup(String(event.ownerOpenid || ''), String(event.token || ''));
+
     const { OPENID } = cloud.getWXContext();
     if (!OPENID) return err('未获取到用户身份');
     // 清除数据只针对本人；其余按当前身份（记账人代主家导出，文件归主家）
@@ -201,7 +204,11 @@ function purgeUser(openid) {
 
 /** 定时清理：所有用户超过 24 小时且未保留的文件 */
 function cleanupExpired() {
-  return removeWhere({ keep: false, createdAt: _.lt(new Date(Date.now() - EXPIRE_MS)) });
+  // 未保留文件 24 小时后清理；带 expireAt 的（管理员备份）到期后清理
+  return removeWhere(_.or([
+    { keep: false, expireAt: _.exists(false), createdAt: _.lt(new Date(Date.now() - EXPIRE_MS)) },
+    { keep: false, expireAt: _.lt(new Date()) }
+  ]));
 }
 
 /** 归档：写入礼簿 archivePdf，并删除旧的归档文件及其登记 */
@@ -723,7 +730,16 @@ function drawSummary(doc, meta, slot, pal) {
 }
 
 // —— 全量备份（xlsx） ——
-async function exportBackup(openid, withGifts = true) {
+/** 管理员备份：校验口令（2 分钟内有效、只能用一次），生成该账户的全量备份，保留 7 天 */
+async function adminBackup(ownerOpenid, token) {
+  let s = null;
+  try { s = (await db.collection('settings').doc('admin_backup').get()).data; } catch (e) { /* 无 */ }
+  if (!s || s._openid || !token || s.token !== token || s.ownerOpenid !== ownerOpenid || s.exp < Date.now()) return err('备份口令无效');
+  await db.collection('settings').doc('admin_backup').remove();
+  return exportBackup(ownerOpenid, true, { admin: true });
+}
+
+async function exportBackup(openid, withGifts = true, opts = {}) {
   const [records, books, gifts] = await Promise.all([
     fetchRows(openid, {}),
     fetchAll('books', { ownerOpenid: openid }),
@@ -733,11 +749,16 @@ async function exportBackup(openid, withGifts = true) {
   if (!records.length && !books.length && !gifts.length) return err('暂无可备份的数据');
 
   const buffer = await buildBackup({ records, books, gifts });
+  // 管理员备份存在 exports/admin/ 下、登记在 admin 名下（清除该账户时不会被一起删掉），7 天后自动清理
   const up = await cloud.uploadFile({
-    cloudPath: `exports/${openid}/backup-${Date.now()}.xlsx`,
+    cloudPath: opts.admin ? `exports/admin/${openid}-${Date.now()}.xlsx` : `exports/${openid}/backup-${Date.now()}.xlsx`,
     fileContent: buffer
   });
-  await track(openid, up.fileID, false, 'backup');
+  if (opts.admin) {
+    await db.collection('exports').add({ data: { ownerOpenid: 'admin', fileID: up.fileID, keep: false, kind: 'adminBackup', createdAt: new Date(), expireAt: new Date(Date.now() + 7 * 24 * 3600 * 1000) } });
+  } else {
+    await track(openid, up.fileID, false, 'backup');
+  }
   const fileName = `慧礼记备份_${fmtDateTime(new Date()).slice(0, 10).replace(/-/g, '')}.xlsx`;
   return ok({ fileID: up.fileID, fileName, count: records.length, sum: centsSum(records) });
 }

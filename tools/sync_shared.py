@@ -9,6 +9,7 @@ SHARED = os.path.join(ROOT, 'tools', 'cloud-shared')
 TARGETS = {
     'ctx.js': ['account', 'books', 'records', 'payment', 'export', 'qrcode', 'system'],
     'plans.js': ['system', 'warmer', 'account'],
+    'purge.js': ['account', 'system'],
 }
 
 for name, funcs in TARGETS.items():

@@ -99,5 +99,78 @@
       </view>
       <button class="btn-outline save" bindtap="onSetPlan">确定</button>
     </view>
+
+    <!-- 数据清除：不可恢复，均需预览、输入名称确认，并记操作日志 -->
+    <view class="section-title danger-title">数据清除（不可恢复）</view>
+    <view class="card">
+      <view class="seg">
+        <view class="seg-item {{purgeTab === 'account' ? 'on' : ''}}" data-t="account" bindtap="onPurgeTab">按账户</view>
+        <view class="seg-item {{purgeTab === 'book' ? 'on' : ''}}" data-t="book" bindtap="onPurgeTab">按礼簿</view>
+        <view class="seg-item {{purgeTab === 'orphan' ? 'on' : ''}}" data-t="orphan" bindtap="onPurgeTab">无主数据</view>
+        <view class="seg-item {{purgeTab === 'logs' ? 'on' : ''}}" data-t="logs" bindtap="onPurgeTab">日志</view>
+      </view>
+
+      <!-- 按账户 -->
+      <block wx:if="{{purgeTab === 'account'}}">
+        <view class="muted small tip">先在上方「手动开通」搜索并选中主家，或直接填 openid，再点「预览」。</view>
+        <input class="input" placeholder="要清除的账户 openid" value="{{purgeOpenid || subOpenid}}" bindinput="onPurgeOpenid" />
+        <view class="row between">
+          <text>同时删除他作为宾客在别人礼簿里的随礼</text>
+          <switch checked="{{purgeGuest}}" bindchange="onPurgeGuest" color="{{primary}}" />
+        </view>
+        <view class="muted small">默认不删：那些随礼属于别的主家的礼簿，删了对方账会对不上</view>
+        <button class="btn-outline save" bindtap="onPurgePreview">预览将删除的数据</button>
+        <block wx:if="{{purgePv}}">
+          <view class="pv-head">「{{purgePv.name || '未命名'}}」<text class="muted small" wx:if="{{purgePv.orgName}}"> · {{purgePv.orgName}}</text></view>
+          <view class="idx-row" wx:for="{{purgePv.rows}}" wx:key="label"><text>{{item.label}}</text><text>{{item.count}}</text></view>
+          <view class="muted small" wx:if="{{!purgePv.rows.length}}">没有可删除的数据</view>
+          <view class="muted small" wx:if="{{purgePv.guestRecordsCount}}">他在别人礼簿里另有 {{purgePv.guestRecordsCount}} 条随礼（保留）</view>
+          <view class="row">
+            <button class="btn btn-sm btn-outline" loading="{{backingUp}}" bindtap="onPurgeBackup">先备份</button>
+            <text class="muted small backup-st">{{purgeBackup ? '已备份 ✓（7 天内可下载）' : ''}}</text>
+          </view>
+          <view class="row between">
+            <text>{{purgeBackup ? '已备份' : '不需要备份'}}</text>
+            <switch checked="{{purgeBackedUp}}" bindchange="onPurgeBackedUp" color="{{primary}}" />
+          </view>
+          <button class="btn-danger save" disabled="{{!purgeBackedUp || !purgePv.rows.length}}" loading="{{purging}}" bindtap="onPurgeRun">清除该账户数据</button>
+        </block>
+      </block>
+
+      <!-- 按礼簿 -->
+      <block wx:if="{{purgeTab === 'book'}}">
+        <view class="row" style="margin-top:20rpx">
+          <input class="input flex1" placeholder="礼簿名称 / 主家称呼 / 礼簿 id" value="{{bookKeyword}}" bindinput="onBookKeyword" bindconfirm="onBookSearch" />
+          <button class="btn btn-outline" bindtap="onBookSearch">搜索</button>
+        </view>
+        <view class="host" wx:for="{{purgeBooks}}" wx:key="_id">
+          <view class="row between">
+            <view class="book-name">{{item.hostName ? item.hostName + ' · ' : ''}}{{item.name}}<text class="muted small"> · {{item.accountName}}</text></view>
+            <view class="link danger" data-i="{{index}}" bindtap="onPurgeBook">删除</view>
+          </view>
+          <view class="muted small">{{item.date || '未设日期'}} · 礼金 {{item.count}} 条<text wx:if="{{item.archived}}"> · 已归档</text></view>
+        </view>
+      </block>
+
+      <!-- 无主数据 -->
+      <block wx:if="{{purgeTab === 'orphan'}}">
+        <view class="muted small tip">已注销账户残留的礼簿、礼金、导出文件，已不存在的主家的人员关系，过期 30 天以上的邀请卡等。</view>
+        <button class="btn-outline save" loading="{{orphanLoading}}" bindtap="onOrphanPreview">扫描</button>
+        <block wx:if="{{orphanRows}}">
+          <view class="idx-row" wx:for="{{orphanRows}}" wx:key="label"><text>{{item.label}}</text><text>{{item.count}}</text></view>
+          <view class="muted small" wx:if="{{!orphanRows.length}}">没有无主数据</view>
+          <button wx:if="{{orphanRows.length}}" class="btn-danger save" loading="{{purging}}" bindtap="onOrphanPurge">全部清理</button>
+        </block>
+      </block>
+
+      <!-- 操作日志 -->
+      <block wx:if="{{purgeTab === 'logs'}}">
+        <view class="log" wx:for="{{logs}}" wx:key="_id">
+          <view>{{item.title}}</view>
+          <view class="muted small">{{item.timeStr}} · {{item.detail}}</view>
+        </view>
+        <view class="muted small" wx:if="{{!logs.length}}">暂无清除记录</view>
+      </block>
+    </view>
   </block>
 </view>

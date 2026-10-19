@@ -12,6 +12,7 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const { resolveCtx } = require('./ctx.js');
 const P = require('./plans.js');
+const Purge = require('./purge.js');
 
 exports.main = async (event) => {
   if (event && event.action === '__warm') return { code: 0, msg: 'warm', data: null };
@@ -27,6 +28,15 @@ exports.main = async (event) => {
       case 'adminSetPlan': return await guard(OPENID, () => setPlan(event.ownerOpenid, event.plan, event.days, 'admin'));
       case 'adminFindHosts': return await guard(OPENID, () => findHosts(event.keyword));
       case 'adminIndexes': return await guard(OPENID, () => ensureIndexes());
+      // 数据清除：按账户（预览 / 备份 / 执行）、按礼簿、无主数据；操作日志
+      case 'adminPurgePreview': return await guard(OPENID, () => purgePreview(OPENID, String(event.ownerOpenid || ''), event.guestRecords === true));
+      case 'adminBackup': return await guard(OPENID, () => adminBackup(String(event.ownerOpenid || '')));
+      case 'adminPurge': return await guard(OPENID, () => adminPurge(OPENID, event));
+      case 'adminBookPreview': return await guard(OPENID, () => bookPreview(String(event.keyword || event.bookId || '')));
+      case 'adminPurgeBook': return await guard(OPENID, () => purgeBook(OPENID, String(event.bookId || ''), event.confirmName));
+      case 'adminOrphanPreview': return await guard(OPENID, () => orphans(OPENID, false));
+      case 'adminOrphanPurge': return await guard(OPENID, () => orphans(OPENID, true));
+      case 'adminLogs': return await guard(OPENID, () => adminLogs());
       default: return err('未知 action');
     }
   } catch (e) {
@@ -126,6 +136,199 @@ async function setPlan(ownerOpenid, plan, days, source) {
   // 读回确认已生效
   const now = await P.planOf(db, ownerOpenid);
   return ok({ ownerOpenid, plan: now.plan, planName: now.name, expiresAt: now.expiresAt });
+}
+
+// —— 数据清除（管理员） ——
+const _ = db.command;
+const OPENID_RE = /^[a-zA-Z0-9_-]{10,64}$/;
+
+/** 是否为该用户本人上传到 paycodes/ 目录的收款码（与 account 云函数一致） */
+function ownPayCode(fileID, openid) {
+  const esc = String(openid || '').replace(/[^a-zA-Z0-9_-]/g, '');
+  return !!esc && new RegExp(`^cloud://[^/]+/paycodes/(book-)?${esc}-\\d+\\.(png|jpe?g|webp)$`, 'i').test(String(fileID || ''));
+}
+
+/** 被清除账户的显示信息（确认时输入的名称：主家称呼；没有主家信息时用微信昵称） */
+async function target(ownerOpenid) {
+  if (!OPENID_RE.test(ownerOpenid)) return { error: '账户不正确' };
+  if (await P.isAdmin(db, ownerOpenid)) return { error: '不能清除管理员账户' };
+  const acc = (await db.collection('accounts').where({ ownerOpenid }).limit(1).get()).data[0] || null;
+  const user = (await db.collection('users').where({ openid: ownerOpenid }).limit(1).get()).data[0] || null;
+  if (!acc && !user) return { error: '账户不存在或已清除' };
+  return { acc, user, name: (acc && acc.accountName) || (user && user.nickname) || '' };
+}
+
+async function purgePreview(admin, ownerOpenid, guestRecords) {
+  const t = await target(ownerOpenid);
+  if (t.error) return err(t.error);
+  const rows = await Purge.preview(db, ownerOpenid, { guestRecords, subscription: true });
+  const guest = guestRecords ? 0 : (await db.collection('records').where({ payerOpenid: ownerOpenid }).count()).total;
+  return ok({ name: t.name, orgName: (t.acc && t.acc.orgName) || '', rows, guestRecordsCount: guest });
+}
+
+/**
+ * 清除前备份：调用 export 云函数生成该账户的全量 Excel（保留 7 天，管理员可下载）
+ * export 通过一次性口令确认是管理员发起的（settings.admin_backup，2 分钟内有效）
+ */
+async function adminBackup(ownerOpenid) {
+  const t = await target(ownerOpenid);
+  if (t.error) return err(t.error);
+  const token = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  await P.writeSetting(db, 'admin_backup', { token, ownerOpenid, exp: Date.now() + 2 * 60 * 1000 });
+  const res = await cloud.callFunction({ name: 'export', data: { action: 'adminBackup', ownerOpenid, token } });
+  const r = res.result || {};
+  if (r.code !== 0) return err(r.msg || '备份失败');
+  return ok(r.data);
+}
+
+/** 执行清除：需输入该账户名称确认、并已备份（或确认不需要备份） */
+async function adminPurge(admin, e) {
+  const ownerOpenid = String(e.ownerOpenid || '');
+  const t = await target(ownerOpenid);
+  if (t.error) return err(t.error);
+  if (String(e.confirmName || '').trim() !== t.name) return err('输入的名称与该账户不一致');
+  if (e.backedUp !== true) return err('请先备份，或确认不需要备份');
+  const res = await Purge.run(db, cloud, ownerOpenid, { guestRecords: e.guestRecords === true, subscription: true, ownPayCode });
+  await log(admin, 'purgeAccount', { ownerOpenid, name: t.name, guestRecords: e.guestRecords === true, removed: res.removed, files: res.files });
+  return ok(res);
+}
+
+/** 按礼簿清除：搜索礼簿（名称 / 主家称呼 / 礼簿 id），返回礼簿与礼金条数 */
+async function bookPreview(keyword) {
+  const k = keyword.trim().slice(0, 30);
+  if (!k) return err('请输入礼簿名称或主家称呼');
+  const reg = db.RegExp({ regexp: k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), options: 'i' });
+  let books = (await db.collection('books').where(_.or([{ _id: k }, { name: reg }, { hostName: reg }])).limit(20).get()).data;
+  if (books.length < 20) {
+    const accs = (await db.collection('accounts').where({ accountName: reg }).field({ ownerOpenid: true }).limit(10).get()).data;
+    if (accs.length) {
+      const more = (await db.collection('books').where({ ownerOpenid: _.in(accs.map(a => a.ownerOpenid)) }).limit(20).get()).data;
+      books = books.concat(more.filter(b => !books.some(x => x._id === b._id))).slice(0, 20);
+    }
+  }
+  const owners = [...new Set(books.map(b => b.ownerOpenid))];
+  const names = {};
+  if (owners.length) {
+    (await db.collection('accounts').where({ ownerOpenid: _.in(owners) }).field({ ownerOpenid: true, accountName: true }).get())
+      .data.forEach(a => { names[a.ownerOpenid] = a.accountName; });
+  }
+  const list = await Promise.all(books.map(async b => ({
+    _id: b._id, name: b.name, hostName: b.hostName || '', date: b.date || '', archived: !!b.archived,
+    accountName: names[b.ownerOpenid] || '（无主家信息）',
+    count: (await db.collection('records').where({ ownerOpenid: b.ownerOpenid, bookId: b._id }).count()).total
+  })));
+  return ok({ list });
+}
+
+/** 删除一本礼簿及其礼金记录、存档与礼簿码文件；需输入礼簿名称确认 */
+async function purgeBook(admin, bookId, confirmName) {
+  if (!/^[a-zA-Z0-9_-]{1,64}$/.test(bookId)) return err('参数错误');
+  let book;
+  try { book = (await db.collection('books').doc(bookId).get()).data; } catch (e) { return err('礼簿不存在'); }
+  if (String(confirmName || '').trim() !== book.name) return err('输入的礼簿名称不一致');
+  const files = [];
+  if (book.archivePdf && book.archivePdf.fileID) files.push(book.archivePdf.fileID);
+  if (ownPayCode(book.payCodeFileID, book.ownerOpenid)) files.push(book.payCodeFileID);
+  const acc = (await db.collection('accounts').where({ ownerOpenid: book.ownerOpenid }).limit(1).get()).data[0];
+  const prefix = acc && acc.payCodeFileID ? acc.payCodeFileID.split('/paycodes/')[0] : '';
+  if (prefix) ['develop', 'trial', 'release'].forEach(env => files.push(`${prefix}/qrcodes/${bookId}-${env}.png`));
+  try { if (files.length) await cloud.deleteFile({ fileList: files }); } catch (e) { /* 忽略 */ }
+  let records = 0;
+  for (let i = 0; i < 200; i++) {
+    const r = await db.collection('records').where({ ownerOpenid: book.ownerOpenid, bookId }).remove();
+    records += r.stats.removed;
+    if (!r.stats.removed) break;
+  }
+  if (book.archivePdf && book.archivePdf.fileID) await db.collection('exports').where({ fileID: book.archivePdf.fileID }).remove();
+  await db.collection('books').doc(bookId).remove();
+  if (acc && acc.activeBookId === bookId) await db.collection('accounts').doc(acc._id).update({ data: { activeBookId: '' } });
+  const removed = [{ label: '礼簿', count: 1 }, { label: '礼金记录', count: records }];
+  await log(admin, 'purgeBook', { bookId, name: book.name, ownerOpenid: book.ownerOpenid, removed });
+  return ok({ removed });
+}
+
+/**
+ * 无主数据：主家信息已不存在的礼簿 / 礼金 / 导出文件，加入的主家已不存在的人员关系，过期 30 天以上的邀请卡，
+ * 用户信息已不存在的送礼记录 / 提醒 / 同名合并。doIt=false 只统计
+ */
+async function orphans(admin, doIt) {
+  const ownersOf = async (col, field) => {
+    const res = await db.collection(col).aggregate().group({ _id: '$' + field }).limit(1000).end();
+    return (res.list || []).map(x => x._id).filter(x => x && !String(x).startsWith('merged:'));
+  };
+  const missing = async (ids, col, field) => {
+    const out = [];
+    for (let i = 0; i < ids.length; i += 100) {
+      const part = ids.slice(i, i + 100);
+      const have = (await db.collection(col).where({ [field]: _.in(part) }).field({ [field]: true }).limit(1000).get()).data.map(x => x[field]);
+      part.forEach(id => { if (!have.includes(id)) out.push(id); });
+    }
+    return out;
+  };
+  const safe = async fn => { try { return await fn(); } catch (e) { return []; } };
+  // 主家已不存在
+  const hostOwners = [...new Set((await safe(() => ownersOf('books', 'ownerOpenid'))).concat(await safe(() => ownersOf('records', 'ownerOpenid'))))];
+  const noHost = await missing(hostOwners, 'accounts', 'ownerOpenid');
+  // 用户已不存在（个人数据）
+  const personal = [...new Set((await safe(() => ownersOf('gifts_out', 'ownerOpenid')))
+    .concat(await safe(() => ownersOf('reminders', 'ownerOpenid')), await safe(() => ownersOf('person_alias', 'ownerOpenid'))))];
+  const noUser = await missing(personal, 'users', 'openid');
+  // 人员关系：所属主家信息已不存在
+  const aids = await safe(() => ownersOf('members', 'aid'));
+  const noAcc = await missing(aids, 'accounts', '_id');
+  const expired = { expiresAt: _.lt(new Date(Date.now() - 30 * 24 * 3600 * 1000)) };
+
+  const items = [
+    ['无主礼簿', 'books', noHost.length ? { ownerOpenid: _.in(noHost) } : null],
+    ['无主礼金记录', 'records', noHost.length ? { ownerOpenid: _.in(noHost) } : null],
+    ['无主导出 / 存档登记', 'exports', noHost.length ? { ownerOpenid: _.in(noHost) } : null],
+    ['已注销用户的送礼记录', 'gifts_out', noUser.length ? { ownerOpenid: _.in(noUser) } : null],
+    ['已注销用户的提醒', 'reminders', noUser.length ? { ownerOpenid: _.in(noUser) } : null],
+    ['已注销用户的同名合并', 'person_alias', noUser.length ? { ownerOpenid: _.in(noUser) } : null],
+    ['主家已不存在的人员关系', 'members', noAcc.length ? { aid: _.in(noAcc) } : null],
+    ['过期 30 天以上的邀请卡', 'invites', expired]
+  ].filter(x => x[2]);
+  const rows = [];
+  let files = 0;
+  for (const [label, col, cond] of items) {
+    let count = 0;
+    if (!doIt) {
+      try { count = (await db.collection(col).where(cond).count()).total; } catch (e) { count = 0; }
+    } else if (col === 'exports') {
+      for (let i = 0; i < 100; i++) {
+        const rs = (await db.collection('exports').where(cond).limit(50).get()).data;
+        if (!rs.length) break;
+        try { await cloud.deleteFile({ fileList: rs.filter(r => !r._openid).map(r => r.fileID) }); files += rs.length; } catch (e) { /* 忽略 */ }
+        await db.collection('exports').where({ _id: _.in(rs.map(r => r._id)) }).remove();
+        count += rs.length;
+      }
+    } else {
+      for (let i = 0; i < 200; i++) {
+        let r;
+        try { r = await db.collection(col).where(cond).remove(); } catch (e) { break; }
+        count += r.stats.removed;
+        if (!r.stats.removed) break;
+      }
+    }
+    if (count) rows.push({ label, count });
+  }
+  if (doIt) await log(admin, 'purgeOrphans', { removed: rows, files });
+  return ok({ rows, files });
+}
+
+/** 操作日志 */
+async function log(admin, action, detail) {
+  try { await db.createCollection('admin_logs'); } catch (e) { /* 已存在 */ }
+  await db.collection('admin_logs').add({ data: { admin, action, ...detail, at: new Date() } });
+}
+
+async function adminLogs() {
+  try {
+    const res = await db.collection('admin_logs').orderBy('at', 'desc').limit(50).get();
+    return ok({ list: res.data });
+  } catch (e) {
+    return ok({ list: [] });
+  }
 }
 
 // —— 数据库索引 ——

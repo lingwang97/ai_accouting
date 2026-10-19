@@ -1,5 +1,6 @@
 // pages/admin/admin.js — 系统设置（仅管理员）：预热调度配置、付费订阅手动开通（预留）
 const req = require('../../utils/request.js');
+const openfile = require('../../utils/openfile.js');
 const fmt = require('../../utils/format.js');
 const theme = require('../../utils/theme.js');
 
@@ -12,6 +13,9 @@ const FUNC_LABEL = {
 Page({
   data: {
     loaded: false,
+    // 数据清除
+    purgeTab: 'account', purgeOpenid: '', purgeGuest: false, purgePv: null, purgeBackup: null, purgeBackedUp: false,
+    backingUp: false, purging: false, bookKeyword: '', purgeBooks: [], orphanRows: null, orphanLoading: false, logs: [],
     warmup: null,
     funcs: [],          // [{ name, label, on }]
     intervals: INTERVALS,
@@ -131,6 +135,143 @@ Page({
   },
   onSubDays(e) { this.setData({ subDays: e.detail.value }); },
   onPlan(e) { this.setData({ planIdx: Number(e.detail.value) }); },
+
+  // —— 数据清除（不可恢复：预览 → 备份 → 输入名称确认） ——
+  onPurgeTab(e) {
+    const t = e.currentTarget.dataset.t;
+    this.setData({ purgeTab: t });
+    if (t === 'logs') this.loadLogs();
+  },
+  onPurgeOpenid(e) { this.setData({ purgeOpenid: e.detail.value, purgePv: null }); },
+  onPurgeGuest(e) { this.setData({ purgeGuest: e.detail.value, purgePv: null }); },
+  onPurgeBackedUp(e) { this.setData({ purgeBackedUp: e.detail.value }); },
+  purgeTarget() { return (this.data.purgeOpenid || this.data.subOpenid || '').trim(); },
+
+  async onPurgePreview() {
+    const openid = this.purgeTarget();
+    if (!openid) return wx.showToast({ title: '请先选择或填写账户', icon: 'none' });
+    try {
+      const pv = await req.adminPurgePreview(openid, this.data.purgeGuest);
+      this.setData({ purgePv: pv, purgeBackup: null, purgeBackedUp: false });
+    } catch (e) { this.setData({ purgePv: null }); }
+  },
+
+  /** 备份：生成该账户的全量 Excel（云端保留 7 天），并打开 */
+  async onPurgeBackup() {
+    if (this.data.backingUp) return;
+    this.setData({ backingUp: true });
+    try {
+      const r = await req.adminBackup(this.purgeTarget());
+      this.setData({ purgeBackup: r, purgeBackedUp: true });
+      try {
+        const path = await openfile.download(r.fileID, r.fileName);
+        openfile.open(path, r.fileName);
+      } catch (e) { /* 下载失败不影响：云端已保留 7 天 */ }
+    } catch (e) { /* toast 已提示 */ } finally {
+      this.setData({ backingUp: false });
+    }
+  },
+
+  /** 执行：输入主家称呼确认 */
+  onPurgeRun() {
+    const pv = this.data.purgePv;
+    if (!pv || this.data.purging) return;
+    wx.showModal({
+      title: '输入名称确认',
+      editable: true,
+      placeholderText: `请输入「${pv.name}」`,
+      confirmText: '清除',
+      confirmColor: '#FA5151',
+      success: async res => {
+        if (!res.confirm) return;
+        if ((res.content || '').trim() !== pv.name) return wx.showToast({ title: '名称不一致，未清除', icon: 'none' });
+        this.setData({ purging: true });
+        try {
+          const r = await req.adminPurge({ ownerOpenid: this.purgeTarget(), confirmName: pv.name, guestRecords: this.data.purgeGuest, backedUp: this.data.purgeBackedUp });
+          const total = r.removed.reduce((t, x) => t + x.count, 0);
+          wx.showModal({ title: '已清除', content: `共删除 ${total} 条数据、${r.files} 个文件。数据较多时如未删完，可再执行一次。`, showCancel: false });
+          this.setData({ purgePv: null, purgeOpenid: '', purgeBackedUp: false, purgeBackup: null });
+        } catch (e) { /* toast 已提示 */ } finally {
+          this.setData({ purging: false });
+        }
+      }
+    });
+  },
+
+  onBookKeyword(e) { this.setData({ bookKeyword: e.detail.value }); },
+  async onBookSearch() {
+    const k = (this.data.bookKeyword || '').trim();
+    if (!k) return wx.showToast({ title: '请输入礼簿名称', icon: 'none' });
+    try {
+      const { list } = await req.adminBookPreview(k);
+      this.setData({ purgeBooks: list });
+      if (!list.length) wx.showToast({ title: '没有找到', icon: 'none' });
+    } catch (e) { /* toast 已提示 */ }
+  },
+  onPurgeBook(e) {
+    const b = this.data.purgeBooks[Number(e.currentTarget.dataset.i)];
+    if (!b) return;
+    wx.showModal({
+      title: '删除礼簿',
+      editable: true,
+      placeholderText: `输入「${b.name}」确认，将删除 ${b.count} 条礼金`,
+      confirmText: '删除',
+      confirmColor: '#FA5151',
+      success: async res => {
+        if (!res.confirm) return;
+        if ((res.content || '').trim() !== b.name) return wx.showToast({ title: '名称不一致，未删除', icon: 'none' });
+        try {
+          await req.adminPurgeBook(b._id, b.name);
+          wx.showToast({ title: '已删除', icon: 'success' });
+          this.onBookSearch();
+        } catch (err) { /* toast 已提示 */ }
+      }
+    });
+  },
+
+  async onOrphanPreview() {
+    this.setData({ orphanLoading: true });
+    try {
+      const { rows } = await req.adminOrphanPreview();
+      this.setData({ orphanRows: rows });
+    } catch (e) { /* toast 已提示 */ } finally {
+      this.setData({ orphanLoading: false });
+    }
+  },
+  onOrphanPurge() {
+    wx.showModal({
+      title: '清理无主数据',
+      content: '将删除扫描到的全部无主数据，不可恢复。',
+      confirmText: '清理',
+      confirmColor: '#FA5151',
+      success: async res => {
+        if (!res.confirm) return;
+        this.setData({ purging: true });
+        try {
+          const { rows, files } = await req.adminOrphanPurge();
+          wx.showModal({ title: '已清理', content: `共删除 ${rows.reduce((t, x) => t + x.count, 0)} 条数据、${files} 个文件。`, showCancel: false });
+          this.setData({ orphanRows: null });
+        } catch (e) { /* toast 已提示 */ } finally {
+          this.setData({ purging: false });
+        }
+      }
+    });
+  },
+
+  async loadLogs() {
+    try {
+      const { list } = await req.adminLogs();
+      const T = { purgeAccount: '清除账户', purgeBook: '删除礼簿', purgeOrphans: '清理无主数据' };
+      this.setData({
+        logs: list.map(l => ({
+          _id: l._id,
+          title: `${T[l.action] || l.action}${l.name ? '「' + l.name + '」' : ''}`,
+          timeStr: fmt.dateTime(l.at),
+          detail: (l.removed || []).map(x => `${x.label} ${x.count}`).join('、') || '无数据'
+        }))
+      });
+    } catch (e) { /* toast 已提示 */ }
+  },
 
   async onSetPlan() {
     const p = this.data.plans[this.data.planIdx];

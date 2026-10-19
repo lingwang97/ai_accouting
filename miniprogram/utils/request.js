@@ -127,6 +127,15 @@ module.exports = {
   adminSetPlan: (ownerOpenid, plan, days) => call('system', { action: 'adminSetPlan', ownerOpenid, plan, days }),
   adminFindHosts: keyword => call('system', { action: 'adminFindHosts', keyword }),
   adminIndexes: () => call('system', { action: 'adminIndexes' }),
+  // 数据清除（管理员）
+  adminPurgePreview: (ownerOpenid, guestRecords) => call('system', { action: 'adminPurgePreview', ownerOpenid, guestRecords: !!guestRecords }),
+  adminBackup: ownerOpenid => call('system', { action: 'adminBackup', ownerOpenid }),
+  adminPurge: d => call('system', { action: 'adminPurge', ...d }),
+  adminBookPreview: keyword => call('system', { action: 'adminBookPreview', keyword }),
+  adminPurgeBook: (bookId, confirmName) => call('system', { action: 'adminPurgeBook', bookId, confirmName }),
+  adminOrphanPreview: () => call('system', { action: 'adminOrphanPreview' }),
+  adminOrphanPurge: () => call('system', { action: 'adminOrphanPurge' }),
+  adminLogs: () => call('system', { action: 'adminLogs' }),
   adsConfig: () => call('system', { action: 'ads' }, { silent: true }),
   adminSetAds: ads => call('system', { action: 'adminSetAds', ads })
 };
