@@ -35,6 +35,12 @@ Page({
   },
 
   onShow() {
+    // 已退出登录：立即显示宾客首页，不先渲染上一个账户的工作台
+    if (getApp().isLoggedOut()) {
+      if (this.data.mode !== 'guest') this.toGuest();
+      this.setData({ loggedIn: false });
+      return;
+    }
     theme.apply(this);
     this.setData({ guideTip: !wx.getStorageSync('guide_tip_closed') });
     // 秒开：先显示上次的工作台数据，后台刷新

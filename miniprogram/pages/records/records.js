@@ -40,12 +40,20 @@ Page({
 
   async onShow() {
     this._hidden = false;
-    theme.apply(this); // 主题色跟当前礼簿事由走
     const app = getApp();
+    // 已退出登录：立即清空上一个账户的礼簿（不等登录状态恢复）
+    if (app.isLoggedOut()) {
+      this._booksAt = 0;
+      this._bookPicked = false;
+      this.setData({ loggedIn: false, list: [], books: [{ _id: '', name: '全部礼簿' }], bookIdx: 0 });
+      app.refreshTabBar();
+      return;
+    }
+    theme.apply(this); // 主题色跟当前礼簿事由走
     app.refreshTabBar();
     await app.loginReady;
     if (!app.globalData.user) {
-      this.setData({ loggedIn: false, list: [] });
+      this.setData({ loggedIn: false, list: [], books: [{ _id: '', name: '全部礼簿' }], bookIdx: 0 });
       return;
     }
     // 切换过身份：丢弃上一身份的礼簿与明细，重新加载

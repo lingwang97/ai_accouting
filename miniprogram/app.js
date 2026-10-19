@@ -82,6 +82,12 @@ App({
     this.setBadge(0);
   },
 
+  /** 已主动退出登录（同步判断）：各 tab 页 onShow 先据此立即切到未登录界面，避免闪现上一个账户的内容 */
+  isLoggedOut() {
+    if (this.globalData.user) return false;
+    try { return !!wx.getStorageSync('logged_out'); } catch (e) { return false; }
+  },
+
   /** 当前身份角色：globalData.role 只在工作台 / 我的页刷新时写入，冷启动时向云函数读取一次 */
   ensureRole() {
     if (this.globalData.role) return Promise.resolve(this.globalData.role);

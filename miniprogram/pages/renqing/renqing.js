@@ -27,6 +27,11 @@ Page({
   },
 
   async onShow() {
+    // 已退出登录：立即清空上一个账户的往来（不等登录状态恢复，也不再查询身份）
+    if (getApp().isLoggedOut()) {
+      getApp().refreshTabBar();
+      return this.setData({ loggedIn: false, people: [], shownPeople: [], outList: [], inList: [], receipts: [], shownReceipts: [], reminds: [] });
+    }
     // 记账人身份不显示「往来」（切换身份后可能停留在本页）：回到工作台
     if ((await getApp().ensureRole()) === 'clerk') return wx.switchTab({ url: '/pages/index/index' });
     theme.apply(this); // 主题色跟当前礼簿事由走
@@ -40,7 +45,7 @@ Page({
   async load() {
     await getApp().loginReady;
     if (!getApp().globalData.user) {
-      return this.setData({ loggedIn: false, people: [], shownPeople: [], outList: [] });
+      return this.setData({ loggedIn: false, people: [], shownPeople: [], outList: [], inList: [], receipts: [], shownReceipts: [], reminds: [] });
     }
     this.setData({ loading: true, loggedIn: true });
     try {
