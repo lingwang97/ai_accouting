@@ -10,12 +10,13 @@
 .empty-icon { font-size: 96rpx; color: #07C160; }
 
 /* 列表批量 */
-.tools { display: flex; align-items: center; gap: 20rpx; margin-bottom: 16rpx; }
+.tools { display: flex; align-items: center; margin-bottom: 16rpx; }
+.tools .link { margin-left: 20rpx; }
 .search { flex: 1; background: #fff; border-radius: 12rpx; padding: 16rpx 20rpx; }
 .link { color: #576B95; font-size: 28rpx; }
 .link.danger { color: #FA5151; }
 .item {
-  display: flex; align-items: center; background: #fff; border-radius: 16rpx;
+  display: flex; flex-wrap: wrap; align-items: center; background: #fff; border-radius: 16rpx;
   padding: 24rpx; margin-bottom: 16rpx;
 }
 .item.picked { box-shadow: 0 0 0 3rpx var(--primary) inset; }
@@ -24,18 +25,20 @@
   text-align: center; color: #fff; font-size: 26rpx; margin-right: 20rpx; flex-shrink: 0;
 }
 .check.on { background: var(--primary); border-color: var(--primary); }
-.info { flex: 1; }
+.info { flex: 1; min-width: 0; }
 .payer { font-size: 32rpx; font-weight: 600; margin-right: 16rpx; }
 .amt { font-size: 34rpx; }
-.ops { display: flex; align-items: center; gap: 24rpx; }
+.ops { display: flex; align-items: center; margin-left: 24rpx; }
+.ops .btn-ok { margin-left: 24rpx; }
 .btn-ok {
   margin: 0; padding: 0 28rpx; line-height: 64rpx; height: 64rpx;
   font-size: 28rpx; background: #07C160; color: #fff; border-radius: 10rpx;
 }
 .btn-ok[disabled] { opacity: .5; }
+.batch-bar .muted { margin: 0 16rpx; }
 .batch-bar {
   position: fixed; left: 0; right: 0; bottom: 0; background: #fff;
-  display: flex; align-items: center; justify-content: space-between; gap: 16rpx;
+  display: flex; align-items: center; justify-content: space-between;
   padding: 20rpx 24rpx calc(20rpx + env(safe-area-inset-bottom)); box-shadow: 0 -2rpx 12rpx rgba(0, 0, 0, .06);
 }
 
@@ -57,7 +60,32 @@
 .big-cash { font-size: 32rpx; color: #FF9F1C; font-weight: 600; margin-bottom: 16rpx; }
 
 /* 批次录入 */
-.link.small { font-size: 24rpx; margin-top: 8rpx; }
+/* 批次：整行「查看明细」按钮，点击区域大 */
+.batch-more {
+  width: 100%; margin-top: 20rpx; height: 80rpx; line-height: 80rpx; text-align: center; border-radius: 12rpx;
+  background: var(--primary-soft); color: var(--primary); font-size: 28rpx; font-weight: 600;
+}
+.batch-more-hover { opacity: .7; }
+.pm-tag { font-size: 22rpx; color: #07C160; background: #E8F8EF; border-radius: 6rpx; padding: 2rpx 10rpx; margin-left: 12rpx; font-weight: normal; }
+.pm-tag.cash { color: #FF9F1C; background: #FFF7E6; }
+/* 批次明细底部弹层 */
+.sheet { width: 100%; background: #fff; border-radius: 24rpx 24rpx 0 0; padding: 32rpx 32rpx calc(32rpx + env(safe-area-inset-bottom)); box-sizing: border-box; }
+.sh-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12rpx; }
+.sh-title { font-size: 34rpx; font-weight: 700; }
+.sh-close { width: 72rpx; height: 72rpx; line-height: 72rpx; text-align: center; font-size: 36rpx; color: #999; margin-right: -16rpx; }
+.sh-list { max-height: 600rpx; }
+.sh-row { display: flex; align-items: center; justify-content: space-between; padding: 18rpx 0; border-bottom: 1rpx solid #f0f0f0; }
+.sh-info { flex: 1; min-width: 0; }
+.sh-name { font-size: 30rpx; color: #333; }
+.sh-amt { font-size: 32rpx; margin-left: 20rpx; flex-shrink: 0; }
+.sh-sum { text-align: right; font-size: 32rpx; margin-top: 20rpx; }
+.sh-sub { text-align: right; margin-top: 6rpx; }
+.sh-mismatch { font-size: 28rpx; padding: 20rpx 0; }
+.sh-ops { display: flex; }
+.sh-btn { flex: 1; font-size: 34rpx; font-weight: 600; border-radius: 16rpx; padding: 12rpx 0; }
+.sh-btn::after { border: none; }
+.sh-btn.no { background: #fff; color: #FA5151; border: 2rpx solid #FA5151; margin-right: 20rpx; }
+.sh-btn.ok { background: #07C160; color: #fff; }
 .batch-rows { margin-top: 12rpx; background: #F7F7F7; border-radius: 10rpx; padding: 8rpx 16rpx; }
 .batch-rows.big { margin: 8rpx 0 16rpx; text-align: left; font-size: 30rpx; }
 .batch-row { display: flex; justify-content: space-between; padding: 8rpx 0; font-size: 26rpx; }
@@ -72,7 +100,8 @@
 .small { font-size: 22rpx; }
 .ed-input { width: 220rpx; border: 2rpx solid #e5e5e5; border-radius: 10rpx; padding: 12rpx 16rpx; text-align: right; font-size: 32rpx; }
 .ed-sum { text-align: right; font-size: 30rpx; margin: 20rpx 0; }
-.ed-ops { display: flex; gap: 20rpx; }
+.ed-ops { display: flex; }
+.ed-ops .ed-btn:not(:last-child) { margin-right: 20rpx; }
 .ed-btn { flex: 1; font-size: 30rpx; }
 .ed-btn.ok { background: #07C160; color: #fff; }
 .notify-tip { background: #FFF7E6; color: #D46B08; border-radius: 12rpx; padding: 18rpx 24rpx; font-size: 26rpx; margin-bottom: 20rpx; }

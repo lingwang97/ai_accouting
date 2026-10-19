@@ -145,7 +145,9 @@ const INDEXES = [
   ['gifts_out', 'owner_name', [['ownerOpenid', 1], ['toName', 1]]],
   ['gifts_out', 'owner_date', [['ownerOpenid', 1], ['date', -1]]],
   ['exports', 'owner_file', [['ownerOpenid', 1], ['fileID', 1]]],
-  ['exports', 'keep_time', [['keep', 1], ['createdAt', 1]]]
+  ['exports', 'keep_time', [['keep', 1], ['createdAt', 1]]],
+  ['reminders', 'owner_done_date', [['ownerOpenid', 1], ['done', 1], ['date', 1]]],
+  ['reminders', 'push', [['pushed', 1], ['notifyDay', 1]]]
 ];
 
 /**

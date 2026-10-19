@@ -14,7 +14,8 @@
 .lbl { width: 140rpx; color: #666; }
 .flex1 { flex: 1; }
 .input { border: 2rpx solid #e5e5e5; border-radius: 12rpx; padding: 16rpx 20rpx; }
-.widths { display: flex; gap: 12rpx; }
+.widths { display: flex; }
+.widths .filter:not(:last-child) { margin-right: 12rpx; }
 .filter {
   padding: 8rpx 24rpx; border-radius: 999rpx;
   background: #f2f3f5; color: #666; font-size: 26rpx;
@@ -24,10 +25,12 @@
   display: flex; justify-content: space-between; align-items: center;
   padding: 18rpx 0; border-bottom: 2rpx solid #f5f5f5;
 }
-.ops { display: flex; gap: 24rpx; }
+.ops { display: flex; }
+.ops .op:not(:last-child) { margin-right: 24rpx; }
 .op { color: #2B7FFF; padding: 0 8rpx; }
 .op.danger { color: #FA5151; }
-.adds { display: flex; flex-wrap: wrap; gap: 16rpx; margin-bottom: 16rpx; }
+.adds { display: flex; flex-wrap: wrap; margin-bottom: 0; margin-right: -16rpx; }
+.adds .filter { margin: 0 16rpx 16rpx 0; }
 
 .book-bar { display: flex; justify-content: space-between; align-items: center; }
 .book-pick { font-weight: 600; color: #333; }

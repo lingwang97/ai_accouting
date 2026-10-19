@@ -31,7 +31,8 @@ Page({
     const app = getApp();
     await app.loginReady;
     this.setData({ loggedIn: !!app.globalData.user });
-    if (app.globalData.user && !this.data.displayName) this.setData({ displayName: app.globalData.user.nickname || '' });
+    // 家人共享沿用微信昵称；记账人必须自己填写真实姓名，不预填昵称
+    if (app.globalData.user && !this.data.displayName && this.data.info && this.data.info.type !== 'clerk') this.setData({ displayName: app.globalData.user.nickname || '' });
   },
 
   /** 未登录：先登录，登录后自动回到本页 */
@@ -44,6 +45,10 @@ Page({
 
   async onAccept() {
     if (this.data.accepting) return;
+    const dn = (this.data.displayName || '').trim();
+    if (this.data.info && this.data.info.type === 'clerk' && (dn.length < 2 || /^(微信用户|记账人|wx|用户)\d*$/i.test(dn))) {
+      return wx.showToast({ title: '请填写你的真实姓名（2～12 个字）', icon: 'none' });
+    }
     this.setData({ accepting: true });
     try {
       const r = await req.inviteAccept(this.data.token, (this.data.displayName || '').trim());

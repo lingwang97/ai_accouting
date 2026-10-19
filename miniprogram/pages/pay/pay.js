@@ -13,9 +13,14 @@ const POLL_MAX = 200; // 约 10 分钟
 /** 页面展示用：金额文本、批次名单 */
 function viewRecord(r) {
   const items = r.items || [];
+  const mixed = r.payMethod === 'mixed';
   return {
     ...r,
+    mixed,
     amountStr: fmt.money(r.amount),
+    // 需扫码转账的金额（转账+现金时只转转账部分）、交给礼台的现金
+    payStr: fmt.money(mixed ? r.transferAmount : r.amount),
+    cashStr: fmt.money(r.cashAmount || 0),
     itemsStr: items.length > 1 ? items.map(x => `${x.name} ￥${fmt.money(x.amount)}`).join('、') : ''
   };
 }
@@ -32,7 +37,7 @@ Page({
     relation: '',
     batchMode: false,  // 批次录入：一次登记多位随礼人，按合计转一笔账
     batchRows: [],
-    payMethod: 'wechat', // wechat 微信转账 | cash 现金（跳过收款码与转账步骤）
+    payMethod: 'wechat', // wechat 微信转账 | cash 现金（跳过收款码与转账步骤）| mixed 转账+现金（仅批次录入）
     relations: scenes.RELATIONS,
     isFuneral: false,
     submitting: false,
@@ -90,7 +95,10 @@ Page({
   onName(e) { this.setData({ payerName: e.detail.value }); },
   onAmount(e) { this.setData({ amount: e.detail.value }); },
   onRemark(e) { this.setData({ remark: e.detail.value }); },
-  onBatchMode(e) { this.setData({ batchMode: e.detail.value }); },
+  onBatchMode(e) {
+    const on = e.detail.value;
+    this.setData({ batchMode: on, ...(on || this.data.payMethod !== 'mixed' ? {} : { payMethod: 'wechat' }) });
+  },
   onBatchChange(e) { this._batchRows = e.detail.rows; },
   onQuick(e) { this.setData({ amount: String(e.currentTarget.dataset.v) }); },
   onRelation(e) {
@@ -314,7 +322,7 @@ Page({
   showScanGuide() {
     wx.showModal({
       title: '收款码已存入相册',
-      content: `① 退回微信，点右上角「＋」→「扫一扫」\n② 点右上角「相册」，选第一张图（刚保存的收款码）\n③ 转账 ￥${this.data.record.amountStr}，再回到这里点「我已完成转账」`,
+      content: `① 退回微信，点右上角「＋」→「扫一扫」\n② 点右上角「相册」，选第一张图（刚保存的收款码）\n③ 转账 ￥${this.data.record.payStr}，再回到这里点「我已完成转账」`,
       confirmText: '去转账',
       showCancel: false
     });

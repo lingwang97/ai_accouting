@@ -1,14 +1,16 @@
 // components/batch-list — 批次录入：一次登记多位随礼人（姓名 / 金额 / 关系 / 礼品备注），自动合计
-// 随礼页（宾客）与礼台现金登记页共用；每次修改触发 change 事件：{ rows, count, total }
+// 随礼页（宾客）与礼台记账页共用；每次修改触发 change 事件：{ rows, count, total }
+// mixed=true（支付方式「转账+现金」）：每人选择转账或现金，合计分别显示
 const scenes = require('../../utils/scenes.js');
 
 const { MAX } = require('../../utils/batch.js');
-const emptyRow = () => ({ name: '', amount: '', relation: '', remark: '' });
+const emptyRow = () => ({ name: '', amount: '', relation: '', remark: '', method: 'wechat' });
 
 Component({
   properties: {
     firstLabel: { type: String, value: '' }, // 第一位的标注，如"本人"
-    quick: { type: Array, value: [] }        // 快捷金额
+    quick: { type: Array, value: [] },       // 快捷金额
+    mixed: { type: Boolean, value: false, observer() { this.emit(); } } // 转账+现金：每人选支付方式
   },
 
   data: {
@@ -16,7 +18,9 @@ Component({
     relations: scenes.RELATIONS,
     max: MAX,
     count: 0,
-    totalStr: '0.00'
+    totalStr: '0.00',
+    wechatStr: '0.00',
+    cashStr: '0.00'
   },
 
   lifetimes: {
@@ -31,6 +35,10 @@ Component({
     onQuick(e) {
       const { i, v } = e.currentTarget.dataset;
       this.setRow(i, 'amount', String(v));
+    },
+    onMethod(e) {
+      const { i, m } = e.currentTarget.dataset;
+      this.setRow(i, 'method', m);
     },
     onRelation(e) {
       this.setRow(e.currentTarget.dataset.i, 'relation', this.data.relations[Number(e.detail.value)]);
@@ -64,9 +72,11 @@ Component({
     emit() {
       const rows = this.data.rows;
       const filled = rows.filter(r => (r.name || '').trim() || Number(r.amount) > 0);
-      const fen = filled.reduce((t, r) => t + (Number(r.amount) > 0 ? Math.round(Number(r.amount) * 100) : 0), 0);
+      const fenOf = rs => rs.reduce((t, r) => t + (Number(r.amount) > 0 ? Math.round(Number(r.amount) * 100) : 0), 0);
+      const fen = fenOf(filled);
+      const cashFen = fenOf(filled.filter(r => r.method === 'cash'));
       const totalStr = (fen / 100).toFixed(2);
-      this.setData({ count: filled.length, totalStr });
+      this.setData({ count: filled.length, totalStr, wechatStr: ((fen - cashFen) / 100).toFixed(2), cashStr: (cashFen / 100).toFixed(2) });
       this.triggerEvent('change', { rows, count: filled.length, total: fen / 100 });
     }
   }

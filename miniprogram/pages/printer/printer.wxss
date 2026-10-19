@@ -3,7 +3,8 @@
   padding: 20rpx 0; border-bottom: 2rpx solid #f5f5f5;
 }
 .dev-name { font-weight: 600; }
-.dev-actions { display: flex; gap: 16rpx; }
+.dev-actions { display: flex; }
+.dev-actions button:not(:last-child) { margin-right: 16rpx; }
 .sm { font-size: 26rpx; padding: 8rpx 24rpx; line-height: 1.6; }
 .scan-head { display: flex; justify-content: space-between; align-items: center; }
 .link { color: #2B7FFF; font-size: 26rpx; }

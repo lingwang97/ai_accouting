@@ -4,6 +4,7 @@ const req = require('../../utils/request.js');
 const theme = require('../../utils/theme.js');
 const cache = require('../../utils/cache.js');
 const plan = require('../../utils/plan.js');
+const perm = require('../../utils/perm.js');
 
 const { VERSION } = require('../../config.js');
 
@@ -14,8 +15,9 @@ Page({
     user: null,
     account: null,
     role: 'none',       // owner 主家本人 | clerk 记账人
-    restricted: false,  // 只负责部分场次的记账人或家人共享：不显示主家信息等管理入口
+    restricted: false,  // 只能看到部分礼簿（数据范围受限）
     readonly: false,    // 家人共享：只读
+    pm: {},             // 当前身份的权限 { info: true, ... }（主家全部为 true）
     identities: [],
     printerName: '',
     versionText: versionText(),
@@ -56,15 +58,18 @@ Page({
         return;
       }
 
-      const { account, role, identities, restricted, readonly } = await req.accountGet();
+      const { account, role, identities, restricted, readonly, perms } = await req.accountGet();
       app.globalData.account = account;
       app.globalData.role = role;
+      app.refreshTabBar(); // 记账人身份隐藏「往来」
+      app.globalData.perms = perms || [];
       theme.setAccount(account);
       theme.apply(this);
       app._accountChecked = true;
       const view = {
         account, role, identities: identities || [],
-        restricted: !!restricted, readonly: !!readonly
+        restricted: !!restricted, readonly: !!readonly,
+        pm: perm.map(perms, role)
       };
       this.setData(view);
       cache.set('mine', { user: app.globalData.user, ...view });
@@ -168,6 +173,7 @@ Page({
 
   goLogin() { wx.navigateTo({ url: '/pages/login/login' }); },
   goAccount() { wx.navigateTo({ url: '/pages/account/account' }); },
+  goAppearance() { wx.navigateTo({ url: '/pages/appearance/appearance' }); },
   goQrcode() { wx.navigateTo({ url: '/pages/qrcode/qrcode' }); },
   goPrinter() { wx.navigateTo({ url: '/pages/printer/printer' }); },
   goStyle() { wx.navigateTo({ url: '/pages/receiptset/receiptset' }); },
@@ -228,7 +234,7 @@ Page({
     app.resetIdentity();
     theme.setAccount(null); // 主题色恢复默认（含本地存储）
     try { wx.setStorageSync(LOGOUT_KEY, true); } catch (e) { /* 忽略 */ }
-    this.setData({ user: null, account: null, role: 'none', restricted: false, readonly: false, isAdmin: false, planText: '' });
+    this.setData({ user: null, account: null, role: 'none', restricted: false, readonly: false, pm: {}, isAdmin: false, planText: '' });
     theme.apply(this);
   }
 });

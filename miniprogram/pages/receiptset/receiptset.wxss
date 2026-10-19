@@ -3,14 +3,17 @@
 .flex1 { flex: 1; }
 .stamp-input { margin-left: 24rpx; width: 220rpx; }
 .input { border: 2rpx solid #e5e5e5; border-radius: 12rpx; padding: 16rpx 20rpx; }
-.chips { display: flex; flex-wrap: wrap; gap: 16rpx; margin-bottom: 12rpx; }
+.chips { display: flex; flex-wrap: wrap; margin-bottom: -4rpx; margin-right: -16rpx; }
+.chips .chip { margin: 0 16rpx 16rpx 0; }
 .chip { padding: 8rpx 28rpx; border-radius: 999rpx; background: #f2f3f5; color: #666; font-size: 26rpx; }
 .chip.on { background: var(--primary); color: #fff; }
-.colors { display: flex; gap: 20rpx; }
+.colors { display: flex; }
+.colors .color:not(:last-child) { margin-right: 20rpx; }
 .color { width: 52rpx; height: 52rpx; border-radius: 50%; border: 4rpx solid transparent; }
 .color.on { border-color: #fff; box-shadow: 0 0 0 4rpx #333; }
 .field-row { display: flex; justify-content: space-between; align-items: center; padding: 18rpx 0; border-bottom: 2rpx solid #f5f5f5; }
-.ops { display: flex; gap: 24rpx; }
+.ops { display: flex; }
+.ops .op:not(:last-child) { margin-right: 24rpx; }
 .op { color: #2B7FFF; padding: 0 8rpx; }
 .op.danger { color: #FA5151; }
 .btn-link { background: none; color: #576B95; font-size: 28rpx; margin-top: 12rpx; }

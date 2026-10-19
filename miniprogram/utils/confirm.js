@@ -17,11 +17,14 @@ function confirmTransfer(record) {
   const who = isBatch
     ? `${record.payerName}（${record.records.map(r => r.payerName + ' ￥' + fmt.money(r.amount)).join('、')}）`
     : `${record.payerName}${record.proxyFor ? '（代 ' + receipt.proxyText(record) + '）' : ''}`;
-  const cash = record.payMethod === 'cash';
+  const mixed = !!record.mixed; // 批次混合支付：部分转账、部分现金
+  const cash = !mixed && record.payMethod === 'cash';
   return new Promise(resolve => {
     wx.showModal({
-      title: `${cash ? '现金' : '宾客登记'} ￥${amount}`,
-      content: cash ? `请清点 ${who} 交来的现金是否为 ￥${amount}` : `请核对微信收到 ${who} 的转账金额是否为 ￥${amount}`,
+      title: `${mixed ? '转账+现金' : (cash ? '现金' : '宾客登记')} ￥${amount}`,
+      content: mixed
+        ? `请核对 ${who}：微信转账 ￥${record.wechatSumStr}、现金 ￥${record.cashSumStr} 是否都已收到`
+        : (cash ? `请清点 ${who} 交来的现金是否为 ￥${amount}` : `请核对微信收到 ${who} 的转账金额是否为 ￥${amount}`),
       confirmText: '一致入簿', // 按钮文字最多 4 个字，超出弹窗会直接失败
       cancelText: '金额不符',
       success: res => {

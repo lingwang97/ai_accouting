@@ -1,5 +1,5 @@
 // custom-tab-bar — 自定义底部菜单
-// 四个菜单始终显示；「礼簿」「往来」未登录时页面内提示登录，登录后才显示数据
+// 「礼簿」「往来」未登录时页面内提示登录，登录后才显示数据；记账人身份不显示「往来」（人情往来属于本人，记账时不需要）
 // 第一个菜单：主家 / 记账人为「工作台」（待确认角标画在这里），宾客为「首页」
 // 选中颜色跟礼簿事由走（喜事红、白事灰，见 utils/theme.js）
 const theme = require('../utils/theme.js');
@@ -7,7 +7,7 @@ const theme = require('../utils/theme.js');
 const TABS = [
   { path: 'pages/index/index', text: '首页', hostText: '工作台', icon: 'home', badge: true },
   { path: 'pages/records/records', text: '礼簿', icon: 'book' },
-  { path: 'pages/renqing/renqing', text: '往来', icon: 'people' },
+  { path: 'pages/renqing/renqing', text: '往来', icon: 'people', hideClerk: true },
   { path: 'pages/mine/mine', text: '我的', icon: 'user' }
 ];
 
@@ -34,7 +34,8 @@ Component({
       const n = (app && app.globalData.badge) || 0;
       const t = theme.current();
       this.setData({
-        list: TABS.map(x => ({ ...x, label: isHost && x.hostText ? x.hostText : x.text })),
+        list: TABS.filter(x => !(x.hideClerk && app && app.globalData.role === 'clerk'))
+          .map(x => ({ ...x, label: isHost && x.hostText ? x.hostText : x.text })),
         selected: cur,
         badge: n > 0 ? (n > 99 ? '99+' : String(n)) : '',
         color: t.primary,

@@ -7,6 +7,7 @@ const printer = require('../../utils/printer.js');
 const confirm = require('../../utils/confirm.js');
 const theme = require('../../utils/theme.js');
 const cache = require('../../utils/cache.js');
+const perm = require('../../utils/perm.js');
 
 const PAGE_SIZE = 20;
 const POLL_MS = 5000; // 页面停留时自动刷新待确认转账
@@ -32,6 +33,7 @@ Page({
     relIdx: 0,
     loggedIn: true,
     readonly: false,  // 家人共享：只读
+    pm: {},           // 当前身份的权限：确认 / 作废 / 打印 / 礼台记账按权限显示
     busy: false
   },
 
@@ -56,7 +58,7 @@ Page({
     }
     // 冷启动时 role 为空：先读取身份，避免家人共享看到操作按钮
     const role = await app.ensureRole();
-    this.setData({ loggedIn: true, readonly: role === 'viewer' });
+    this.setData({ loggedIn: true, readonly: role === 'viewer', pm: perm.current() });
     // 礼簿下拉：首次进入先用缓存，网络结果回来后再校正；之后每分钟最多重新拉一次
     let booksP = null;
     if (app.globalData.activeBookChanged) {

@@ -37,7 +37,8 @@
 
 .pay-ways { text-align: left; font-size: 24rpx; color: #666; line-height: 1.7; margin: 16rpx 0; padding: 16rpx 20rpx; background: #F7F7F7; border-radius: 12rpx; }
 .btn-save { margin: 20rpx 0 8rpx; }
-.chips { display: flex; flex-wrap: wrap; gap: 14rpx; margin-bottom: 14rpx; }
+.chips { display: flex; flex-wrap: wrap; margin-bottom: 0; margin-right: -14rpx; }
+.chips .chip { margin: 0 14rpx 14rpx 0; }
 .chip { padding: 8rpx 26rpx; border-radius: 999rpx; background: #f2f3f5; color: #666; font-size: 26rpx; }
 .chip.on { background: var(--primary); color: #fff; }
 .success-head.plain .ok-title { color: #333; }
@@ -51,7 +52,8 @@
 .big-amount { font-size: 72rpx; margin: 8rpx 0; }
 .saved-tip { color: var(--primary); font-size: 28rpx; margin: 16rpx 0 4rpx; }
 .cash-tip { color: #FF9F1C; font-size: 30rpx; font-weight: 600; margin: 16rpx 0; }
-.batch-switch { display: flex; justify-content: space-between; align-items: center; gap: 24rpx; }
+.batch-switch { display: flex; justify-content: space-between; align-items: center; }
+.batch-switch switch { margin-left: 24rpx; }
 .pay-method { margin-top: 28rpx; }
 .items { font-size: 24rpx; line-height: 1.6; margin-top: 8rpx; }
 .host-cta { margin: 24rpx 0; padding: 22rpx 24rpx; background: var(--primary-soft); color: var(--primary); border-radius: 12rpx; font-size: 26rpx; line-height: 1.6; text-align: center; }

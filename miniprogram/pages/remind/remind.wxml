@@ -1,0 +1,37 @@
+<view class="container" style="{{themeStyle}}">
+  <view class="tip muted">记下亲友办事的日期，到时在「往来」顶部提醒你回礼；同意订阅后，还会在提醒当天上午 9 点收到微信服务通知。</view>
+  <view class="card">
+    <view class="field">
+      <text class="label">对方姓名 *</text>
+      <input class="input" placeholder="谁家办事" maxlength="20" value="{{name}}" data-k="name" bindinput="onInput" />
+    </view>
+    <view class="field">
+      <text class="label">事由类型</text>
+      <view class="chips">
+        <view class="chip {{eventType === item.type ? 'on' : ''}}" wx:for="{{scenes}}" wx:key="type" data-t="{{item.type}}" bindtap="onType">{{item.label}}</view>
+      </view>
+    </view>
+    <view class="field">
+      <text class="label">事由</text>
+      <input class="input" placeholder="选填，如：儿子结婚" maxlength="20" value="{{event}}" data-k="event" bindinput="onInput" />
+    </view>
+    <view class="field">
+      <text class="label">办事日期 *</text>
+      <picker mode="date" value="{{date}}" start="{{today}}" bindchange="onDate"><view class="input">{{date || '请选择'}}</view></picker>
+    </view>
+    <view class="field">
+      <text class="label">提前提醒</text>
+      <view class="chips">
+        <view class="chip {{before === item.v ? 'on' : ''}}" wx:for="{{befores}}" wx:key="v" data-v="{{item.v}}" bindtap="onBefore">{{item.t}}</view>
+      </view>
+    </view>
+    <view class="field">
+      <text class="label">备注</text>
+      <input class="input" placeholder="选填，如：上次随我 ￥600" maxlength="50" value="{{note}}" data-k="note" bindinput="onInput" />
+    </view>
+  </view>
+
+  <button class="btn-primary" loading="{{saving}}" bindtap="onSave">保存提醒</button>
+  <view class="muted center sub-tip" wx:if="{{pushOn}}">保存时会请求订阅一次服务通知，用于本条提醒</view>
+  <button wx:if="{{_id}}" class="btn-del" bindtap="onDelete">删除</button>
+</view>

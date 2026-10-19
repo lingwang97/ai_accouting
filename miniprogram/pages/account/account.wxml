@@ -20,8 +20,11 @@
   </view>
 
   <view class="card">
-    <view class="section-title">主家称呼</view>
-    <input class="input" placeholder="建议真实姓名,如：张三" value="{{accountName}}" bindinput="onNameInput" />
+    <block wx:if="{{!codeOnly}}">
+      <view class="section-title">主家称呼</view>
+      <input class="input" placeholder="建议真实姓名,如：张三" value="{{accountName}}" bindinput="onNameInput" />
+    </block>
+    <view class="muted" wx:else>你只负责部分礼簿：可以为「{{accountName}}」上传新的收款码，主家确认采用后才生效，确认前宾客仍转到原收款码。</view>
 
     <view class="section-title" style="margin-top:28rpx">微信个人收款码</view>
     <view class="paycode-box" bindtap="onChoosePayCode">
@@ -35,19 +38,12 @@
     <view class="pending-note" wx:if="{{pendingNote}}">已提交的新收款码待主家确认，确认前宾客仍转到原收款码</view>
   </view>
 
-  <view class="card">
+  <view class="card" wx:if="{{!codeOnly}}">
     <view class="section-title">快捷礼金</view>
     <input class="input" placeholder="用逗号分隔，如：200,500,600,800,1000,1888" value="{{quickText}}" bindinput="onQuickInput" />
-    <view class="muted" style="margin-top:12rpx">宾客随礼时可一键选择，清空后不显示快捷金额<text class="link-inline" wx:if="{{quickText}}" bindtap="onClearQuick">清空</text>；礼簿名称请到「我的 → 礼簿管理」设置</view>
-
-    <view class="section-title" style="margin-top:28rpx">主题色 <text class="muted">（工作台、按钮、宾客随礼页、礼簿码与台卡的主色；白事礼簿自动素灰）</text></view>
-    <view class="colors">
-      <view wx:for="{{colors}}" wx:key="*this"
-            class="color-dot {{item === primary ? 'on' : ''}}"
-            style="background:{{item}}" data-c="{{item}}" bindtap="onPickColor" />
-    </view>
+    <view class="muted" style="margin-top:12rpx">宾客随礼时可一键选择，清空后不显示快捷金额<text class="link-inline" wx:if="{{quickText}}" bindtap="onClearQuick">清空</text>；礼簿名称请到「我的 → 礼簿管理」设置；主题色请到「我的 → 外观设置」</view>
   </view>
 
-  <button class="btn-primary" loading="{{saving || uploading}}" bindtap="onSave">保存</button>
-  <view class="clear-form" bindtap="onClearForm">清空重填</view>
+  <button class="btn-primary" loading="{{saving || uploading}}" bindtap="onSave">{{codeOnly ? '提交主家确认' : '保存'}}</button>
+  <view class="clear-form" wx:if="{{!codeOnly}}" bindtap="onClearForm">清空重填</view>
 </view>

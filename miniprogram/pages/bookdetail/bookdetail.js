@@ -4,6 +4,7 @@ const fmt = require('../../utils/format.js');
 const scenes = require('../../utils/scenes.js');
 const openfile = require('../../utils/openfile.js');
 const theme = require('../../utils/theme.js');
+const perm = require('../../utils/perm.js');
 
 Page({
   data: {
@@ -16,7 +17,9 @@ Page({
     maxAmount: '0.00',
     byRelation: [],
     orgMode: false,
-    readonly: true    // 家人共享：只读（身份读取前先按只读显示）
+    readonly: true,   // 家人共享：只读（身份读取前先按只读显示）
+    pm: {},           // 当前身份的权限：生成存档需「管理礼簿」，导出需「对账与导出」
+    canExport: false  // 有导出权限（家人共享也可导出）
   },
 
   async onLoad(options) {
@@ -24,7 +27,8 @@ Page({
     this.setData({ id: options.id });
     const role = await app.ensureRole(); // 冷启动时 role 为空，先读取身份
     const acc = app.globalData.account;
-    this.setData({ orgMode: !!(acc && acc.orgMode) && role !== 'viewer', readonly: role === 'viewer' });
+    const pm = perm.current();
+    this.setData({ orgMode: !!(acc && acc.orgMode) && role !== 'viewer', readonly: role === 'viewer', pm, canExport: pm.export || role === 'viewer' });
   },
 
   async onShow() {

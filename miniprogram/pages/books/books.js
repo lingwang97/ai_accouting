@@ -6,6 +6,7 @@ const scenes = require('../../utils/scenes.js');
 const printer = require('../../utils/printer.js');
 const theme = require('../../utils/theme.js');
 const openfile = require('../../utils/openfile.js');
+const perm = require('../../utils/perm.js');
 
 const EXPORTS = [
   { format: 'book', label: '传统礼簿 PDF（竖排，整本）' },
@@ -20,7 +21,9 @@ Page({
     list: [],          // 其他未归档礼簿
     archived: [],
     showArchived: false,
-    restricted: false, // 只负责部分场次的礼台人员：只能看、导出
+    restricted: false, // 只能看到部分礼簿（数据范围受限）：不能新建礼簿
+    pm: {},            // 当前身份的权限：管理礼簿 / 导出 / 礼簿共享（邀请与管理）按权限显示
+    canExport: false,  // 有导出权限（家人共享也可导出）
     orgMode: false,
     exporting: false,
     iconKey: 'r',      // 描边按钮图标颜色跟主题色
@@ -35,8 +38,9 @@ Page({
 
   async load() {
     try {
-      const { list, activeBookId, restricted } = await req.bookList();
+      const [{ list, activeBookId, restricted, perms }, role] = await Promise.all([req.bookList(), getApp().ensureRole()]);
       const acc = getApp().globalData.account;
+      const pm = perm.map(perms, role);
       const all = list.map(b => ({
         ...b,
         typeLabel: scenes.label(b.type),
@@ -46,6 +50,8 @@ Page({
       this.setData({
         activeBookId,
         restricted: !!restricted,
+        pm,
+        canExport: pm.export || role === 'viewer',
         orgMode: !!(acc && acc.orgMode),
         current: all.find(b => b._id === activeBookId) || null,
         list: all.filter(b => !b.archived && b._id !== activeBookId),

@@ -3,7 +3,8 @@
 .no { color: #666; font-size: 26rpx; }
 .tag { margin-left: 10rpx; font-size: 22rpx; color: var(--primary); background: #E8F8EF; border-radius: 6rpx; padding: 2rpx 10rpx; }
 .del { color: #FA5151; font-size: 26rpx; }
-.line { display: flex; gap: 12rpx; margin-bottom: 12rpx; }
+.line { display: flex; margin-bottom: 12rpx; }
+.line .amt, .line .remark { margin-left: 12rpx; }
 .input { border: 2rpx solid #e5e5e5; border-radius: 12rpx; padding: 16rpx 18rpx; font-size: 28rpx; }
 .name { flex: 3; }
 .amt { flex: 2; }
@@ -11,10 +12,18 @@
 .rel-val { color: #333; }
 .rel-val.ph { color: #999; }
 .remark { flex: 4; }
-.chips { display: flex; flex-wrap: wrap; gap: 12rpx; margin-bottom: 12rpx; }
+.chips { display: flex; flex-wrap: wrap; margin-bottom: 0; margin-right: -12rpx; }
+.chips .chip { margin: 0 12rpx 12rpx 0; }
 .chip { padding: 6rpx 22rpx; border-radius: 999rpx; background: #f2f3f5; color: #666; font-size: 24rpx; }
 .chip.on { background: var(--primary); color: #fff; }
 .add { color: #576B95; font-size: 28rpx; padding: 8rpx 0 16rpx; }
 .total { text-align: right; font-size: 30rpx; color: #333; }
 .total .num { font-weight: 700; color: #FF9F1C; }
 .money { color: #FA5151; font-weight: 700; }
+.head-r { display: flex; align-items: center; }
+.head-r .del { margin-left: 20rpx; }
+/* 转账+现金：每人支付方式 */
+.seg { display: flex; border: 2rpx solid var(--primary); border-radius: 999rpx; overflow: hidden; }
+.seg-i { padding: 6rpx 22rpx; font-size: 24rpx; color: var(--primary); }
+.seg-i.on { background: var(--primary); color: #fff; }
+.total.split { font-size: 26rpx; color: #666; margin-top: 6rpx; }

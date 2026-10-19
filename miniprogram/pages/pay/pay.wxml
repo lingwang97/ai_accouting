@@ -33,7 +33,7 @@
       </view>
       <view class="card">
         <block wx:if="{{batchMode}}">
-          <batch-list first-label="本人" quick="{{account.quickAmounts || []}}" bindchange="onBatchChange" />
+          <batch-list first-label="本人" quick="{{account.quickAmounts || []}}" mixed="{{payMethod === 'mixed'}}" bindchange="onBatchChange" />
         </block>
         <block wx:else>
           <view class="field">
@@ -66,8 +66,10 @@
           <view class="chips">
             <view class="chip {{payMethod === 'wechat' ? 'on' : ''}}" data-m="wechat" bindtap="onPayMethod">微信转账</view>
             <view class="chip {{payMethod === 'cash' ? 'on' : ''}}" data-m="cash" bindtap="onPayMethod">💵 现金</view>
+            <view class="chip {{payMethod === 'mixed' ? 'on' : ''}}" wx:if="{{batchMode}}" data-m="mixed" bindtap="onPayMethod">转账+现金</view>
           </view>
           <view class="muted" wx:if="{{payMethod === 'cash'}}">现金请当面交给主家或礼台，无需扫码转账</view>
+          <view class="muted" wx:if="{{payMethod === 'mixed'}}">在上方名单里为每位选「转账」或「现金」：转账部分扫码转一笔，现金部分当面交给礼台</view>
         </view>
       </view>
       <button class="btn-primary" loading="{{submitting}}" bindtap="onConfirmTransfer">{{payMethod === 'cash' ? '确认随礼（现金）' : '确认随礼'}}</button>
@@ -77,7 +79,8 @@
     <block wx:if="{{step === 'transfer'}}">
       <view class="card center">
         <view class="muted">请转账</view>
-        <view class="pay-amount money big-amount">￥{{record.amountStr}}</view>
+        <view class="pay-amount money big-amount">￥{{record.payStr}}</view>
+        <view class="cash-tip" wx:if="{{record.mixed}}">另有现金 ￥{{record.cashStr}}，请当面交给礼台（共 ￥{{record.amountStr}}）</view>
         <view class="muted">随礼人：{{record.payerName}}</view>
         <view class="muted items" wx:if="{{record.itemsStr}}">{{record.itemsStr}}</view>
       </view>
@@ -88,14 +91,14 @@
         <view class="scan-steps">
           <view>1. 退回微信聊天列表，点右上角「＋」→「扫一扫」</view>
           <view>2. 扫描主家屏幕（或礼簿台卡）上 <text class="em">第 2 步</text> 的收款码</view>
-          <view>3. 转账 <text class="money">￥{{record.amountStr}}</text>，完成后回到本页点下方按钮</view>
+          <view>3. 转账 <text class="money">￥{{record.payStr}}</text>，完成后回到本页点下方按钮</view>
         </view>
         <view class="link-fold" bindtap="onToggleFallback">{{showFallback ? '收起' : '看不到收款码？存到相册转账'}}</view>
       </view>
 
       <!-- 不在现场（或在现场看不到收款码）：存相册后用扫一扫识别 -->
       <view class="card center" wx:if="{{!onsite || showFallback}}">
-        <view class="section-title">向主家收款码转账 ￥{{record.amountStr}}</view>
+        <view class="section-title">向主家收款码转账 ￥{{record.payStr}}</view>
         <image wx:if="{{payCodeUrl}}" class="paycode" src="{{payCodeUrl}}" mode="aspectFit" bindtap="onPreviewPayCode" />
         <view wx:else class="muted">收款码加载失败，请联系主家</view>
         <view class="saved-tip" wx:if="{{codeSaved}}">✓ 收款码已存入相册</view>
@@ -103,7 +106,7 @@
         <view class="pay-ways">
           <view>① 退回微信，点右上角「＋」→「扫一扫」</view>
           <view>② 点右上角「相册」，选第一张图（收款码）</view>
-          <view>③ 转账 <text class="money">￥{{record.amountStr}}</text>，回到本页点「我已完成转账」</view>
+          <view>③ 转账 <text class="money">￥{{record.payStr}}</text>，回到本页点「我已完成转账」</view>
         </view>
         <view class="link-fold" wx:if="{{codeSaved}}" bindtap="onSavePayCode">没找到？重新保存</view>
         <view class="muted">微信限制：小程序内长按收款码无法直接付款</view>
@@ -121,6 +124,7 @@
         <view class="muted">{{record.payerName}} · ￥{{record.amountStr}}<text wx:if="{{record.payMethod === 'cash'}}"> · 现金</text></view>
         <view class="muted items" wx:if="{{record.itemsStr}}">{{record.itemsStr}}</view>
         <view class="cash-tip" wx:if="{{record.payMethod === 'cash'}}">请将现金 ￥{{record.amountStr}} 当面交给主家或礼台</view>
+        <view class="cash-tip" wx:if="{{record.mixed}}">转账 ￥{{record.payStr}} 已完成，请将现金 ￥{{record.cashStr}} 当面交给礼台</view>
         <view class="muted tip">主家确认收到后，礼金将记入礼簿，本页自动显示回执，请勿关闭</view>
       </view>
       <button class="btn-plain" bindtap="onRefresh">刷新状态</button>

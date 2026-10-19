@@ -22,17 +22,24 @@
         </view>
         <view class="desc muted">主家同意后可以查看以上礼簿的明细、合计、统计、对账和导出；只能查看，不能修改。</view>
       </block>
-      <view class="desc muted" wx:else>
-        主家同意后成为记账人，可以查看礼簿、确认收礼、登记现金、打印回执、导出。
-      </view>
+      <block wx:else>
+        <view class="books" wx:if="{{!info.allBooks && info.books.length}}">
+          <view class="bk" wx:for="{{info.books}}" wx:key="index"><text>{{item.name}}</text><text class="muted">{{item.count}} 份 · ￥{{item.sum}}</text></view>
+        </view>
+        <view class="perm-label muted" wx:if="{{info.perms && info.perms.length}}">可以做的事</view>
+        <view class="perms" wx:if="{{info.perms && info.perms.length}}">
+          <text class="perm" wx:for="{{info.perms}}" wx:key="*this">{{item}}</text>
+        </view>
+        <view class="desc muted">主家同意后成为记账人，可以查看{{info.allBooks ? '全部礼簿（含以后新建的）' : '以上礼簿'}}的礼金{{info.perms && info.perms.length ? '，并按上面的权限操作' : ''}}。</view>
+      </block>
     </block>
 
     <view class="err" wx:if="{{errMsg}}">{{errMsg}}</view>
 
     <block wx:if="{{info && !errMsg}}">
       <view class="dn" wx:if="{{loggedIn && info.type === 'clerk'}}">
-        <view class="dn-label">记账人姓名 / 礼台编号</view>
-        <input class="dn-input" placeholder="如：李华、礼台1号，回执和小票上显示" maxlength="12" value="{{displayName}}" bindinput="onDisplayName" />
+        <view class="dn-label">你的真实姓名 <text class="req">*</text></view>
+        <input class="dn-input" placeholder="如：李华（回执、小票上显示，主家据此辨认）" maxlength="12" value="{{displayName}}" bindinput="onDisplayName" />
       </view>
       <button wx:if="{{!loggedIn}}" class="btn-primary" bindtap="goLogin">登录后接受</button>
       <button wx:else class="btn-primary" loading="{{accepting}}" bindtap="onAccept">

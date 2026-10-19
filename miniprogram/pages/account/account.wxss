@@ -9,24 +9,29 @@
   overflow: hidden;
 }
 .paycode { width: 100%; height: 100%; }
-.paycode-empty { display: flex; flex-direction: column; align-items: center; gap: 8rpx; }
-.colors { display: flex; gap: 24rpx; margin: 20rpx 0; }
+.paycode-empty { display: flex; flex-direction: column; align-items: center; }
+.paycode-empty .muted { margin-top: 8rpx; }
+.colors { display: flex; margin: 20rpx 0; }
+.colors .color-dot:not(:last-child) { margin-right: 24rpx; }
 .color-dot {
   width: 56rpx; height: 56rpx; border-radius: 50%;
   border: 4rpx solid transparent;
 }
 .color-dot.on { border-color: #333; }
-.switch-row { display: flex; justify-content: space-between; align-items: center; gap: 24rpx; margin-top: 28rpx; }
+.switch-row { display: flex; justify-content: space-between; align-items: center; margin-top: 28rpx; }
+.switch-row switch { margin-left: 24rpx; }
 .link-inline { color: #576B95; margin-left: 12rpx; }
 .clear-form { text-align: center; color: #999; font-size: 28rpx; padding: 28rpx 0; }
 
 /* 记账人提交、待主家确认的收款码 */
 .review { border: 2rpx solid #f0b429; background: #fffaf0; }
-.rv-imgs { display: flex; gap: 24rpx; margin: 20rpx 0; }
+.rv-imgs { display: flex; margin: 20rpx 0; }
+.rv-imgs .rv-col:not(:last-child) { margin-right: 24rpx; }
 .rv-col { flex: 1; text-align: center; }
 .rv-img { width: 100%; height: 280rpx; border: 2rpx solid #eee; border-radius: 12rpx; background: #fff; }
 .rv-img.new { border-color: var(--primary); }
-.rv-ops { display: flex; gap: 20rpx; }
+.rv-ops { display: flex; }
+.rv-ops .rv-btn:not(:last-child) { margin-right: 20rpx; }
 .rv-btn {
   flex: 1; height: 76rpx; line-height: 76rpx; text-align: center; border-radius: 12rpx; font-size: 28rpx;
   border: 2rpx solid var(--primary); color: var(--primary); background: #fff;

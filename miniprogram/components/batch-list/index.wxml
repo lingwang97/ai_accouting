@@ -2,7 +2,13 @@
   <view class="row" wx:for="{{rows}}" wx:for-index="ri" wx:key="ri">
     <view class="row-head">
       <text class="no">第 {{ri + 1}} 位<text class="tag" wx:if="{{ri === 0 && firstLabel}}">{{firstLabel}}</text></text>
-      <text class="del" wx:if="{{rows.length > 1}}" data-i="{{ri}}" bindtap="onDel">删除</text>
+      <view class="head-r">
+        <view class="seg" wx:if="{{mixed}}">
+          <view class="seg-i {{item.method !== 'cash' ? 'on' : ''}}" data-i="{{ri}}" data-m="wechat" bindtap="onMethod">转账</view>
+          <view class="seg-i {{item.method === 'cash' ? 'on' : ''}}" data-i="{{ri}}" data-m="cash" bindtap="onMethod">现金</view>
+        </view>
+        <text class="del" wx:if="{{rows.length > 1}}" data-i="{{ri}}" bindtap="onDel">删除</text>
+      </view>
     </view>
     <view class="line">
       <input class="input name" placeholder="姓名 *" maxlength="20" value="{{item.name}}" data-i="{{ri}}" data-k="name" bindinput="onInput" />
@@ -20,4 +26,5 @@
   </view>
   <view class="add" wx:if="{{rows.length < max}}" bindtap="onAdd">＋ 再加一位</view>
   <view class="total">共 <text class="num">{{count}}</text> 人 · 合计 <text class="money">￥{{totalStr}}</text></view>
+  <view class="total split" wx:if="{{mixed}}">转账 ￥{{wechatStr}} · 现金 ￥{{cashStr}}</view>
 </view>

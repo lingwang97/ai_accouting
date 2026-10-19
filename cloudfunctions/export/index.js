@@ -15,7 +15,7 @@
 // 五、定时触发器 cleanup（每天 3 点）：删除所有用户超过 24 小时且 keep=false 的文件
 //   出参：{ code:0, msg:'ok', data:{ deleted: n } }
 const cloud = require('wx-server-sdk');
-const { resolveCtx, canBook, readonly } = require('./ctx.js');
+const { resolveCtx, canBook, readonly, can } = require('./ctx.js');
 // 按需加载：pdfkit / exceljs 体积大，只在对应格式时加载，缩短冷启动
 let _pdfkit = null;
 let _exceljs = null;
@@ -65,6 +65,8 @@ exports.main = async (event) => {
     const ctx = await resolveCtx(db, OPENID);
     const OWNER = ctx.ownerOpenid;
     if (event.action === 'cleanup') return await cleanupFile(OWNER, String(event.fileID || ''));
+    // 记账人需有「对账与导出」权限（家人共享可导出共享的礼簿）
+    if (ctx.role === 'clerk' && !can(ctx, 'export')) return err('你没有导出权限');
     // 送礼记录属于本人的人情往来：记账人备份主家数据时不含；只负责部分场次的人员不能全量备份
     if (event.format === 'backup' && ctx.bookIds) return err('你只负责部分场次，请按场次导出');
     if (event.format === 'backup') return await exportBackup(OWNER, ctx.role === 'owner');
@@ -80,7 +82,7 @@ exports.main = async (event) => {
     if (format === 'book' && !bookId) return err('传统礼簿请选择一本礼簿整本导出');
     // 仅传统礼簿支持归档保留；家人共享只读，不能生成存档
     const archive = format === 'book' && event.keep === true;
-    if (archive && readonly(ctx)) return err('家人共享为只读，不能生成存档');
+    if (archive && !can(ctx, 'books')) return err('生成存档需要「管理礼簿」权限');
 
     if (bookId) {
       // 按礼簿导出：先校验礼簿归属
@@ -264,8 +266,24 @@ function buildMeta(rows, { account, book, startDay, endDay, themeName }) {
     startDay, endDay, themeName,
     count: rows.length,
     sum: rows.reduce((s, r) => s + Math.round(Number(r.amount) * 100), 0) / 100,
+    methodLine: methodSummary(rows),
     exportedAt: fmtDateTime(new Date())
   };
+}
+
+/** 支付方式分项：微信 / 现金合计，另列「转账+现金」批次（金额已分别计入微信与现金） */
+function methodSummary(rows) {
+  const fen = rs => rs.reduce((s, r) => s + Math.round(Number(r.amount) * 100), 0);
+  const f = n => (n / 100).toFixed(2);
+  const cash = rows.filter(r => r.payMethod === 'cash');
+  const wechat = rows.filter(r => r.payMethod !== 'cash');
+  const mixed = rows.filter(r => r.batchPay === 'mixed');
+  let s = `微信 ${wechat.length} 份 ￥${f(fen(wechat))}　现金 ${cash.length} 份 ￥${f(fen(cash))}`;
+  if (mixed.length) {
+    const n = new Set(mixed.map(r => r.batchId)).size;
+    s += `　其中转账+现金 ${n} 批：转账 ￥${f(fen(mixed.filter(r => r.payMethod !== 'cash')))}、现金 ￥${f(fen(mixed.filter(r => r.payMethod === 'cash')))}`;
+  }
+  return s;
 }
 
 /** 副标题：主家 / 礼簿日期 / 统计区间 */
@@ -278,6 +296,7 @@ function subtitleLines(meta) {
   if (meta.startDay && meta.endDay) {
     lines.push(`统计区间：${meta.startDay} 至 ${meta.endDay}${meta.themeName ? '　礼簿：' + meta.themeName : ''}`);
   }
+  if (meta.methodLine) lines.push(meta.methodLine);
   lines.push(`导出时间：${meta.exportedAt}　由微信小程序「慧礼记」生成`);
   return lines;
 }
@@ -314,7 +333,8 @@ const COLS = [ // 合计宽度 515，不超过 595.28 - 80（按用户要求不�
   { key: 'themeName', title: '礼簿', w: 64 },
   { key: 'remark', title: '礼品/备注', w: 153 }
 ];
-const methodText = r => (r.payMethod === 'cash' ? '现金' : '微信');
+// 「转账+现金」批次的记录标「混」，礼台登记的微信标「礼台」
+const methodText = r => (r.payMethod === 'cash' ? '现金' : (r.deskEntry && !r.payerOpenid ? '微信(礼台)' : '微信')) + (r.batchPay === 'mixed' ? '·混' : '');
 
 /** 按整本礼簿导出时标题已含礼簿名，不再重复「礼簿」列，宽度并入礼品/备注；按日期跨礼簿导出时保留 */
 function colsFor(meta) {

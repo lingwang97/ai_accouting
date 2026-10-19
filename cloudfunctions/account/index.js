@@ -7,7 +7,7 @@ const _ = db.command;
 const accounts = db.collection('accounts');
 const members = db.collection('members');
 const invites = db.collection('invites');
-const { resolveCtx, restricted, readonly, trusted } = require('./ctx.js');
+const { resolveCtx, restricted, readonly, trusted, can, PERMS, ALL_PERMS, DEFAULT_PERMS, cleanPerms } = require('./ctx.js');
 const P = require('./plans.js');
 const TITLES = ['', '礼台', '收银', '主管']; // 机构版礼台人员岗位
 const INVITE_TTL = 7 * 24 * 3600 * 1000; // 邀请 7 天内有效
@@ -62,7 +62,9 @@ exports.main = async (event) => {
       case 'setOrgMode':
         return await setOrgMode(OPENID, event.orgMode === true, event.orgName);
       case 'memberUpdate':
-        return await memberUpdate(OPENID, event.memberId, event.title, event.bookIds);
+        return await memberUpdate(OPENID, event.memberId, event.title, event.bookIds, event.allBooks, event.perms);
+      case 'setTheme':
+        return await setTheme(OPENID, event.primary);
       case 'leave':
         return await leave(OPENID, event.aid);
       case 'switch':
@@ -92,9 +94,11 @@ async function getMine(openid, withPayCode) {
   // 收款码由主家（或移交前的记账人）上传，云存储只有上传者可读：预览链接由云函数生成
   // 只有主家信息页、礼簿码页需要（withPayCode），其余页面省掉这次调用
   let account = ctx.account && safeAccount(ctx.account, ctx);
-  if (withPayCode && account && account.payCodeFileID) {
+  // 没有「修改主家信息」权限的记账人看不到收款码文件，但可以看预览（申请更换收款码时对照）；家人不返回
+  const codeId = ctx.account && ctx.account.payCodeFileID;
+  if (withPayCode && account && codeId && (can(ctx, 'info') || can(ctx, 'paycode') || can(ctx, 'show'))) {
     try {
-      const t = await cloud.getTempFileURL({ fileList: [account.payCodeFileID] });
+      const t = await cloud.getTempFileURL({ fileList: [codeId] });
       const f = t.fileList && t.fileList[0];
       account = { ...account, payCodeUrl: (f && f.status === 0 && f.tempFileURL) || '' };
     } catch (e) { /* 预览失败不影响使用 */ }
@@ -102,8 +106,9 @@ async function getMine(openid, withPayCode) {
   return ok({
     account,
     role: ctx.role,                  // owner 主家本人 | clerk 记账人 | viewer 家人共享 | none 尚未完善
-    restricted: restricted(ctx),     // 只负责部分场次 / 家人共享：不能管理主家信息、礼簿、人员
+    restricted: restricted(ctx),     // 只负责部分礼簿（数据范围受限）/ 家人共享
     readonly: readonly(ctx),         // 家人共享：只读
+    perms: ctx.perms || [],          // 拥有的权限（主家为全部，见 ctx.PERMS）
     // 主家：待处理的入伙申请数（工作台提醒）
     pendingMembers: ctx.role === 'owner' ? (await members.where({ aid: ctx.account._id, status: 'pending' }).count()).total : 0,
     lastNotify: (ctx.user && ctx.user.lastNotify) || null, // 最近一次新礼金提醒的发送结果
@@ -112,11 +117,11 @@ async function getMine(openid, withPayCode) {
 }
 
 /**
- * 返回给前端的主家信息：去掉内部字段；只负责部分场次的人员与家人看不到收款码文件
+ * 返回给前端的主家信息：去掉内部字段；没有「修改主家信息」权限的记账人与家人看不到收款码文件
  */
 function safeAccount(a, ctx) {
   const { ownerOpenid, transferredFrom, transferPending, _openid, pendingPayCode, ...rest } = a;
-  if (restricted(ctx)) { delete rest.payCodeFileID; delete rest.payCodeBy; }
+  if (!can(ctx, 'info')) { delete rest.payCodeFileID; delete rest.payCodeBy; }
   return { ...rest, hasPendingPayCode: !!pendingPayCode };
 }
 
@@ -145,7 +150,10 @@ async function save(openid, event) {
 
   // own=true：操作本人自己的主家信息（记账人新建自己的礼簿）；否则按当前身份
   let ctx = await resolveCtx(db, openid);
-  if (event.own !== true && restricted(ctx)) return err('你只负责部分场次，无权修改主家信息');
+  if (event.own !== true && readonly(ctx)) return err('家人共享为只读，不能修改');
+  // 没有「修改主家信息」权限的记账人：有「申请更换收款码」权限时只能申请更换收款码（主家确认后生效）
+  const codeOnly = event.own !== true && ctx.account && !can(ctx, 'info');
+  if (codeOnly && !can(ctx, 'paycode')) return err('你没有修改主家信息的权限');
   if (event.own === true && ctx.role !== 'owner') {
     const mine = (await accounts.where({ ownerOpenid: openid, _openid: _.exists(false) }).limit(1).get()).data[0] || null;
     ctx = { role: mine ? 'owner' : 'none', ownerOpenid: openid, account: mine, user: ctx.user };
@@ -154,6 +162,7 @@ async function save(openid, event) {
 
   // 收款码关系到钱进谁的账户：新上传的必须是本人刚上传的图片（不能填别人的文件）
   const codeChanged = !ctx.account || payCodeFileID !== ctx.account.payCodeFileID;
+  if (codeOnly && !codeChanged) return err('请上传新的收款码');
   if (codeChanged) {
     if (!ownPayCode(payCodeFileID, openid)) return err('收款码图片无效，请重新上传');
     try {
@@ -172,7 +181,9 @@ async function save(openid, event) {
     // 主家在「主家信息」页亲自选过主题色才作为全局主色（旧账号的默认绿色不算）
     chosen: (event.theme || {}).chosen === true
   };
-  const data = { accountName, theme, updatedAt: db.serverDate() };
+  const data = { accountName, updatedAt: db.serverDate() };
+  // 主题色在「外观设置」单独修改（setTheme）；未传时保持原值，新建主家信息用默认
+  if (event.theme || !ctx.account) data.theme = theme;
   // 收款模式：longpress=付款方手机长按识别收款码（原模式）；screen=店主亮屏双码（新模式）。未传则保持原值
   if (PAY_MODES.includes(event.payMode)) data.payMode = event.payMode;
   // 礼金快捷金额（宾客随礼页一键选择），未传则保持原值
@@ -196,6 +207,11 @@ async function save(openid, event) {
     const added = await accounts.add({ data: { ownerOpenid: openid, ...data, createdAt: db.serverDate() } });
     await setCurrent(openid, added._id);
     return ok({ account: safeAccount({ _id: added._id, ownerOpenid: openid, ...data }, ctx) });
+  }
+  if (codeOnly) {
+    const by = handlerOf(ctx);
+    await accounts.doc(ctx.account._id).update({ data: { pendingPayCode: { fileID: payCodeFileID, by, byOpenid: openid, at: new Date() }, payCodeCheck: true, payCodeBy: by } });
+    return ok({ account: safeAccount({ ...ctx.account, pendingPayCode: true }, ctx), pendingPayCode: true });
   }
   // 记账人更换收款码：先存为待确认，主家在「主家信息」页核对采用后才生效，宾客仍转到原收款码
   let pendingCode = false;
@@ -296,9 +312,9 @@ async function payCodeDecide(openid, target, approve) {
 async function createInvite(openid, type, opts = {}) {
   const ctx = await resolveCtx(db, openid);
   if (!ctx.account) return err('请先完善主家信息');
-  if (restricted(ctx)) return err('你只负责部分场次，无权邀请人员');
   type = ['transfer', 'viewer'].includes(type) ? type : 'clerk';
   if (type === 'transfer' && ctx.role !== 'owner') return err('只有主家本人可以移交');
+  if (!can(ctx, 'members')) return err('你没有邀请记账人的权限');
   const now = new Date();
   const data = {
     type, aid: ctx.account._id, ownerOpenid: ctx.ownerOpenid, fromOpenid: openid,
@@ -309,9 +325,18 @@ async function createInvite(openid, type, opts = {}) {
     data.maxUses = Math.max(1, Math.min(INVITE_USES_MAX, Math.floor(Number(opts.maxUses)) || INVITE_USES));
     data.uses = 0;
   }
+  if (type === 'clerk') {
+    // 负责的礼簿 + 授予的权限；都不能超出邀请人自己拥有的
+    const scope = await pickScope(ctx, opts.bookIds, opts.allBooks === true, [ctx.account.activeBookId]);
+    if (scope.error) return err(scope.error);
+    Object.assign(data, scope);
+    const perms = grantable(ctx, opts.perms);
+    if (perms.error) return err(perms.error);
+    data.perms = perms.perms;
+  }
   if (type === 'viewer') {
-    // 礼簿共享：只共享选中的礼簿
-    const want = Array.isArray(opts.bookIds) ? opts.bookIds.slice(0, 100).map(String) : [];
+    // 礼簿共享：只共享选中的礼簿（只能共享自己负责的）
+    const want = (Array.isArray(opts.bookIds) ? opts.bookIds.slice(0, 100).map(String) : []).filter(id => !ctx.bookIds || ctx.bookIds.includes(id));
     const picked = want.length
       ? (await db.collection('books').where({ _id: _.in(want), ownerOpenid: ctx.ownerOpenid }).get()).data
       : [];
@@ -332,7 +357,37 @@ async function createInvite(openid, type, opts = {}) {
     await invites.where({ aid: ctx.account._id, type: 'transfer', used: false }).update({ data: { used: true, voided: true } });
   }
   const added = await invites.add({ data });
-  return ok({ token: added._id, type, accountName: ctx.account.accountName, full: !!data.full, books: data.books || [], maxUses: data.maxUses || 1 });
+  return ok({ token: added._id, type, accountName: ctx.account.accountName, full: !!data.full, books: data.books || [], allBooks: !!data.allBooks, perms: data.perms || [], maxUses: data.maxUses || 1 });
+}
+
+/**
+ * 记账人负责的礼簿：allBooks 为全部（含以后新建的）；不能超出操作人自己负责的
+ * 返回 { allBooks: true, bookIds: [] } 或 { bookIds, books }，未选时用 fallback
+ */
+async function pickScope(ctx, bookIds, allBooks, fallback) {
+  if (allBooks) {
+    if (ctx.bookIds) return { error: '你只负责部分礼簿，不能授予全部礼簿' };
+    return { allBooks: true, bookIds: [], books: [] };
+  }
+  let want = Array.isArray(bookIds) && bookIds.length ? bookIds.slice(0, 100).map(String) : (fallback || []).filter(Boolean);
+  if (ctx.bookIds) want = want.filter(id => ctx.bookIds.includes(id));
+  const picked = want.length
+    ? (await db.collection('books').where({ _id: _.in(want), ownerOpenid: ctx.ownerOpenid }).get()).data
+    : [];
+  if (!picked.length) return { error: '请选择记账人负责的礼簿' };
+  return {
+    allBooks: false,
+    bookIds: picked.map(b => b._id),
+    books: picked.map(b => ({ name: b.hostName ? `${b.hostName} · ${b.name}` : b.name, count: b.statCount || 0, sum: (b.statFen || 0) / 100 }))
+  };
+}
+
+/** 可授予的权限：未传时为默认权限；只能授予操作人自己拥有的 */
+function grantable(ctx, perms) {
+  const want = cleanPerms(perms) || DEFAULT_PERMS.slice();
+  const out = want.filter(k => can(ctx, k));
+  if (!out.length) return { error: '请至少授予一项权限' };
+  return { perms: out };
 }
 
 /** 邀请详情（接受前展示） */
@@ -344,6 +399,8 @@ async function inviteInfo(token) {
     type: inv.type, accountName: inv.accountName, fromName: inv.fromName, used: inv.used, expired: inv.expiresAt < new Date(),
     full: inv.type === 'transfer' ? inv.full !== false : undefined, // 旧版移交邀请没有 full 字段，视为整体移交（家人共享无此字段）
     books: inv.books || [],
+    allBooks: !!inv.allBooks,
+    perms: inv.type === 'clerk' ? (inv.perms || DEFAULT_PERMS).map(k => PERMS[k]).filter(Boolean) : [], // 授予的权限（显示名）
     stayClerk: inv.stayClerk !== false,
     maxUses: inv.type === 'transfer' ? 1 : max,
     left: inv.type === 'transfer' ? (inv.used ? 0 : 1) : Math.max(0, max - (inv.uses || 0)),
@@ -377,6 +434,8 @@ async function acceptInvite(openid, token, displayName) {
 
   if (inv.type === 'viewer' || inv.type === 'clerk') {
     const viewer = inv.type === 'viewer';
+    // 记账人必须填写真实姓名（回执、小票、对账单上显示，便于主家辨认是谁确认 / 登记的）
+    if (!viewer && !realName(dn)) return err('请填写记账人的真实姓名（2～12 个字）');
     if (acc.ownerOpenid === openid) return err(viewer ? '你就是这位主家，无需接受共享' : '你就是这位主家，无需加入');
     // 邀请卡可能被转发：发出邀请的人须仍是这位主家或其记账人（被移除的记账人发过的卡随之失效）
     if (inv.fromOpenid !== acc.ownerOpenid) {
@@ -391,8 +450,13 @@ async function acceptInvite(openid, token, displayName) {
         // 已共享过：合并新共享的礼簿
         const ids = [...new Set((exist.bookIds || []).concat(inv.bookIds || []))];
         await members.doc(exist._id).update({ data: { bookIds: ids } });
-      } else if (dn) {
-        await members.doc(exist._id).update({ data: { displayName: dn } });
+      } else {
+        // 已是记账人：合并新邀请的礼簿（任一张为全部礼簿则为全部）
+        const upd = dn ? { displayName: dn } : {};
+        if (inv.allBooks) upd.allBooks = true;
+        else if (!exist.allBooks && inv.bookIds) upd.bookIds = [...new Set((exist.bookIds || []).concat(inv.bookIds))];
+        if (inv.perms) upd.perms = [...new Set((cleanPerms(exist.perms) || DEFAULT_PERMS).concat(inv.perms))];
+        if (Object.keys(upd).length) await members.doc(exist._id).update({ data: upd });
       }
       await setCurrent(openid, acc._id);
       return ok({ type: inv.type, aid: acc._id, accountName: acc.accountName });
@@ -402,7 +466,8 @@ async function acceptInvite(openid, token, displayName) {
     await members.add({
       data: {
         aid: acc._id, ownerOpenid: acc.ownerOpenid, memberOpenid: openid, role: viewer ? 'viewer' : 'clerk',
-        ...(viewer ? { bookIds: inv.bookIds || [] } : {}),
+        ...(viewer ? { bookIds: inv.bookIds || [] } : (inv.allBooks ? { allBooks: true, bookIds: [] } : { bookIds: inv.bookIds || [] })),
+        ...(viewer ? {} : { perms: cleanPerms(inv.perms) || DEFAULT_PERMS.slice() }),
         displayName: dn, status: 'pending', inviteId: inv._id, inviteFrom: inv.fromName || '', createdAt: new Date()
       }
     });
@@ -481,7 +546,8 @@ async function resumeTransfer(acc, openid) {
   await members.where({ aid: acc._id, memberOpenid: openid }).remove();
   if (tp.stayClerk !== false) {
     const exist = await members.where({ aid: acc._id, memberOpenid: oldOwner }).count();
-    if (!exist.total) await members.add({ data: { aid: acc._id, ownerOpenid: openid, memberOpenid: oldOwner, role: 'clerk', createdAt: new Date() } });
+    // 原主家熟悉全部礼簿：继续为对方记账时负责全部礼簿
+    if (!exist.total) await members.add({ data: { aid: acc._id, ownerOpenid: openid, memberOpenid: oldOwner, role: 'clerk', allBooks: true, bookIds: [], createdAt: new Date() } });
   }
   // 移交过程中宾客新随的礼仍可能记在原主家名下：再补一轮
   await moveAll('records');
@@ -597,8 +663,10 @@ async function transferBooks(inv, acc, openid) {
     await accounts.doc(acc._id).update({ data: { activeBookId: '', forwardTo: mine._id } });
   }
   if (inv.stayClerk !== false) {
-    const exist = await members.where({ aid: mine._id, memberOpenid: oldOwner }).count();
-    if (!exist.total) await members.add({ data: { aid: mine._id, ownerOpenid: openid, memberOpenid: oldOwner, role: 'clerk', createdAt: new Date() } });
+    // 部分移交：原主家负责移交过去的这几本礼簿
+    const exist = (await members.where({ aid: mine._id, memberOpenid: oldOwner }).limit(1).get()).data[0];
+    if (!exist) await members.add({ data: { aid: mine._id, ownerOpenid: openid, memberOpenid: oldOwner, role: 'clerk', bookIds: ids, createdAt: new Date() } });
+    else if (!exist.allBooks) await members.doc(exist._id).update({ data: { bookIds: [...new Set((exist.bookIds || []).concat(ids))] } });
   }
   // 移交过程中宾客新随的礼：再补一轮
   await move('records', { bookId: _.in(ids), ownerOpenid: oldOwner }, { ownerOpenid: openid, aid: mine._id });
@@ -648,7 +716,10 @@ async function listMembers(openid) {
       avatar: (u[ctx.account.ownerOpenid] || {}).avatar || '',
       me: ctx.account.ownerOpenid === openid
     },
-    canManage: !restricted(ctx),
+    canManage: can(ctx, 'members'),
+    myPerms: ctx.perms || [],        // 自己拥有的权限（邀请 / 设置他人时只能授予这些）
+    myAllBooks: !ctx.bookIds,        // 自己是否负责全部礼簿
+    permNames: PERMS,
     list: ms.map(m => ({
       _id: m._id,
       name: m.displayName || (u[m.memberOpenid] || {}).nickname || '记账人', // 记账名称优先
@@ -656,23 +727,27 @@ async function listMembers(openid) {
       avatar: (u[m.memberOpenid] || {}).avatar || '',
       me: m.memberOpenid === openid,
       title: m.title || '',          // 机构版：岗位
-      bookIds: m.bookIds || [],      // 机构版：负责的场次（空为全部）
+      bookIds: m.bookIds || [],      // 负责的礼簿
+      allBooks: !!m.allBooks,        // 全部礼簿（含以后新建的）
+      perms: cleanPerms(m.perms) || (m.allBooks ? ALL_PERMS : DEFAULT_PERMS), // 授予的权限
       createdAt: m.createdAt
     }))
   });
 }
 
-/** 移除记账人（主家与记账人权限相同；记账人移除自己用 leave） */
+/** 移除记账人 / 取消家人共享（主家或有「邀请与管理记账人」权限的记账人；记账人移除自己用 leave） */
 async function removeMember(openid, memberId) {
   const ctx = await resolveCtx(db, openid);
   if (!ctx.account) return err('请先完善主家信息');
-  if (restricted(ctx)) return err('你只负责部分场次，无权管理人员');
+  if (!can(ctx, 'members')) return err('你没有管理记账人的权限');
   const res = await members.where({ _id: String(memberId || ''), aid: ctx.account._id }).remove();
   if (!res.stats.removed) return err('记账人不存在');
   return ok({ removed: 1 });
 }
 
 const cleanName = s => String(s || '').trim().slice(0, 12);
+// 真实姓名：2～12 个字，不能是微信默认昵称
+const realName = s => s.length >= 2 && !/^(微信用户|记账人|wx|用户)\d*$/i.test(s);
 
 /**
  * 设置记账名称（回执、小票、对账单上显示，便于辨认是谁确认 / 登记的）
@@ -683,6 +758,8 @@ async function setHandlerName(openid, memberId, name) {
   const ctx = await resolveCtx(db, openid);
   if (!ctx.account) return err('请先完善主家信息');
   const n = cleanName(name);
+  // 记账人的名称须为真实姓名（主家本人、家人不限）
+  if (!memberId && ctx.role === 'clerk' && !realName(n)) return err('请填写记账人的真实姓名（2～12 个字）');
   if (!memberId) {
     if (ctx.role === 'owner') {
       await accounts.doc(ctx.account._id).update({ data: { ownerHandlerName: n } });
@@ -696,7 +773,8 @@ async function setHandlerName(openid, memberId, name) {
   }
   const m = (await members.where({ _id: String(memberId), aid: ctx.account._id }).limit(1).get()).data[0];
   if (!m) return err('人员不存在');
-  if (m.memberOpenid !== openid && restricted(ctx)) return err('你只负责部分场次，无权修改他人');
+  if (m.memberOpenid !== openid && !can(ctx, 'members')) return err('你没有管理记账人的权限');
+  if (m.role !== 'viewer' && !realName(n)) return err('请填写记账人的真实姓名（2～12 个字）');
   await members.doc(m._id).update({ data: { displayName: n } });
   return ok({ name: n });
 }
@@ -705,7 +783,7 @@ async function setHandlerName(openid, memberId, name) {
 async function setOrgMode(openid, on, orgName) {
   const ctx = await resolveCtx(db, openid);
   if (!ctx.account) return err('请先完善主家信息');
-  if (restricted(ctx)) return err('你只负责部分场次，无权修改');
+  if (ctx.role !== 'owner') return err('只有主家本人可以设置机构模式');
   if (on) {
     const plan = await P.planOf(db, ctx.ownerOpenid);
     if (!plan.features.org) return err('机构模式属于机构版功能，请联系我们开通');
@@ -716,11 +794,21 @@ async function setOrgMode(openid, on, orgName) {
   return ok({ orgMode: on, orgName: data.orgName !== undefined ? data.orgName : (ctx.account.orgName || '') });
 }
 
+/** 外观设置：主题色（只有主家本人可改，记账人、家人看到的是主家选的颜色） */
+async function setTheme(openid, primary) {
+  const ctx = await resolveCtx(db, openid);
+  if (ctx.role !== 'owner') return err('只有主家本人可以修改主题色');
+  if (!/^#[0-9a-fA-F]{6}$/.test(String(primary || ''))) return err('颜色不正确');
+  const theme = { ...(ctx.account.theme || { name: '默认主题', bg: '#F7F7F7' }), primary, chosen: true };
+  await accounts.doc(ctx.account._id).update({ data: { theme: _.set(theme), updatedAt: db.serverDate() } });
+  return ok({ account: safeAccount({ ...ctx.account, theme }, ctx) });
+}
+
 /** 礼簿共享：已共享的家人及其可查看的礼簿 */
 async function listViewers(openid) {
   const ctx = await resolveCtx(db, openid);
   if (!ctx.account) return err('请先完善主家信息');
-  if (restricted(ctx)) return err('无权查看');
+  if (!can(ctx, 'members')) return err('无权查看');
   const ms = (await members.where({ aid: ctx.account._id, role: 'viewer' }).limit(100).get()).data.filter(m => m.status !== 'pending');
   const users = {};
   if (ms.length) {
@@ -738,21 +826,40 @@ async function listViewers(openid) {
   });
 }
 
-/** 机构版：设置礼台人员的岗位与负责场次（bookIds 为空表示负责全部场次） */
-async function memberUpdate(openid, memberId, title, bookIds) {
+/**
+ * 设置记账人负责的礼簿（allBooks 为全部，含以后新建的）、权限（perms）与岗位（机构版）；家人共享只改共享的礼簿
+ * 主家或有「邀请与管理记账人」权限的记账人可改，只能授予自己拥有的权限与礼簿，不能改自己
+ */
+async function memberUpdate(openid, memberId, title, bookIds, allBooks, perms) {
   const ctx = await resolveCtx(db, openid);
   if (!ctx.account) return err('请先完善主家信息');
-  if (restricted(ctx)) return err('你只负责部分场次，无权管理人员');
+  if (!can(ctx, 'members')) return err('你没有管理记账人的权限');
   const m = (await members.where({ _id: String(memberId || ''), aid: ctx.account._id }).limit(1).get()).data[0];
   if (!m) return err('人员不存在');
+  if (m.memberOpenid === openid) return err('不能修改自己的权限');
   const data = {};
   if (title !== undefined) data.title = TITLES.includes(title) ? title : '';
-  if (bookIds !== undefined) {
-    const want = Array.isArray(bookIds) ? bookIds.slice(0, 100).map(String) : [];
-    const own = want.length
-      ? (await db.collection('books').where({ _id: _.in(want), ownerOpenid: ctx.ownerOpenid }).field({ _id: true }).get()).data.map(b => b._id)
-      : [];
-    data.bookIds = own;
+  if (bookIds !== undefined || allBooks !== undefined) {
+    if (m.role === 'viewer') {
+      const want = (Array.isArray(bookIds) ? bookIds.slice(0, 100).map(String) : []).filter(id => !ctx.bookIds || ctx.bookIds.includes(id));
+      data.bookIds = want.length
+        ? (await db.collection('books').where({ _id: _.in(want), ownerOpenid: ctx.ownerOpenid }).field({ _id: true }).get()).data.map(b => b._id)
+        : [];
+    } else {
+      // 未传 allBooks 时沿用旧约定：空列表为全部礼簿（机构版场次设置）
+      const all = allBooks === true || (allBooks === undefined && !(Array.isArray(bookIds) && bookIds.length));
+      const scope = await pickScope(ctx, bookIds, all, []);
+      if (scope.error) return err(scope.error);
+      data.allBooks = scope.allBooks;
+      data.bookIds = scope.bookIds;
+    }
+  }
+  if (perms !== undefined && m.role !== 'viewer') {
+    const g = grantable(ctx, perms);
+    if (g.error) return err(g.error);
+    // 对方已有、而操作人自己没有的权限：操作人无权收回，原样保留
+    const kept = (cleanPerms(m.perms) || (m.allBooks ? ALL_PERMS : DEFAULT_PERMS)).filter(k => !can(ctx, k));
+    data.perms = ALL_PERMS.filter(k => g.perms.includes(k) || kept.includes(k));
   }
   await members.doc(m._id).update({ data });
   return ok({ _id: m._id, ...data });
@@ -827,6 +934,7 @@ async function purge(openid, confirm) {
     records: await removeAll('records', { ownerOpenid: openid }),
     books: await removeAll('books', { ownerOpenid: openid }),
     gifts_out: await removeAll('gifts_out', { ownerOpenid: openid }),
+    reminders: await removeAll('reminders', { ownerOpenid: openid }),
     print_templates: await removeAll('print_templates', { ownerOpenid: openid }),
     accounts: await removeAll('accounts', { ownerOpenid: openid }),
     members: (await removeAll('members', { ownerOpenid: openid })) + (await removeAll('members', { memberOpenid: openid })),

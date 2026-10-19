@@ -25,9 +25,9 @@
       <picker range="{{relations}}" value="{{relIdx}}" bindchange="onRelation">
         <view class="rel-btn {{relIdx > 0 ? 'on' : ''}}">{{relIdx > 0 ? relations[relIdx] : '关系'}} ▾</view>
       </picker>
-      <view class="export-btn" bindtap="goExport">导出</view>
+      <view class="export-btn" wx:if="{{pm.export || readonly}}" bindtap="goExport">导出</view>
     </view>
-    <view class="cash-entry" wx:if="{{!readonly}}" bindtap="goCash">＋ 登记现金（礼台记账）
+    <view class="cash-entry" wx:if="{{!readonly && pm.desk}}" bindtap="goCash">＋ 礼台记账（现金 / 微信）
     </view>
   </view>
 
@@ -50,7 +50,7 @@
     <view class="r-actions" wx:if="{{item.status === 'transferred'}}">
       <text class="badge warn">{{item.statusText}}</text>
       <view class="flex1"></view>
-      <block wx:if="{{!readonly}}">
+      <block wx:if="{{!readonly && pm.confirm}}">
         <view class="link danger" data-idx="{{index}}" bindtap="onReject">未收到</view>
         <button class="btn-confirm" data-idx="{{index}}" bindtap="onConfirm">确认收到</button>
       </block>
@@ -65,13 +65,11 @@
     <!-- 已入簿 -->
     <view class="r-actions" wx:elif="{{item.status === 'paid'}}">
       <text class="badge ok">{{item.statusText}}</text>
-      <text class="badge {{item.printed ? 'ok' : 'warn'}}" wx:if="{{!readonly}}">{{item.printed ? '已打印' : '待打印'}}</text>
+      <text class="badge {{item.printed ? 'ok' : 'warn'}}" wx:if="{{!readonly && pm.show}}">{{item.printed ? '已打印' : '待打印'}}</text>
       <view class="flex1"></view>
       <view class="link" data-id="{{item._id}}" bindtap="onReceipt">回执</view>
-      <block wx:if="{{!readonly}}">
-        <view class="link" data-idx="{{index}}" bindtap="onPrint">{{item.printed ? '补打' : '打印'}}</view>
-        <view class="link danger" data-idx="{{index}}" bindtap="onVoid">作废</view>
-      </block>
+      <view class="link" wx:if="{{!readonly && pm.show}}" data-idx="{{index}}" bindtap="onPrint">{{item.printed ? '补打' : '打印'}}</view>
+      <view class="link danger" wx:if="{{!readonly && pm.void}}" data-idx="{{index}}" bindtap="onVoid">作废</view>
     </view>
   </view>
 

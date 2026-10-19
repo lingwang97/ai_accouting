@@ -14,14 +14,14 @@
     <!-- 当前礼簿 -->
     <view class="book-card" bindtap="goRecords">
       <view class="bc-top">
-        <view class="bc-title" catchtap="{{restricted ? '' : 'onSwitchBook'}}">
+        <view class="bc-title" catchtap="{{canSwitch ? 'onSwitchBook' : ''}}">
           <view class="bc-name">{{book ? (book.hostName ? book.hostName + ' · ' + book.name : book.name) : '我的礼簿'}}</view>
           <view class="bc-meta" wx:if="{{book}}">{{book.typeLabel}}<text wx:if="{{book.date}}"> · {{book.date}}</text></view>
         </view>
-        <view class="bc-switch-btn" wx:if="{{!restricted}}" hover-class="bc-switch-hover" catchtap="onSwitchBook">⇅ 切换礼簿</view>
+        <view class="bc-switch-btn" wx:if="{{canSwitch}}" hover-class="bc-switch-hover" catchtap="onSwitchBook">⇅ 切换礼簿</view>
       </view>
       <view class="bc-label">礼金合计</view>
-      <view class="bc-sum">￥{{book ? book.sumStr : '0.00'}}</view>
+      <view class="bc-sum {{book ? book.sumCls : ''}}">￥{{book ? book.sumStr : '0.00'}}</view>
       <view class="bc-foot">
         <text>{{book ? book.count : 0}} 份</text>
         <text>今日 ￥{{todaySum}} · {{todayCount}} 份</text>
@@ -60,24 +60,24 @@
       </view>
     </view>
 
-    <!-- 四个常用操作 -->
-    <view class="grid" wx:else>
-      <view class="g-item" hover-class="g-hover" bindtap="goQrcode">
+    <!-- 四个常用操作（记账人按权限显示；隐藏部分后仍两列排列） -->
+    <view class="grid" wx:elif="{{pm.show || pm.confirm || pm.desk}}">
+      <view class="g-item" hover-class="g-hover" wx:if="{{pm.show}}" bindtap="goQrcode">
         <view class="g-icon"><image src="/assets/icons/qrcode-w.svg" /></view>
         <view class="g-title">出示礼簿码</view>
         <view class="g-sub">双码展示 · 台卡</view>
       </view>
-      <view class="g-item" hover-class="g-hover" bindtap="goPending">
+      <view class="g-item" hover-class="g-hover" wx:if="{{pm.confirm}}" bindtap="goPending">
         <view class="g-icon"><image src="/assets/icons/check-w.svg" /><text class="g-badge" wx:if="{{pendingCount > 0}}">{{pendingCount}}</text></view>
         <view class="g-title">待确认</view>
         <view class="g-sub {{pendingCount > 0 ? 'hot' : ''}}">{{pendingCount > 0 ? pendingCount + ' 份 ￥' + pendingSum : '暂无'}}</view>
       </view>
-      <view class="g-item" hover-class="g-hover" bindtap="goCash">
+      <view class="g-item" hover-class="g-hover" wx:if="{{pm.desk}}" bindtap="goCash">
         <view class="g-icon"><image src="/assets/icons/cash-w.svg" /></view>
-        <view class="g-title">登记现金</view>
-        <view class="g-sub">礼台记账</view>
+        <view class="g-title">礼台记账</view>
+        <view class="g-sub">现金 / 微信代登记</view>
       </view>
-      <view class="g-item" hover-class="g-hover" bindtap="goPrinter">
+      <view class="g-item" hover-class="g-hover" wx:if="{{pm.show}}" bindtap="goPrinter">
         <view class="g-icon"><image src="/assets/icons/printer-w.svg" /></view>
         <view class="g-title">打印机</view>
         <view class="g-sub {{printerName ? 'ok' : ''}}">{{printerName ? '已连接' : '未连接'}}</view>
@@ -86,7 +86,7 @@
 
     <!-- 次常用 -->
     <view class="card links" wx:if="{{!readonly}}">
-      <view class="link-item" bindtap="goReconcile"><image src="/assets/icons/receipt-m.svg" /><text>一键对账</text></view>
+      <view class="link-item" wx:if="{{pm.export}}" bindtap="goReconcile"><image src="/assets/icons/receipt-m.svg" /><text>一键对账</text></view>
       <view class="link-item" bindtap="goBooks"><image src="/assets/icons/book-m.svg" /><text>{{account.orgMode ? '场次管理' : '礼簿管理'}}</text></view>
       <view class="link-item" wx:if="{{account.orgMode}}" bindtap="goOrgSummary"><image src="/assets/icons/layers-m.svg" /><text>场次汇总</text></view>
     </view>

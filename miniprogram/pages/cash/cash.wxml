@@ -12,7 +12,17 @@
     <switch checked="{{batchMode}}" bindchange="onBatchMode" color="#C8161D" />
   </view>
   <view class="card">
-    <batch-list wx:if="{{batchMode}}" id="batch" quick="{{quick}}" bindchange="onBatchChange" />
+    <view class="field">
+      <text class="label">收款方式</text>
+      <view class="chips">
+        <view class="chip {{payMethod === 'cash' ? 'on' : ''}}" data-m="cash" bindtap="onPayMethod">💵 现金</view>
+        <view class="chip {{payMethod === 'wechat' ? 'on' : ''}}" data-m="wechat" bindtap="onPayMethod">微信</view>
+        <view class="chip {{payMethod === 'mixed' ? 'on' : ''}}" wx:if="{{batchMode}}" data-m="mixed" bindtap="onPayMethod">转账+现金</view>
+      </view>
+      <view class="muted" wx:if="{{payMethod === 'wechat'}}">宾客当面向主家收款码转账，看到到账后再登记，登记即入簿</view>
+      <view class="muted" wx:if="{{payMethod === 'mixed'}}">在下方名单里为每位选「转账」或「现金」</view>
+    </view>
+    <batch-list wx:if="{{batchMode}}" id="batch" quick="{{quick}}" mixed="{{payMethod === 'mixed'}}" bindchange="onBatchChange" />
     <block wx:else>
       <view class="field">
         <text class="label">随礼人 *</text>
@@ -25,7 +35,7 @@
         </view>
       </view>
       <view class="field">
-        <text class="label">现金金额 *</text>
+        <text class="label">{{payMethod === 'wechat' ? '微信金额' : '现金金额'}} *</text>
         <view class="chips">
           <view class="chip {{amount == item ? 'on' : ''}}" wx:for="{{quick}}" wx:key="*this" data-v="{{item}}" bindtap="onQuick">{{item}}</view>
         </view>
@@ -41,9 +51,9 @@
   <button class="btn-primary" loading="{{saving}}" bindtap="onSave">{{batchMode ? '全部入簿，登记下一批' : '入簿，登记下一位'}}</button>
 
   <view class="done" wx:if="{{done.length}}">
-    <view class="section-title">本次已登记 {{doneCount}} 份 · 现金 ￥{{doneSum}}</view>
+    <view class="section-title">本次已登记 {{doneCount}} 份 · 合计 ￥{{doneSum}}</view>
     <view class="done-item" wx:for="{{done}}" wx:key="_id" data-id="{{item._id}}" bindtap="onReceipt">
-      <text>{{item.payerName}}</text>
+      <text>{{item.payerName}}<text class="muted"> · {{item.methodStr}}</text></text>
       <text class="money">￥{{item.amountStr}}</text>
     </view>
   </view>

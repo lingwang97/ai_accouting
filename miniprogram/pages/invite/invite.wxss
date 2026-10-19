@@ -18,3 +18,8 @@
 .dn { text-align: left; margin-bottom: 28rpx; }
 .dn-label { color: #666; font-size: 26rpx; margin-bottom: 10rpx; }
 .dn-input { border: 2rpx solid #e5e5e5; border-radius: 12rpx; padding: 18rpx 20rpx; font-size: 28rpx; }
+/* 记账人邀请：授予的权限（不用 flex gap，用外边距） */
+.perm-label { text-align: left; font-size: 24rpx; margin-bottom: 10rpx; }
+.perms { display: flex; flex-wrap: wrap; margin: 0 -12rpx 12rpx 0; text-align: left; }
+.perm { font-size: 24rpx; color: #555; background: #F2F3F5; border-radius: 999rpx; padding: 6rpx 20rpx; margin: 0 12rpx 12rpx 0; }
+.req { color: #FA5151; }

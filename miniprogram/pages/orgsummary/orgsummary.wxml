@@ -36,7 +36,7 @@
         <text><text class="muted">{{item.count}} 份 · </text><text class="money">￥{{item.sumStr}}</text></text>
       </view>
       <view class="muted center" wx:if="{{!loading && staff.length === 0}}">暂无已入簿的礼金</view>
-      <view class="muted small tip">按"确认收到 / 登记现金"的人统计，便于和各礼台核对现金</view>
+      <view class="muted small tip">按"确认收到 / 礼台记账"的人统计，便于和各礼台核对现金</view>
     </view>
   </block>
 </view>

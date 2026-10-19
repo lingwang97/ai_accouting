@@ -29,8 +29,8 @@
     <block wx:if="{{role !== 'viewer'}}">
     <view class="group-title">收礼设置</view>
     <view class="card menu">
-      <view class="menu-item" bindtap="goAccount" wx:if="{{!restricted}}">
-        <image class="mi-icon" src="/assets/icons/user-m.svg" /><text class="mi-text">主家信息与收款码</text><text class="arrow">›</text>
+      <view class="menu-item" bindtap="goAccount" wx:if="{{role !== 'clerk' || pm.info || pm.paycode}}">
+        <image class="mi-icon" src="/assets/icons/user-m.svg" /><text class="mi-text">{{role === 'clerk' && !pm.info ? '收款码（申请更换）' : '主家信息与收款码'}}</text><text class="arrow">›</text>
       </view>
       <view class="menu-item" bindtap="goMembers" wx:if="{{account}}">
         <image class="mi-icon" src="/assets/icons/people-m.svg" /><text class="mi-text">{{account.orgMode ? '礼台人员' : '记账人'}}</text><text class="arrow"><text class="muted">邀请 / 移交主家</text> ›</text>
@@ -46,19 +46,28 @@
     </view>
 
     </block>
+    <!-- 外观设置：仅主家本人 -->
+    <block wx:if="{{account && role === 'owner'}}">
+      <view class="group-title">外观设置</view>
+      <view class="card menu">
+        <view class="menu-item" bindtap="goAppearance">
+          <image class="mi-icon" src="/assets/icons/layers-m.svg" /><text class="mi-text">主题色</text><text class="arrow">›</text>
+        </view>
+      </view>
+    </block>
     <view class="group-title">打印与回执</view>
     <view class="card menu">
       <view class="menu-item" bindtap="goPrinter">
         <image class="mi-icon" src="/assets/icons/printer-m.svg" /><text class="mi-text">蓝牙打印机</text><text class="arrow"><text class="muted">{{printerName || '未连接'}}</text> ›</text>
       </view>
-      <view class="menu-item" bindtap="goStyle" wx:if="{{account && !readonly}}">
+      <view class="menu-item" bindtap="goStyle" wx:if="{{account && !readonly && pm.style}}">
         <image class="mi-icon" src="/assets/icons/receipt-m.svg" /><text class="mi-text">回执样式</text><text class="arrow"><text class="muted">电子回执 / 打印小票</text> ›</text>
       </view>
     </view>
 
     <view class="group-title">数据</view>
     <view class="card menu">
-      <view class="menu-item" bindtap="goExport" wx:if="{{account && role !== 'viewer'}}">
+      <view class="menu-item" bindtap="goExport" wx:if="{{account && role !== 'viewer' && pm.export}}">
         <image class="mi-icon" src="/assets/icons/export-m.svg" /><text class="mi-text">导出与备份</text><text class="arrow">›</text>
       </view>
       <view class="menu-item" bindtap="onPrivacy">

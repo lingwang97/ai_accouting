@@ -12,7 +12,8 @@
 .cc-name { font-size: 36rpx; font-weight: 700; margin-top: 20rpx; }
 .cc-sum { font-size: 64rpx; font-weight: 700; margin-top: 12rpx; }
 .cc-count { font-size: 24rpx; opacity: .85; }
-.cc-ops { display: flex; gap: 16rpx; margin-top: 28rpx; }
+.cc-ops { display: flex; margin-top: 28rpx; }
+.cc-ops .cc-op:not(:last-child) { margin-right: 16rpx; }
 .cc-op {
   flex: 1; text-align: center; padding: 16rpx 0; border-radius: 12rpx; font-size: 28rpx;
   background: rgba(255, 255, 255, .18); border: 2rpx solid rgba(255, 255, 255, .5);
@@ -21,14 +22,16 @@
 /* 其他礼簿 */
 .group-title { font-size: 24rpx; color: #999; margin: 8rpx 12rpx 12rpx; }
 .book.archived { opacity: .75; }
-.b-top { display: flex; align-items: center; gap: 12rpx; margin-bottom: 8rpx; }
+.b-top { display: flex; align-items: center; margin-bottom: 8rpx; }
+.b-top .tag { margin-left: 12rpx; }
 .b-name { font-size: 32rpx; font-weight: 600; flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .tag { font-size: 22rpx; padding: 2rpx 14rpx; border-radius: 999rpx; background: #f2f3f5; color: #666; flex-shrink: 0; }
 .tag.wedding, .tag.baby, .tag.other { background: #C8161D1A; color: #C8161D; }
 .tag.birthday, .tag.house { background: #B8860B1A; color: #B8860B; }
 .tag.funeral { background: #3333331A; color: #333; }
 .b-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 16rpx; }
-.b-ops { display: flex; align-items: center; gap: 20rpx; }
+.b-ops { display: flex; align-items: center; }
+.b-ops .op-btn:not(:first-child), .b-ops .op-link { margin-left: 20rpx; }
 .op-btn { font-size: 24rpx; color: var(--primary); border: 2rpx solid var(--primary); border-radius: 999rpx; padding: 6rpx 20rpx; }
 .op-link { font-size: 24rpx; color: #576B95; }
 .op-link.gray { color: #999; }
@@ -43,13 +46,15 @@
   padding: 20rpx 24rpx calc(20rpx + env(safe-area-inset-bottom)); box-shadow: 0 -2rpx 12rpx rgba(0, 0, 0, .06);
 }
 /* 底部并排按钮：各占一半，新建实心、共享描边 */
-.bottom-bar { display: flex; gap: 20rpx; }
+.bottom-bar { display: flex; }
+.bottom-bar .bb-btn:not(:last-child) { margin-right: 20rpx; }
 .bb-btn {
   flex: 1; height: 88rpx; border-radius: 16rpx; font-size: 30rpx; font-weight: 600;
-  display: flex; align-items: center; justify-content: center; gap: 10rpx; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center; box-sizing: border-box;
 }
 .bb-btn.solid { background: var(--primary); color: #fff; }
 .bb-btn.outline { background: #fff; color: var(--primary); border: 2rpx solid var(--primary); }
 .bb-hover { opacity: .8; }
 .bb-plus { font-size: 34rpx; line-height: 1; }
 .bb-icon { width: 36rpx; height: 36rpx; }
+.bb-plus, .bb-icon { margin-right: 10rpx; }

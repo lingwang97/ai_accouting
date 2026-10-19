@@ -9,7 +9,7 @@ const _ = db.command;
 const books = db.collection('books');
 const accounts = db.collection('accounts');
 const records = db.collection('records');
-const { resolveCtx, canBook, restricted } = require('./ctx.js');
+const { resolveCtx, canBook, restricted, can } = require('./ctx.js');
 
 const TYPES = ['wedding', 'birthday', 'baby', 'house', 'funeral', 'other'];
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -38,9 +38,12 @@ exports.main = async (event) => {
     const account = ctx.account;
     if (!account) return err('请先完善主家信息');
     const OWNER = ctx.ownerOpenid;
-    // 机构版：只负责部分场次的礼台人员只能看到、统计这些礼簿，不能新建 / 修改 / 切换 / 归档
-    const MANAGE = ['save', 'setActive', 'archive', 'saveTpl'];
-    if (MANAGE.includes(event.action) && restricted(ctx)) return err('你只负责部分场次，无权管理礼簿');
+    // 记账人按权限：「管理礼簿」新建 / 修改 / 切换 / 归档，「回执与打印样式」改样式；只能操作负责的礼簿
+    if (['save', 'setActive', 'archive'].includes(event.action) && !can(ctx, 'books')) return err('你没有管理礼簿的权限');
+    if (event.action === 'saveTpl' && !can(ctx, 'style')) return err('你没有修改回执与打印样式的权限');
+    if (event.action === 'save' && event.book && event.book._id && !canBook(ctx, String(event.book._id))) return err('礼簿不存在');
+    if (event.action === 'save' && event.book && !event.book._id && ctx.bookIds) return err('你只负责部分礼簿，不能新建礼簿');
+    if (['setActive', 'archive', 'saveTpl'].includes(event.action) && !canBook(ctx, String(event.bookId || ''))) return err('礼簿不存在');
     if (event.action === 'getTpl' && !event.bookId) event.bookId = account.activeBookId; // 未指定时为当前礼簿，同样校验负责场次
     if (['stats', 'getTpl'].includes(event.action) && event.bookId && !canBook(ctx, String(event.bookId))) return err('礼簿不存在');
     switch (event.action) {
@@ -85,6 +88,7 @@ async function list(openid, account, ctx) {
   return ok({
     activeBookId: canBook(ctx, account.activeBookId) ? (account.activeBookId || '') : '',
     restricted: restricted(ctx),
+    perms: ctx.perms || [],
     list: visible.map(b => ({
       _id: b._id, name: b.name, type: b.type, date: b.date, location: b.location,
       archived: b.archived, archivePdf: b.archivePdf || null,

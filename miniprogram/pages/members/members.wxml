@@ -1,6 +1,6 @@
 <view class="container" style="{{themeStyle}}">
   <view class="card intro muted">
-    记账人可以帮主家记账：查看礼簿、确认收礼、登记现金、打印回执、导出等，与主家权限相同；回执和小票上显示各自的"记账人姓名 / 礼台编号"，点「改名」可修改；
+    每位记账人分别设置：负责哪些礼簿（或全部礼簿，含以后新建的），以及能做哪些事（确认收礼、礼台记账、导出等，可用模板一键选择）。移交、机构模式、外观设置、同意加入和确认收款码只能由主家本人操作。回执和小票上显示各自的"记账人姓名 / 礼台编号"，点「改名」可修改；
     "清除数据"和"人情往来"只属于各自本人。回执和小票上会同时显示主家与记账人。
   </view>
 
@@ -35,16 +35,39 @@
       <image class="avatar" src="{{item.avatar || '/assets/avatar-default.png'}}" mode="aspectFill" />
       <view class="name">{{item.name}}<text class="tag" wx:if="{{item.me}}">我</text><text class="tag" wx:if="{{orgMode && item.title}}">{{item.title}}</text>
         <view class="muted small" wx:if="{{item.nickname && item.nickname !== item.name}}">微信：{{item.nickname}}</view>
-        <view class="muted small" wx:if="{{orgMode}}">负责：{{item.booksText}}</view>
-        <view class="muted small" wx:elif="{{item.timeStr}}">{{item.timeStr}} 加入</view>
+        <view class="muted small">负责：{{item.booksText}} · {{item.permCount}} 项权限<text wx:if="{{item.timeStr}}"> · {{item.timeStr}} 加入</text></view>
       </view>
       <view class="link" wx:if="{{item.me || canManage}}" data-idx="{{index}}" bindtap="onRename">改名</view>
-      <view class="link" wx:if="{{orgMode && canManage}}" data-idx="{{index}}" bindtap="onEditMember">设置</view>
+      <view class="link" wx:if="{{canManage && !item.me}}" data-idx="{{index}}" bindtap="onEditMember">设置</view>
       <view class="link danger" wx:if="{{!item.me && canManage}}" data-idx="{{index}}" bindtap="onRemove">移除</view>
     </view>
     <view class="muted" wx:if="{{!loading && list.length === 0}}">还没有记账人</view>
   </view>
 
+  <view class="card" wx:if="{{canManage}}">
+    <view class="section-title">邀请记账人 · 负责的礼簿与权限</view>
+    <view class="book-row {{item.on && !inviteAll ? 'on' : ''}}" wx:for="{{inviteBooks}}" wx:key="_id" data-i="{{index}}" bindtap="onInviteBook">
+      <view class="check {{item.on && !inviteAll ? 'on' : ''}}">{{item.on && !inviteAll ? '✓' : ''}}</view>
+      <view class="b-info">{{item.name}}</view>
+    </view>
+    <view class="book-row {{inviteAll ? 'on' : ''}}" wx:if="{{myAllBooks}}" bindtap="onInviteAll">
+      <view class="check {{inviteAll ? 'on' : ''}}">{{inviteAll ? '✓' : ''}}</view>
+      <view class="b-info">全部礼簿<text class="muted small">（含以后新建的）</text></view>
+    </view>
+    <view class="perm-head">
+      <text class="muted">权限</text>
+      <view class="chips tpl-chips">
+        <view class="chip {{inviteTpl === item ? 'on' : ''}}" wx:for="{{tplNames}}" wx:key="*this" data-t="{{item}}" bindtap="onInviteTpl">{{item}}</view>
+      </view>
+    </view>
+    <view class="perm-grid">
+      <view class="perm-item" wx:for="{{invitePerms}}" wx:key="key" data-i="{{index}}" bindtap="onInvitePerm">
+        <view class="check {{item.on ? 'on' : ''}}">{{item.on ? '✓' : ''}}</view>
+        <text class="perm-name">{{item.name}}</text>
+      </view>
+    </view>
+    <view class="muted small invite-desc" wx:if="{{inviteDesc}}">{{inviteDesc}}</view>
+  </view>
   <button wx:if="{{canManage}}" class="btn-primary" open-type="share" data-type="clerk" disabled="{{!clerkToken}}">邀请记账人（发给微信好友）</button>
   <view class="muted hint">对方打开卡片、登录后点「接受邀请」，经主家同意后加入。邀请 7 天内有效，每张最多 5 人使用；移交卡片仅限一人使用。</view>
 
@@ -86,22 +109,40 @@
 
   <button wx:if="{{role === 'clerk'}}" class="btn-leave" bindtap="onLeave">退出，不再为这位主家记账</button>
 
-  <!-- 机构版：岗位与负责场次 -->
+  <!-- 设置负责的礼簿与权限（机构版另可设岗位） -->
   <view class="mask" wx:if="{{editor}}">
     <view class="editor">
       <view class="ed-title">设置「{{editor.name}}」</view>
-      <view class="muted">岗位</view>
-      <view class="chips">
-        <view class="chip {{editor.title === item ? 'on' : ''}}" wx:for="{{titles}}" wx:key="*this" data-t="{{item}}" bindtap="onEdTitle">{{item}}</view>
+      <block wx:if="{{orgMode}}">
+        <view class="muted">岗位</view>
+        <view class="chips">
+          <view class="chip {{editor.title === item ? 'on' : ''}}" wx:for="{{titles}}" wx:key="*this" data-t="{{item}}" bindtap="onEdTitle">{{item}}</view>
+        </view>
+      </block>
+      <view class="muted" style="margin-top:20rpx">负责的礼簿</view>
+      <view class="book-row {{editor.all ? 'on' : ''}}" wx:if="{{myAllBooks}}" bindtap="onEdAll">
+        <view class="check {{editor.all ? 'on' : ''}}">{{editor.all ? '✓' : ''}}</view>
+        <view class="b-info">全部礼簿<text class="muted small">（含以后新建的）</text></view>
       </view>
-      <view class="muted" style="margin-top:20rpx">负责场次（不选 = 全部场次）</view>
       <scroll-view scroll-y class="ed-list">
-        <view class="book-row {{item.on ? 'on' : ''}}" wx:for="{{editor.books}}" wx:key="_id" data-i="{{index}}" bindtap="onEdBook">
-          <view class="check {{item.on ? 'on' : ''}}">{{item.on ? '✓' : ''}}</view>
+        <view class="book-row {{item.on && !editor.all ? 'on' : ''}}" wx:for="{{editor.books}}" wx:key="_id" data-i="{{index}}" bindtap="onEdBook">
+          <view class="check {{item.on && !editor.all ? 'on' : ''}}">{{item.on && !editor.all ? '✓' : ''}}</view>
           <view class="b-info">{{item.name}}<text class="muted small" wx:if="{{item.date}}"> · {{item.date}}</text></view>
         </view>
       </scroll-view>
-      <view class="muted small">只负责部分场次的人员：只能看到、确认、登记这些场次的礼金，不能修改主家信息、礼簿和人员</view>
+      <view class="perm-head">
+        <text class="muted">权限</text>
+        <view class="chips tpl-chips">
+          <view class="chip {{editor.tpl === item ? 'on' : ''}}" wx:for="{{tplNames}}" wx:key="*this" data-t="{{item}}" bindtap="onEdTpl">{{item}}</view>
+        </view>
+      </view>
+      <view class="perm-grid">
+        <view class="perm-item" wx:for="{{editor.perms}}" wx:key="key" data-i="{{index}}" bindtap="onEdPerm">
+          <view class="check {{item.on ? 'on' : ''}}">{{item.on ? '✓' : ''}}</view>
+          <text class="perm-name">{{item.name}}</text>
+        </view>
+      </view>
+      <view class="muted small">记账人只能看到、操作负责的礼簿；能做哪些事由上面的权限决定，只能授予你自己拥有的权限</view>
       <view class="ed-ops">
         <button class="ed-btn" bindtap="onEdCancel">取消</button>
         <button class="ed-btn ok" bindtap="onEdSave">保存</button>

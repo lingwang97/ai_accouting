@@ -6,7 +6,7 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
 const notify = require('./notify.js');
-const { resolveCtx, handlerName, canBook, readonly } = require('./ctx.js');
+const { resolveCtx, handlerName, canBook, readonly, can } = require('./ctx.js');
 const accounts = db.collection('accounts');
 const records = db.collection('records');
 
@@ -29,6 +29,9 @@ exports.main = async (event) => {
     const OWNER_ACTIONS = ['cashEntry', 'confirm', 'confirmBatch', 'reject', 'void'];
     const ctx = OWNER_ACTIONS.includes(event.action) ? await resolveCtx(db, OPENID) : null;
     if (ctx && readonly(ctx)) return err('家人共享为只读，不能修改');
+    // 记账人按权限：礼台记账 / 确认收礼 / 作废
+    const NEED = { cashEntry: 'desk', confirm: 'confirm', confirmBatch: 'confirm', reject: 'confirm', void: 'void' };
+    if (ctx && !can(ctx, NEED[event.action])) return err('你没有「' + { desk: '礼台记账', confirm: '确认收礼', void: '作废' }[NEED[event.action]] + '」权限');
     switch (event.action) {
       // 付款方
       case 'create': return await create(OPENID, event);
@@ -61,8 +64,9 @@ exports.main = async (event) => {
 async function create(openid, event) {
   const aid = String(event.aid || '');
   if (!validId(aid)) return err('参数错误');
+  const multi = Array.isArray(event.items) && event.items.length > 1;
   const parsed = parseItems(Array.isArray(event.items) && event.items.length ? event.items
-    : [{ name: event.payerName, amount: event.amount, relation: event.relation, remark: event.remark }]);
+    : [{ name: event.payerName, amount: event.amount, relation: event.relation, remark: event.remark }], multi && event.payMethod === 'mixed');
   if (parsed.error) return err(parsed.error);
   const items = parsed.items;
   const totalFen = items.reduce((t, x) => t + Math.round(x.amount * 100), 0);
@@ -93,8 +97,13 @@ async function create(openid, event) {
   if (new Set(recent.data.map(r => r.batchId || r._id)).size >= RATE_MAX) return err('操作太频繁，请稍后再试');
 
   const payDay = bjDay(now);
-  // 支付方式：wechat 微信转账（默认）/ cash 现金。现金不经收款码，登记后直接等待主家确认收到
-  const payMethod = event.payMethod === 'cash' ? 'cash' : 'wechat';
+  // 支付方式：wechat 微信转账（默认）/ cash 现金 / mixed 转账+现金（批次：部分人转账、部分人给现金，按转账部分扫码转一笔）
+  // 现金不经收款码，登记后直接等待主家确认收到；全是现金的 mixed 按现金处理，全是转账的按转账处理
+  const split = splitFen(items);
+  let payMethod = event.payMethod === 'cash' ? 'cash' : (event.payMethod === 'mixed' && multi ? 'mixed' : 'wechat');
+  if (payMethod === 'mixed' && !split.wechat) payMethod = 'cash';
+  if (payMethod === 'mixed' && !split.cash) payMethod = 'wechat';
+  if (payMethod !== 'mixed') items.forEach(x => { delete x.payMethod; });
 
   // 记入本场礼簿码指定的礼簿，否则记入当前礼簿（旧数据无礼簿时退回旧版主题名）
   const book = fixed || await activeBookOf(account);
@@ -107,7 +116,8 @@ async function create(openid, event) {
     bookId: book ? book._id : '',
     bookType: book ? book.type : 'other',
     themeName: book ? book.name : ((account.theme && account.theme.name) || ''),
-    payMethod,
+    payMethod: payMethod === 'mixed' ? 'wechat' : payMethod, // mixed 时每人的 payMethod 在 items 里
+    ...(payMethod === 'mixed' ? { batchPay: 'mixed' } : {}),
     status: payMethod === 'cash' ? 'transferred' : 'pending',
     ...(payMethod === 'cash' ? { transferredAt: now } : {}),
     printed: false,
@@ -118,9 +128,12 @@ async function create(openid, event) {
   const record = {
     _id: ids[0], aid: accountId, batchId, payMethod, status: base.status, payDay, createdAt: now,
     payerName: batchName(items), amount: totalFen / 100,
+    transferAmount: (payMethod === 'cash' ? 0 : (payMethod === 'mixed' ? split.wechat : totalFen)) / 100, // 需扫码转账的金额
+    cashAmount: (payMethod === 'cash' ? totalFen : (payMethod === 'mixed' ? split.cash : 0)) / 100,       // 交给礼台的现金
+
     remark: items.length > 1 ? '' : items[0].remark,
     relation: items.length > 1 ? '' : items[0].relation,
-    items: items.map((x, i) => ({ _id: ids[i], name: x.payerName, amount: x.amount })),
+    items: items.map((x, i) => ({ _id: ids[i], name: x.payerName, amount: x.amount, method: x.payMethod || payMethod })),
     accountName: hostName || account.accountName
   };
   if (payMethod === 'cash') {
@@ -147,14 +160,18 @@ async function create(openid, event) {
   });
 }
 
-/** 校验随礼人名单：1～BATCH_PEOPLE 人，姓名必填且不重复，每人金额 > 0 */
-function parseItems(raw) {
+/**
+ * 校验随礼人名单：1～BATCH_PEOPLE 人，姓名必填且不重复，每人金额 > 0
+ * mixed=true（批次「转账+现金」）：每人各自的支付方式 p.method（wechat / cash）
+ */
+function parseItems(raw, mixed) {
   if (raw.length > BATCH_PEOPLE) return { error: `批次录入最多 ${BATCH_PEOPLE} 人` };
   const items = raw.map(p => ({
     payerName: String((p && p.name) || '').trim().slice(0, 20),
     amount: Math.round(Number(p && p.amount) * 100) / 100,
     relation: RELATIONS.includes(p && p.relation) ? p.relation : '',
-    remark: String((p && p.remark) || '').trim().slice(0, 50)
+    remark: String((p && p.remark) || '').trim().slice(0, 50),
+    ...(mixed ? { payMethod: p && p.method === 'cash' ? 'cash' : 'wechat' } : {})
   }));
   for (const it of items) {
     if (!it.payerName) return { error: '请填写随礼人姓名' };
@@ -163,6 +180,13 @@ function parseItems(raw) {
   }
   if (new Set(items.map(x => x.payerName)).size !== items.length) return { error: '随礼人姓名有重复' };
   return { items };
+}
+
+/** 转账部分与现金部分的金额（分）；未标注支付方式的按转账 */
+function splitFen(items) {
+  const s = { wechat: 0, cash: 0 };
+  items.forEach(x => { s[x.payMethod === 'cash' ? 'cash' : 'wechat'] += Math.round(x.amount * 100); });
+  return s;
 }
 
 /** 按名单逐人建记录；多于 1 人时用 batchId 关联成一个批次 */
@@ -197,12 +221,22 @@ async function cashEntry(openid, ctx, event) {
   const account = ctx.account;
   if (!account) return err('请先完善主家信息');
 
+  // 礼台记账：payMethod cash 现金（默认）/ wechat 宾客当面微信转账、礼台看到到账后登记 / mixed 批次转账+现金（每人各自 method）
+  const multi = Array.isArray(event.items) && event.items.length > 1;
+  let method = ['wechat', 'mixed'].includes(event.payMethod) ? event.payMethod : 'cash';
+  if (method === 'mixed' && !multi) method = 'cash';
   // 批次录入：items 为多位随礼人，每人一条记录（batchId 关联），每人各打一张小票
   const parsed = parseItems(Array.isArray(event.items) && event.items.length ? event.items
-    : [{ name: event.payerName, amount: event.amount, relation: event.relation, remark: event.remark }]);
+    : [{ name: event.payerName, amount: event.amount, relation: event.relation, remark: event.remark }], method === 'mixed');
   if (parsed.error) return err(parsed.error);
   const items = parsed.items;
   if (items.reduce((t, x) => t + Math.round(x.amount * 100), 0) > 100000 * 100) return err('单笔金额超限');
+  if (method === 'mixed') {
+    const split = splitFen(items);
+    if (!split.wechat) method = 'cash';
+    else if (!split.cash) method = 'wechat';
+    if (method !== 'mixed') items.forEach(x => { delete x.payMethod; });
+  }
 
   let book = null;
   if (event.bookId) {
@@ -211,6 +245,11 @@ async function cashEntry(openid, ctx, event) {
     if (book.archived) return err('该礼簿已归档');
   } else {
     book = await activeBookOf(account);
+    // 只负责部分礼簿：未指定时记入负责的礼簿（当前礼簿不在其中时取第一本）
+    if (ctx.bookIds && (!book || !canBook(ctx, book._id))) {
+      try { book = (await db.collection('books').doc(ctx.bookIds[0]).get()).data; } catch (e) { book = null; }
+      if (book && (book.ownerOpenid !== ctx.ownerOpenid || book.archived)) book = null;
+    }
   }
   if (book && !canBook(ctx, book._id)) return err('请选择你负责的场次');
   if (!book && ctx.bookIds) return err('请选择你负责的场次');
@@ -226,7 +265,9 @@ async function cashEntry(openid, ctx, event) {
     bookId: book ? book._id : '',
     bookType: book ? book.type : 'other',
     themeName: book ? book.name : ((account.theme && account.theme.name) || ''),
-    payMethod: 'cash',
+    payMethod: method === 'wechat' ? 'wechat' : 'cash', // mixed 时每人的 payMethod 在 items 里
+    ...(method === 'mixed' ? { batchPay: 'mixed' } : {}),
+    deskEntry: true, // 礼台登记（不经宾客扫码）
     status: 'paid',
     printed: false,
     payDay: bjDay(now),
@@ -294,7 +335,7 @@ async function notifyOwner(rid, envVersion) {
     // 家人共享、待主家同意的不提醒；只负责部分场次的人员只提醒本场的礼金
     to = to.concat(ms.data
       .filter(m => m.role !== 'viewer' && m.status !== 'pending' && !m._openid)
-      .filter(m => !Array.isArray(m.bookIds) || !m.bookIds.length || m.bookIds.includes(rec.bookId))
+      .filter(m => m.allBooks || !Array.isArray(m.bookIds) || !m.bookIds.length || m.bookIds.includes(rec.bookId))
       .map(m => m.memberOpenid));
   } catch (e) { /* 尚无记账人 */ }
   let show = rec;
@@ -304,7 +345,9 @@ async function notifyOwner(rid, envVersion) {
       ...rec,
       payerName: rec.payerName,
       amount: all.reduce((t, r) => t + Math.round(r.amount * 100), 0) / 100,
-      remark: `${all.length}人一起随礼`
+      remark: all.some(r => r.batchPay === 'mixed')
+        ? `${all.length}人·转账${centStr(all.filter(r => r.payMethod !== 'cash'))}+现金${centStr(all.filter(r => r.payMethod === 'cash'))}`
+        : `${all.length}人一起随礼`
     };
   }
   const data = notify.build(show, bjTime(rec.transferredAt || new Date()));
@@ -519,6 +562,7 @@ function bj(d) {
 const bjDay = d => bj(d).day;
 const bjTime = d => { const b = bj(d); return `${b.day} ${b.hm}`; };
 
+const centStr = rs => String(rs.reduce((t, r) => t + Math.round(r.amount * 100), 0) / 100);
 const validId = s => /^[a-zA-Z0-9_-]{1,64}$/.test(String(s || ''));
 const ok = data => ({ code: 0, msg: 'ok', data });
 const err = msg => ({ code: 1, msg, data: null });

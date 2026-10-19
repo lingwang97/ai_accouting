@@ -27,6 +27,11 @@ exports.main = async (event) => {
     await ensureCol('gifts_out');
     switch (event.action) {
       case 'outList': return await outList(OPENID, event);
+      case 'inList': return await inList(OPENID, event);
+      case 'remindList': return await remindList(OPENID);
+      case 'remindSave': return await remindSave(OPENID, event.remind, event.subscribed === true, event.envVersion);
+      case 'remindDone': return await remindDone(OPENID, event.id, event.done !== false);
+      case 'remindDelete': return await remindDelete(OPENID, event.id);
       case 'outSave': return await outSave(OPENID, event.gift);
       case 'outDelete': return await outDelete(OPENID, event.id);
       case 'query': return await query(OPENID, event.key || (event.name ? 'n:' + event.name : ''));
@@ -37,6 +42,98 @@ exports.main = async (event) => {
     return err('人情往来操作失败：' + e.message);
   }
 };
+
+/**
+ * 我收到的礼：本人礼簿里已入簿的礼金（按入簿时间倒序，数据库分页），可按姓名搜索；附全部笔数与合计
+ * 只算本人作为主家的礼簿（为别人记账的不算，与往来对比一致）
+ */
+async function inList(openid, event) {
+  const page = Math.max(1, Number(event.page) || 1);
+  const pageSize = Math.min(50, Math.max(1, Number(event.pageSize) || 20));
+  const cond = { ownerOpenid: openid, status: 'paid' };
+  const kw = String(event.keyword || '').trim().slice(0, 20);
+  if (kw) cond.payerName = db.RegExp({ regexp: kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), options: 'i' });
+  const [cnt, sum, res] = await Promise.all([
+    records.where(cond).count(),
+    records.aggregate().match(cond)
+      .group({ _id: null, fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) }).end(),
+    records.where(cond).orderBy('paidAt', 'desc').skip((page - 1) * pageSize).limit(pageSize)
+      .field({ payerName: true, relation: true, amount: true, themeName: true, bookType: true, payDay: true, payMethod: true, remark: true, proxyFor: true, paidAt: true })
+      .get()
+  ]);
+  return ok({
+    list: res.data,
+    total: cnt.total,
+    sum: Math.round(((sum.list && sum.list[0]) || { fen: 0 }).fen) / 100,
+    page,
+    pageSize
+  });
+}
+
+// —— 亲友办事提醒（手动添加）：到提醒日在「往来」顶部提示，订阅过的由 warmer 定时推送服务通知 ——
+const REMIND_DAYS = [0, 1, 3, 7]; // 提前几天提醒
+const reminders = db.collection('reminders');
+
+/** 未处理的提醒（按办事日期升序，最近的在前）+ 最近处理过的 */
+async function remindList(openid) {
+  await ensureCol('reminders');
+  const [todo, done] = await Promise.all([
+    reminders.where({ ownerOpenid: openid, done: false }).orderBy('date', 'asc').limit(100).get(),
+    reminders.where({ ownerOpenid: openid, done: true }).orderBy('date', 'desc').limit(20).get()
+  ]);
+  return ok({ list: todo.data, done: done.data });
+}
+
+/** 新增 / 修改提醒；subscribed=true 表示用户刚同意了订阅消息（本条可推送一次） */
+async function remindSave(openid, r, subscribed, envVersion) {
+  await ensureCol('reminders');
+  r = r || {};
+  const data = {
+    name: String(r.name || '').trim().slice(0, 20),
+    personKey: String(r.personKey || '').slice(0, 120),
+    eventType: TYPES.includes(r.eventType) ? r.eventType : 'other',
+    event: String(r.event || '').trim().slice(0, 20),
+    date: DAY_RE.test(r.date || '') ? r.date : '',
+    before: REMIND_DAYS.includes(Number(r.before)) ? Number(r.before) : 1,
+    note: String(r.note || '').trim().slice(0, 50),
+    updatedAt: new Date()
+  };
+  if (!data.name) return err('请填写对方姓名');
+  if (!data.date) return err('请选择办事日期');
+  data.notifyDay = shiftDay(data.date, -data.before); // 提醒日（北京时间）
+  data.pushed = false;  // 修改后重新推送
+  if (subscribed) data.subscribed = true;
+  // 推送打开的小程序版本跟随订阅时的版本（开发版 / 体验版测试时能打开）
+  if (['develop', 'trial', 'release'].includes(envVersion)) data.envVersion = envVersion;
+  if (r._id) {
+    const res = await reminders.where({ _id: String(r._id), ownerOpenid: openid }).update({ data });
+    if (!res.stats.updated) return err('提醒不存在');
+    return ok({ _id: r._id, ...data });
+  }
+  const n = await reminders.where({ ownerOpenid: openid, done: false }).count();
+  if (n.total >= 200) return err('未处理的提醒太多，请先处理一些');
+  const added = await reminders.add({ data: { ownerOpenid: openid, ...data, done: false, subscribed: !!subscribed, createdAt: new Date() } });
+  return ok({ _id: added._id, ...data });
+}
+
+async function remindDone(openid, id, done) {
+  const res = await reminders.where({ _id: String(id || ''), ownerOpenid: openid }).update({ data: { done, doneAt: done ? new Date() : null } });
+  if (!res.stats.updated) return err('提醒不存在');
+  return ok({ done });
+}
+
+async function remindDelete(openid, id) {
+  const res = await reminders.where({ _id: String(id || ''), ownerOpenid: openid }).remove();
+  if (!res.stats.removed) return err('提醒不存在');
+  return ok({ removed: 1 });
+}
+
+/** YYYY-MM-DD 加减天数 */
+function shiftDay(day, n) {
+  const t = new Date(day + 'T00:00:00Z');
+  t.setUTCDate(t.getUTCDate() + n);
+  return t.toISOString().slice(0, 10);
+}
 
 /** 我送出的礼：手动登记 + 用慧礼记扫码随礼且主家已确认入簿的（自动），合并分页 */
 async function outList(openid, event) {

@@ -18,7 +18,8 @@
 .title { font-size: 48rpx; font-weight: 700; letter-spacing: 8rpx; color: #333; margin: 36rpx 0 8rpx; }
 .slogan { font-size: 26rpx; color: #888; letter-spacing: 4rpx; }
 
-.points { display: flex; justify-content: center; gap: 36rpx; margin-top: 40rpx; }
+.points { display: flex; justify-content: center; margin-top: 40rpx; }
+.points .point:not(:last-child) { margin-right: 36rpx; }
 .point { font-size: 26rpx; color: #555; }
 .tick { color: var(--primary); font-weight: 700; margin-right: 8rpx; }
 

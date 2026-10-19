@@ -1,5 +1,5 @@
 {
-  "navigationBarTitleText": "登记现金",
+  "navigationBarTitleText": "礼台记账",
   "usingComponents": {
     "batch-list": "/components/batch-list/index"
   }

@@ -4,7 +4,7 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
 const records = db.collection('records');
-const { resolveCtx, canBook, readonly } = require('./ctx.js');
+const { resolveCtx, canBook, readonly, can } = require('./ctx.js');
 const PENDING_TTL = 30 * 60 * 1000;
 
 /** 幂等建集合（init 未跑完时自愈；同一实例每个集合只尝试一次） */
@@ -40,6 +40,7 @@ exports.main = async (event) => {
         return await detail(OWNER, event.rid, ctx);
       case 'markPrinted':
         if (readonly(ctx)) return err('家人共享为只读');
+        if (!can(ctx, 'show')) return err('你没有打印权限');
         return await markPrinted(OWNER, event.rids, ctx);
       case 'pending':
         return await pending(OWNER, ctx);
@@ -107,12 +108,13 @@ async function dashboard(ctx) {
   const pendFen = Math.round(((pendRes.list && pendRes.list[0]) || { fen: 0 }).fen);
   // 返回给前端的主家信息去掉内部字段；只负责部分场次的人员与家人看不到收款码文件
   const { ownerOpenid, transferredFrom, transferPending, pendingPayCode, _openid, ...shown } = account;
-  if (ctx.bookIds) { delete shown.payCodeFileID; delete shown.payCodeBy; }
+  if (!can(ctx, 'info')) { delete shown.payCodeFileID; delete shown.payCodeBy; }
   return ok({
     account: { ...shown, hasPendingPayCode: !!pendingPayCode },
     role: ctx.role,
     restricted: !!ctx.bookIds,
     readonly: readonly(ctx),
+    perms: ctx.perms || [],
     lastNotify,
     book,
     needBooks: !book,
@@ -160,7 +162,7 @@ async function orgSummary(ctx, event) {
       _id: b._id, name: b.name, type: b.type, date: b.date || '', hostName: b.hostName || '', archived: !!b.archived,
       count: 0, fen: 0, pending: 0, cashFen: 0, wechatFen: 0, staff: [],
       // 负责本场的礼台人员（未指定场次的人员负责全部）
-      onDuty: members.data.filter(m => !m.bookIds || !m.bookIds.length || m.bookIds.includes(b._id))
+      onDuty: members.data.filter(m => m.role !== 'viewer' && (m.allBooks || !m.bookIds || !m.bookIds.length || m.bookIds.includes(b._id)))
         .map(m => ({ name: users[m.memberOpenid] || '记账人', title: m.title || '' }))
     };
   });
@@ -215,7 +217,7 @@ async function reconcile(ctx, event) {
   const base = { ownerOpenid: owner, bookId };
   if (/^\d{4}-\d{2}-\d{2}$/.test(String(event.day || ''))) base.payDay = event.day;
   const fenOf = _.aggregate.sum(_.aggregate.multiply(['$amount', 100]));
-  const [byStatus, deskCash, diff, byHandler] = await Promise.all([
+  const [byStatus, deskCash, diff, byHandler, deskWechat, mixedRes] = await Promise.all([
     records.aggregate().match(base)
       .group({ _id: { status: '$status', method: '$payMethod' }, count: _.aggregate.sum(1), fen: fenOf })
       .limit(100).end(),
@@ -227,7 +229,14 @@ async function reconcile(ctx, event) {
       .end(),
     records.aggregate().match({ ...base, status: 'paid' })
       .group({ _id: { handler: '$handlerOpenid', method: '$payMethod' }, name: _.aggregate.first('$handlerName'), count: _.aggregate.sum(1), fen: fenOf })
-      .limit(200).end()
+      .limit(200).end(),
+    // 礼台登记的微信（宾客当面转账、礼台看到到账后登记）
+    records.aggregate().match({ ...base, status: 'paid', payMethod: 'wechat', payerOpenid: '' })
+      .group({ _id: null, count: _.aggregate.sum(1), fen: fenOf }).end(),
+    // 「转账+现金」批次：按批次、支付方式分组
+    records.aggregate().match({ ...base, status: 'paid', batchPay: 'mixed' })
+      .group({ _id: { batchId: '$batchId', method: '$payMethod' }, fen: fenOf })
+      .limit(1000).end()
   ]);
 
   const z = () => ({ count: 0, fen: 0 });
@@ -253,6 +262,12 @@ async function reconcile(ctx, event) {
     if (g._id.method === 'cash') { hs[k].cashCount += g.count; hs[k].cashFen += Math.round(g.fen); }
   });
   const y = x => ({ count: x.count, sum: Math.round(x.fen) / 100 });
+  const dw = (deskWechat.list && deskWechat.list[0]) || { count: 0, fen: 0 };
+  const mx = { batches: new Set(), wechatFen: 0, cashFen: 0 };
+  (mixedRes.list || []).forEach(g => {
+    mx.batches.add(g._id.batchId);
+    if (g._id.method === 'cash') mx.cashFen += Math.round(g.fen); else mx.wechatFen += Math.round(g.fen);
+  });
   return ok({
     book: { _id: book._id, name: book.name, type: book.type, date: book.date || '', hostName: book.hostName || '' },
     day: base.payDay || '',
@@ -261,6 +276,10 @@ async function reconcile(ctx, event) {
     cash: y(s.cash),
     deskCash: y(desk),
     guestCash: { count: s.cash.count - desk.count, sum: Math.round(s.cash.fen - desk.fen) / 100 },
+    deskWechat: y(dw),
+    guestWechat: { count: s.wechat.count - dw.count, sum: Math.round(s.wechat.fen - dw.fen) / 100 },
+    // 转账+现金批次：批次数、其中转账部分与现金部分（已分别计入上面的微信 / 现金）
+    mixed: { batches: mx.batches.size, wechat: mx.wechatFen / 100, cash: mx.cashFen / 100, sum: (mx.wechatFen + mx.cashFen) / 100 },
     transferred: y(s.transferred),
     pending: y(s.pending),
     rejected: y(s.rejected),

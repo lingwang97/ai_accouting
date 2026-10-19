@@ -5,6 +5,7 @@
 // 两种模式都可生成「收款台卡」（双码合成图，保存相册后打印贴摊位）
 const req = require('../../utils/request.js');
 const theme = require('../../utils/theme.js');
+const perm = require('../../utils/perm.js');
 
 const CARD_W = 750;
 const CARD_H = 1240;
@@ -19,8 +20,14 @@ Page({
     errMsg: ''
   },
 
-  onLoad(options) {
+  async onLoad(options) {
     this._bookId = options.bookId || ''; // 机构版：本场礼簿码
+    // 记账人需有「礼簿码与打印」权限
+    const role = await getApp().ensureRole();
+    if ((role === 'clerk' || role === 'viewer') && !perm.can('show')) {
+      wx.showToast({ title: '你没有「礼簿码与打印」权限', icon: 'none' });
+      return setTimeout(() => wx.navigateBack(), 800);
+    }
     this.load();
   },
 

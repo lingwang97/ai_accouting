@@ -21,10 +21,16 @@
     <view class="card">
       <view class="section-title">按支付方式</view>
       <view class="row"><text>微信转账</text><text><text class="muted">{{r.wechat.count}} 份 · </text>￥{{r.wechat.sumStr}}</text></view>
+      <block wx:if="{{r.deskWechat.count}}">
+        <view class="row sub"><text>宾客扫码转账</text><text><text class="muted">{{r.guestWechat.count}} 份 · </text>￥{{r.guestWechat.sumStr}}</text></view>
+        <view class="row sub"><text>礼台登记微信</text><text><text class="muted">{{r.deskWechat.count}} 份 · </text>￥{{r.deskWechat.sumStr}}</text></view>
+      </block>
       <view class="row"><text>现金合计</text><text><text class="muted">{{r.cash.count}} 份 · </text>￥{{r.cash.sumStr}}</text></view>
       <view class="row sub"><text>礼台登记现金</text><text><text class="muted">{{r.deskCash.count}} 份 · </text>￥{{r.deskCash.sumStr}}</text></view>
       <view class="row sub"><text>宾客自报现金</text><text><text class="muted">{{r.guestCash.count}} 份 · </text>￥{{r.guestCash.sumStr}}</text></view>
-      <view class="muted small tip">点钞时以"现金合计"为准；微信转账可与微信收款记录核对</view>
+      <view class="row mixed" wx:if="{{r.mixed.batches}}"><text>其中转账+现金 {{r.mixed.batches}} 批</text><text>￥{{r.mixed.sumStr}}</text></view>
+      <view class="row sub" wx:if="{{r.mixed.batches}}"><text>转账部分 / 现金部分</text><text>￥{{r.mixed.wechatStr}} / ￥{{r.mixed.cashStr}}</text></view>
+      <view class="muted small tip">点钞时以"现金合计"为准；微信转账可与微信收款记录核对；转账+现金批次已分别计入微信与现金</view>
     </view>
 
     <!-- 待处理 -->

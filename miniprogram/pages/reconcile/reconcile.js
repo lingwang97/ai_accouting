@@ -3,6 +3,7 @@ const req = require('../../utils/request.js');
 const fmt = require('../../utils/format.js');
 const theme = require('../../utils/theme.js');
 const receipt = require('../../utils/receipt.js');
+const perm = require('../../utils/perm.js');
 
 Page({
   data: {
@@ -43,6 +44,8 @@ Page({
           ...r,
           bookTitle: r.book.hostName ? `${r.book.hostName} · ${r.book.name}` : r.book.name,
           paid: m(r.paid), wechat: m(r.wechat), cash: m(r.cash), deskCash: m(r.deskCash), guestCash: m(r.guestCash),
+          deskWechat: m(r.deskWechat || { count: 0, sum: 0 }), guestWechat: m(r.guestWechat || r.wechat),
+          mixed: { ...(r.mixed || { batches: 0 }), sumStr: fmt.money((r.mixed || {}).sum || 0), wechatStr: fmt.money((r.mixed || {}).wechat || 0), cashStr: fmt.money((r.mixed || {}).cash || 0) },
           transferred: m(r.transferred), pending: m(r.pending), rejected: m(r.rejected), void: m(r.void),
           diff: { ...r.diff, declaredStr: fmt.money(r.diff.declared), actualStr: fmt.money(r.diff.actual), gapStr: fmt.money(Math.abs(r.diff.gap)) },
           handlers: r.handlers.map(h => ({ ...h, sumStr: fmt.money(h.sum), cashSumStr: fmt.money(h.cashSum) })),
@@ -68,6 +71,7 @@ Page({
 
   goPending() {
     if (getApp().globalData.role === 'viewer') return wx.showToast({ title: '家人共享为只读，由主家确认', icon: 'none' });
+    if (!perm.can('confirm')) return wx.showToast({ title: '你没有「确认收礼」权限', icon: 'none' });
     wx.navigateTo({ url: '/pages/pending/pending' });
   },
 
@@ -79,10 +83,12 @@ Page({
       `范围：${this.data.range === 'today' ? '今日 ' + fmt.day(new Date()) : '全部'}　生成：${r.at}`,
       `已入簿：${r.paid.count} 份，￥${r.paid.sumStr}`,
       `· 微信转账：${r.wechat.count} 份，￥${r.wechat.sumStr}`,
+      ...(r.deskWechat.count ? [`　- 宾客扫码转账：${r.guestWechat.count} 份，￥${r.guestWechat.sumStr}`, `　- 礼台登记微信：${r.deskWechat.count} 份，￥${r.deskWechat.sumStr}`] : []),
       `· 现金合计：${r.cash.count} 份，￥${r.cash.sumStr}`,
       `　- 礼台登记现金：${r.deskCash.count} 份，￥${r.deskCash.sumStr}`,
       `　- 宾客自报现金：${r.guestCash.count} 份，￥${r.guestCash.sumStr}`
     ];
+    if (r.mixed.batches) out.push(`其中转账+现金：${r.mixed.batches} 批，￥${r.mixed.sumStr}（转账 ￥${r.mixed.wechatStr}、现金 ￥${r.mixed.cashStr}，已分别计入上面）`);
     if (r.transferred.count) out.push(`待确认：${r.transferred.count} 份，￥${r.transferred.sumStr}`);
     if (r.pending.count) out.push(`宾客未转账：${r.pending.count} 份，￥${r.pending.sumStr}`);
     if (r.rejected.count) out.push(`未收到（已拒绝）：${r.rejected.count} 份，￥${r.rejected.sumStr}`);

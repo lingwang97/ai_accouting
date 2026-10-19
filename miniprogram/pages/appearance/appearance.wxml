@@ -1,0 +1,34 @@
+<view class="container" style="{{themeStyle}}">
+  <!-- 实时预览：使用所选颜色 -->
+  <view class="section-title">预览</view>
+  <view class="preview" style="{{pvStyle}}">
+    <view class="pv-book">
+      <view class="pv-top">
+        <view class="pv-name">张府 · 婚礼礼簿</view>
+        <view class="pv-switch">⇅ 切换礼簿</view>
+      </view>
+      <view class="pv-label">礼金合计</view>
+      <view class="pv-sum">￥12880.00</view>
+      <view class="pv-foot"><text>36 份</text><text>明细 ›</text></view>
+    </view>
+    <view class="pv-btn">确认收到</view>
+    <view class="pv-tabs">
+      <view class="pv-tab" wx:for="{{tabs}}" wx:key="icon">
+        <image class="pv-icon" src="/assets/icons/{{item.icon}}-{{index === 0 ? pv.icon : 'g'}}.svg" />
+        <text class="pv-text {{index === 0 ? 'on' : ''}}">{{item.label}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="section-title">主题色</view>
+    <view class="colors">
+      <view wx:for="{{colors}}" wx:key="*this"
+            class="color-dot {{item === primary ? 'on' : ''}}"
+            style="background:{{item}}" data-c="{{item}}" bindtap="onPickColor" />
+    </view>
+    <view class="muted">礼簿码、工作台、按钮和底部菜单都会使用该颜色；白事礼簿始终自动使用素灰色，不受此设置影响</view>
+  </view>
+
+  <button class="btn-primary" loading="{{saving}}" disabled="{{saving || primary === saved}}" bindtap="onSave">保存</button>
+</view>

@@ -1,5 +1,5 @@
 // pages/index/index.js — 首页 / 工作台（按身份切换）
-// 主家、记账人：工作台——当前礼簿概览 + 出示礼簿码 / 待确认 / 登记现金 / 打印机 四个常用操作
+// 主家、记账人：工作台——当前礼簿概览 + 出示礼簿码 / 待确认 / 礼台记账 / 打印机 四个常用操作
 // 宾客、未登录：扫码随礼
 const req = require('../../utils/request.js');
 const fmt = require('../../utils/format.js');
@@ -7,10 +7,13 @@ const notify = require('../../utils/notify.js');
 const scenes = require('../../utils/scenes.js');
 const theme = require('../../utils/theme.js');
 const cache = require('../../utils/cache.js');
+const perm = require('../../utils/perm.js');
 
 const POLL_MS = 5000;
 const POLL_MS_READONLY = 30000; // 家人只读：不处理待确认，放慢轮询
 const LOGOUT_KEY = 'logged_out';
+// 礼金合计位数多时缩小字号（如 1234567.89 共 10 位）
+const sumCls = str => (str.length >= 13 ? 'xlong' : str.length >= 10 ? 'long' : '');
 
 Page({
   data: {
@@ -24,6 +27,7 @@ Page({
     pendingCount: 0,
     pendingSum: '0.00',
     printerName: '',
+    pm: {},            // 当前身份的权限（记账人按各自权限显示操作）
     notifyTip: '',     // 新礼金提醒未开启 / 发送失败时的提示
     themeStyle: ''
   },
@@ -68,6 +72,7 @@ Page({
       const d = (dP && (await dP)) || (await req.dashboard());
       app.globalData.account = d.account;
       app.globalData.role = d.role;
+      app.globalData.perms = d.perms || [];
       theme.setAccount(d.account); // 主家选的主题色
       app._accountChecked = true;
       if (!d.account) return this.toGuest();
@@ -83,8 +88,10 @@ Page({
         role: d.role,
         restricted: !!d.restricted,
         readonly: !!d.readonly,     // 家人共享：只读
+        pm: perm.map(d.perms, d.role),
+        canSwitch: perm.map(d.perms, d.role).books && !d.restricted, // 能管理礼簿且不限礼簿范围才可切换
         notifyTip: notify.tipText(d.lastNotify),
-        book: b ? { ...b, typeLabel: scenes.label(b.type), sumStr: fmt.money(b.sum) } : null,
+        book: b ? { ...b, typeLabel: scenes.label(b.type), sumStr: fmt.money(b.sum), sumCls: sumCls(fmt.money(b.sum)) } : null,
         todaySum: fmt.money(d.today.sum),
         todayCount: d.today.count,
         pendingCount: d.pending.count,

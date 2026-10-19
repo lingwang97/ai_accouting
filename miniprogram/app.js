@@ -10,6 +10,7 @@ App({
     badge: 0,          // 待确认礼金数（自定义底部菜单「工作台」角标）
     bookType: '',      // 当前礼簿事由，决定主题色（utils/theme.js）
     role: null,        // 当前身份：owner | clerk | viewer；冷启动为空，用 ensureRole() 读取
+    perms: null,       // 当前身份的权限列表（记账人各自不同；主家全部，见 utils/perm.js），随 role 一起写入
     identityVer: 0     // 切换身份次数；页面据此丢弃上一身份的数据
   },
   onLaunch() {
@@ -71,6 +72,7 @@ App({
     this.globalData.recordsBookId = '';
     this.globalData.bookType = '';
     this.globalData.role = null;
+    this.globalData.perms = null;
     this.globalData.identityVer = (this.globalData.identityVer || 0) + 1;
     this.globalData.themePrimary = null; // 主题色随身份重新读取
     require('./utils/cache.js').clear();
@@ -85,8 +87,10 @@ App({
     if (this.globalData.role) return Promise.resolve(this.globalData.role);
     return require('./utils/request.js').accountGet().then(r => {
       this.globalData.role = r.role || 'none';
+      this.globalData.perms = r.perms || [];
       this.globalData.account = r.account || null;
       this._accountChecked = true;
+      this.refreshTabBar(); // 记账人身份隐藏「往来」
       return this.globalData.role;
     }).catch(() => '');
   },

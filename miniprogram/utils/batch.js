@@ -1,4 +1,5 @@
-// utils/batch.js — 批次录入：名单校验（随礼页与现金登记页共用，组件见 components/batch-list）
+// utils/batch.js — 批次录入：名单校验（随礼页与礼台记账页共用，组件见 components/batch-list）
+// 支付方式为「转账+现金」时每人带 method（wechat / cash），其余方式云函数忽略
 const MAX = 10; // 与云函数 payment 批次上限一致
 
 /**
@@ -14,7 +15,7 @@ function validate(rows) {
     if (!name) return { error: '请填写每位随礼人的姓名' };
     if (!(Number(raw) > 0)) return { error: `请填写 ${name} 的金额` };
     if (items.some(x => x.name === name)) return { error: `${name} 重复填写` };
-    items.push({ name, amount: Math.round(Number(raw) * 100) / 100, relation: r.relation || '', remark: (r.remark || '').trim() });
+    items.push({ name, amount: Math.round(Number(raw) * 100) / 100, relation: r.relation || '', remark: (r.remark || '').trim(), method: r.method === 'cash' ? 'cash' : 'wechat' });
   }
   if (!items.length) return { error: '请填写随礼人' };
   if (items.length > MAX) return { error: `一次最多登记 ${MAX} 人` };

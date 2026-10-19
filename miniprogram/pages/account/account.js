@@ -1,4 +1,5 @@
-// pages/account/account.js — 主家信息：称呼、微信收款码、主题色、快捷礼金
+// pages/account/account.js — 主家信息：称呼、微信收款码、快捷礼金（主题色在「我的 → 外观设置」）
+// 没有「修改主家信息」权限的记账人：只能申请更换收款码（codeOnly），主家确认后生效
 const req = require('../../utils/request.js');
 const theme = require('../../utils/theme.js');
 
@@ -16,6 +17,7 @@ Page({
     colors: PRESET_COLORS,
     saving: false,
     uploading: false,
+    codeOnly: false,     // 没有「修改主家信息」权限：只能申请更换收款码
     reviews: [],         // 主家：记账人提交、待确认的收款码
     pendingNote: false   // 记账人：已提交的新收款码待主家确认
   },
@@ -34,9 +36,13 @@ Page({
   async load() {
     try {
       if (this._own) return; // 新建：空白表单
-      const { account, role } = await req.accountGet(true);
+      const { account, role, perms } = await req.accountGet(true);
       if (!account) return;
       this._role = role;
+      // 没有「修改主家信息」权限（只有申请更换收款码）：只能提交新收款码
+      const codeOnly = role !== 'owner' && !(perms || []).includes('info');
+      this.setData({ codeOnly });
+      if (codeOnly) wx.setNavigationBarTitle({ title: '申请更换收款码' });
       this.setData({ pendingNote: role !== 'owner' && !!account.hasPendingPayCode });
       if (role === 'owner' && account.payCodeCheck) this.loadReviews();
       this._saved = account; // 已保存的主家信息（开关即时保存时使用）
@@ -142,6 +148,7 @@ Page({
     if (!name) return wx.showToast({ title: '请填写主家称呼', icon: 'none' });
     if (this.data.uploading) return wx.showToast({ title: '收款码上传中，请稍候', icon: 'none' });
     if (!this.data.payCodeFileID) return wx.showToast({ title: '请上传微信收款码', icon: 'none' });
+    if (this.data.codeOnly && this._saved && this.data.payCodeFileID === this._saved.payCodeFileID) return wx.showToast({ title: '请先上传新的收款码', icon: 'none' });
     const quickAmounts = String(this.data.quickText || '').split(/[,，\s]+/).map(Number).filter(n => n > 0);
 
     this.setData({ saving: true });
@@ -149,7 +156,8 @@ Page({
       const { account, pendingPayCode } = await req.accountSave({
         accountName: name,
         payCodeFileID: this.data.payCodeFileID,
-        theme: { name: this.data.themeName || '我的礼簿', primary: this.data.primary, chosen: true },
+        // 新建主家信息时带上默认主题，之后在「外观设置」修改
+        ...(this._own || !this._saved ? { theme: { name: this.data.themeName || '我的礼簿', primary: this.data.primary } } : {}),
         quickAmounts,
         confirmPayCode: true, // 主家在本页核对后保存：解除收款码提醒
         own: this._own || undefined

@@ -2,7 +2,7 @@
 const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const ENVS = ['develop', 'trial', 'release'];
-const { resolveCtx, canBook, readonly, trusted } = require('./ctx.js');
+const { resolveCtx, canBook, readonly, trusted, can } = require('./ctx.js');
 
 exports.main = async (event) => {
   const { OPENID } = cloud.getWXContext();
@@ -18,6 +18,7 @@ exports.main = async (event) => {
     // 主家本人或其记账人可生成
     const ctx = await resolveCtx(db, OPENID);
     if (readonly(ctx)) return err('家人共享为只读，不能出示礼簿码');
+    if (!can(ctx, 'show')) return err('你没有出示礼簿码的权限');
     if (!trusted(account) || account.ownerOpenid !== ctx.ownerOpenid) return err('无权生成该账户二维码');
 
     // 本场礼簿码（机构版多场同时办）：scene 用礼簿 id，宾客扫码后直接记入这一场
@@ -28,7 +29,11 @@ exports.main = async (event) => {
       if (!trusted(book) || book.ownerOpenid !== ctx.ownerOpenid || !canBook(ctx, book._id)) return err('礼簿不存在');
       scene = book._id;
     } else if (ctx.bookIds) {
-      return err('你只负责部分场次，请在场次里生成本场礼簿码');
+      // 只负责部分礼簿：出示负责礼簿的本场礼簿码（当前礼簿在其中时用当前礼簿）
+      const id = ctx.bookIds.includes(account.activeBookId) ? account.activeBookId : ctx.bookIds[0];
+      try { book = (await db.collection('books').doc(id).get()).data; } catch (e) { /* 不存在 */ }
+      if (!trusted(book) || book.ownerOpenid !== ctx.ownerOpenid) return err('你负责的礼簿已不存在，请联系主家');
+      scene = book._id;
     }
     // scene 最长 32 字符，云数据库 _id 本身就是 32 位，因此直接用 id 作 scene（不加 "aid=" 前缀）
     if (scene.length > 32) return err('账户 ID 过长，无法生成小程序码');

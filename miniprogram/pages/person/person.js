@@ -57,6 +57,12 @@ Page({
     wx.navigateTo({ url: `/pages/giftedit/giftedit?toName=${encodeURIComponent(this.data.name)}&toKey=${encodeURIComponent(key)}` });
   },
 
+  /** 记下此人家办事的日期，到时提醒回礼 */
+  onAddRemind() {
+    const key = this.data.key.startsWith('o:') ? this.data.key : '';
+    wx.navigateTo({ url: `/pages/remind/remind?name=${encodeURIComponent(this.data.name)}&key=${encodeURIComponent(key)}` });
+  },
+
   onEditGift(e) {
     const g = this.data.given[e.currentTarget.dataset.idx];
     if (g.auto) return wx.navigateTo({ url: `/pages/receipt/receipt?rid=${g.rid}` });

@@ -1,10 +1,12 @@
-// pages/cash/cash.js — 礼台现金登记：主家 / 记账人直接录入，入簿即生效，自动打印回执，可连续登记
+// pages/cash/cash.js — 礼台记账：主家 / 记账人直接录入（现金，或宾客当面微信转账、礼台看到到账），入簿即生效，自动打印回执，可连续登记
+// 不想自助扫码登记的宾客由礼台代为登记；批次录入还可选「转账+现金」（每人各自选）
 const req = require('../../utils/request.js');
 const fmt = require('../../utils/format.js');
 const scenes = require('../../utils/scenes.js');
 const printer = require('../../utils/printer.js');
 const batch = require('../../utils/batch.js');
 const theme = require('../../utils/theme.js');
+const perm = require('../../utils/perm.js');
 
 const DEFAULT_QUICK = [200, 500, 600, 800, 1000, 1888];
 const DONE_MAX = 20; // 本次已登记列表最多显示的份数
@@ -21,6 +23,7 @@ Page({
     bookName: '',
     quick: DEFAULT_QUICK,
     batchMode: false, // 批次录入：一次登记多位随礼人，每人各打一张小票
+    payMethod: 'cash', // cash 现金 | wechat 微信（礼台确认已到账）| mixed 转账+现金（仅批次录入）
     books: [],        // 机构模式：可选场次（未归档）
     bookIdx: 0,
     relations: scenes.RELATIONS,
@@ -35,6 +38,12 @@ Page({
   },
 
   async onLoad() {
+    // 记账人需有「礼台记账」权限
+    const role = await getApp().ensureRole();
+    if ((role === 'clerk' || role === 'viewer') && !perm.can('desk')) {
+      wx.showToast({ title: '你没有「礼台记账」权限', icon: 'none' });
+      return setTimeout(() => wx.navigateBack(), 800);
+    }
     try {
       const [{ account }, { list, activeBookId }] = await Promise.all([req.accountGet(), req.bookList()]);
       if (!account) {
@@ -60,7 +69,11 @@ Page({
     const r = e.currentTarget.dataset.r;
     this.setData({ relation: this.data.relation === r ? '' : r });
   },
-  onBatchMode(e) { this.setData({ batchMode: e.detail.value }); },
+  onBatchMode(e) {
+    const on = e.detail.value;
+    this.setData({ batchMode: on, ...(on || this.data.payMethod !== 'mixed' ? {} : { payMethod: 'cash' }) });
+  },
+  onPayMethod(e) { this.setData({ payMethod: e.currentTarget.dataset.m }); },
   onPickBook(e) { this.setData({ bookIdx: Number(e.detail.value) }); },
   onBatchChange(e) { this._batchRows = e.detail.rows; },
 
@@ -84,10 +97,12 @@ Page({
     try {
       const b = this.data.books[this.data.bookIdx];
       if (this.data.books.length && b) payload.bookId = b._id;
+      payload.payMethod = this.data.payMethod;
       const { record, list } = await req.cashEntry(payload);
       const added = (list && list.length ? list : [record]).map(r => ({ ...r, amountStr: fmt.money(r.amount) }));
       const done = added.slice().reverse().concat(this.data.done).slice(0, DONE_MAX);
       this._doneFen = (this._doneFen || 0) + added.reduce((s, r) => s + Math.round(r.amount * 100), 0);
+      added.forEach(r => { r.methodStr = r.payMethod === 'cash' ? '现金' : '微信'; });
       this.setData({ ...emptyForm(), done, doneCount: this.data.doneCount + added.length, doneSum: fmt.money(this._doneFen / 100) });
       if (this.data.batchMode) this.selectComponent('#batch').reset();
       const addFen = added.reduce((s, r) => s + Math.round(r.amount * 100), 0);

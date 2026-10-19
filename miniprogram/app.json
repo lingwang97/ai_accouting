@@ -19,6 +19,7 @@
     "pages/renqing/renqing",
     "pages/person/person",
     "pages/giftedit/giftedit",
+    "pages/remind/remind",
     "pages/pending/pending",
     "pages/cash/cash",
     "pages/members/members",
@@ -26,7 +27,8 @@
     "pages/admin/admin",
     "pages/orgsummary/orgsummary",
     "pages/reconcile/reconcile",
-    "pages/bookshare/bookshare"
+    "pages/bookshare/bookshare",
+    "pages/appearance/appearance"
   ],
   "window": {
     "backgroundTextStyle": "light",

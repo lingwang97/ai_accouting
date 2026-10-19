@@ -42,7 +42,10 @@ Page({
     this.setData({
       date: fmt.day(new Date()),
       toName: decodeURIComponent(options.toName || ''),
-      toKey: decodeURIComponent(options.toKey || '')
+      toKey: decodeURIComponent(options.toKey || ''),
+      // 从办事提醒「记回礼」进入：带上事由
+      ...(options.eventType ? { eventType: options.eventType } : {}),
+      event: decodeURIComponent(options.event || '')
     });
   },
 

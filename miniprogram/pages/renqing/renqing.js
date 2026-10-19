@@ -1,4 +1,4 @@
-// pages/renqing/renqing.js — 人情往来：往来名单（收/送汇总）+ 我送出的礼 + 随礼回执（扫码随礼后主家确认的电子回执）
+// pages/renqing/renqing.js — 人情往来：往来对比（收/送汇总）+ 我收到的礼 + 我送出的礼 + 随礼回执（扫码随礼后主家确认的电子回执）
 const req = require('../../utils/request.js');
 const fmt = require('../../utils/format.js');
 const scenes = require('../../utils/scenes.js');
@@ -6,7 +6,13 @@ const theme = require('../../utils/theme.js');
 
 Page({
   data: {
-    tab: 'people',     // people | out | receipts
+    tab: 'people',     // people 往来对比 | in 我收到的礼 | out 我送出的礼 | receipts 随礼回执
+    inList: [],        // 我收到的礼（分页）
+    inSum: '0.00',
+    inTotal: 0,
+    inPage: 1,
+    reminds: [],       // 亲友办事提醒（未处理，最近的在前）
+    remindAll: false,  // 展开全部提醒
     receipts: [],      // 随礼回执
     shownReceipts: [],
     keyword: '',
@@ -19,7 +25,9 @@ Page({
     loggedIn: true
   },
 
-  onShow() {
+  async onShow() {
+    // 记账人身份不显示「往来」（切换身份后可能停留在本页）：回到工作台
+    if ((await getApp().ensureRole()) === 'clerk') return wx.switchTab({ url: '/pages/index/index' });
     theme.apply(this); // 主题色跟当前礼簿事由走
     getApp().refreshTabBar();
     getApp().refreshBadge();
@@ -32,6 +40,7 @@ Page({
       return this.setData({ loggedIn: false, people: [], shownPeople: [], outList: [] });
     }
     this.setData({ loading: true, loggedIn: true });
+    this.loadReminds();
     try {
       if (this.data.tab === 'people') {
         const { list } = await req.rqPeople();
@@ -44,6 +53,8 @@ Page({
         }));
         this.setData({ people });
         this.filterPeople();
+      } else if (this.data.tab === 'in') {
+        await this.loadIn(1);
       } else if (this.data.tab === 'receipts') {
         const { list } = await req.myReceipts();
         this.setData({
@@ -95,12 +106,87 @@ Page({
   /** 搜索：名单里没有时也可直接查询该姓名 */
   onSearch() {
     const k = (this.data.keyword || '').trim();
-    if (this.data.tab === 'out') return this.load();
+    if (this.data.tab === 'out' || this.data.tab === 'in') return this.load();
     if (this.data.tab === 'receipts') return this.filterReceipts();
     if (k && this.data.shownPeople.length === 0) this.openPerson('n:' + k);
   },
 
   onPerson(e) { this.openPerson(e.currentTarget.dataset.key); },
+
+  // —— 亲友办事提醒 ——
+  async loadReminds() {
+    try {
+      const { list } = await req.remindList();
+      const today = fmt.day(new Date());
+      const dayDiff = d => Math.round((new Date(d + 'T00:00:00') - new Date(today + 'T00:00:00')) / 86400000);
+      this.setData({
+        reminds: list.map(r => {
+          const n = dayDiff(r.date);
+          return {
+            ...r,
+            typeLabel: scenes.label(r.eventType),
+            dateStr: r.date.slice(5).replace('-', '月') + '日',
+            leftStr: n > 0 ? `还有 ${n} 天` : (n === 0 ? '今天' : `已过 ${-n} 天`),
+            hot: n >= 0 && n <= (r.before || 0) + 1, // 已到提醒期
+            past: n < 0
+          };
+        })
+      });
+    } catch (e) { /* 静默 */ }
+  },
+  onRemindAll() { this.setData({ remindAll: !this.data.remindAll }); },
+  onAddRemind() { wx.navigateTo({ url: '/pages/remind/remind' }); },
+  onInRemind(e) {
+    const { name, amount } = e.currentTarget.dataset;
+    wx.navigateTo({ url: `/pages/remind/remind?name=${encodeURIComponent(name)}&note=${encodeURIComponent(`曾随我 ￥${amount}`)}` });
+  },
+  onRemind(e) {
+    const r = this.data.reminds[e.currentTarget.dataset.idx];
+    if (!r) return;
+    wx.showActionSheet({
+      itemList: ['记回礼', '已处理', '修改', '删除'],
+      success: async res => {
+        try {
+          if (res.tapIndex === 0) {
+            wx.navigateTo({
+              url: `/pages/giftedit/giftedit?toName=${encodeURIComponent(r.name)}&toKey=${encodeURIComponent(r.personKey || '')}&eventType=${r.eventType}&event=${encodeURIComponent(r.event || '')}`
+            });
+            await req.remindDone(r._id, true);
+          } else if (res.tapIndex === 1) {
+            await req.remindDone(r._id, true);
+            wx.showToast({ title: '已处理', icon: 'success' });
+          } else if (res.tapIndex === 2) {
+            getApp().globalData.editRemind = r;
+            return wx.navigateTo({ url: '/pages/remind/remind?edit=1' });
+          } else {
+            await req.remindDelete(r._id);
+          }
+          this.loadReminds();
+        } catch (err) { /* toast 已提示 */ }
+      }
+    });
+  },
+
+  /** 我收到的礼：按页加载（page=1 重新加载），可按姓名搜索 */
+  async loadIn(page) {
+    const res = await req.inList({ page, pageSize: 30, keyword: (this.data.keyword || '').trim() || undefined });
+    const rows = res.list.map(r => ({
+      ...r,
+      amountStr: fmt.money(r.amount),
+      typeLabel: scenes.label(r.bookType),
+      methodStr: r.payMethod === 'cash' ? '现金' : '微信'
+    }));
+    this.setData({
+      inList: page === 1 ? rows : this.data.inList.concat(rows),
+      inPage: page,
+      inTotal: res.total,
+      inSum: fmt.money(res.sum)
+    });
+  },
+  onInMore() {
+    if (this.data.inList.length < this.data.inTotal) this.loadIn(this.data.inPage + 1).catch(() => {});
+  },
+  onInPerson(e) { this.openPerson('n:' + e.currentTarget.dataset.name); },
 
   /** key：o:微信身份:姓名 或 n:姓名（只输入姓名查询时） */
   openPerson(key) {

@@ -5,6 +5,7 @@ const confirm = require('../../utils/confirm.js');
 const receipt = require('../../utils/receipt.js');
 const notify = require('../../utils/notify.js');
 const theme = require('../../utils/theme.js');
+const perm = require('../../utils/perm.js');
 
 const POLL_MS = 5000;
 const MODE_KEY = 'pending_mode'; // 记住上次使用的处理方式
@@ -21,8 +22,10 @@ Page({
     pickedSum: '0.00',
     current: null,    // 逐笔模式当前一笔（队列最早的一笔）
     editor: null,     // 批次逐人改金额：{ group, rows: [{_id, name, declared, value}] }
+    sheet: null,      // 列表模式批次明细弹层（当前打开的一组）
     notifyTip: '',    // 新礼金提醒未开启时提示
     busy: false,
+    canConfirm: true, // 没有「确认收礼」权限：只能查看列表
     loaded: false
   },
 
@@ -35,6 +38,10 @@ Page({
 
   onShow() {
     theme.apply(this); // 主题色跟当前礼簿事由走
+    getApp().ensureRole().then(() => {
+      const canConfirm = perm.can('confirm');
+      this.setData(canConfirm ? { canConfirm } : { canConfirm, mode: 'list', selectMode: false });
+    });
     this.checkNotify();
     this.load(false);
     this._timer = setInterval(() => this.load(true), POLL_MS);
@@ -52,10 +59,9 @@ Page({
       const { list } = await req.recordPending();
       if (silent && list.length > countOf(this._list)) wx.vibrateShort({ type: 'heavy' });
       const picked = new Set(this._list.filter(r => r.picked).map(r => r._id));
-      const opened = new Set(this._list.filter(r => r.open).map(r => r._id)); // 保留已展开的批次明细
       // 批次录入的多位随礼人合成一组；按转账时间先后排列：逐笔模式先处理最早的
       const items = groupRecords(list)
-        .map(g => ({ ...g, picked: picked.has(g._id), open: opened.has(g._id) }))
+        .map(g => ({ ...g, picked: picked.has(g._id) }))
         .sort((a, b) => new Date(a.transferredAt || a.createdAt) - new Date(b.transferredAt || b.createdAt));
       this._list = items;
       // 轮询只做一次 setData
@@ -112,7 +118,11 @@ Page({
     const picked = list.filter(r => r.picked);
     const pickedFen = picked.reduce((s, r) => s + Math.round(r.amount * 100), 0);
     getApp().setBadge(total);
+    // 批次明细弹层：跟随最新数据；该组已处理（不在列表中）则自动关闭
+    const sheet = this._sheetId ? (this.findById(this._sheetId) || null) : null;
+    if (!sheet) this._sheetId = null;
     return {
+      sheet,
       shown: this.filterList(keyword),
       current: list[0] || null, // 逐笔模式当前一笔（队列最早的一笔）
       total,
@@ -126,15 +136,26 @@ Page({
     const g = this.findById(e.currentTarget.dataset.id);
     if (!g) return;
     const res = await this.run(() => confirm.confirmTransfer(g));
-    if (res === 'edit') this.openEditor(g);
+    if (res === 'edit') { this.onCloseSheet(); this.openEditor(g); }
     else if (res) this.removeLocal(g._id);
   },
 
-  /** 展开 / 收起批次明细 */
-  onExpand(e) {
-    const id = e.currentTarget.dataset.id;
-    this._list = this._list.map(g => (g._id === id ? { ...g, open: !g.open } : g));
+  /** 打开批次明细弹层（catchtap，不触发勾选） */
+  onOpenSheet(e) {
+    this._sheetId = e.currentTarget.dataset.id;
     this.setData(this.derive());
+  },
+  onCloseSheet() {
+    this._sheetId = null;
+    this.setData({ sheet: null });
+  },
+  noop() {},
+  /** 弹层内：金额不一致 → 逐人按实际金额入簿（复用逐笔模式的编辑器） */
+  onSheetMismatch() {
+    const g = this.data.sheet && this.findById(this.data.sheet._id);
+    if (!g) return;
+    this.onCloseSheet();
+    this.openEditor(g);
   },
 
   async onReject(e) {
@@ -277,9 +298,16 @@ function groupRecords(list) {
     const first = recs[0];
     const fen = recs.reduce((s, r) => s + Math.round(r.amount * 100), 0);
     const batch = recs.length > 1;
+    // 混合支付（服务端标记 batchPay: 'mixed'）：每人各自 payMethod，分别小计
+    const mixed = recs.some(r => r.batchPay === 'mixed');
+    const cashFen = recs.filter(r => r.payMethod === 'cash').reduce((s, r) => s + Math.round(r.amount * 100), 0);
     return {
       ...first,
       batch,
+      mixed,
+      methodLabel: mixed ? '转账+现金' : (first.payMethod === 'cash' ? '现金' : '转账'),
+      wechatSumStr: fmt.money((fen - cashFen) / 100),
+      cashSumStr: fmt.money(cashFen / 100),
       records: recs.map(r => ({ ...r, amountStr: fmt.money(r.amount) })),
       payerName: batch ? `${first.payerName} 等 ${recs.length} 人` : first.payerName,
       amount: fen / 100,
@@ -287,8 +315,7 @@ function groupRecords(list) {
       relation: batch ? '' : first.relation,
       remark: batch ? '' : first.remark,
       proxyStr: batch ? '' : receipt.proxyText(first),
-      timeStr: fmt.time(first.transferredAt || first.createdAt),
-      open: false
+      timeStr: fmt.time(first.transferredAt || first.createdAt)
     };
   });
 }

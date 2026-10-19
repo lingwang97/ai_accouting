@@ -67,6 +67,8 @@ module.exports = {
   viewerList: () => call('account', { action: 'viewers' }),
   memberUpdate: (memberId, d) => call('account', { action: 'memberUpdate', memberId, ...d }),
   setOrgMode: (orgMode, orgName) => call('account', { action: 'setOrgMode', orgMode, orgName }),
+  // 外观设置：主题色（仅主家本人）
+  setTheme: primary => call('account', { action: 'setTheme', primary }).then(r => { ['dashboard', 'mine'].forEach(k => require('./cache.js').set(k, null)); return r; }),
   orgSummary: month => call('records', { action: 'orgSummary', month }),
   reconcile: (bookId, day) => call('records', { action: 'reconcile', bookId, day }),
   // 记账人提交的收款码：主家确认后才生效（target 为 'account' 或礼簿 id）
@@ -79,6 +81,12 @@ module.exports = {
   identitySwitch: aid => call('account', { action: 'switch', aid }),
   exportCleanup: fileID => call('export', { action: 'cleanup', fileID }),
   exportPurge: () => call('export', { action: 'purge' }),
+  inList: d => call('renqing', { action: 'inList', ...d }),
+  // 亲友办事提醒
+  remindList: () => call('renqing', { action: 'remindList' }),
+  remindSave: (remind, subscribed) => call('renqing', { action: 'remindSave', remind, subscribed: !!subscribed, envVersion: envVersion() }),
+  remindDone: (id, done) => call('renqing', { action: 'remindDone', id, done: done !== false }),
+  remindDelete: id => call('renqing', { action: 'remindDelete', id }),
   outList: d => call('renqing', { action: 'outList', ...d }),
   outSave: gift => call('renqing', { action: 'outSave', gift }),
   outDelete: id => call('renqing', { action: 'outDelete', id }),

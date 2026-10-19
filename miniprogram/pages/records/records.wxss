@@ -1,13 +1,15 @@
 .sum-row { display: flex; justify-content: space-between; align-items: flex-start; }
 .sum { font-size: 60rpx; margin: 8rpx 0; }
 .pending-hint { color: #FF9F1C; }
-.filters { display: flex; gap: 12rpx; }
+.filters { display: flex; }
+.filters .filter:not(:last-child) { margin-right: 12rpx; }
 .filter {
   padding: 8rpx 24rpx; border-radius: 999rpx;
   background: #f2f3f5; color: #666; font-size: 26rpx;
 }
 .filter.on { background: var(--primary); color: #fff; }
-.search-row { display: flex; align-items: center; gap: 16rpx; margin-top: 20rpx; }
+.search-row { display: flex; align-items: center; margin-top: 20rpx; }
+.search-row .rel-btn, .search-row .export-btn { margin-left: 16rpx; }
 .search {
   flex: 1; background: #f2f3f5;
   border-radius: 999rpx; padding: 16rpx 28rpx;
@@ -22,10 +24,11 @@
 .payer { font-weight: 600; }
 .r-amount { font-size: 34rpx; }
 .r-actions {
-  display: flex; align-items: center; gap: 24rpx;
+  display: flex; align-items: center;
   margin-top: 16rpx; padding-top: 16rpx;
   border-top: 2rpx solid #f5f5f5;
 }
+.r-actions .flex1, .r-actions .link, .r-actions .btn-confirm, .r-actions .muted, .r-actions .badge:not(:first-child) { margin-left: 24rpx; }
 .flex1 { flex: 1; }
 .badge { font-size: 22rpx; padding: 4rpx 14rpx; border-radius: 6rpx; }
 .badge.ok { background: #07C16022; color: #07C160; }
