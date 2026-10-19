@@ -28,8 +28,12 @@
 .name-row .payer { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .name-row .amt, .name-row .cash-tag { flex-shrink: 0; white-space: nowrap; }
 .amt { font-size: 34rpx; }
-.ops { display: flex; align-items: center; margin-left: 24rpx; flex-shrink: 0; }
-.ops .btn { margin-left: 24rpx; }
+.ops { display: flex; align-items: center; margin-left: 20rpx; flex-shrink: 0; }
+.ops .btn { margin-left: 20rpx; }
+/* 第 2 行：说明在左（过长省略），操作在右 */
+.meta-row { display: flex; align-items: center; margin-top: 8rpx; }
+.meta { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.ok-sm { width: 120rpx; height: 56rpx; line-height: 56rpx; padding: 0; font-size: 26rpx; }
 /* 批量确认栏：基于全局 .bottom-bar */
 .batch-bar { display: flex; align-items: center; justify-content: space-between; }
 .batch-bar .muted { margin: 0 16rpx; }
@@ -86,3 +90,13 @@
 .ed-sum { text-align: right; font-size: 30rpx; margin: 20rpx 0; }
 .notify-tip { background: #FFF7E6; color: #D46B08; border-radius: var(--r-s); padding: 18rpx 24rpx; font-size: 26rpx; margin-bottom: 20rpx; }
 .nt-go { float: right; color: var(--primary); }
+
+/* 逐笔模式：左右切换 */
+.card-nav { display: flex; align-items: center; justify-content: space-between; margin: 8rpx 0 20rpx; }
+.card-nav .remain { flex: 1; margin: 0; }
+.nav-arrow { width: 72rpx; height: 72rpx; line-height: 68rpx; text-align: center; font-size: 52rpx; color: var(--primary); border-radius: 50%; background: #fff; flex-shrink: 0; }
+.nav-arrow.off { color: var(--text-3); opacity: .4; }
+.big-card.slide-l { animation: slideL .26s ease-out; }
+.big-card.slide-r { animation: slideR .26s ease-out; }
+@keyframes slideL { from { transform: translateX(60rpx); opacity: .3; } to { transform: none; opacity: 1; } }
+@keyframes slideR { from { transform: translateX(-60rpx); opacity: .3; } to { transform: none; opacity: 1; } }

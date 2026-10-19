@@ -21,7 +21,10 @@ Page({
     selectMode: false,
     pickedCount: 0,
     pickedSum: '0.00',
-    current: null,    // 逐笔模式当前一笔（队列最早的一笔）
+    current: null,    // 逐笔模式当前显示的一笔
+    cardIdx: 0,       // 逐笔模式：当前是第几笔（左右滑动切换）
+    cardCount: 0,
+    slide: '',        // 切换动画：slide-l / slide-r
     editor: null,     // 批次逐人改金额：{ group, rows: [{_id, name, declared, value}] }
     sheet: null,      // 列表模式批次明细弹层（当前打开的一组）
     notifyTip: '',    // 新礼金提醒未开启时提示
@@ -125,7 +128,7 @@ Page({
     return {
       sheet,
       shown: this.filterList(keyword),
-      current: list[0] || null, // 逐笔模式当前一笔（队列最早的一笔）
+      ...this.cardOf(list),     // 逐笔模式：保持正在看的那一笔；它已处理则显示原位置的下一笔
       total,
       sumStr: fmt.money(fen / 100),
       pickedCount: countOf(picked),
@@ -193,9 +196,48 @@ Page({
     }
   },
 
-  // —— 逐笔模式 ——
+  // —— 逐笔模式：左右滑动切换 ——
+  /**
+   * 当前显示哪一笔：优先保持正在看的那一笔（新到账的排在队尾，不打断）；
+   * 它已处理（不在列表中）则停在原位置，即显示下一笔；超出末尾回到第一笔
+   */
+  cardOf(list) {
+    let idx = this._curId ? list.findIndex(r => r._id === this._curId) : -1;
+    if (idx < 0) idx = this._curIdx || 0; // 已处理：原位置即下一笔
+    if (idx >= list.length) idx = 0;      // 处理的是最后一笔：回到第一笔
+    const current = list[idx] || null;
+    this._curId = current ? current._id : null;
+    this._curIdx = idx;
+    return { current, cardIdx: idx, cardCount: list.length };
+  },
   setCurrent() {
-    this.setData({ current: this._list[0] || null });
+    this.setData(this.cardOf(this._list));
+  },
+  goCard(step) {
+    const n = this._list.length;
+    if (n < 2) return;
+    const idx = ((this._curIdx || 0) + step + n) % n;
+    this._curId = this._list[idx]._id;
+    this._curIdx = idx;
+    this.setData({ ...this.cardOf(this._list), slide: step > 0 ? 'slide-l' : 'slide-r' });
+    clearTimeout(this._slideT);
+    this._slideT = setTimeout(() => this.setData({ slide: '' }), 260);
+  },
+  onCardPrev() { this.goCard(-1); },
+  onCardNext() { this.goCard(1); },
+  onTouchStart(e) {
+    const t = e.changedTouches[0];
+    this._touch = { x: t.clientX, y: t.clientY };
+  },
+  onTouchEnd(e) {
+    const s = this._touch;
+    this._touch = null;
+    if (!s) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - s.x;
+    const dy = t.clientY - s.y;
+    // 水平滑动超过 60px 且明显大于竖直方向才切换，避免与页面上下滚动冲突
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) this.goCard(dx < 0 ? 1 : -1);
   },
 
   /** 收到了：卡片上已大字显示金额，直接入簿 */

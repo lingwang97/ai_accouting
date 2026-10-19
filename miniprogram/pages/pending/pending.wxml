@@ -32,12 +32,15 @@
       <view class="check {{item.picked ? 'on' : ''}}" wx:if="{{selectMode}}">{{item.picked ? '✓' : ''}}</view>
       <view class="info">
         <view class="name-row"><text class="payer">{{item.nameStr}}</text><text class="money amt">￥{{item.amountStr}}</text><text class="cash-tag" wx:if="{{item.mixed}}">转账+现金</text><text class="cash-tag" wx:elif="{{item.payMethod === 'cash'}}">💵 现金</text></view>
-        <view class="muted">{{item.timeStr}} {{item.mixed ? '转账+现金' : (item.payMethod === 'cash' ? '宾客现金' : '已转账')}}<text wx:if="{{item.relation}}"> · {{item.relation}}</text><text wx:if="{{item.proxyStr}}"> · 代 {{item.proxyStr}}</text><text wx:if="{{item.remark}}"> · {{item.remark}}</text></view>
+        <!-- 第 2 行：说明在左，操作在右（姓名独占第 1 行，不被按钮挤压） -->
+        <view class="meta-row">
+          <view class="muted meta">{{item.timeStr}} {{item.mixed ? '转账+现金' : (item.payMethod === 'cash' ? '宾客现金' : '已转账')}}<text wx:if="{{item.relation}}"> · {{item.relation}}</text><text wx:if="{{item.proxyStr}}"> · 代 {{item.proxyStr}}</text><text wx:if="{{item.remark}}"> · {{item.remark}}</text></view>
+          <view class="ops" wx:if="{{canConfirm && !selectMode}}">
+            <view class="link danger" data-id="{{item._id}}" catchtap="onReject">未收到</view>
+            <button class="btn btn-sm btn-primary ok-sm" data-id="{{item._id}}" catchtap="onConfirm">确认</button>
+          </view>
+        </view>
         <view class="muted" wx:if="{{item.mixed}}">转账 ￥{{item.wechatSumStr}} · 现金 ￥{{item.cashSumStr}}</view>
-      </view>
-      <view class="ops" wx:if="{{canConfirm && !selectMode}}">
-        <view class="link danger" data-id="{{item._id}}" catchtap="onReject">未收到</view>
-        <button class="btn btn-sm btn-primary" data-id="{{item._id}}" catchtap="onConfirm">确认收到</button>
       </view>
       <!-- 批次：整行大按钮查看明细；catchtap 不触发勾选 -->
       <view class="batch-more" wx:if="{{item.batch}}" hover-class="batch-more-hover" data-id="{{item._id}}" catchtap="onOpenSheet">查看明细（{{item.records.length}} 人）›</view>
@@ -54,8 +57,13 @@
   <!-- 逐笔大字 -->
   <block wx:else>
     <view class="card-mode" wx:if="{{current}}">
-      <view class="remain">还剩 {{total}} 笔 · 按到账先后</view>
-      <view class="big-card">
+      <!-- 左右滑动（或点两侧箭头）切换待确认的账单 -->
+      <view class="card-nav">
+        <view class="nav-arrow {{cardCount > 1 ? '' : 'off'}}" bindtap="onCardPrev">‹</view>
+        <view class="remain">第 {{cardIdx + 1}} / {{cardCount}} 笔 · 共 {{total}} 份 · 左右滑动切换</view>
+        <view class="nav-arrow {{cardCount > 1 ? '' : 'off'}}" bindtap="onCardNext">›</view>
+      </view>
+      <view class="big-card {{slide}}" bindtouchstart="onTouchStart" bindtouchend="onTouchEnd">
         <view class="big-name">{{current.nameStr}}</view>
         <view class="big-amount">￥{{current.amountStr}}</view>
         <view class="big-cash" wx:if="{{current.mixed}}">转账+现金：转账 ￥{{current.wechatSumStr}} · 现金 ￥{{current.cashSumStr}}</view>
