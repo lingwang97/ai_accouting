@@ -81,7 +81,8 @@ Page({
     try {
       const r = await req.qrcodeGen(account._id, this._bookId);
       const qrUrl = await this.getTempUrl(r.fileID);
-      const name = (r.book && (r.book.hostName || r.book.name)) || account.accountName;
+      // 标题显示主家（机构版为本场主家），下方显示礼簿名称，避免礼簿名显示两次
+      const name = (r.book && r.book.hostName) || account.accountName;
       this.setData({
         primary: theme.forType(r.book && r.book.type).primary, // 本场是白事时素灰
         account: { ...account, accountName: name },

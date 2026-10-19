@@ -147,10 +147,14 @@ Page({
   },
 
   // —— 工作台操作 ——
-  /** 机构模式 / 只负责部分场次：出示当前场次的「本场礼簿码」 */
+  /**
+   * 机构模式：出示当前场次的「本场礼簿码」；只负责部分礼簿的记账人，负责的不是主家当前礼簿时也用本场礼簿码
+   * 其余（含记账人负责的正是当前礼簿）与主家完全相同：主家礼簿码 + 同样的扫码流程
+   */
   goQrcode() {
     const b = this.data.book;
-    const perBook = b && (this.data.restricted || (this.data.account && this.data.account.orgMode));
+    const a = this.data.account || {};
+    const perBook = b && (a.orgMode || (this.data.restricted && b._id !== a.activeBookId));
     wx.navigateTo({ url: '/pages/qrcode/qrcode' + (perBook ? `?bookId=${b._id}` : '') });
   },
   goPending() { wx.navigateTo({ url: '/pages/pending/pending' }); },
