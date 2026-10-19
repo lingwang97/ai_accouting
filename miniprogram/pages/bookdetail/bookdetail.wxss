@@ -7,3 +7,6 @@
 .rel-top { display: flex; justify-content: space-between; margin-bottom: 8rpx; }
 .bar-bg { height: 14rpx; background: #f2f3f5; border-radius: 7rpx; overflow: hidden; }
 .bar { height: 100%; background: var(--primary); border-radius: 7rpx; }
+/* 加载中 / 失败重试 */
+.state-box { text-align: center; padding: 200rpx 0; }
+.retry { display: inline-block; margin-top: 24rpx; padding: 14rpx 48rpx; border-radius: 999rpx; border: 2rpx solid var(--primary); color: var(--primary); font-size: 28rpx; }

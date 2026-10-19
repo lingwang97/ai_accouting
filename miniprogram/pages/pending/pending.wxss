@@ -27,8 +27,12 @@
 .check.on { background: var(--primary); border-color: var(--primary); }
 .info { flex: 1; min-width: 0; }
 .payer { font-size: 32rpx; font-weight: 600; margin-right: 16rpx; }
+/* 姓名过长省略，金额与标签不换行 */
+.name-row { display: flex; align-items: center; }
+.name-row .payer { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.name-row .amt, .name-row .cash-tag { flex-shrink: 0; white-space: nowrap; }
 .amt { font-size: 34rpx; }
-.ops { display: flex; align-items: center; margin-left: 24rpx; }
+.ops { display: flex; align-items: center; margin-left: 24rpx; flex-shrink: 0; }
 .ops .btn-ok { margin-left: 24rpx; }
 .btn-ok {
   margin: 0; padding: 0 28rpx; line-height: 64rpx; height: 64rpx;
@@ -74,9 +78,11 @@
 .sh-title { font-size: 34rpx; font-weight: 700; }
 .sh-close { width: 72rpx; height: 72rpx; line-height: 72rpx; text-align: center; font-size: 36rpx; color: #999; margin-right: -16rpx; }
 .sh-list { max-height: 600rpx; }
-.sh-row { display: flex; align-items: center; justify-content: space-between; padding: 18rpx 0; border-bottom: 1rpx solid #f0f0f0; }
+.sh-row { display: flex; align-items: center; justify-content: space-between; padding: 18rpx 0; border-bottom: 2rpx solid #f5f5f5; }
 .sh-info { flex: 1; min-width: 0; }
-.sh-name { font-size: 30rpx; color: #333; }
+.sh-name { font-size: 30rpx; color: #333; display: flex; align-items: center; }
+.sh-nm { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.sh-name .pm-tag { flex-shrink: 0; }
 .sh-amt { font-size: 32rpx; margin-left: 20rpx; flex-shrink: 0; }
 .sh-sum { text-align: right; font-size: 32rpx; margin-top: 20rpx; }
 .sh-sub { text-align: right; margin-top: 6rpx; }
@@ -95,10 +101,11 @@
 .ed-title { font-size: 34rpx; font-weight: 700; margin-bottom: 8rpx; }
 .ed-tip { margin-bottom: 16rpx; }
 .ed-list { max-height: 640rpx; }
-.ed-row { display: flex; align-items: center; justify-content: space-between; padding: 14rpx 0; border-bottom: 1rpx solid #f0f0f0; }
-.ed-name { font-size: 30rpx; }
+.ed-row { display: flex; align-items: center; justify-content: space-between; padding: 14rpx 0; border-bottom: 2rpx solid #f5f5f5; }
+.ed-name { font-size: 30rpx; flex: 1; min-width: 0; margin-right: 20rpx; }
+.ed-nm { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .small { font-size: 22rpx; }
-.ed-input { width: 220rpx; border: 2rpx solid #e5e5e5; border-radius: 10rpx; padding: 12rpx 16rpx; text-align: right; font-size: 32rpx; }
+.ed-input { width: 220rpx; flex-shrink: 0; border: 2rpx solid #e5e5e5; border-radius: 10rpx; padding: 12rpx 16rpx; text-align: right; font-size: 32rpx; }
 .ed-sum { text-align: right; font-size: 30rpx; margin: 20rpx 0; }
 .ed-ops { display: flex; }
 .ed-ops .ed-btn:not(:last-child) { margin-right: 20rpx; }

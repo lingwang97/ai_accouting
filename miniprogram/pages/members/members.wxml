@@ -1,7 +1,6 @@
 <view class="container" style="{{themeStyle}}">
   <view class="card intro muted">
-    每位记账人分别设置：负责哪些礼簿（或全部礼簿，含以后新建的），以及能做哪些事（确认收礼、礼台记账、导出等，可用模板一键选择）。移交、机构模式、外观设置、同意加入和确认收款码只能由主家本人操作。回执和小票上显示各自的"记账人姓名 / 礼台编号"，点「改名」可修改；
-    "清除数据"和"人情往来"只属于各自本人。回执和小票上会同时显示主家与记账人。
+    为每位记账人设置负责的礼簿和可做的事；回执、小票上显示记账人姓名。
   </view>
 
   <view class="card join" wx:if="{{joins.length}}">
@@ -69,7 +68,7 @@
     <view class="muted small invite-desc" wx:if="{{inviteDesc}}">{{inviteDesc}}</view>
   </view>
   <button wx:if="{{canManage}}" class="btn-primary" open-type="share" data-type="clerk" disabled="{{!clerkToken}}">邀请记账人（发给微信好友）</button>
-  <view class="muted hint">对方打开卡片、登录后点「接受邀请」，经主家同意后加入。邀请 7 天内有效，每张最多 5 人使用；移交卡片仅限一人使用。</view>
+  <view class="muted hint">7 天内有效，最多 5 人；对方接受后需你同意</view>
 
   <block wx:if="{{role === 'owner'}}">
     <view class="card transfer">

@@ -28,7 +28,9 @@
     "pages/orgsummary/orgsummary",
     "pages/reconcile/reconcile",
     "pages/bookshare/bookshare",
-    "pages/appearance/appearance"
+    "pages/appearance/appearance",
+    "pages/guide/guide",
+    "pages/welcome/welcome"
   ],
   "window": {
     "backgroundTextStyle": "light",

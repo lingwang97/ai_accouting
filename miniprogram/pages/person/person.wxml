@@ -18,7 +18,7 @@
 
   <view class="section-title">TA 随给我的（{{received.length}}）</view>
   <view class="card item" wx:for="{{received}}" wx:key="_id">
-    <view class="i-top"><text>{{item.event || item.typeLabel}}</text><text class="money">{{item.counted ? '￥' + item.amountStr : '金额未单列'}}</text></view>
+    <view class="i-top"><text class="i-name">{{item.event || item.typeLabel}}</text><text class="money i-amt">{{item.counted ? '￥' + item.amountStr : '金额未单列'}}</text></view>
     <view class="muted">{{item.date}}<text wx:if="{{item.relation}}"> · {{item.relation}}</text>
       <text wx:if="{{item.viaProxy}}" class="proxy"> · 由 {{item.viaProxy}} 代随</text>
       <text wx:if="{{item.withProxy}}" class="proxy"> · 含代 {{item.withProxy}} 的礼金</text></view>
@@ -27,7 +27,7 @@
 
   <view class="section-title" style="margin-top:28rpx">我送给 TA 的（{{given.length}}）</view>
   <view class="card item" wx:for="{{given}}" wx:key="_id" data-idx="{{index}}" bindtap="onEditGift">
-    <view class="i-top"><text>{{item.event || item.typeLabel}}</text><text class="money">￥{{item.amountStr}}</text></view>
+    <view class="i-top"><text class="i-name">{{item.event || item.typeLabel}}</text><text class="money i-amt">￥{{item.amountStr}}</text></view>
     <view class="muted">{{item.date}} · {{item.typeLabel}}<text wx:if="{{item.auto}}" class="proxy"> · 扫码随礼</text><text wx:if="{{item.remark}}"> · {{item.remark}}</text></view>
   </view>
   <view class="muted empty" wx:if="{{!loading && given.length === 0}}">暂无</view>

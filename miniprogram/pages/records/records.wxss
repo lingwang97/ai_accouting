@@ -21,7 +21,11 @@
 .record.transferred { border-left: 8rpx solid #FF9F1C; }
 .record.pending { opacity: .7; }
 .r-top { display: flex; justify-content: space-between; margin-bottom: 8rpx; }
-.payer { font-weight: 600; }
+.payer { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* 姓名过长省略，金额不换行 */
+.r-right { flex-shrink: 0; white-space: nowrap; margin-left: 16rpx; }
+.sum-left { flex: 1; min-width: 0; }
+.filters { flex-shrink: 0; margin-left: 16rpx; }
 .r-amount { font-size: 34rpx; }
 .r-actions {
   display: flex; align-items: center;
@@ -42,7 +46,7 @@
 }
 .pad { padding: 40rpx 0; }
 
-.book-pick { font-size: 30rpx; font-weight: 600; color: #333; margin-bottom: 8rpx; }
+.book-pick { font-size: 30rpx; font-weight: 600; color: #333; margin-bottom: 8rpx; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .rel-btn { padding: 0 20rpx; line-height: 64rpx; border-radius: 12rpx; background: #f2f3f5; color: #666; font-size: 26rpx; white-space: nowrap; }
 .rel-btn.on { background: var(--primary-soft); color: var(--primary); }
 .declared { color: #FF9F1C; }

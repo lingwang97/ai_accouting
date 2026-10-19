@@ -4,6 +4,9 @@
 .advice { text-align: center; color: var(--primary); }
 .advice.owe { color: #FA5151; }
 .i-top { display: flex; justify-content: space-between; margin-bottom: 6rpx; }
+/* 事由过长省略，金额不换行 */
+.i-name { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.i-amt { flex-shrink: 0; white-space: nowrap; margin-left: 16rpx; }
 .proxy { color: #FF9F1C; }
 .dup-tip { font-size: 24rpx; color: #FF9F1C; background: #FFF7E6; }
 .empty { padding: 0 8rpx 16rpx; }

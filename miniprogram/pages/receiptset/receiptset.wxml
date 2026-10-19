@@ -63,7 +63,7 @@
     <view class="chips">
       <view class="chip" wx:for="{{disabledItems}}" wx:key="f" data-f="{{item.f}}" bindtap="onAddField">＋ {{item.label}}</view>
     </view>
-    <view class="muted">金额始终显示在收据中部</view>
+    <view class="muted">金额始终显示在回执中部</view>
   </view>
 
   <button class="btn-primary" loading="{{saving}}" bindtap="onSave">保存模板</button>

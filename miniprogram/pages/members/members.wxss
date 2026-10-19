@@ -2,7 +2,9 @@
 .row { display: flex; align-items: center; padding: 16rpx 0; border-bottom: 2rpx solid #f5f5f5; }
 .row .avatar { margin-right: 20rpx; }
 .avatar { width: 72rpx; height: 72rpx; border-radius: 50%; background: #eee; flex-shrink: 0; }
-.name { flex: 1; font-size: 30rpx; }
+.name { flex: 1; font-size: 30rpx; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* 姓名、说明过长省略，按钮不换行 */
+.name > view, .b-info > view { overflow: hidden; text-overflow: ellipsis; }
 .small { font-size: 22rpx; }
 .tag { font-size: 20rpx; color: var(--primary); background: var(--primary-soft); border-radius: 6rpx; padding: 2rpx 10rpx; margin-left: 12rpx; }
 .link.danger { color: #FA5151; font-size: 26rpx; }
@@ -20,7 +22,7 @@
   text-align: center; color: #fff; font-size: 24rpx; flex-shrink: 0;
 }
 .check.on { background: var(--primary); border-color: var(--primary); }
-.b-info { flex: 1; }
+.b-info { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .stay-row { display: flex; justify-content: space-between; align-items: center; margin-top: 20rpx; }
 .stay-row switch { margin-left: 20rpx; }
 .transfer-desc { background: #F7F7F7; border-radius: 12rpx; padding: 16rpx 20rpx; font-size: 26rpx; color: #555; margin: 20rpx 0; line-height: 1.6; }
@@ -36,7 +38,7 @@
 .ed-ops .ed-btn:not(:last-child) { margin-right: 20rpx; }
 .ed-btn { flex: 1; font-size: 30rpx; }
 .ed-btn.ok { background: var(--primary); color: #fff; }
-.row .link { margin-left: 36rpx; white-space: nowrap; }
+.row .link { margin-left: 36rpx; white-space: nowrap; flex-shrink: 0; }
 .invite-desc { margin-top: 12rpx; }
 /* 权限勾选：两列，不用 flex gap（旧版 iOS 不支持），用外边距 */
 .perm-head { display: flex; align-items: center; justify-content: space-between; margin-top: 24rpx; }

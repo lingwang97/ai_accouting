@@ -177,7 +177,7 @@ Page({
       wx.hideLoading();
       wx.showModal({
         title: '礼簿台卡已保存到相册',
-        content: '可打印后摆在礼台。宾客：先扫上方礼簿码登记姓名礼金，再用微信扫一扫扫下方收款码转账。',
+        content: '上码登记礼金，下码扫码转账',
         showCancel: false
       });
     } catch (e) {

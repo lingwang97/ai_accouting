@@ -20,7 +20,7 @@
     <view class="share-desc">{{shareDesc}}</view>
     <button class="btn-primary" open-type="share">发给家人（微信好友 / 家庭群）</button>
   </block>
-  <view class="muted hint">卡片 7 天内有效，每张最多 5 人使用；家人打开、登录后点「接受共享」，你在工作台同意后即可查看</view>
+  <view class="muted hint">7 天内有效，最多 5 人；对方接受后需你同意</view>
 
   <view class="section-title" style="margin-top:36rpx">已共享的家人（{{viewers.length}}）</view>
   <view class="card">

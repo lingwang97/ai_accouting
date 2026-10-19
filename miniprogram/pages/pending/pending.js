@@ -57,7 +57,7 @@ Page({
     if (this.data.busy) return;
     try {
       const { list } = await req.recordPending();
-      if (silent && list.length > countOf(this._list)) wx.vibrateShort({ type: 'heavy' });
+      if (silent && list.length > countOf(this._list)) wx.vibrateShort({ type: 'heavy', fail() {} });
       const picked = new Set(this._list.filter(r => r.picked).map(r => r._id));
       // 批次录入的多位随礼人合成一组；按转账时间先后排列：逐笔模式先处理最早的
       const items = groupRecords(list)

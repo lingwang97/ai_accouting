@@ -217,7 +217,7 @@ Page({
       const { status } = await req.payStatus(this.data.record._id);
       if (status === 'paid') {
         this.stopPoll();
-        wx.vibrateShort({ type: 'medium' });
+        wx.vibrateShort({ type: 'medium', fail() {} });
         this.setData({ step: 'success' });
         this.loadReceipt();
       } else if (status === 'rejected') {
@@ -311,7 +311,7 @@ Page({
   saveByPreview() {
     wx.showModal({
       title: '请长按保存收款码',
-      content: '即将打开收款码大图，请长按图片选择「保存图片」，再用微信扫一扫 → 相册识别转账',
+      content: '长按大图选「保存图片」，再用扫一扫 → 相册转账',
       confirmText: '打开大图',
       showCancel: false,
       success: () => wx.previewImage({ urls: [this.data.payCodeUrl], showmenu: true })
@@ -322,7 +322,7 @@ Page({
   showScanGuide() {
     wx.showModal({
       title: '收款码已存入相册',
-      content: `① 退回微信，点右上角「＋」→「扫一扫」\n② 点右上角「相册」，选第一张图（刚保存的收款码）\n③ 转账 ￥${this.data.record.payStr}，再回到这里点「我已完成转账」`,
+      content: '回微信「扫一扫」→ 右上角「相册」选它转账，转完回来点「我已完成转账」',
       confirmText: '去转账',
       showCancel: false
     });

@@ -345,7 +345,7 @@ function saveImage(filePath) {
     wx.saveImageToPhotosAlbum({
       filePath,
       success: () => {
-        wx.showToast({ title: '回执已保存到相册', icon: 'success' });
+        wx.showToast({ title: '回执已存相册', icon: 'success' });
         resolve(true);
       },
       fail: e => {

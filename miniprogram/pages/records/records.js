@@ -148,7 +148,7 @@ Page({
     const before = this.data.pendingCount;
     try {
       const res = await req.recordList(this.buildParams(1));
-      if (res.pendingCount > before) wx.vibrateShort({ type: 'heavy' });
+      if (res.pendingCount > before) wx.vibrateShort({ type: 'heavy', fail() {} });
       if (res.pendingCount !== before) getApp().setBadge(res.pendingCount);
       // 合计与份数总是刷新
       this.setData({ sum: fmt.money(res.sum), total: res.total, pendingCount: res.pendingCount });
@@ -219,15 +219,18 @@ Page({
     this.setData({ loading: true });
     try {
       const res = await req.recordList(this.buildParams(this.data.page));
-      const list = this.data.list.concat(res.list.map(decorate));
-      this.setData({
-        list,
+      // 加载更多：按下标追加，不重传整张列表
+      const start = this.data.list.length;
+      const more = res.list.map(decorate);
+      const patch = {
         sum: fmt.money(res.sum),
         total: res.total,
         pendingCount: res.pendingCount,
         page: this.data.page + 1,
-        hasMore: list.length < res.listTotal
-      });
+        hasMore: start + more.length < res.listTotal
+      };
+      more.forEach((item, i) => { patch[`list[${start + i}]`] = item; });
+      this.setData(patch);
       this._listTotal = res.listTotal;
     } catch (e) { /* toast 已提示 */ } finally {
       this.setData({ loading: false });

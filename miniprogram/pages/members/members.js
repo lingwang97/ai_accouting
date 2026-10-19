@@ -181,7 +181,7 @@ Page({
     const target = owner ? this.data.owner : this.data.list[idx];
     if (!target) return;
     wx.showModal({
-      title: '记账人姓名 / 礼台编号',
+      title: '记账人姓名',
       editable: true,
       content: target.name || '',
       placeholderText: '如：李华、礼台1号，回执和小票上显示',

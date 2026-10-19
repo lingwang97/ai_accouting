@@ -56,12 +56,13 @@ Page({
       app.globalData.pendingInvite = '';
       app.resetIdentity();
       if (r.pending) {
-        // 记账人 / 家人共享：主家同意后才生效
+        // 记账人 / 家人共享：主家同意后才生效；记账人第一次使用先看快速介绍
+        const intro = r.type !== 'viewer' && !wx.getStorageSync('guide_seen');
         return wx.showModal({
           title: '已提交申请',
           content: `已向「${r.accountName}」提交申请，主家同意后你就可以${r.type === 'viewer' ? '查看共享的礼簿' : '记账'}了。`,
           showCancel: false,
-          success: () => wx.switchTab({ url: '/pages/index/index' })
+          success: () => (intro ? wx.redirectTo({ url: '/pages/welcome/welcome?role=clerk' }) : wx.switchTab({ url: '/pages/index/index' }))
         });
       }
       wx.showModal({

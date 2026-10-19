@@ -19,7 +19,8 @@ Page({
     orgMode: false,
     readonly: true,   // 家人共享：只读（身份读取前先按只读显示）
     pm: {},           // 当前身份的权限：生成存档需「管理礼簿」，导出需「对账与导出」
-    canExport: false  // 有导出权限（家人共享也可导出）
+    canExport: false, // 有导出权限（家人共享也可导出）
+    loadError: false  // 加载失败：显示重试，不留空白页
   },
 
   async onLoad(options) {
@@ -31,8 +32,18 @@ Page({
     this.setData({ orgMode: !!(acc && acc.orgMode) && role !== 'viewer', readonly: role === 'viewer', pm, canExport: pm.export || role === 'viewer' });
   },
 
-  async onShow() {
+  onShow() {
     theme.apply(this); // 主题色跟当前礼簿事由走
+    this.load();
+  },
+
+  /** 加载失败后点击重试 */
+  onRetry() {
+    this.setData({ loadError: false });
+    this.load();
+  },
+
+  async load() {
     try {
       const s = await req.bookStats(this.data.id);
       const total = s.sum || 0;
@@ -47,6 +58,7 @@ Page({
         wechatCount: s.byMethod ? s.byMethod.wechat.count : 0,
         cashSum: fmt.money(s.byMethod ? s.byMethod.cash.sum : 0),
         cashCount: s.byMethod ? s.byMethod.cash.count : 0,
+        loadError: false,
         byRelation: s.byRelation.map(r => ({
           ...r,
           sumStr: fmt.money(r.sum),
@@ -54,7 +66,10 @@ Page({
         }))
       });
       wx.setNavigationBarTitle({ title: s.book.name });
-    } catch (e) { /* toast 已提示 */ }
+    } catch (e) {
+      // toast 已提示；还没有数据时显示重试
+      if (!this.data.book) this.setData({ loadError: true });
+    }
   },
 
   /** 礼簿页按本礼簿筛选 */

@@ -176,12 +176,14 @@ Page({
       typeLabel: scenes.label(r.bookType),
       methodStr: r.payMethod === 'cash' ? '现金' : '微信'
     }));
-    this.setData({
-      inList: page === 1 ? rows : this.data.inList.concat(rows),
-      inPage: page,
-      inTotal: res.total,
-      inSum: fmt.money(res.sum)
-    });
+    const patch = { inPage: page, inTotal: res.total, inSum: fmt.money(res.sum) };
+    if (page === 1) patch.inList = rows;
+    else {
+      // 加载更多：按下标追加，不重传整张列表
+      const start = this.data.inList.length;
+      rows.forEach((r, i) => { patch[`inList[${start + i}]`] = r; });
+    }
+    this.setData(patch);
   },
   onInMore() {
     if (this.data.inList.length < this.data.inTotal) this.loadIn(this.data.inPage + 1).catch(() => {});

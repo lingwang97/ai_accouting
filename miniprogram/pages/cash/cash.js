@@ -25,6 +25,7 @@ Page({
     batchMode: false, // 批次录入：一次登记多位随礼人，每人各打一张小票
     payMethod: 'cash', // cash 现金 | wechat 微信（礼台确认已到账）| mixed 转账+现金（仅批次录入）
     books: [],        // 机构模式：可选场次（未归档）
+    orgMode: !!(getApp().globalData.account && getApp().globalData.account.orgMode), // 机构模式称「场次」，个人称「礼簿」
     bookIdx: 0,
     relations: scenes.RELATIONS,
     saving: false,
@@ -55,6 +56,7 @@ Page({
       const books = list.filter(b => !b.archived).map(b => ({ _id: b._id, name: b.hostName ? `${b.hostName} · ${b.name}` : b.name, type: b.type }));
       const pickBook = account.orgMode || !activeBookId;
       this.setData({
+        orgMode: !!account.orgMode,
         books: pickBook ? books : [],
         bookIdx: Math.max(0, books.findIndex(b => b._id === activeBookId)),
         bookName: book ? book.name : '',

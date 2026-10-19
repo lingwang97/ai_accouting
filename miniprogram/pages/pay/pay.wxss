@@ -35,7 +35,6 @@
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.pay-ways { text-align: left; font-size: 24rpx; color: #666; line-height: 1.7; margin: 16rpx 0; padding: 16rpx 20rpx; background: #F7F7F7; border-radius: 12rpx; }
 .btn-save { margin: 20rpx 0 8rpx; }
 .chips { display: flex; flex-wrap: wrap; margin-bottom: 0; margin-right: -14rpx; }
 .chips .chip { margin: 0 14rpx 14rpx 0; }
@@ -43,8 +42,6 @@
 .chip.on { background: var(--primary); color: #fff; }
 .success-head.plain .ok-title { color: #333; }
 .scan-icon { font-size: 80rpx; }
-.scan-steps { text-align: left; font-size: 28rpx; color: #333; line-height: 2; margin: 8rpx 0 20rpx; }
-.scan-steps .em { color: var(--primary); font-weight: 600; }
 .link-fold { color: #576B95; font-size: 26rpx; padding-top: 8rpx; }
 .success-head { padding: 28rpx; }
 .btn-receipt { margin-top: 28rpx; }
@@ -57,3 +54,8 @@
 .pay-method { margin-top: 28rpx; }
 .items { font-size: 24rpx; line-height: 1.6; margin-top: 8rpx; }
 .host-cta { margin: 24rpx 0; padding: 22rpx 24rpx; background: var(--primary-soft); color: var(--primary); border-radius: 12rpx; font-size: 26rpx; line-height: 1.6; text-align: center; }
+/* 转账步骤：一行三步（不用 gap，用 margin） */
+.step-row { display: flex; justify-content: center; margin: 12rpx 0 20rpx; }
+.sr-item { flex: 1; font-size: 26rpx; color: #333; background: #F7F7F7; border-radius: 10rpx; padding: 14rpx 8rpx; text-align: center; white-space: nowrap; }
+.sr-item:not(:last-child) { margin-right: 12rpx; }
+.sr-num { color: var(--primary); font-weight: 600; margin-right: 4rpx; }

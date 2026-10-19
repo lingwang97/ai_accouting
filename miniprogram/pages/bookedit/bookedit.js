@@ -66,6 +66,10 @@ Page({
           },
           complete: () => this.setData({ uploading: false })
         });
+      },
+      fail: err => {
+        if (String((err && err.errMsg) || '').includes('cancel')) return; // 用户取消
+        wx.showToast({ title: '无法选择图片', icon: 'none' });
       }
     });
   },
@@ -87,7 +91,7 @@ Page({
       if (pendingPayCode) {
         // 记账人上传的本场收款码：主家确认采用后才生效
         await new Promise(resolve => wx.showModal({
-          title: '收款码待主家确认', content: '礼簿已保存。新上传的本场收款码需主家在「主家信息」页确认采用后才生效。', showCancel: false, complete: resolve
+          title: '收款码待主家确认', content: '礼簿已保存，新收款码待主家确认后生效', showCancel: false, complete: resolve
         }));
       } else {
         wx.showToast({ title: id ? '已保存' : '已创建并设为当前', icon: 'success' });

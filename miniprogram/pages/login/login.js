@@ -34,6 +34,7 @@ Page({
       const token = app.globalData.pendingInvite;
       setTimeout(() => {
         if (token) wx.redirectTo({ url: `/pages/invite/invite?token=${token}` });
+        else if (data.isNew) wx.redirectTo({ url: '/pages/welcome/welcome' }); // 新用户：先看快速介绍
         else wx.switchTab({ url: '/pages/mine/mine' });
       }, 600);
     } catch (e) {

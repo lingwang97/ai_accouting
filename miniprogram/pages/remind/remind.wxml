@@ -1,5 +1,5 @@
 <view class="container" style="{{themeStyle}}">
-  <view class="tip muted">记下亲友办事的日期，到时在「往来」顶部提醒你回礼；同意订阅后，还会在提醒当天上午 9 点收到微信服务通知。</view>
+  <view class="tip muted">到期在「往来」提醒你；订阅后当天 9 点再发微信通知</view>
   <view class="card">
     <view class="field">
       <text class="label">对方姓名 *</text>
@@ -32,6 +32,5 @@
   </view>
 
   <button class="btn-primary" loading="{{saving}}" bindtap="onSave">保存提醒</button>
-  <view class="muted center sub-tip" wx:if="{{pushOn}}">保存时会请求订阅一次服务通知，用于本条提醒</view>
   <button wx:if="{{_id}}" class="btn-del" bindtap="onDelete">删除</button>
 </view>

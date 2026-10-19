@@ -138,6 +138,10 @@ Page({
           },
           complete: () => this.setData({ uploading: false })
         });
+      },
+      fail: err => {
+        if (String((err && err.errMsg) || '').includes('cancel')) return; // 用户取消
+        wx.showToast({ title: '无法选择图片', icon: 'none' });
       }
     });
   },
@@ -172,7 +176,7 @@ Page({
       theme.apply(this);
       if (pendingPayCode) {
         this.setData({ pendingNote: true });
-        wx.showModal({ title: '已提交主家确认', content: '收款码关系到礼金转到谁的账户：主家确认采用后才生效，确认前宾客仍转到原收款码。', showCancel: false });
+        wx.showModal({ title: '已提交主家确认', content: '新收款码待主家确认后生效', showCancel: false });
       } else {
         wx.showToast({ title: '保存成功', icon: 'success' });
       }

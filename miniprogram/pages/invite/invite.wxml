@@ -23,14 +23,15 @@
         <view class="desc muted">主家同意后可以查看以上礼簿的明细、合计、统计、对账和导出；只能查看，不能修改。</view>
       </block>
       <block wx:else>
+        <view class="perm-label muted">可查看：{{info.allBooks ? '全部礼簿' : ''}}</view>
         <view class="books" wx:if="{{!info.allBooks && info.books.length}}">
           <view class="bk" wx:for="{{info.books}}" wx:key="index"><text>{{item.name}}</text><text class="muted">{{item.count}} 份 · ￥{{item.sum}}</text></view>
         </view>
-        <view class="perm-label muted" wx:if="{{info.perms && info.perms.length}}">可以做的事</view>
+        <view class="perm-label muted" wx:if="{{info.perms && info.perms.length}}">可操作：</view>
         <view class="perms" wx:if="{{info.perms && info.perms.length}}">
           <text class="perm" wx:for="{{info.perms}}" wx:key="*this">{{item}}</text>
         </view>
-        <view class="desc muted">主家同意后成为记账人，可以查看{{info.allBooks ? '全部礼簿（含以后新建的）' : '以上礼簿'}}的礼金{{info.perms && info.perms.length ? '，并按上面的权限操作' : ''}}。</view>
+        <view class="desc muted">接受后需主家同意才生效</view>
       </block>
     </block>
 

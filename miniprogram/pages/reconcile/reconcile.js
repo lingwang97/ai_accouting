@@ -83,10 +83,10 @@ Page({
       `范围：${this.data.range === 'today' ? '今日 ' + fmt.day(new Date()) : '全部'}　生成：${r.at}`,
       `已入簿：${r.paid.count} 份，￥${r.paid.sumStr}`,
       `· 微信转账：${r.wechat.count} 份，￥${r.wechat.sumStr}`,
-      ...(r.deskWechat.count ? [`　- 宾客扫码转账：${r.guestWechat.count} 份，￥${r.guestWechat.sumStr}`, `　- 礼台登记微信：${r.deskWechat.count} 份，￥${r.deskWechat.sumStr}`] : []),
+      ...(r.deskWechat.count ? [`　- 宾客扫码转账：${r.guestWechat.count} 份，￥${r.guestWechat.sumStr}`, `　- 礼台记账（微信）：${r.deskWechat.count} 份，￥${r.deskWechat.sumStr}`] : []),
       `· 现金合计：${r.cash.count} 份，￥${r.cash.sumStr}`,
-      `　- 礼台登记现金：${r.deskCash.count} 份，￥${r.deskCash.sumStr}`,
-      `　- 宾客自报现金：${r.guestCash.count} 份，￥${r.guestCash.sumStr}`
+      `　- 礼台记账（现金）：${r.deskCash.count} 份，￥${r.deskCash.sumStr}`,
+      `　- 宾客现金：${r.guestCash.count} 份，￥${r.guestCash.sumStr}`
     ];
     if (r.mixed.batches) out.push(`其中转账+现金：${r.mixed.batches} 批，￥${r.mixed.sumStr}（转账 ￥${r.mixed.wechatStr}、现金 ￥${r.mixed.cashStr}，已分别计入上面）`);
     if (r.transferred.count) out.push(`待确认：${r.transferred.count} 份，￥${r.transferred.sumStr}`);

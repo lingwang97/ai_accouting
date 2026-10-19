@@ -8,14 +8,16 @@
   text-align: center; color: #fff; font-size: 24rpx; flex-shrink: 0;
 }
 .check.on { background: var(--primary); border-color: var(--primary); }
-.b-info { flex: 1; }
+.b-info { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* 礼簿名、姓名过长省略 */
+.b-info > view, .v-info > view { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .small { font-size: 22rpx; }
 .center { text-align: center; }
 .share-desc { background: #fff; border-radius: 12rpx; padding: 18rpx 22rpx; font-size: 26rpx; color: #555; margin-bottom: 20rpx; line-height: 1.6; }
 .hint { text-align: center; margin: 16rpx 0; line-height: 1.6; }
 .v-row { display: flex; align-items: center; padding: 16rpx 0; border-bottom: 2rpx solid #f5f5f5; }
 .v-row .avatar { margin-right: 16rpx; }
-.v-row .link { margin-left: 16rpx; }
+.v-row .link { margin-left: 16rpx; flex-shrink: 0; }
 .v-row:last-child { border-bottom: none; }
 .avatar { width: 64rpx; height: 64rpx; border-radius: 50%; background: #eee; flex-shrink: 0; }
 .v-info { flex: 1; min-width: 0; }

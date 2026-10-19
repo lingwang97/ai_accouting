@@ -62,7 +62,7 @@
 
     <view class="section-title">数据库索引</view>
     <view class="card">
-      <view class="muted small tip">一键创建 15 条查询索引（已存在的自动跳过），记录多了以后礼簿、工作台依旧很快。首次使用需在云开发控制台 → 云函数 → system → 配置 → 环境变量 添加 WX_APPSECRET（小程序后台 → 开发管理 → AppSecret）。</view>
+      <view class="muted small tip">一键创建查询索引（已存在的会跳过）。首次使用需在云函数 system 的环境变量添加 WX_APPSECRET。</view>
       <button class="btn-primary save" loading="{{indexing}}" bindtap="onIndexes">一键创建 / 检查索引</button>
       <view class="idx-sum" wx:if="{{indexSummary}}">{{indexSummary}}</view>
       <view class="idx-row" wx:for="{{indexResults}}" wx:key="name">

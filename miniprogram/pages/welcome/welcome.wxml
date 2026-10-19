@@ -1,0 +1,30 @@
+<view class="page" style="{{themeStyle}}">
+  <view class="skip" bindtap="goHome">跳过</view>
+
+  <swiper class="swiper" current="{{current}}" bindchange="onChange">
+    <swiper-item wx:for="{{slides}}" wx:key="title">
+      <view class="slide">
+        <view class="icon-circle"><image class="icon" src="/assets/icons/{{item.icon}}-w.svg" /></view>
+        <view class="title">{{item.title}}</view>
+        <view class="sub">{{item.sub}}</view>
+      </view>
+    </swiper-item>
+  </swiper>
+
+  <view class="dots">
+    <view class="dot {{current === index ? 'on' : ''}}" wx:for="{{slides}}" wx:key="title"></view>
+  </view>
+
+  <view class="ops">
+    <block wx:if="{{current < slides.length - 1}}">
+      <button class="btn-primary" bindtap="onNext">下一步</button>
+    </block>
+    <block wx:elif="{{role === 'clerk'}}">
+      <button class="btn-primary" bindtap="goHome">开始记账</button>
+    </block>
+    <block wx:else>
+      <button class="btn-primary" bindtap="goAccount">去完善收款码</button>
+      <button class="btn-plain later" bindtap="goHome">先看看</button>
+    </block>
+  </view>
+</view>

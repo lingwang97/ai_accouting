@@ -1,0 +1,16 @@
+<view class="container" style="{{themeStyle}}">
+  <view class="seg">
+    <view class="seg-item {{tab === 'host' ? 'on' : ''}}" data-t="host" bindtap="onTab">主家</view>
+    <view class="seg-item {{tab === 'clerk' ? 'on' : ''}}" data-t="clerk" bindtap="onTab">记账人</view>
+    <view class="seg-item {{tab === 'guest' ? 'on' : ''}}" data-t="guest" bindtap="onTab">宾客</view>
+  </view>
+
+  <view class="step" wx:for="{{steps}}" wx:key="title">
+    <view class="num">{{index + 1}}</view>
+    <view class="body">
+      <view class="title">{{item.title}}</view>
+      <view class="desc">{{item.desc}}</view>
+      <view class="go" wx:if="{{item.url}}" data-i="{{index}}" bindtap="onGo">{{item.go || '去设置'}} ›</view>
+    </view>
+  </view>
+</view>

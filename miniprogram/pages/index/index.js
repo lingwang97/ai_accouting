@@ -8,6 +8,7 @@ const scenes = require('../../utils/scenes.js');
 const theme = require('../../utils/theme.js');
 const cache = require('../../utils/cache.js');
 const perm = require('../../utils/perm.js');
+const device = require('../../utils/device.js');
 
 const POLL_MS = 5000;
 const POLL_MS_READONLY = 30000; // 家人只读：不处理待确认，放慢轮询
@@ -29,11 +30,13 @@ Page({
     printerName: '',
     pm: {},            // 当前身份的权限（记账人按各自权限显示操作）
     notifyTip: '',     // 新礼金提醒未开启 / 发送失败时的提示
+    guideTip: false,   // 「第一次使用？看看使用说明」小卡片（关闭后不再显示）
     themeStyle: ''
   },
 
   onShow() {
     theme.apply(this);
+    this.setData({ guideTip: !wx.getStorageSync('guide_tip_closed') });
     // 秒开：先显示上次的工作台数据，后台刷新
     if (this.data.mode === 'loading' && !wx.getStorageSync(LOGOUT_KEY)) {
       const c = cache.get('dashboard');
@@ -123,7 +126,7 @@ Page({
     try {
       const pending = await req.pendingStat();
       if (!pending) return;
-      if (silent && pending.count > this.data.pendingCount) wx.vibrateShort({ type: 'heavy' });
+      if (silent && pending.count > this.data.pendingCount) wx.vibrateShort({ type: 'heavy', fail() {} });
       this.setData({ pendingCount: pending.count, pendingSum: fmt.money(pending.sum) });
       getApp().setBadge(pending.count);
     } catch (e) { /* 静默 */ }
@@ -180,6 +183,14 @@ Page({
   goMembers() { wx.navigateTo({ url: '/pages/members/members' }); },
   goRecords() { wx.switchTab({ url: '/pages/records/records' }); },
   goLogin() { wx.navigateTo({ url: '/pages/login/login' }); },
+  /** 使用说明小卡片：记账人打开记账人分页 */
+  goGuide() {
+    wx.navigateTo({ url: '/pages/guide/guide?tab=' + (this.data.role === 'clerk' ? 'clerk' : 'host') });
+  },
+  onCloseGuideTip() {
+    try { wx.setStorageSync('guide_tip_closed', true); } catch (e) { /* 忽略 */ }
+    this.setData({ guideTip: false });
+  },
   goMyReceipts() { wx.navigateTo({ url: '/pages/myreceipts/myreceipts' }); }, // 宾客首页
 
   /** 转发给好友 / 分享到朋友圈：落地首页（宾客扫码随礼，主家创建礼簿） */
@@ -203,7 +214,7 @@ Page({
     } else {
       wx.showModal({
         title: '未开启提醒',
-        content: '请在弹窗中点「允许」。如果没有弹窗，可能之前选过拒绝：点右上角「···」→「设置」→「通知管理」打开。',
+        content: '未弹出授权？右上角「···」→ 设置 → 通知管理 打开',
         showCancel: false
       });
     }
@@ -222,6 +233,10 @@ Page({
         } else {
           wx.showToast({ title: '不是有效的礼簿码', icon: 'none' });
         }
+      },
+      fail: err => {
+        if (String((err && err.errMsg) || '').includes('cancel')) return; // 用户取消
+        wx.showToast({ title: device.isPC() ? '当前设备不支持扫码' : '扫码失败，请重试', icon: 'none' });
       }
     });
   }

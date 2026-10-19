@@ -13,7 +13,9 @@
   <view class="notify-tip" wx:if="{{!canConfirm}}">你没有「确认收礼」权限，只能查看待确认礼金，由主家或其他记账人确认</view>
   <view class="notify-tip" wx:elif="{{notifyTip}}" bindtap="onSubscribe">🔔 {{notifyTip}} <text class="nt-go">开启 ›</text></view>
 
-  <view class="empty" wx:if="{{loaded && total === 0}}">
+  <!-- 首次加载完成前显示加载中，避免空状态闪现 -->
+  <view class="muted center pad" wx:if="{{!loaded}}">加载中…</view>
+  <view class="empty" wx:elif="{{total === 0}}">
     <view class="empty-icon">✓</view>
     <view>全部处理完了</view>
     <view class="muted">新礼金到达时会自动出现在这里</view>
@@ -29,13 +31,13 @@
     <view class="item {{item.picked ? 'picked' : ''}}" wx:for="{{shown}}" wx:key="_id" data-id="{{item._id}}" bindtap="onPick">
       <view class="check {{item.picked ? 'on' : ''}}" wx:if="{{selectMode}}">{{item.picked ? '✓' : ''}}</view>
       <view class="info">
-        <view><text class="payer">{{item.payerName}}</text><text class="money amt">￥{{item.amountStr}}</text><text class="cash-tag" wx:if="{{item.mixed}}">转账+现金</text><text class="cash-tag" wx:elif="{{item.payMethod === 'cash'}}">💵 现金</text></view>
-        <view class="muted">{{item.timeStr}} {{item.mixed ? '转账+现金' : (item.payMethod === 'cash' ? '登记现金' : '已转账')}}<text wx:if="{{item.relation}}"> · {{item.relation}}</text><text wx:if="{{item.proxyStr}}"> · 代 {{item.proxyStr}}</text><text wx:if="{{item.remark}}"> · {{item.remark}}</text></view>
+        <view class="name-row"><text class="payer">{{item.payerName}}</text><text class="money amt">￥{{item.amountStr}}</text><text class="cash-tag" wx:if="{{item.mixed}}">转账+现金</text><text class="cash-tag" wx:elif="{{item.payMethod === 'cash'}}">💵 现金</text></view>
+        <view class="muted">{{item.timeStr}} {{item.mixed ? '转账+现金' : (item.payMethod === 'cash' ? '宾客现金' : '已转账')}}<text wx:if="{{item.relation}}"> · {{item.relation}}</text><text wx:if="{{item.proxyStr}}"> · 代 {{item.proxyStr}}</text><text wx:if="{{item.remark}}"> · {{item.remark}}</text></view>
         <view class="muted" wx:if="{{item.mixed}}">转账 ￥{{item.wechatSumStr}} · 现金 ￥{{item.cashSumStr}}</view>
       </view>
       <view class="ops" wx:if="{{canConfirm && !selectMode}}">
         <view class="link danger" data-id="{{item._id}}" catchtap="onReject">未收到</view>
-        <button class="btn-ok" data-id="{{item._id}}" catchtap="onConfirm">{{item.mixed ? '确认收到' : (item.payMethod === 'cash' ? '收到现金' : '确认收到')}}</button>
+        <button class="btn-ok" data-id="{{item._id}}" catchtap="onConfirm">确认收到</button>
       </view>
       <!-- 批次：整行大按钮查看明细；catchtap 不触发勾选 -->
       <view class="batch-more" wx:if="{{item.batch}}" hover-class="batch-more-hover" data-id="{{item._id}}" catchtap="onOpenSheet">查看明细（{{item.records.length}} 人）›</view>
@@ -67,10 +69,10 @@
             <text class="money">￥{{r.amountStr}}</text>
           </view>
         </view>
-        <view class="muted">{{current.timeStr}} {{current.mixed ? '转账+现金' : (current.payMethod === 'cash' ? '登记现金' : '已转账')}}</view>
+        <view class="muted">{{current.timeStr}} {{current.mixed ? '转账+现金' : (current.payMethod === 'cash' ? '宾客现金' : '已转账')}}</view>
       </view>
       <view class="tip muted">{{current.mixed ? '请核对微信转账与现金合计与上面的金额一致' : (current.payMethod === 'cash' ? '请清点现金与上面的金额一致' : '请核对微信已收到上面的金额')}}</view>
-      <button class="btn-big ok" disabled="{{busy}}" bindtap="onCardOk">{{current.mixed ? '确认收到' : (current.payMethod === 'cash' ? '收到现金' : '收到了')}}</button>
+      <button class="btn-big ok" disabled="{{busy}}" bindtap="onCardOk">确认收到</button>
       <button class="btn-big no" disabled="{{busy}}" bindtap="onCardNo">没收到</button>
       <view class="link center mismatch" bindtap="onCardMismatch">金额不一致？按实际到账入簿</view>
     </view>
@@ -86,7 +88,7 @@
       <scroll-view scroll-y class="sh-list">
         <view class="sh-row" wx:for="{{sheet.records}}" wx:for-item="r" wx:key="_id">
           <view class="sh-info">
-            <view class="sh-name">{{r.payerName}}<text class="pm-tag {{r.payMethod === 'cash' ? 'cash' : ''}}">{{r.payMethod === 'cash' ? '现金' : '转账'}}</text></view>
+            <view class="sh-name"><text class="sh-nm">{{r.payerName}}</text><text class="pm-tag {{r.payMethod === 'cash' ? 'cash' : ''}}">{{r.payMethod === 'cash' ? '现金' : '转账'}}</text></view>
             <view class="muted small" wx:if="{{r.relation || r.remark}}">{{r.relation}}<text wx:if="{{r.relation && r.remark}}"> · </text>{{r.remark}}</view>
           </view>
           <text class="money sh-amt">￥{{r.amountStr}}</text>
@@ -97,7 +99,7 @@
       <view class="link center sh-mismatch" wx:if="{{canConfirm}}" bindtap="onSheetMismatch">金额不一致？按实际金额入簿</view>
       <view class="sh-ops" wx:if="{{canConfirm}}">
         <button class="sh-btn no" disabled="{{busy}}" data-id="{{sheet._id}}" bindtap="onReject">未收到</button>
-        <button class="sh-btn ok" disabled="{{busy}}" data-id="{{sheet._id}}" bindtap="onConfirm">{{sheet.mixed ? '确认收到' : (sheet.payMethod === 'cash' ? '收到现金' : '确认收到')}}</button>
+        <button class="sh-btn ok" disabled="{{busy}}" data-id="{{sheet._id}}" bindtap="onConfirm">确认收到</button>
       </view>
     </view>
   </view>
@@ -109,8 +111,8 @@
       <view class="muted ed-tip">{{editor.group.payerName}} · 宾客登记合计 ￥{{editor.group.amountStr}}</view>
       <scroll-view scroll-y class="ed-list">
         <view class="ed-row" wx:for="{{editor.rows}}" wx:key="_id">
-          <view class="ed-name">{{item.name}}<view class="muted small">登记 ￥{{item.declared}}</view></view>
-          <input class="ed-input" type="digit" value="{{item.value}}" data-i="{{index}}" bindinput="onEditInput" />
+          <view class="ed-name"><view class="ed-nm">{{item.name}}</view><view class="muted small">登记 ￥{{item.declared}}</view></view>
+          <input class="ed-input" type="digit" cursor-spacing="120" adjust-position value="{{item.value}}" data-i="{{index}}" bindinput="onEditInput" />
         </view>
       </scroll-view>
       <view class="ed-sum">实际合计 <text class="money">￥{{editor.sumStr}}</text></view>

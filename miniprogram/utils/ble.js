@@ -1,4 +1,5 @@
 // utils/ble.js — BLE 连接管理与分包写入（文档 §6.5）
+const device = require('./device.js');
 const STORAGE_KEY = 'printerDevice';
 
 // 常见蓝牙打印机名称前缀，用于发现过滤（可在扫描页选择"显示全部设备"绕过）
@@ -16,7 +17,8 @@ function openAdapter() {
   return new Promise((resolve, reject) => {
     wx.openBluetoothAdapter({
       success: resolve,
-      fail: () => reject(new Error('请打开手机蓝牙后重试'))
+      // 电脑 / iPad 上不支持蓝牙打印，提示换手机操作
+      fail: () => reject(new Error(device.notPhone() ? '当前设备不支持蓝牙打印，请在手机上操作' : '请打开手机蓝牙后重试'))
     });
   });
 }

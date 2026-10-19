@@ -178,6 +178,12 @@ Page({
   goPrinter() { wx.navigateTo({ url: '/pages/printer/printer' }); },
   goStyle() { wx.navigateTo({ url: '/pages/receiptset/receiptset' }); },
   goExport() { wx.navigateTo({ url: '/pages/export/export' }); },
+  /** 使用说明：按身份打开对应分页（未完善主家信息的按宾客） */
+  goGuide() {
+    const { role, account } = this.data;
+    const tab = role === 'clerk' ? 'clerk' : (account ? 'host' : 'guest');
+    wx.navigateTo({ url: '/pages/guide/guide?tab=' + tab });
+  },
 
   /** 隐私与数据：查看说明 / 清除我的全部数据（注销） */
   onPrivacy() {
@@ -187,7 +193,7 @@ Page({
         if (res.tapIndex === 0) {
           wx.showModal({
             title: '隐私说明',
-            content: '慧礼记仅保存你登记的礼簿、礼金、送礼记录和收款码图片，用于记账、回执与导出；数据存于微信云开发，仅你本人可见。宾客的姓名、礼金仅对主家和宾客本人可见。导出文件下载后即从云端删除。你可随时在此清除全部数据。',
+            content: '慧礼记仅保存你登记的礼簿、礼金、送礼记录和收款码图片，用于记账、回执与导出；数据存于微信云开发，仅你和你授权的记账人、家人可见。宾客的姓名、礼金仅对主家和宾客本人可见。导出文件下载后即从云端删除。你可随时在此清除全部数据。',
             showCancel: false
           });
         } else {

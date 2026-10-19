@@ -75,7 +75,7 @@ async function doConfirm(record, actual) {
 async function confirmGroupAmounts(group, amounts) {
   try {
     const r = await req.payConfirm(group._id, undefined, amounts);
-    wx.showToast({ title: '已按实际金额入簿', icon: 'success' });
+    wx.showToast({ title: '已按实收入簿', icon: 'success' });
     await autoPrint(r.list || [r.record]);
     getApp().refreshBadge();
     return true;
@@ -129,7 +129,7 @@ function confirmBatch(records) {
             showCancel: false
           });
         } else {
-          wx.showToast({ title: `已入簿 ${done.length} 份`, icon: 'success' });
+          wx.showToast({ title: `已入簿 ${done.length} 份`, icon: 'none' });
         }
         resolve(done.length);
       },
