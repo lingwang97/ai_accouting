@@ -118,7 +118,8 @@ Page({
   },
 
   // —— 订阅（预留）：手动开通 / 延期 / 取消 ——
-  onSubOpenid(e) { this.setData({ subOpenid: e.detail.value, hostIdx: -1 }); },
+  // 换了账户：之前的清除预览与备份作废
+  onSubOpenid(e) { this.setData({ subOpenid: e.detail.value, hostIdx: -1, purgePv: null, purgeBackup: null, purgeBackedUp: false }); },
   onHostKeyword(e) { this.setData({ hostKeyword: e.detail.value }); },
   async onFindHosts() {
     const k = (this.data.hostKeyword || '').trim();
@@ -131,7 +132,7 @@ Page({
   },
   onPickHost(e) {
     const i = Number(e.currentTarget.dataset.i);
-    this.setData({ hostIdx: i, subOpenid: this.data.hosts[i].ownerOpenid });
+    this.setData({ hostIdx: i, subOpenid: this.data.hosts[i].ownerOpenid, purgePv: null, purgeBackup: null, purgeBackedUp: false });
   },
   onSubDays(e) { this.setData({ subDays: e.detail.value }); },
   onPlan(e) { this.setData({ planIdx: Number(e.detail.value) }); },
@@ -142,7 +143,7 @@ Page({
     this.setData({ purgeTab: t });
     if (t === 'logs') this.loadLogs();
   },
-  onPurgeOpenid(e) { this.setData({ purgeOpenid: e.detail.value, purgePv: null }); },
+  onPurgeOpenid(e) { this.setData({ purgeOpenid: e.detail.value, purgePv: null, purgeBackup: null, purgeBackedUp: false }); },
   onPurgeGuest(e) { this.setData({ purgeGuest: e.detail.value, purgePv: null }); },
   onPurgeBackedUp(e) { this.setData({ purgeBackedUp: e.detail.value }); },
   purgeTarget() { return (this.data.purgeOpenid || this.data.subOpenid || '').trim(); },
@@ -152,16 +153,17 @@ Page({
     if (!openid) return wx.showToast({ title: '请先选择或填写账户', icon: 'none' });
     try {
       const pv = await req.adminPurgePreview(openid, this.data.purgeGuest);
+      this._pvOpenid = openid; // 备份、清除都以预览时的账户为准
       this.setData({ purgePv: pv, purgeBackup: null, purgeBackedUp: false });
     } catch (e) { this.setData({ purgePv: null }); }
   },
 
   /** 备份：生成该账户的全量 Excel（云端保留 7 天），并打开 */
   async onPurgeBackup() {
-    if (this.data.backingUp) return;
+    if (this.data.backingUp || !this.data.purgePv || !this._pvOpenid) return;
     this.setData({ backingUp: true });
     try {
-      const r = await req.adminBackup(this.purgeTarget());
+      const r = await req.adminBackup(this._pvOpenid);
       this.setData({ purgeBackup: r, purgeBackedUp: true });
       try {
         const path = await openfile.download(r.fileID, r.fileName);
@@ -187,7 +189,12 @@ Page({
         if ((res.content || '').trim() !== pv.name) return wx.showToast({ title: '名称不一致，未清除', icon: 'none' });
         this.setData({ purging: true });
         try {
-          const r = await req.adminPurge({ ownerOpenid: this.purgeTarget(), confirmName: pv.name, guestRecords: this.data.purgeGuest, backedUp: this.data.purgeBackedUp });
+          // 有备份带 backupId；没备份需打开「不需要备份」才带 skipBackup
+          const bk = this.data.purgeBackup && this.data.purgeBackup.backupId;
+          const r = await req.adminPurge({
+            ownerOpenid: this._pvOpenid, confirmName: pv.name, guestRecords: this.data.purgeGuest, backedUp: this.data.purgeBackedUp,
+            ...(bk ? { backupId: bk } : { skipBackup: !!this.data.purgeBackedUp })
+          });
           const total = r.removed.reduce((t, x) => t + x.count, 0);
           wx.showModal({ title: '已清除', content: `共删除 ${total} 条数据、${r.files} 个文件。数据较多时如未删完，可再执行一次。`, showCancel: false });
           this.setData({ purgePv: null, purgeOpenid: '', purgeBackedUp: false, purgeBackup: null });

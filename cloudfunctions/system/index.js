@@ -30,7 +30,7 @@ exports.main = async (event) => {
       case 'adminIndexes': return await guard(OPENID, () => ensureIndexes());
       // 数据清除：按账户（预览 / 备份 / 执行）、按礼簿、无主数据；操作日志
       case 'adminPurgePreview': return await guard(OPENID, () => purgePreview(OPENID, String(event.ownerOpenid || ''), event.guestRecords === true));
-      case 'adminBackup': return await guard(OPENID, () => adminBackup(String(event.ownerOpenid || '')));
+      case 'adminBackup': return await guard(OPENID, () => adminBackup(OPENID, String(event.ownerOpenid || '')));
       case 'adminPurge': return await guard(OPENID, () => adminPurge(OPENID, event));
       case 'adminBookPreview': return await guard(OPENID, () => bookPreview(String(event.keyword || event.bookId || '')));
       case 'adminPurgeBook': return await guard(OPENID, () => purgeBook(OPENID, String(event.bookId || ''), event.confirmName));
@@ -170,7 +170,7 @@ async function purgePreview(admin, ownerOpenid, guestRecords) {
  * 清除前备份：调用 export 云函数生成该账户的全量 Excel（保留 7 天，管理员可下载）
  * export 通过一次性口令确认是管理员发起的（settings.admin_backup，2 分钟内有效）
  */
-async function adminBackup(ownerOpenid) {
+async function adminBackup(admin, ownerOpenid) {
   const t = await target(ownerOpenid);
   if (t.error) return err(t.error);
   const token = Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -178,7 +178,9 @@ async function adminBackup(ownerOpenid) {
   const res = await cloud.callFunction({ name: 'export', data: { action: 'adminBackup', ownerOpenid, token } });
   const r = res.result || {};
   if (r.code !== 0) return err(r.msg || '备份失败');
-  return ok(r.data);
+  // 记下备份（清除时核对 backupId，确认确实备份过这个账户）
+  const logged = await log(admin, 'backup', { ownerOpenid, name: t.name, fileID: r.data.fileID });
+  return ok({ ...r.data, backupId: logged });
 }
 
 /** 执行清除：需输入该账户名称确认、并已备份（或确认不需要备份） */
@@ -187,9 +189,16 @@ async function adminPurge(admin, e) {
   const t = await target(ownerOpenid);
   if (t.error) return err(t.error);
   if (String(e.confirmName || '').trim() !== t.name) return err('输入的名称与该账户不一致');
-  if (e.backedUp !== true) return err('请先备份，或确认不需要备份');
+  // 必须是 24 小时内为这个账户做过的备份，或明确选择不需要备份
+  if (e.skipBackup !== true) {
+    let b = null;
+    try { b = (await db.collection('admin_logs').doc(String(e.backupId || '')).get()).data; } catch (x) { /* 无 */ }
+    if (!b || b.action !== 'backup' || b.ownerOpenid !== ownerOpenid || Date.now() - new Date(b.at).getTime() > 24 * 3600 * 1000) {
+      return err('请先备份，或确认不需要备份');
+    }
+  }
   const res = await Purge.run(db, cloud, ownerOpenid, { guestRecords: e.guestRecords === true, subscription: true, ownPayCode });
-  await log(admin, 'purgeAccount', { ownerOpenid, name: t.name, guestRecords: e.guestRecords === true, removed: res.removed, files: res.files });
+  await log(admin, 'purgeAccount', { ownerOpenid, name: t.name, guestRecords: e.guestRecords === true, skipBackup: e.skipBackup === true, removed: res.removed, files: res.files });
   return ok(res);
 }
 
@@ -268,7 +277,10 @@ async function orphans(admin, doIt) {
   const safe = async fn => { try { return await fn(); } catch (e) { return []; } };
   // 主家已不存在
   const hostOwners = [...new Set((await safe(() => ownersOf('books', 'ownerOpenid'))).concat(await safe(() => ownersOf('records', 'ownerOpenid'))))];
-  const noHost = await missing(hostOwners, 'accounts', 'ownerOpenid');
+  // 正在整体移交（中途超时、尚未续跑完）的原主家：数据还挂在他名下，不算无主
+  const moving = (await safe(async () => (await db.collection('accounts').where({ transferPending: _.exists(true) }).field({ transferPending: true }).limit(1000).get()).data))
+    .map(a => a.transferPending && a.transferPending.from).filter(Boolean);
+  const noHost = (await missing(hostOwners, 'accounts', 'ownerOpenid')).filter(o => !moving.includes(o));
   // 用户已不存在（个人数据）
   const personal = [...new Set((await safe(() => ownersOf('gifts_out', 'ownerOpenid')))
     .concat(await safe(() => ownersOf('reminders', 'ownerOpenid')), await safe(() => ownersOf('person_alias', 'ownerOpenid'))))];
@@ -319,12 +331,13 @@ async function orphans(admin, doIt) {
 /** 操作日志 */
 async function log(admin, action, detail) {
   try { await db.createCollection('admin_logs'); } catch (e) { /* 已存在 */ }
-  await db.collection('admin_logs').add({ data: { admin, action, ...detail, at: new Date() } });
+  const added = await db.collection('admin_logs').add({ data: { admin, action, ...detail, at: new Date() } });
+  return added._id;
 }
 
 async function adminLogs() {
   try {
-    const res = await db.collection('admin_logs').orderBy('at', 'desc').limit(50).get();
+    const res = await db.collection('admin_logs').where({ action: _.neq('backup') }).orderBy('at', 'desc').limit(50).get();
     return ok({ list: res.data });
   } catch (e) {
     return ok({ list: [] });

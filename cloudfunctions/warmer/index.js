@@ -11,9 +11,9 @@ exports.main = async (event) => {
   if (cloud.getWXContext().OPENID || !(event && (event.Type === 'Timer' || event.TriggerName === 'warm'))) {
     return { code: 1, msg: '仅限定时触发', data: null };
   }
-  // 北京时间 9:00～9:04（UTC 1 点、前 5 分钟）：推送当天到期的提醒
-  const now = new Date();
-  if (now.getUTCHours() === 1 && now.getUTCMinutes() < 5) {
+  // 北京时间 9:00～21:59 每一轮都推送当天到期、尚未推送的提醒（pushed 保证只推一次；某轮失败下一轮补推）
+  const bjHour = (new Date().getUTCHours() + 8) % 24;
+  if (bjHour >= 9 && bjHour < 22) {
     try { await pushReminders(); } catch (e) { console.warn('提醒推送失败', e.message); }
   }
   const cfg = normalizeWarmup(await readSetting(db, 'warmup', DEFAULT_WARMUP));
@@ -54,7 +54,7 @@ async function pushReminders() {
   const _ = db.command;
   const t = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10); // 北京时间今天
   const col = db.collection('reminders');
-  for (let round = 0; round < 10; round++) {
+  for (let round = 0; round < 4; round++) { // 每轮最多 200 条，避免超出 20 秒超时；没推完的下一轮继续
     const res = await col.where({ done: false, pushed: false, subscribed: true, notifyDay: _.lte(t), date: _.gte(t), _openid: _.exists(false) })
       .limit(50).get();
     if (!res.data.length) break;
@@ -66,9 +66,11 @@ async function pushReminders() {
         });
         result = { ok: true };
       } catch (e) {
-        result = { ok: false, code: e.errCode || -1 }; // 43101：未订阅或次数已用完
+        result = { ok: false, code: e.errCode || -1 };
       }
-      await col.doc(r._id).update({ data: { pushed: true, pushResult: { ...result, at: new Date() } } });
+      // 成功、或确定性失败（43101 未订阅 / 次数用完、47003 参数不符、40003 openid 无效）才标记已推送；其余（网络等）下一轮重试，最多 5 次
+      const final = result.ok || [43101, 47003, 40003].includes(result.code) || (r.pushTries || 0) >= 4;
+      await col.doc(r._id).update({ data: { pushed: final, pushTries: (r.pushTries || 0) + 1, pushResult: { ...result, at: new Date() } } });
     }));
     if (res.data.length < 50) break;
   }

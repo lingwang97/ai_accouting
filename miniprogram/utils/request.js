@@ -73,7 +73,7 @@ module.exports = {
   reconcile: (bookId, day) => call('records', { action: 'reconcile', bookId, day }),
   // 记账人提交的收款码：主家确认后才生效（target 为 'account' 或礼簿 id）
   payCodeReviews: () => call('account', { action: 'payCodeReviews' }),
-  payCodeDecide: (target, approve) => call('account', { action: 'payCodeDecide', target, approve: !!approve }),
+  payCodeDecide: (target, approve, ver) => call('account', { action: 'payCodeDecide', target, approve: !!approve, ver }),
   // 通过邀请卡申请加入的记账人 / 家人：主家同意后才生效
   memberPending: () => call('account', { action: 'pendingMembers' }),
   memberApprove: (memberId, approve) => call('account', { action: 'approveMember', memberId, approve: !!approve }),

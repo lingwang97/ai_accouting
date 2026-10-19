@@ -208,7 +208,8 @@ Page({
         idx,
         name: m.name,
         title: m.title || '',
-        all: this.data.myAllBooks && (!!m.allBooks || !ids.length),
+        // 我不是「全部礼簿」时不能改对方的「全部礼簿」：原样保留，不降级
+        all: this.data.myAllBooks ? (!!m.allBooks || !ids.length) : !!m.allBooks,
         books: (this._books || []).filter(b => !b.archived || ids.includes(b._id))
           .map(b => ({ _id: b._id, name: b.hostName ? `${b.hostName} · ${b.name}` : b.name, date: b.date || '', on: ids.includes(b._id) })),
         perms,
@@ -231,6 +232,7 @@ Page({
   },
   onEdBook(e) {
     const i = e.currentTarget.dataset.i;
+    if (!this.data.myAllBooks && this.data.editor.all) return; // 对方负责全部礼簿，我无权改
     this.setData({ [`editor.books[${i}].on`]: !this.data.editor.books[i].on, 'editor.all': false });
   },
   onEdAll() {
@@ -242,8 +244,11 @@ Page({
     const ed = this.data.editor;
     const m = this.data.list[ed.idx];
     try {
-      const bookIds = ed.all ? [] : ed.books.filter(b => b.on).map(b => b._id);
-      if (!ed.all && !bookIds.length) return wx.showToast({ title: '请选择负责的礼簿', icon: 'none' });
+      const picked = ed.books.filter(b => b.on).map(b => b._id);
+      if (!ed.all && !picked.length) return wx.showToast({ title: '请选择负责的礼簿', icon: 'none' });
+      // 我看不到的礼簿不在列表里：保留对方原有的，不随这次保存改动
+      const hidden = (m.bookIds || []).filter(id => !(this._books || []).some(b => b._id === id));
+      const bookIds = ed.all ? [] : picked.concat(hidden);
       // 我没有的权限不在列表里：保留对方原有的，不随这次保存改动
       const perms = ed.perms.filter(x => x.on).map(x => x.key)
         .concat((m.perms || []).filter(k => !this.data.myPerms.includes(k)));

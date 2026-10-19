@@ -56,7 +56,8 @@ exports.main = async (event) => {
     });
     return ok({ openid: OPENID, user: u, isNew: false });
   } catch (e) {
-    return err('登录失败：' + e.message);
+    console.error('login', e);
+    return err('登录失败，请稍后重试');
   }
 };
 

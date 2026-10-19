@@ -62,7 +62,8 @@ async function printRecord(record) {
   const app = getApp();
   record = {
     ...record,
-    payerName: record.nameTag ? `${record.payerName}（${record.nameTag}）` : record.payerName, // 同名区分备注
+    // 同名区分备注：只印宾客自己填的；主家 / 礼台的私下备注不外露
+    payerName: record.nameTag && record.nameTagBy === 'guest' ? `${record.payerName}（${record.nameTag}）` : record.payerName,
     accountName: record.hostName || record.accountName || (app.globalData.account && app.globalData.account.accountName) || '',
     handlerName: record.handlerName || (app.globalData.user && app.globalData.user.nickname) || ''
   };

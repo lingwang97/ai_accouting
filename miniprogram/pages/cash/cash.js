@@ -44,13 +44,13 @@ Page({
     const role = await getApp().ensureRole();
     if ((role === 'clerk' || role === 'viewer') && !perm.can('desk')) {
       wx.showToast({ title: '你没有「礼台记账」权限', icon: 'none' });
-      return setTimeout(() => wx.navigateBack(), 800);
+      return setTimeout(() => wx.navigateBack({ fail: () => wx.switchTab({ url: '/pages/index/index' }) }), 800);
     }
     try {
       const [{ account }, { list, activeBookId }] = await Promise.all([req.accountGet(), req.bookList()]);
       if (!account) {
         wx.showToast({ title: '请先完善主家信息', icon: 'none' });
-        return setTimeout(() => wx.navigateBack(), 800);
+        return setTimeout(() => wx.navigateBack({ fail: () => wx.switchTab({ url: '/pages/index/index' }) }), 800);
       }
       const book = list.find(b => b._id === activeBookId);
       // 机构模式 / 只负责部分场次：登记前选择场次
@@ -103,6 +103,8 @@ Page({
       const b = this.data.books[this.data.bookIdx];
       if (this.data.books.length && b) payload.bookId = b._id;
       payload.payMethod = this.data.payMethod;
+      // 转账+现金只填了一位：按这一位的方式提交，不算混合
+      if (payload.payMethod === 'mixed' && payload.items && payload.items.length === 1) payload.payMethod = payload.items[0].method;
       const { record, list } = await req.cashEntry(payload);
       const added = (list && list.length ? list : [record]).map(r => ({ ...r, amountStr: fmt.money(r.amount), nameStr: samename.nameStr(r.payerName, r.nameTag) }));
       const done = added.slice().reverse().concat(this.data.done).slice(0, DONE_MAX);
@@ -123,7 +125,7 @@ Page({
 
   /**
    * 同名区分：查询礼簿里已有的同名宾客，逐个选择「是哪一位」或「新的一位」并填区分备注
-   * 选中已有 → personKey + tag；新的一位 → tag。返回 false 表示用户取消；查询失败（网络）按无备注继续
+   * 选中已有 → personRef（那一位的某条记录 id，服务端换成往来人）+ tag；新的一位 → tag。返回 false 表示用户取消；查询失败（网络）按无备注继续
    */
   async pickSameName(payload) {
     const items = payload.items || [payload];
@@ -140,7 +142,7 @@ Page({
       const r = await samename.choose(name, people);
       if (!r) return false;
       if (r.person) {
-        it.personKey = r.person.key;
+        it.personRef = r.person.ref;
         it.tag = r.person.tag;
       } else {
         it.tag = r.tag;

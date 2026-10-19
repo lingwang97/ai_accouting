@@ -106,7 +106,8 @@ function buildModel(record, tpl, accountName) {
   const values = {
     receiptNo: receiptNo(record),
     payee: accountName || '',
-    payerName: record.nameTag ? `${record.payerName}（${record.nameTag}）` : record.payerName, // 同名区分备注
+    // 同名区分备注：只显示宾客自己填的；主家 / 礼台的私下备注不外露
+    payerName: record.nameTag && record.nameTagBy === 'guest' ? `${record.payerName}（${record.nameTag}）` : record.payerName,
     relation: record.relation || '',
     proxyFor: proxyText(record),
     amountUpper: amountUpper(record.amount),

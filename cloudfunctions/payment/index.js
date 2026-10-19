@@ -88,18 +88,6 @@ async function create(openid, event) {
   if (fixed && fixed.archived) return err('本场礼簿已结束');
   const accountId = account._id;
 
-  // 同名提醒：主家礼簿里已有别的宾客用了同一个姓名（不是本人扫码登记的）时，请宾客填区分信息，方便主家辨认
-  // 只返回需要填写的姓名，不透露对方任何信息
-  // 本人之前在这位主家这里填过的区分信息直接沿用，不再重复询问
-  const untagged = items.filter(x => !x.nameTag);
-  if (untagged.length) {
-    const mine = (await records.where({ ownerOpenid: account.ownerOpenid, payerOpenid: openid, payerName: _.in(untagged.map(x => x.payerName)), nameTag: _.exists(true) })
-      .field({ payerName: true, nameTag: true }).limit(100).get()).data;
-    untagged.forEach(x => { const m = mine.find(r => r.payerName === x.payerName && r.nameTag); if (m) x.nameTag = m.nameTag; });
-  }
-  const needTag = await sameNameOthers(account.ownerOpenid, openid, items.filter(x => !x.nameTag).map(x => x.payerName));
-  if (needTag.length) return ok({ needTag });
-
   // 防刷：同一付款人 1 分钟内最多发起 RATE_MAX 次（一个批次算一次）
   const now = new Date();
   const recent = await records.where({
@@ -107,12 +95,33 @@ async function create(openid, event) {
     createdAt: _.gt(new Date(now.getTime() - 60 * 1000))
   }).field({ batchId: true }).limit(100).get();
   if (new Set(recent.data.map(r => r.batchId || r._id)).size >= RATE_MAX) return err('操作太频繁，请稍后再试');
+  // 同名检查也计入频率：防止反复提交试探某人是否随过礼
+  if (!(await sameNameQuota(openid))) return err('操作太频繁，请稍后再试');
+
+  // 同名提醒：主家礼簿里已有别的宾客用了同一个姓名（不是本人扫码登记的）时，请宾客填区分信息，方便主家辨认
+  // 只返回需要填写的姓名，不透露对方任何信息
+  // 本人之前在这位主家这里填过的区分信息直接沿用，不再重复询问
+  const untagged = items.filter(x => !x.nameTag);
+  if (untagged.length) {
+    const mine = (await records.where({ ownerOpenid: account.ownerOpenid, payerOpenid: openid, payerName: _.in(untagged.map(x => x.payerName)), nameTag: _.exists(true) })
+      .field({ payerName: true, nameTag: true, nameTagBy: true }).limit(100).get()).data;
+    untagged.forEach(x => {
+      const m = mine.find(r => r.payerName === x.payerName && r.nameTag);
+      if (m) { x.nameTag = m.nameTag; x.nameTagBy = m.nameTagBy || 'host'; } // 沿用时保留来源（主家写的不印在小票上）
+    });
+  }
+  items.forEach(x => { if (x.nameTag && !x.nameTagBy) x.nameTagBy = 'guest'; }); // 宾客自己填的区分信息（小票、回执上可印）
+  const needTag = await sameNameOthers(account.ownerOpenid, openid, items.filter(x => !x.nameTag).map(x => x.payerName));
+  if (needTag.length) return ok({ needTag });
+
 
   const payDay = bjDay(now);
   // 支付方式：wechat 微信转账（默认）/ cash 现金 / mixed 转账+现金（批次：部分人转账、部分人给现金，按转账部分扫码转一笔）
   // 现金不经收款码，登记后直接等待主家确认收到；全是现金的 mixed 按现金处理，全是转账的按转账处理
   const split = splitFen(items);
-  let payMethod = event.payMethod === 'cash' ? 'cash' : (event.payMethod === 'mixed' && multi ? 'mixed' : 'wechat');
+  // 「转账+现金」只填了一人：按这一人选的方式
+  const single = event.payMethod === 'mixed' && !multi && Array.isArray(event.items) && event.items[0] && event.items[0].method;
+  let payMethod = event.payMethod === 'cash' || single === 'cash' ? 'cash' : (event.payMethod === 'mixed' && multi ? 'mixed' : 'wechat');
   if (payMethod === 'mixed' && !split.wechat) payMethod = 'cash';
   if (payMethod === 'mixed' && !split.cash) payMethod = 'wechat';
   if (payMethod !== 'mixed') items.forEach(x => { delete x.payMethod; });
@@ -172,6 +181,18 @@ async function create(openid, event) {
   });
 }
 
+/** 同名检查的频率限制：每位宾客 10 分钟内最多 10 次（内存计数，同一实例内有效，配合上面的创建频率限制） */
+const nameChecks = new Map();
+async function sameNameQuota(openid) {
+  const now = Date.now();
+  const list = (nameChecks.get(openid) || []).filter(t => now - t < 10 * 60 * 1000);
+  if (list.length >= 10) return false;
+  list.push(now);
+  nameChecks.set(openid, list);
+  if (nameChecks.size > 5000) nameChecks.clear();
+  return true;
+}
+
 /** 主家礼簿里，与这些姓名同名、但不是该宾客扫码登记的记录所用的姓名 */
 async function sameNameOthers(ownerOpenid, openid, names) {
   if (!names.length) return [];
@@ -184,7 +205,7 @@ async function sameNameOthers(ownerOpenid, openid, names) {
 /**
  * 校验随礼人名单：1～BATCH_PEOPLE 人，姓名必填且不重复，每人金额 > 0
  * mixed=true（批次「转账+现金」）：每人各自的支付方式 p.method（wechat / cash）
- * 同名区分备注 p.tag 都接受；desk=true（礼台记账）另接受 p.personKey（宾客自助随礼不接受）
+ * 同名区分备注 p.tag 都接受；礼台记账另可用 personRef 指定为已有的某一位（见 cashEntry，宾客自助随礼不接受）
  */
 function parseItems(raw, mixed, desk) {
   if (raw.length > BATCH_PEOPLE) return { error: `批次录入最多 ${BATCH_PEOPLE} 人` };
@@ -196,7 +217,7 @@ function parseItems(raw, mixed, desk) {
     ...(mixed ? { payMethod: p && p.method === 'cash' ? 'cash' : 'wechat' } : {}),
     // 同名区分：区分备注（宾客扫码登记时同名会被要求填写；礼台记账时选择），指定为已有的某一位只限礼台记账
     ...(p && p.tag ? { nameTag: String(p.tag).trim().replace(/[#:\s]/g, '').slice(0, 12) } : {}),
-    ...(desk && p && /^(o:[\w-]{1,64}:|n:)[^\s]{1,40}$/.test(String(p.personKey || '')) ? { personKey: String(p.personKey) } : {})
+
   }));
   for (const it of items) {
     if (!it.payerName) return { error: '请填写随礼人姓名' };
@@ -249,12 +270,27 @@ async function cashEntry(openid, ctx, event) {
   // 礼台记账：payMethod cash 现金（默认）/ wechat 宾客当面微信转账、礼台看到到账后登记 / mixed 批次转账+现金（每人各自 method）
   const multi = Array.isArray(event.items) && event.items.length > 1;
   let method = ['wechat', 'mixed'].includes(event.payMethod) ? event.payMethod : 'cash';
-  if (method === 'mixed' && !multi) method = 'cash';
+  // 「转账+现金」只填了一人：按这一人选的方式
+  if (method === 'mixed' && !multi) method = event.items && event.items[0] && event.items[0].method === 'wechat' ? 'wechat' : 'cash';
   // 批次录入：items 为多位随礼人，每人一条记录（batchId 关联），每人各打一张小票
   const parsed = parseItems(Array.isArray(event.items) && event.items.length ? event.items
-    : [{ name: event.payerName, amount: event.amount, relation: event.relation, remark: event.remark, tag: event.tag, personKey: event.personKey }], method === 'mixed', true);
+    : [{ name: event.payerName, amount: event.amount, relation: event.relation, remark: event.remark, tag: event.tag, personRef: event.personRef }], method === 'mixed', true);
   if (parsed.error) return err(parsed.error);
   const items = parsed.items;
+  // 同名区分：选了礼簿里已有的某一位（personRef 为那一位的某条记录 id），由服务端换成往来人 key（不把宾客 openid 交给前端）
+  const raw = Array.isArray(event.items) && event.items.length ? event.items : [{ personRef: event.personRef }];
+  for (let i = 0; i < items.length; i++) {
+    const ref = String((raw[i] && raw[i].personRef) || '');
+    if (validId(ref)) {
+      const r = await getRecord(ref);
+      if (r && r.ownerOpenid === ctx.ownerOpenid && r.payerName === items[i].payerName) {
+        items[i].personKey = r.personKey || (r.payerOpenid ? `o:${r.payerOpenid}:${String(r.payerName).replace(/[\s\u3000]/g, '')}` : '');
+        if (!items[i].personKey) delete items[i].personKey;
+        if (r.nameTag) { items[i].nameTag = r.nameTag; items[i].nameTagBy = r.nameTagBy || 'desk'; }
+      }
+    }
+    if (items[i].nameTag && !items[i].nameTagBy) items[i].nameTagBy = 'desk';
+  }
   if (items.reduce((t, x) => t + Math.round(x.amount * 100), 0) > 100000 * 100) return err('单笔金额超限');
   if (method === 'mixed') {
     const split = splitFen(items);

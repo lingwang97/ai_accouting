@@ -39,7 +39,15 @@ Page({
     this.setData({ guideTip: !wx.getStorageSync('guide_tip_closed') });
     // 秒开：先显示上次的工作台数据，后台刷新
     if (this.data.mode === 'loading' && !wx.getStorageSync(LOGOUT_KEY)) {
-      const c = cache.get('dashboard');
+      let c = cache.get('dashboard');
+      // 旧版缓存没有权限表：按身份补算；记账人权限尚未取到时丢弃缓存，避免入口被隐藏
+      if (c && !c.pm) {
+        const g = getApp().globalData;
+        if (c.role === 'owner' || g.perms) {
+          c.pm = perm.map(g.perms, c.role);
+          if (c.canSwitch === undefined) c.canSwitch = c.pm.books && !c.restricted;
+        } else c = null;
+      }
       if (c) {
         this.setData({ ...c, mode: 'host' });
         theme.apply(this, c.book ? c.book.type : 'other');

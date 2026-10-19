@@ -33,6 +33,8 @@ Page({
     getApp().refreshTabBar();
     getApp().refreshBadge();
     this.load();
+    // 办事提醒只在进入页面时刷新，切换标签不重复请求
+    getApp().loginReady.then(() => { if (getApp().globalData.user) this.loadReminds(); });
   },
 
   async load() {
@@ -41,7 +43,6 @@ Page({
       return this.setData({ loggedIn: false, people: [], shownPeople: [], outList: [] });
     }
     this.setData({ loading: true, loggedIn: true });
-    this.loadReminds();
     try {
       if (this.data.tab === 'people') {
         const { list } = await req.rqPeople();

@@ -9,7 +9,7 @@
       <view class="muted from" wx:if="{{info.fromName}}">来自：{{info.fromName}}</view>
       <block wx:if="{{info.type === 'transfer'}}">
         <view class="books" wx:if="{{info.books.length}}">
-          <view class="bk" wx:for="{{info.books}}" wx:key="index"><text>{{item.name}}</text><text class="muted">{{item.count}} 份 · ￥{{item.sum}}</text></view>
+          <view class="bk" wx:for="{{info.books}}" wx:key="index"><text>{{item.name}}</text><text class="muted">{{item.count}} 份 · ￥{{item.sumStr}}</text></view>
         </view>
         <view class="desc muted">
           {{info.full ? '接收后，主家信息、全部礼簿和礼金记录都归你所有，已印好的礼簿码继续有效。' : '接收后，以上礼簿和礼金记录归你所有。'}}{{info.stayClerk ? '对方会成为你的记账人，可继续帮你记账。' : ''}}
@@ -18,14 +18,14 @@
       </block>
       <block wx:elif="{{info.type === 'viewer'}}">
         <view class="books" wx:if="{{info.books.length}}">
-          <view class="bk" wx:for="{{info.books}}" wx:key="index"><text>{{item.name}}</text><text class="muted">{{item.count}} 份 · ￥{{item.sum}}</text></view>
+          <view class="bk" wx:for="{{info.books}}" wx:key="index"><text>{{item.name}}</text><text class="muted">{{item.count}} 份 · ￥{{item.sumStr}}</text></view>
         </view>
         <view class="desc muted">主家同意后可以查看以上礼簿的明细、合计、统计、对账和导出；只能查看，不能修改。</view>
       </block>
       <block wx:else>
         <view class="perm-label muted">可查看：{{info.allBooks ? '全部礼簿' : ''}}</view>
         <view class="books" wx:if="{{!info.allBooks && info.books.length}}">
-          <view class="bk" wx:for="{{info.books}}" wx:key="index"><text>{{item.name}}</text><text class="muted">{{item.count}} 份 · ￥{{item.sum}}</text></view>
+          <view class="bk" wx:for="{{info.books}}" wx:key="index"><text>{{item.name}}</text><text class="muted">{{item.count}} 份 · ￥{{item.sumStr}}</text></view>
         </view>
         <view class="perm-label muted" wx:if="{{info.perms && info.perms.length}}">可操作：</view>
         <view class="perms" wx:if="{{info.perms && info.perms.length}}">

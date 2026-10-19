@@ -119,9 +119,9 @@
         </view>
       </block>
       <view class="muted" style="margin-top:20rpx">负责的礼簿</view>
-      <view class="book-row {{editor.all ? 'on' : ''}}" wx:if="{{myAllBooks}}" bindtap="onEdAll">
+      <view class="book-row {{editor.all ? 'on' : ''}}" wx:if="{{myAllBooks || editor.all}}" bindtap="onEdAll">
         <view class="check {{editor.all ? 'on' : ''}}">{{editor.all ? '✓' : ''}}</view>
-        <view class="b-info">全部礼簿<text class="muted small">（含以后新建的）</text></view>
+        <view class="b-info">全部礼簿<text class="muted small">{{myAllBooks ? '（含以后新建的）' : '（你无权修改）'}}</text></view>
       </view>
       <scroll-view scroll-y class="ed-list">
         <view class="book-row {{item.on && !editor.all ? 'on' : ''}}" wx:for="{{editor.books}}" wx:key="_id" data-i="{{index}}" bindtap="onEdBook">

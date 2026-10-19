@@ -26,7 +26,7 @@ Page({
     const role = await getApp().ensureRole();
     if ((role === 'clerk' || role === 'viewer') && !perm.can('show')) {
       wx.showToast({ title: '你没有「礼簿码与打印」权限', icon: 'none' });
-      return setTimeout(() => wx.navigateBack(), 800);
+      return setTimeout(() => wx.navigateBack({ fail: () => wx.switchTab({ url: '/pages/index/index' }) }), 800);
     }
     this.load();
   },

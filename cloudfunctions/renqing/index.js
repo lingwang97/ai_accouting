@@ -44,7 +44,8 @@ exports.main = async (event) => {
       default: return err('未知 action');
     }
   } catch (e) {
-    return err('人情往来操作失败：' + e.message);
+    console.error('renqing', event.action, e);
+    return err('人情往来操作失败，请稍后重试');
   }
 };
 
@@ -256,7 +257,7 @@ const norm = s => String(s || '').replace(/[\s\u3000]/g, '');
 async function fetchAll(col, cond, fields) {
   const out = [];
   while (out.length < MAX_ROWS) {
-    const res = await col.where(cond).field(fields).skip(out.length).limit(100).get();
+    const res = await col.where(cond).field(fields).orderBy('_id', 'asc').skip(out.length).limit(100).get(); // 固定顺序，翻页不重不漏
     out.push(...res.data);
     if (res.data.length < 100) break;
   }
@@ -453,7 +454,7 @@ async function moveEntry(openid, e) {
   }
   const r = (await records.where({ _id: id, ownerOpenid: openid }).limit(1).get()).data[0];
   if (!r) return err('记录不存在');
-  const data = KEY_RE.test(to) ? { personKey: to, nameTag: to.startsWith('n:') ? cleanTag(to.split('#')[1]) : (r.nameTag || '') } : { personKey: nameKey(r.payerName, tag), nameTag: tag };
+  const data = KEY_RE.test(to) ? { personKey: to, nameTag: to.startsWith('n:') ? cleanTag(to.split('#')[1]) : (r.nameTag || ''), nameTagBy: 'host' } : { personKey: nameKey(r.payerName, tag), nameTag: tag, nameTagBy: 'host' };
   await records.doc(id).update({ data });
   return ok({ key: data.personKey });
 }

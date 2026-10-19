@@ -50,6 +50,7 @@ exports.main = async (event) => {
         return await themes(OWNER);
       // 同名区分：礼台记账前查礼簿里同名的人；给某位宾客设区分备注
       case 'nameCheck':
+        if (!can(ctx, 'desk')) return err('无权查询');
         return await nameCheck(ctx, event.names);
       case 'setNameTag':
         if (!can(ctx, 'desk') && !can(ctx, 'confirm')) return err('无权修改');
@@ -72,9 +73,11 @@ async function expirePending(openid) {
   const last = expiredAt.get(openid) || 0;
   if (Date.now() - last < 60 * 1000) return;
   expiredAt.set(openid, Date.now());
+  // 转账+现金批次不自动取消：现金可能已交到礼台，由主家在待确认里处理
   await records.where({
     ownerOpenid: openid,
     status: 'pending',
+    batchPay: _.neq('mixed'),
     createdAt: _.lt(new Date(Date.now() - PENDING_TTL))
   }).update({ data: { status: 'cancelled', autoCancelled: true } });
 }
@@ -242,7 +245,7 @@ async function reconcile(ctx, event) {
     // 「转账+现金」批次：按批次、支付方式分组
     records.aggregate().match({ ...base, status: 'paid', batchPay: 'mixed' })
       .group({ _id: { batchId: '$batchId', method: '$payMethod' }, fen: fenOf })
-      .limit(1000).end()
+      .limit(10000).end()
   ]);
 
   const z = () => ({ count: 0, fen: 0 });
@@ -402,7 +405,8 @@ async function pendingStat(openid, ctx) {
 
 /**
  * 礼簿（主家全部礼簿，受限记账人为负责的礼簿）里同名的人：按 微信身份 / 区分备注 / 指定的人 分组
- * 返回 { 姓名: [{ key, tag, scanned, relation, count, lastDay }] }，只返回有记录的姓名
+ * 返回 { 姓名: [{ ref, tag, scanned, relation, count, lastDay }] }，只返回有记录的姓名
+ * ref 为这一位的某条记录 id（礼台记账时回传，由服务端换成往来人 key），不把宾客 openid 交给前端
  */
 async function nameCheck(ctx, names) {
   if (!ctx.account) return ok({ map: {} });
@@ -413,7 +417,7 @@ async function nameCheck(ctx, names) {
   const res = await records.aggregate().match(cond)
     .group({
       _id: { name: '$payerName', openid: '$payerOpenid', tag: '$nameTag', pk: '$personKey' },
-      count: _.aggregate.sum(1), relation: _.aggregate.first('$relation'), lastDay: _.aggregate.max('$payDay')
+      count: _.aggregate.sum(1), relation: _.aggregate.first('$relation'), lastDay: _.aggregate.max('$payDay'), ref: _.aggregate.first('$_id')
     })
     .limit(500).end();
   const norm = s => String(s || '').replace(/[\s\u3000]/g, '');
@@ -424,8 +428,10 @@ async function nameCheck(ctx, names) {
     const arr = (map[name] = map[name] || []);
     const same = arr.find(x => x.key === key);
     if (same) { same.count += g.count; return; }
-    arr.push({ key, tag: tag || '', scanned: !!openid, relation: g.relation || '', count: g.count, lastDay: g.lastDay || '' });
+    arr.push({ key, ref: g.ref, tag: tag || '', scanned: !!openid, relation: g.relation || '', count: g.count, lastDay: g.lastDay || '' });
   });
+  // 去掉内部 key（含宾客 openid）
+  Object.keys(map).forEach(n => { map[n] = map[n].map(({ key, ...x }) => x); });
   return ok({ map });
 }
 
@@ -435,10 +441,14 @@ async function setNameTag(ctx, rid, tag) {
   const t = String(tag || '').trim().replace(/[#:\s]/g, '').slice(0, 12);
   const rec = (await records.where({ _id: rid, ownerOpenid: ctx.ownerOpenid }).limit(1).get()).data[0];
   if (!rec || !canBook(ctx, rec.bookId)) return err('记录不存在');
+  // 主家 / 记账人设的区分备注（nameTagBy=host）：只在主家这边显示，不印在给宾客的小票、回执上
+  const data = { nameTag: t, nameTagBy: 'host' };
   if (rec.payerOpenid && !rec.personKey) {
-    await records.where({ ownerOpenid: ctx.ownerOpenid, payerOpenid: rec.payerOpenid, payerName: rec.payerName }).update({ data: { nameTag: t } });
+    const cond = { ownerOpenid: ctx.ownerOpenid, payerOpenid: rec.payerOpenid, payerName: rec.payerName };
+    if (ctx.bookIds) cond.bookId = _.in(ctx.bookIds); // 只负责部分礼簿：只改负责的礼簿里的
+    await records.where(cond).update({ data });
   } else {
-    await records.doc(rid).update({ data: { nameTag: t } });
+    await records.doc(rid).update({ data });
   }
   return ok({ tag: t });
 }

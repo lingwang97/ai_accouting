@@ -730,6 +730,28 @@ function drawSummary(doc, meta, slot, pal) {
 }
 
 // —— 全量备份（xlsx） ——
+/**
+ * 管理员备份额外包含的原始数据（清除会一并删除的）：未入簿的礼金（待转账 / 待确认 / 已拒绝 / 已作废 / 已取消）、
+ * 主家信息、记账人与家人关系、邀请卡、提醒、同名合并、套餐订阅；每条一行 JSON
+ */
+async function adminExtra(openid) {
+  const safe = p => p.catch(() => []);
+  const [recs, accs, ms1, ms2, invs, rems, alias, subs] = await Promise.all([
+    safe(fetchAll('records', { ownerOpenid: openid, status: _.neq('paid') })),
+    safe(fetchAll('accounts', { ownerOpenid: _.in([openid, 'merged:' + openid]) })),
+    safe(fetchAll('members', { ownerOpenid: openid })),
+    safe(fetchAll('members', { memberOpenid: openid })),
+    safe(fetchAll('invites', { ownerOpenid: openid })),
+    safe(fetchAll('reminders', { ownerOpenid: openid })),
+    safe(fetchAll('person_alias', { ownerOpenid: openid })),
+    safe(fetchAll('subscriptions', { _id: openid }))
+  ]);
+  const rows = [];
+  [['未入簿礼金', recs], ['主家信息', accs], ['记账人 / 家人', ms1], ['加入的主家', ms2], ['邀请卡', invs], ['提醒', rems], ['同名合并', alias], ['套餐订阅', subs]]
+    .forEach(([name, list]) => list.forEach(d => rows.push([name, JSON.stringify(d)])));
+  return rows;
+}
+
 /** 管理员备份：校验口令（2 分钟内有效、只能用一次），生成该账户的全量备份，保留 7 天 */
 async function adminBackup(ownerOpenid, token) {
   let s = null;
@@ -740,15 +762,16 @@ async function adminBackup(ownerOpenid, token) {
 }
 
 async function exportBackup(openid, withGifts = true, opts = {}) {
-  const [records, books, gifts] = await Promise.all([
+  const [records, books, gifts, extra] = await Promise.all([
     fetchRows(openid, {}),
     fetchAll('books', { ownerOpenid: openid }),
-    withGifts ? fetchAll('gifts_out', { ownerOpenid: openid }) : Promise.resolve([])
+    withGifts ? fetchAll('gifts_out', { ownerOpenid: openid }) : Promise.resolve([]),
+    opts.admin ? adminExtra(openid) : Promise.resolve(null)
   ]);
   if (records.tooMany) return err(`礼金超过 ${MAX_ROWS} 笔，请按礼簿或日期范围分段导出`);
-  if (!records.length && !books.length && !gifts.length) return err('暂无可备份的数据');
+  if (!records.length && !books.length && !gifts.length && !(extra && extra.length)) return err('暂无可备份的数据');
 
-  const buffer = await buildBackup({ records, books, gifts });
+  const buffer = await buildBackup({ records, books, gifts, extra });
   // 管理员备份存在 exports/admin/ 下、登记在 admin 名下（清除该账户时不会被一起删掉），7 天后自动清理
   const up = await cloud.uploadFile({
     cloudPath: opts.admin ? `exports/admin/${openid}-${Date.now()}.xlsx` : `exports/${openid}/backup-${Date.now()}.xlsx`,
@@ -780,7 +803,7 @@ const timeOf = r => new Date(r.paidAt || r.createdAt).getTime() || 0;
 const centsSum = rows => rows.reduce((s, r) => s + (Math.round(Number(r.amount) * 100) || 0), 0) / 100;
 
 /** 组装备份工作簿：礼簿汇总 / 礼金明细 / 送礼记录 */
-async function buildBackup({ records, books, gifts }) {
+async function buildBackup({ records, books, gifts, extra }) {
   const wb = new (XLSX().Workbook)();
   wb.creator = '慧礼记';
   const headStyle = row => {
@@ -845,6 +868,15 @@ async function buildBackup({ records, books, gifts }) {
   ws3.getColumn(7).numFmt = '#,##0.00';
   [8, 12, 14, 10, 12, 20, 12, 30].forEach((w, i) => { ws3.getColumn(i + 1).width = w; });
   ws3.views = [{ state: 'frozen', ySplit: 1 }];
+
+  // 管理员备份：其他数据原样存为 JSON，便于需要时恢复
+  if (extra && extra.length) {
+    const ws4 = wb.addWorksheet('其他数据');
+    headStyle(ws4.addRow(['类别', '原始数据（JSON）']));
+    extra.forEach(r => ws4.addRow(r));
+    ws4.getColumn(1).width = 14;
+    ws4.getColumn(2).width = 120;
+  }
 
   return Buffer.from(await wb.xlsx.writeBuffer());
 }

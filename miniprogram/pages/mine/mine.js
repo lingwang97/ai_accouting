@@ -32,7 +32,12 @@ Page({
     this.setData({ primary: theme.apply(this).primary });
     // 先显示上次的数据，避免白屏
     if (!this.data.user) {
-      const c = cache.get('mine');
+      let c = cache.get('mine');
+      // 旧版缓存没有权限表：按身份补算；记账人权限尚未取到时丢弃缓存，避免菜单被隐藏
+      if (c && !c.pm) {
+        const g = getApp().globalData;
+        c = c.role === 'owner' || g.perms ? { ...c, pm: perm.map(g.perms, c.role) } : null;
+      }
       if (c && !wx.getStorageSync(LOGOUT_KEY)) this.setData({ ...c, loading: false }); // 冷启动时 globalData.user 尚未恢复
     }
     this.refresh();

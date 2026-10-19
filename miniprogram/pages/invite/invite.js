@@ -1,5 +1,6 @@
 // pages/invite/invite.js — 接受邀请：成为记账人 / 接收主家移交
 const req = require('../../utils/request.js');
+const fmt = require('../../utils/format.js');
 
 Page({
   data: {
@@ -17,7 +18,12 @@ Page({
     if (!token) return this.setData({ errMsg: '邀请链接无效' });
     try {
       const info = await req.inviteInfo(token);
+      if (Array.isArray(info.books)) info.books = info.books.map(b => ({ ...b, sumStr: fmt.money(b.sum) }));
       this.setData({ info });
+      // 家人共享沿用微信昵称（需等邀请信息返回才知道类型）；记账人不预填
+      const app = getApp();
+      await app.loginReady;
+      if (app.globalData.user && !this.data.displayName && info.type !== 'clerk') this.setData({ displayName: app.globalData.user.nickname || '' });
       if (info.voided) this.setData({ errMsg: '该移交邀请已作废，请让对方重新发起' });
       else if (info.used && info.type === 'transfer') this.setData({ errMsg: '该邀请已被使用，请让对方重新邀请' });
       else if (info.type !== 'transfer' && info.left === 0) this.setData({ errMsg: '这张邀请卡的人数已满，请让对方重新邀请' });

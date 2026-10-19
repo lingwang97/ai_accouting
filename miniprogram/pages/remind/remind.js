@@ -74,7 +74,7 @@ Page({
         _id: d._id || undefined, name: d.name.trim(), personKey: d.personKey, eventType: d.eventType,
         event: d.event, date: d.date, before: d.before, note: d.note
       }, subscribed);
-      wx.showToast({ title: subscribed ? '已保存，到时通知你' : '已保存', icon: 'success' });
+      wx.showToast({ title: '已保存', icon: 'success' });
       setTimeout(() => wx.navigateBack(), 500);
     } catch (e) { /* toast 已提示 */ } finally {
       this.setData({ saving: false });

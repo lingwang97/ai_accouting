@@ -31,7 +31,7 @@
         <button class="btn btn-sm btn-outline" data-id="{{item.deviceId}}" bindtap="onConnect">连接</button>
       </view>
       <view class="muted center pad">搜索中…（确认打印机已开机）</view>
-      <button class="btn-plain" bindtap="onStopScan">停止搜索</button>
+      <button class="btn-outline" bindtap="onStopScan">停止搜索</button>
     </block>
     <block wx:else>
       <button class="btn-primary" bindtap="onScan">扫描蓝牙打印机</button>

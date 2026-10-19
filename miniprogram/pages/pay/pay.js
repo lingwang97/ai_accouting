@@ -130,7 +130,9 @@ Page({
 
     this.setData({ submitting: true });
     try {
-      let res = await req.payCreate({ aid: this.data.aid, ...payload, payMethod: this.data.payMethod });
+      // 转账+现金只填了一位：按这一位的方式提交，不算混合
+      const pm = this.data.payMethod === 'mixed' && payload.items && payload.items.length === 1 ? payload.items[0].method : this.data.payMethod;
+      let res = await req.payCreate({ aid: this.data.aid, ...payload, payMethod: pm });
       // 同名提醒：主家礼簿里已有别的宾客叫这个名字，请填区分信息后重新提交（取消则不提交）
       if (res.needTag) {
         for (const name of res.needTag) {
@@ -139,7 +141,7 @@ Page({
           if (payload.items) payload.items.forEach(x => { if (x.name === name) x.tag = tag; });
           else payload.tag = tag;
         }
-        res = await req.payCreate({ aid: this.data.aid, ...payload, payMethod: this.data.payMethod });
+        res = await req.payCreate({ aid: this.data.aid, ...payload, payMethod: pm });
         if (res.needTag) return wx.showToast({ title: '仍有同名，请修改姓名或区分信息', icon: 'none' });
       }
       const { record } = res;

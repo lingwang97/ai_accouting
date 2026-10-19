@@ -78,12 +78,12 @@ Page({
       success: async res => {
         if (!res.confirm) return;
         try {
-          await req.payCodeDecide(r.target, ok);
+          await req.payCodeDecide(r.target, ok, r.ver); // 带上版本：核对期间被换成另一张时服务端拒绝
           wx.showToast({ title: ok ? '已采用' : '已驳回', icon: 'success' });
           require('../../utils/cache.js').set('dashboard', null);
           this.load();
           this.setData({ reviews: this.data.reviews.filter((x, i) => i !== idx) });
-        } catch (err) { /* toast 已提示 */ }
+        } catch (err) { this.loadReviews(); /* 已更换等：刷新列表重新核对 */ }
       }
     });
   },
