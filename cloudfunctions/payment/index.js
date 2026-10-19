@@ -66,7 +66,7 @@ async function create(openid, event) {
   if (!validId(aid)) return err('参数错误');
   const multi = Array.isArray(event.items) && event.items.length > 1;
   const parsed = parseItems(Array.isArray(event.items) && event.items.length ? event.items
-    : [{ name: event.payerName, amount: event.amount, relation: event.relation, remark: event.remark }], multi && event.payMethod === 'mixed');
+    : [{ name: event.payerName, amount: event.amount, relation: event.relation, remark: event.remark, tag: event.tag }], multi && event.payMethod === 'mixed');
   if (parsed.error) return err(parsed.error);
   const items = parsed.items;
   const totalFen = items.reduce((t, x) => t + Math.round(x.amount * 100), 0);
@@ -87,6 +87,18 @@ async function create(openid, event) {
   if (!account) return err('收款账户不存在');
   if (fixed && fixed.archived) return err('本场礼簿已结束');
   const accountId = account._id;
+
+  // 同名提醒：主家礼簿里已有别的宾客用了同一个姓名（不是本人扫码登记的）时，请宾客填区分信息，方便主家辨认
+  // 只返回需要填写的姓名，不透露对方任何信息
+  // 本人之前在这位主家这里填过的区分信息直接沿用，不再重复询问
+  const untagged = items.filter(x => !x.nameTag);
+  if (untagged.length) {
+    const mine = (await records.where({ ownerOpenid: account.ownerOpenid, payerOpenid: openid, payerName: _.in(untagged.map(x => x.payerName)), nameTag: _.exists(true) })
+      .field({ payerName: true, nameTag: true }).limit(100).get()).data;
+    untagged.forEach(x => { const m = mine.find(r => r.payerName === x.payerName && r.nameTag); if (m) x.nameTag = m.nameTag; });
+  }
+  const needTag = await sameNameOthers(account.ownerOpenid, openid, items.filter(x => !x.nameTag).map(x => x.payerName));
+  if (needTag.length) return ok({ needTag });
 
   // 防刷：同一付款人 1 分钟内最多发起 RATE_MAX 次（一个批次算一次）
   const now = new Date();
@@ -160,10 +172,19 @@ async function create(openid, event) {
   });
 }
 
+/** 主家礼簿里，与这些姓名同名、但不是该宾客扫码登记的记录所用的姓名 */
+async function sameNameOthers(ownerOpenid, openid, names) {
+  if (!names.length) return [];
+  const res = await records.where({
+    ownerOpenid, payerName: _.in(names), payerOpenid: _.neq(openid), status: _.in(['paid', 'transferred', 'pending'])
+  }).field({ payerName: true }).limit(100).get();
+  return [...new Set(res.data.map(r => r.payerName))];
+}
+
 /**
  * 校验随礼人名单：1～BATCH_PEOPLE 人，姓名必填且不重复，每人金额 > 0
  * mixed=true（批次「转账+现金」）：每人各自的支付方式 p.method（wechat / cash）
- * desk=true（礼台记账）：接受同名区分 p.tag / p.personKey（宾客自助随礼不接受）
+ * 同名区分备注 p.tag 都接受；desk=true（礼台记账）另接受 p.personKey（宾客自助随礼不接受）
  */
 function parseItems(raw, mixed, desk) {
   if (raw.length > BATCH_PEOPLE) return { error: `批次录入最多 ${BATCH_PEOPLE} 人` };
@@ -173,8 +194,8 @@ function parseItems(raw, mixed, desk) {
     relation: RELATIONS.includes(p && p.relation) ? p.relation : '',
     remark: String((p && p.remark) || '').trim().slice(0, 50),
     ...(mixed ? { payMethod: p && p.method === 'cash' ? 'cash' : 'wechat' } : {}),
-    // 同名区分（礼台记账时选择）：区分备注、或指定为礼簿里已有的某一位
-    ...(desk && p && p.tag ? { nameTag: String(p.tag).trim().replace(/[#:\s]/g, '').slice(0, 12) } : {}),
+    // 同名区分：区分备注（宾客扫码登记时同名会被要求填写；礼台记账时选择），指定为已有的某一位只限礼台记账
+    ...(p && p.tag ? { nameTag: String(p.tag).trim().replace(/[#:\s]/g, '').slice(0, 12) } : {}),
     ...(desk && p && /^(o:[\w-]{1,64}:|n:)[^\s]{1,40}$/.test(String(p.personKey || '')) ? { personKey: String(p.personKey) } : {})
   }));
   for (const it of items) {

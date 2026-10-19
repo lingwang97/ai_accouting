@@ -5,6 +5,7 @@ const fmt = require('../../utils/format.js');
 const receipt = require('../../utils/receipt.js');
 const scenes = require('../../utils/scenes.js');
 const batch = require('../../utils/batch.js');
+const samename = require('../../utils/samename.js');
 const theme = require('../../utils/theme.js');
 
 const POLL_MS = 3000;
@@ -129,7 +130,19 @@ Page({
 
     this.setData({ submitting: true });
     try {
-      const { record } = await req.payCreate({ aid: this.data.aid, ...payload, payMethod: this.data.payMethod });
+      let res = await req.payCreate({ aid: this.data.aid, ...payload, payMethod: this.data.payMethod });
+      // 同名提醒：主家礼簿里已有别的宾客叫这个名字，请填区分信息后重新提交（取消则不提交）
+      if (res.needTag) {
+        for (const name of res.needTag) {
+          const tag = await samename.askTag(name, { guest: true });
+          if (!tag) return;
+          if (payload.items) payload.items.forEach(x => { if (x.name === name) x.tag = tag; });
+          else payload.tag = tag;
+        }
+        res = await req.payCreate({ aid: this.data.aid, ...payload, payMethod: this.data.payMethod });
+        if (res.needTag) return wx.showToast({ title: '仍有同名，请修改姓名或区分信息', icon: 'none' });
+      }
+      const { record } = res;
       // 现金：不经收款码与转账，直接等待主家确认收到
       if (record.payMethod === 'cash') {
         this.setData({ record: viewRecord(record), step: 'waiting' });

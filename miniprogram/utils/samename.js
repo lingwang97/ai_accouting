@@ -25,14 +25,17 @@ function sheet(itemList, alertText) {
   });
 }
 
-/** 输入区分备注（必填）：空则重新输入，取消返回 null */
-function askTag(name) {
+/**
+ * 输入区分备注（必填）：空则重新输入，取消返回 null
+ * opts.guest：宾客扫码登记时的同名提醒（标题提示同名，提示填村名、单位）
+ */
+function askTag(name, opts = {}) {
   return new Promise(resolve => {
     const ask = () => wx.showModal({
-      title: '区分备注',
+      title: opts.guest ? `已有同名「${name}」` : '区分备注',
       content: '',
       editable: true,
-      placeholderText: '如：李村、公司同事',
+      placeholderText: opts.guest ? '填村名、单位等，方便主家辨认' : '如：李村、公司同事',
       success: res => {
         if (!res.confirm) return resolve(null);
         const t = cleanTag(res.content);
