@@ -6,12 +6,6 @@
     <view class="muted">登录后可创建礼簿、登记礼金、打印回执</view>
     <button class="btn-primary" bindtap="goLogin">登录 / 注册</button>
   </view>
-  <!-- 未登录也可看使用说明 -->
-  <view class="card menu" wx:if="{{!loading && !user}}">
-    <view class="menu-item" bindtap="goGuide">
-      <image class="mi-icon" src="/assets/icons/book-m.svg" /><text class="mi-text">使用说明</text><text class="arrow">›</text>
-    </view>
-  </view>
 
   <block wx:if="{{user}}">
     <!-- 用户信息与身份 -->
