@@ -1,6 +1,6 @@
 page { background: #fff; }
 .page { position: relative; min-height: 100vh; padding-bottom: calc(40rpx + env(safe-area-inset-bottom)); box-sizing: border-box; background: #fff; }
-.skip { position: absolute; top: 24rpx; right: 24rpx; z-index: 2; padding: 10rpx 28rpx; border-radius: 999rpx; background: #f2f3f5; color: #666; font-size: 26rpx; }
+.skip { position: absolute; top: 24rpx; right: 24rpx; z-index: 2; padding: 10rpx 28rpx; border-radius: 999rpx; background: var(--fill); color: var(--text-2); font-size: 26rpx; }
 
 .swiper { height: 760rpx; }
 .slide { display: flex; flex-direction: column; align-items: center; padding: 160rpx 48rpx 0; text-align: center; }

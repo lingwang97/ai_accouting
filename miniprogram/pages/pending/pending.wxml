@@ -37,17 +37,17 @@
       </view>
       <view class="ops" wx:if="{{canConfirm && !selectMode}}">
         <view class="link danger" data-id="{{item._id}}" catchtap="onReject">未收到</view>
-        <button class="btn-ok" data-id="{{item._id}}" catchtap="onConfirm">确认收到</button>
+        <button class="btn btn-sm btn-primary" data-id="{{item._id}}" catchtap="onConfirm">确认收到</button>
       </view>
       <!-- 批次：整行大按钮查看明细；catchtap 不触发勾选 -->
       <view class="batch-more" wx:if="{{item.batch}}" hover-class="batch-more-hover" data-id="{{item._id}}" catchtap="onOpenSheet">查看明细（{{item.records.length}} 人）›</view>
     </view>
     <view class="muted center pad" wx:if="{{keyword && shown.length === 0}}">没有找到「{{keyword}}」</view>
 
-    <view class="batch-bar" wx:if="{{selectMode}}">
+    <view class="bottom-bar batch-bar" wx:if="{{selectMode}}">
       <view class="link" bindtap="onPickAll">全选/全不选</view>
       <view class="muted">已选 {{pickedCount}} 份 · ￥{{pickedSum}}</view>
-      <button class="btn-ok" disabled="{{pickedCount === 0}}" bindtap="onConfirmPicked">确认收到</button>
+      <button class="btn btn-primary" disabled="{{pickedCount === 0}}" bindtap="onConfirmPicked">确认收到</button>
     </view>
   </block>
 
@@ -72,8 +72,8 @@
         <view class="muted">{{current.timeStr}} {{current.mixed ? '转账+现金' : (current.payMethod === 'cash' ? '宾客现金' : '已转账')}}</view>
       </view>
       <view class="tip muted">{{current.mixed ? '请核对微信转账与现金合计与上面的金额一致' : (current.payMethod === 'cash' ? '请清点现金与上面的金额一致' : '请核对微信已收到上面的金额')}}</view>
-      <button class="btn-big ok" disabled="{{busy}}" bindtap="onCardOk">确认收到</button>
-      <button class="btn-big no" disabled="{{busy}}" bindtap="onCardNo">没收到</button>
+      <button class="btn-primary btn-big" disabled="{{busy}}" bindtap="onCardOk">确认收到</button>
+      <button class="btn-danger btn-big" disabled="{{busy}}" bindtap="onCardNo">没收到</button>
       <view class="link center mismatch" bindtap="onCardMismatch">金额不一致？按实际到账入簿</view>
     </view>
   </block>
@@ -82,7 +82,7 @@
   <view class="mask" wx:if="{{sheet}}" bindtap="onCloseSheet">
     <view class="sheet" catchtap="noop">
       <view class="sh-head">
-        <view class="sh-title">批次明细（{{sheet.records.length}} 人）<text class="cash-tag">{{sheet.methodLabel}}</text></view>
+        <view class="sheet-title">批次明细（{{sheet.records.length}} 人）<text class="cash-tag">{{sheet.methodLabel}}</text></view>
         <view class="sh-close" catchtap="onCloseSheet">✕</view>
       </view>
       <scroll-view scroll-y class="sh-list">
@@ -97,17 +97,17 @@
       <view class="sh-sum">合计 <text class="money">￥{{sheet.amountStr}}</text></view>
       <view class="muted sh-sub" wx:if="{{sheet.mixed}}">转账 ￥{{sheet.wechatSumStr}} · 现金 ￥{{sheet.cashSumStr}}</view>
       <view class="link center sh-mismatch" wx:if="{{canConfirm}}" bindtap="onSheetMismatch">金额不一致？按实际金额入簿</view>
-      <view class="sh-ops" wx:if="{{canConfirm}}">
-        <button class="sh-btn no" disabled="{{busy}}" data-id="{{sheet._id}}" bindtap="onReject">未收到</button>
-        <button class="sh-btn ok" disabled="{{busy}}" data-id="{{sheet._id}}" bindtap="onConfirm">确认收到</button>
+      <view class="sheet-btns" wx:if="{{canConfirm}}">
+        <button class="btn btn-lg btn-danger" disabled="{{busy}}" data-id="{{sheet._id}}" bindtap="onReject">未收到</button>
+        <button class="btn btn-lg btn-primary" disabled="{{busy}}" data-id="{{sheet._id}}" bindtap="onConfirm">确认收到</button>
       </view>
     </view>
   </view>
 
   <!-- 批次：逐人按实际金额入簿 -->
   <view class="mask" wx:if="{{editor}}">
-    <view class="editor">
-      <view class="ed-title">按实际金额入簿</view>
+    <view class="sheet">
+      <view class="sheet-title">按实际金额入簿</view>
       <view class="muted ed-tip">{{editor.group.payerName}} · 宾客登记合计 ￥{{editor.group.amountStr}}</view>
       <scroll-view scroll-y class="ed-list">
         <view class="ed-row" wx:for="{{editor.rows}}" wx:key="_id">
@@ -116,9 +116,9 @@
         </view>
       </scroll-view>
       <view class="ed-sum">实际合计 <text class="money">￥{{editor.sumStr}}</text></view>
-      <view class="ed-ops">
-        <button class="ed-btn" bindtap="onEditCancel">取消</button>
-        <button class="ed-btn ok" disabled="{{busy}}" bindtap="onEditSave">按此入簿</button>
+      <view class="sheet-btns">
+        <button class="btn btn-lg btn-plain" bindtap="onEditCancel">取消</button>
+        <button class="btn btn-lg btn-primary" disabled="{{busy}}" bindtap="onEditSave">按此入簿</button>
       </view>
     </view>
   </view>

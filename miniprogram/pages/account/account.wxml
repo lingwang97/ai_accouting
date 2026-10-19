@@ -13,9 +13,9 @@
         <view class="muted small">新提交</view>
       </view>
     </view>
-    <view class="rv-ops">
-      <view class="rv-btn" data-idx="{{index}}" data-ok="{{false}}" bindtap="onDecide">驳回</view>
-      <view class="rv-btn solid" data-idx="{{index}}" data-ok="{{true}}" bindtap="onDecide">采用</view>
+    <view class="btn-row">
+      <view class="btn btn-outline" hover-class="btn-hover" data-idx="{{index}}" data-ok="{{false}}" bindtap="onDecide">驳回</view>
+      <view class="btn btn-primary" hover-class="btn-hover" data-idx="{{index}}" data-ok="{{true}}" bindtap="onDecide">采用</view>
     </view>
   </view>
 

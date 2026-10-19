@@ -144,8 +144,8 @@
         <view class="he-title">我是主家，要办事收礼</view>
         <view class="muted">创建礼簿，宾客扫码随礼自动记账、打印回执</view>
       </view>
-      <button wx:if="{{loggedIn}}" class="btn-primary he-btn" bindtap="goAccount">创建礼簿</button>
-      <button wx:else class="btn-primary he-btn" bindtap="goLogin">登录</button>
+      <button wx:if="{{loggedIn}}" class="btn btn-primary he-btn" bindtap="goAccount">创建礼簿</button>
+      <button wx:else class="btn btn-primary he-btn" bindtap="goLogin">登录</button>
     </view>
   </block>
 </view>

@@ -2,10 +2,8 @@
 .h-top { display: flex; justify-content: space-between; align-items: center; }
 .month { font-size: 30rpx; font-weight: 600; color: var(--primary); }
 .h-sum { font-size: 60rpx; margin: 12rpx 0 4rpx; }
-.hot { color: #FA5151; }
-.seg { display: flex; background: #fff; border-radius: 12rpx; padding: 6rpx; margin-bottom: 20rpx; }
-.seg-item { flex: 1; text-align: center; padding: 16rpx 0; border-radius: 10rpx; font-size: 28rpx; color: #666; }
-.seg-item.on { background: var(--primary); color: #fff; font-weight: 600; }
+.hot { color: var(--danger); }
+.seg { margin-bottom: 20rpx; }
 .row-card .muted { margin-top: 6rpx; }
 .r-top { display: flex; justify-content: space-between; align-items: center; }
 .r-name { font-size: 32rpx; font-weight: 600; }

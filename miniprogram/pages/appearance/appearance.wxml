@@ -11,7 +11,7 @@
       <view class="pv-sum">￥12880.00</view>
       <view class="pv-foot"><text>36 份</text><text>明细 ›</text></view>
     </view>
-    <view class="pv-btn">确认收到</view>
+    <view class="btn btn-primary btn-lg pv-btn">确认收到</view>
     <view class="pv-tabs">
       <view class="pv-tab" wx:for="{{tabs}}" wx:key="icon">
         <image class="pv-icon" src="/assets/icons/{{item.icon}}-{{index === 0 ? pv.icon : 'g'}}.svg" />

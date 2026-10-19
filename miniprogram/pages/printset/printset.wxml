@@ -1,8 +1,8 @@
 <view class="container" style="{{themeStyle}}">
   <!-- 回执样式：电子回执 / 打印小票（两页互相切换，带上当前礼簿） -->
-  <view class="style-seg">
-    <view class="style-item {{'print' === 'receipt' ? 'on' : ''}}" data-t="receipt" bindtap="onStyleTab">电子回执</view>
-    <view class="style-item {{'print' === 'print' ? 'on' : ''}}" data-t="print" bindtap="onStyleTab">打印小票</view>
+  <view class="seg">
+    <view class="seg-item {{'print' === 'receipt' ? 'on' : ''}}" data-t="receipt" bindtap="onStyleTab">电子回执</view>
+    <view class="seg-item {{'print' === 'print' ? 'on' : ''}}" data-t="print" bindtap="onStyleTab">打印小票</view>
   </view>
   <!-- 样式跟礼簿走：每本礼簿各自一套 -->
   <view class="card book-bar">
@@ -28,14 +28,14 @@
     <view class="row"><text class="lbl">致谢语</text>
       <input class="input flex1" value="{{thanks}}" maxlength="40" placeholder="如：谢谢惠顾" bindinput="onThanks" /></view>
     <view class="row"><text class="lbl">分隔线</text>
-      <switch checked="{{showDivider}}" bindchange="onDivider" color="#C8161D" /></view>
+      <switch checked="{{showDivider}}" bindchange="onDivider" color="{{primary}}" /></view>
     <view class="row"><text class="lbl">推广语</text>
       <text class="muted flex1">底部打印"微信搜索「慧礼记」"（白事不打印）</text>
-      <switch checked="{{promo}}" bindchange="onPromo" color="#C8161D" /></view>
+      <switch checked="{{promo}}" bindchange="onPromo" color="{{primary}}" /></view>
     <view class="row"><text class="lbl">纸宽</text>
-      <view class="widths">
-        <view class="filter {{paperWidth === 32 ? 'on' : ''}}" data-w="32" bindtap="onWidth">58mm(32列)</view>
-        <view class="filter {{paperWidth === 48 ? 'on' : ''}}" data-w="48" bindtap="onWidth">80mm(48列)</view>
+      <view class="chips">
+        <view class="chip {{paperWidth === 32 ? 'on' : ''}}" data-w="32" bindtap="onWidth">58mm(32列)</view>
+        <view class="chip {{paperWidth === 48 ? 'on' : ''}}" data-w="48" bindtap="onWidth">80mm(48列)</view>
       </view>
     </view>
   </view>
@@ -53,8 +53,8 @@
     </view>
 
     <view class="section-title" style="margin-top:28rpx">可添加字段</view>
-    <view class="adds">
-      <view class="filter" wx:for="{{disabledItems}}" wx:key="f" data-f="{{item.f}}" bindtap="onAddField">＋ {{item.label}}</view>
+    <view class="chips">
+      <view class="chip" wx:for="{{disabledItems}}" wx:key="f" data-f="{{item.f}}" bindtap="onAddField">＋ {{item.label}}</view>
     </view>
     <view class="muted" wx:if="{{disabledItems.length === 0}}">全部字段已启用</view>
   </view>

@@ -8,7 +8,7 @@
 }
 
 .book-card {
-  background: var(--primary); color: #fff; border-radius: 24rpx; padding: 32rpx;
+  background: var(--primary); color: #fff; border-radius: var(--r-l); padding: 32rpx;
   box-shadow: 0 12rpx 32rpx rgba(0, 0, 0, .12); margin-bottom: 24rpx;
 }
 .bc-top { display: flex; justify-content: space-between; align-items: flex-start; }
@@ -53,16 +53,16 @@
 .g-icon image { width: 44rpx; height: 44rpx; }
 .g-badge {
   position: absolute; top: -12rpx; right: -16rpx; min-width: 36rpx; height: 36rpx; line-height: 36rpx;
-  padding: 0 8rpx; border-radius: 18rpx; background: #FA5151; color: #fff; font-size: 22rpx; text-align: center;
+  padding: 0 8rpx; border-radius: 18rpx; background: var(--danger); color: #fff; font-size: 22rpx; text-align: center;
   box-sizing: border-box; border: 3rpx solid #fff;
 }
 .g-title { font-size: 32rpx; font-weight: 600; color: #333; }
-.g-sub { font-size: 24rpx; color: #999; margin-top: 6rpx; }
-.g-sub.hot { color: #FA5151; font-weight: 600; }
-.g-sub.ok { color: #07C160; }
+.g-sub { font-size: 24rpx; color: var(--text-3); margin-top: 6rpx; }
+.g-sub.hot { color: var(--danger); font-weight: 600; }
+.g-sub.ok { color: var(--success); }
 
 .links { display: flex; justify-content: space-around; padding: 28rpx 8rpx; }
-.link-item { display: flex; flex-direction: column; align-items: center; font-size: 24rpx; color: #555; }
+.link-item { display: flex; flex-direction: column; align-items: center; font-size: 24rpx; color: var(--text-2); }
 .link-item image { width: 48rpx; height: 48rpx; margin-bottom: 10rpx; }
 
 
@@ -101,10 +101,10 @@
   border-radius: 50%; background: var(--primary-soft); color: var(--primary);
   font-size: 24rpx; font-weight: 600; margin-right: 20rpx;
 }
-.my-receipts { text-align: center; color: #576B95; font-size: 28rpx; padding: 8rpx 0 28rpx; }
+.my-receipts { text-align: center; color: var(--link); font-size: 28rpx; padding: 8rpx 0 28rpx; }
 .host-entry { display: flex; align-items: center; justify-content: space-between; }
 .he-title { font-size: 30rpx; font-weight: 600; margin-bottom: 6rpx; }
-.he-btn { margin: 0 0 0 20rpx; padding: 0 32rpx; font-size: 28rpx; line-height: 72rpx; height: 72rpx; flex-shrink: 0; }
+.he-btn { margin-left: 20rpx; flex-shrink: 0; }
 
 /* ===== 骨架屏 ===== */
 .sk { background: linear-gradient(90deg, #ECECEC 25%, #F5F5F5 50%, #ECECEC 75%); background-size: 400% 100%; animation: sk 1.4s ease infinite; border-radius: 12rpx; }

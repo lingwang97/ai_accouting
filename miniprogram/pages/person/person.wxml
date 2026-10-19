@@ -33,5 +33,5 @@
   <view class="muted empty" wx:if="{{!loading && given.length === 0}}">暂无</view>
 
   <button class="btn-primary" style="margin-top:32rpx" bindtap="onAddGift">给 TA 记一笔送礼</button>
-  <button class="btn-plain" style="margin-top:20rpx" bindtap="onAddRemind">TA 家办事时提醒我</button>
+  <button class="btn-outline" style="margin-top:20rpx" bindtap="onAddRemind">TA 家办事时提醒我</button>
 </view>

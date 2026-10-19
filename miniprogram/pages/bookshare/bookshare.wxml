@@ -38,17 +38,17 @@
 
   <!-- 修改共享范围 -->
   <view class="mask" wx:if="{{editor}}">
-    <view class="editor">
-      <view class="ed-title">「{{editor.name}}」可查看的礼簿</view>
+    <view class="sheet">
+      <view class="sheet-title">「{{editor.name}}」可查看的礼簿</view>
       <scroll-view scroll-y class="ed-list">
         <view class="book-row {{item.on ? 'on' : ''}}" wx:for="{{editor.books}}" wx:key="_id" data-i="{{index}}" bindtap="onEdBook">
           <view class="check {{item.on ? 'on' : ''}}">{{item.on ? '✓' : ''}}</view>
           <view class="b-info">{{item.title}}</view>
         </view>
       </scroll-view>
-      <view class="ed-ops">
-        <button class="ed-btn" bindtap="onEdCancel">取消</button>
-        <button class="ed-btn ok" bindtap="onEdSave">保存</button>
+      <view class="sheet-btns">
+        <button class="btn btn-lg btn-plain" bindtap="onEdCancel">取消</button>
+        <button class="btn btn-lg btn-primary" bindtap="onEdSave">保存</button>
       </view>
     </view>
   </view>

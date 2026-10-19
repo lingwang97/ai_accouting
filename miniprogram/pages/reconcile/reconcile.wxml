@@ -64,7 +64,7 @@
 
     <view class="muted center small">生成时间 {{r.at}}</view>
     <view class="ops">
-      <button class="btn-plain op" bindtap="onSaveImage" loading="{{saving}}">保存图片</button>
+      <button class="btn-outline op" bindtap="onSaveImage" loading="{{saving}}">保存图片</button>
       <button class="btn-primary op" bindtap="onCopy">复制对账单</button>
     </view>
   </block>

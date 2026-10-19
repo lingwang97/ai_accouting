@@ -1,14 +1,8 @@
 .center { text-align: center; }
 .shop { font-size: 48rpx; font-weight: 700; margin: 8rpx 0; }
-.field { margin-bottom: 28rpx; }
 .field:last-child { margin-bottom: 0; }
-.label { display: block; color: #666; margin-bottom: 12rpx; }
-.input {
-  border: 2rpx solid #e5e5e5; border-radius: 12rpx;
-  padding: 20rpx;
-}
 .amount-row { display: flex; align-items: center; }
-.yen { font-size: 44rpx; color: #333; margin-right: 8rpx; }
+.yen { font-size: 44rpx; color: var(--text); margin-right: 8rpx; }
 .input.amount { font-size: 44rpx; font-weight: 600; }
 .pay-amount { font-size: 64rpx; margin: 8rpx 0; }
 .success, .waiting { padding: 48rpx 28rpx; }
@@ -16,8 +10,7 @@
 .ok-title { font-size: 40rpx; font-weight: 700; margin: 12rpx 0; }
 .paycode { width: 420rpx; height: 420rpx; margin: 20rpx auto; }
 .tip { margin-top: 16rpx; }
-.btn-link { background: none; color: #999; font-size: 28rpx; margin-top: 16rpx; }
-.btn-link::after { border: none; }
+.btn-link { color: var(--text-3); font-size: 28rpx; margin-top: 16rpx; }
 
 /* 步骤条 */
 .steps { display: flex; align-items: center; justify-content: center; margin-bottom: 24rpx; }
@@ -36,13 +29,10 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .btn-save { margin: 20rpx 0 8rpx; }
-.chips { display: flex; flex-wrap: wrap; margin-bottom: 0; margin-right: -14rpx; }
-.chips .chip { margin: 0 14rpx 14rpx 0; }
-.chip { padding: 8rpx 26rpx; border-radius: 999rpx; background: #f2f3f5; color: #666; font-size: 26rpx; }
-.chip.on { background: var(--primary); color: #fff; }
-.success-head.plain .ok-title { color: #333; }
+.chips + .amount-row { margin-top: 14rpx; }
+.success-head.plain .ok-title { color: var(--text); }
 .scan-icon { font-size: 80rpx; }
-.link-fold { color: #576B95; font-size: 26rpx; padding-top: 8rpx; }
+.link-fold { color: var(--link); font-size: 26rpx; padding-top: 8rpx; }
 .success-head { padding: 28rpx; }
 .btn-receipt { margin-top: 28rpx; }
 .offscreen { position: fixed; left: -2000px; top: 0; width: 750px; height: 1400px; }
@@ -53,7 +43,7 @@
 .batch-switch switch { margin-left: 24rpx; }
 .pay-method { margin-top: 28rpx; }
 .items { font-size: 24rpx; line-height: 1.6; margin-top: 8rpx; }
-.host-cta { margin: 24rpx 0; padding: 22rpx 24rpx; background: var(--primary-soft); color: var(--primary); border-radius: 12rpx; font-size: 26rpx; line-height: 1.6; text-align: center; }
+.host-cta { margin: 24rpx 0; padding: 22rpx 24rpx; background: var(--primary-soft); color: var(--primary); border-radius: var(--r-s); font-size: 26rpx; line-height: 1.6; text-align: center; }
 /* 转账步骤：一行三步（不用 gap，用 margin） */
 .step-row { display: flex; justify-content: center; margin: 12rpx 0 20rpx; }
 .sr-item { flex: 1; font-size: 26rpx; color: #333; background: #F7F7F7; border-radius: 10rpx; padding: 14rpx 8rpx; text-align: center; white-space: nowrap; }

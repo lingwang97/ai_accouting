@@ -74,7 +74,7 @@
     <view class="card transfer">
       <view class="section-title">移交给主家</view>
       <view class="muted">礼簿是你替别人建的？可以把选中的礼簿（含全部礼金记录、回执样式、存档）移交给真正的主家，没选的留在你这里。</view>
-      <button wx:if="{{!showPicker}}" class="btn-plain" style="margin-top:20rpx" bindtap="onPickBooks">选择要移交的礼簿</button>
+      <button wx:if="{{!showPicker}}" class="btn-outline" style="margin-top:20rpx" bindtap="onPickBooks">选择要移交的礼簿</button>
 
       <block wx:if="{{showPicker}}">
         <view class="pick-head">
@@ -93,7 +93,7 @@
             <view>移交后继续为对方记账</view>
             <view class="muted small">你会成为对方的记账人，可随时退出</view>
           </view>
-          <switch checked="{{stayClerk}}" bindchange="onStayClerk" color="#C8161D" />
+          <switch checked="{{stayClerk}}" bindchange="onStayClerk" color="{{primary}}" />
         </view>
 
         <button wx:if="{{!transferToken}}" class="btn-primary" style="margin-top:20rpx" bindtap="onMakeTransfer">生成移交卡片</button>
@@ -106,12 +106,12 @@
     </view>
   </block>
 
-  <button wx:if="{{role === 'clerk'}}" class="btn-leave" bindtap="onLeave">退出，不再为这位主家记账</button>
+  <button wx:if="{{role === 'clerk'}}" class="btn-danger btn-leave" bindtap="onLeave">退出，不再为这位主家记账</button>
 
   <!-- 设置负责的礼簿与权限（机构版另可设岗位） -->
   <view class="mask" wx:if="{{editor}}">
-    <view class="editor">
-      <view class="ed-title">设置「{{editor.name}}」</view>
+    <view class="sheet">
+      <view class="sheet-title">设置「{{editor.name}}」</view>
       <block wx:if="{{orgMode}}">
         <view class="muted">岗位</view>
         <view class="chips">
@@ -142,9 +142,9 @@
         </view>
       </view>
       <view class="muted small">记账人只能看到、操作负责的礼簿；能做哪些事由上面的权限决定，只能授予你自己拥有的权限</view>
-      <view class="ed-ops">
-        <button class="ed-btn" bindtap="onEdCancel">取消</button>
-        <button class="ed-btn ok" bindtap="onEdSave">保存</button>
+      <view class="sheet-btns">
+        <button class="btn btn-lg btn-plain" bindtap="onEdCancel">取消</button>
+        <button class="btn btn-lg btn-primary" bindtap="onEdSave">保存</button>
       </view>
     </view>
   </view>

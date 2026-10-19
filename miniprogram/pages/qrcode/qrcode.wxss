@@ -2,7 +2,7 @@
 .qrcode-card { padding: 40rpx 28rpx; }
 .title { font-size: 36rpx; font-weight: 700; }
 .qr { width: 420rpx; height: 420rpx; margin: 20rpx auto; }
-.warn { color: #FA5151; margin: 16rpx 0; font-size: 26rpx; }
+.warn { color: var(--danger); margin: 16rpx 0; font-size: 26rpx; }
 .tip { margin: 16rpx 0; }
 .paycode { width: 320rpx; height: 320rpx; }
 .btns { display: flex; }
@@ -35,6 +35,6 @@
 /* 台卡画布放到屏幕外 */
 .card-canvas { position: fixed; left: -2000px; top: 0; width: 750px; height: 1240px; }
 
-.try { text-align: center; color: #576B95; font-size: 26rpx; padding: 28rpx 0 8rpx; }
+.try { text-align: center; color: var(--link); font-size: 26rpx; padding: 28rpx 0 8rpx; }
 .s-try { color: rgba(255, 255, 255, .9); }
 .s-book { color: rgba(255, 255, 255, .85); font-size: 28rpx; margin: -16rpx 0 24rpx; }

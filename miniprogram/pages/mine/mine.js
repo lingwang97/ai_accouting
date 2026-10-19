@@ -29,7 +29,7 @@ Page({
   },
 
   onShow() {
-    theme.apply(this);
+    this.setData({ primary: theme.apply(this).primary });
     // 先显示上次的数据，避免白屏
     if (!this.data.user) {
       const c = cache.get('mine');
@@ -64,7 +64,7 @@ Page({
       app.refreshTabBar(); // 记账人身份隐藏「往来」
       app.globalData.perms = perms || [];
       theme.setAccount(account);
-      theme.apply(this);
+      this.setData({ primary: theme.apply(this).primary });
       app._accountChecked = true;
       const view = {
         account, role, identities: identities || [],
@@ -241,7 +241,7 @@ Page({
     theme.setAccount(null); // 主题色恢复默认（含本地存储）
     try { wx.setStorageSync(LOGOUT_KEY, true); } catch (e) { /* 忽略 */ }
     this.setData({ user: null, account: null, role: 'none', restricted: false, readonly: false, pm: {}, isAdmin: false, planText: '' });
-    theme.apply(this);
+    this.setData({ primary: theme.apply(this).primary });
   }
 });
 

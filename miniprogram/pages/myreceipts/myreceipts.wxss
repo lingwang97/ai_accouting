@@ -1,5 +1,5 @@
 .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8rpx; }
 .shop { font-size: 30rpx; font-weight: 600; }
-.link { color: #576B95; font-size: 26rpx; margin-top: 12rpx; text-align: right; }
+.item .link { display: block; margin-top: 12rpx; text-align: right; }
 .pad { padding: 80rpx 0; }
-.host-cta { margin: 24rpx 0; padding: 22rpx 24rpx; background: rgba(200, 22, 29, .08); color: #C8161D; border-radius: 12rpx; font-size: 26rpx; line-height: 1.6; text-align: center; }
+.host-cta { margin: 24rpx 0; padding: 22rpx 24rpx; background: var(--primary-soft); color: var(--primary); border-radius: var(--r-s); font-size: 26rpx; line-height: 1.6; text-align: center; }

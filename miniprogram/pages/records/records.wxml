@@ -16,8 +16,8 @@
         <view class="muted">{{total}} 份<text wx:if="{{pendingCount > 0}}" class="pending-hint"> · {{pendingCount}} 份待确认</text></view>
       </view>
       <view class="filters">
-        <view class="filter {{filterDay === 'today' ? 'on' : ''}}" data-v="today" bindtap="onFilterChange">今日</view>
-        <view class="filter {{filterDay === 'all' ? 'on' : ''}}" data-v="all" bindtap="onFilterChange">全部</view>
+        <view class="chip {{filterDay === 'today' ? 'on' : ''}}" data-v="today" bindtap="onFilterChange">今日</view>
+        <view class="chip {{filterDay === 'all' ? 'on' : ''}}" data-v="all" bindtap="onFilterChange">全部</view>
       </view>
     </view>
     <view class="search-row">
@@ -25,7 +25,7 @@
       <picker range="{{relations}}" value="{{relIdx}}" bindchange="onRelation">
         <view class="rel-btn {{relIdx > 0 ? 'on' : ''}}">{{relIdx > 0 ? relations[relIdx] : '关系'}} ▾</view>
       </picker>
-      <view class="export-btn" wx:if="{{pm.export || readonly}}" bindtap="goExport">导出</view>
+      <view class="btn btn-sm btn-outline export-btn" wx:if="{{pm.export || readonly}}" bindtap="goExport">导出</view>
     </view>
     <view class="cash-entry" wx:if="{{!readonly && pm.desk}}" bindtap="goCash">＋ 礼台记账（现金 / 微信）
     </view>
@@ -52,7 +52,7 @@
       <view class="flex1"></view>
       <block wx:if="{{!readonly && pm.confirm}}">
         <view class="link danger" data-idx="{{index}}" bindtap="onReject">未收到</view>
-        <button class="btn-confirm" data-idx="{{index}}" bindtap="onConfirm">确认收到</button>
+        <button class="btn btn-sm btn-primary" data-idx="{{index}}" bindtap="onConfirm">确认收到</button>
       </block>
     </view>
 

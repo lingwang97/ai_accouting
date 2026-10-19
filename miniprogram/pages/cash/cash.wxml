@@ -9,7 +9,7 @@
       <view>批次录入</view>
       <view class="muted">一次登记多位随礼人，每人单独入簿、各打一张小票</view>
     </view>
-    <switch checked="{{batchMode}}" bindchange="onBatchMode" color="#C8161D" />
+    <switch checked="{{batchMode}}" bindchange="onBatchMode" color="{{primary}}" />
   </view>
   <view class="card">
     <view class="field">

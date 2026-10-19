@@ -1,28 +1,23 @@
 .center { text-align: center; }
 .row { display: flex; align-items: center; margin-top: 16rpx; }
-.row switch, .row .find-btn { margin-left: 16rpx; }
+.row switch, .row .btn { margin-left: 16rpx; }
 .row .days { margin: 0 16rpx; }
 .row.between { justify-content: space-between; margin-top: 0; }
-.label { color: #666; margin: 28rpx 0 12rpx; }
-.chips { display: flex; flex-wrap: wrap; margin: 0 -14rpx -14rpx 0; }
-.chips .chip { margin: 0 14rpx 14rpx 0; }
-.chip { padding: 10rpx 26rpx; border-radius: 999rpx; background: #f2f3f5; color: #666; font-size: 26rpx; }
-.chip.on { background: var(--primary); color: #fff; }
+.label { margin-top: 28rpx; }
 .status { margin-top: 28rpx; line-height: 1.6; }
 .save { margin-top: 24rpx; }
 .plan { padding: 12rpx 0; border-bottom: 2rpx solid #f5f5f5; }
 .plan-name { font-weight: 600; }
 .small { font-size: 22rpx; }
 .tip { margin-top: 16rpx; line-height: 1.6; }
-.input { border: 2rpx solid #e5e5e5; border-radius: 12rpx; padding: 16rpx 20rpx; font-size: 26rpx; }
+.input { font-size: 26rpx; }
 .picker { min-width: 200rpx; }
 .days { width: 140rpx; }
 .idx-sum { margin-top: 20rpx; font-size: 26rpx; color: #333; }
 .idx-row { display: flex; justify-content: space-between; font-size: 24rpx; padding: 10rpx 0; border-bottom: 2rpx solid #f5f5f5; }
 .idx-row .ok, .idx-row .bad { margin-left: 16rpx; }
-.idx-row .ok { color: #07C160; }
-.idx-row .bad { color: #FA5151; text-align: right; }
+.idx-row .ok { color: var(--success); }
+.idx-row .bad { color: var(--danger); text-align: right; }
 .flex1 { flex: 1; }
-.find-btn { margin: 0; padding: 0 28rpx; font-size: 26rpx; line-height: 72rpx; height: 72rpx; }
 .host { padding: 16rpx 20rpx; border: 2rpx solid #eee; border-radius: 12rpx; margin-top: 12rpx; }
 .host.on { border-color: var(--primary); background: var(--primary-soft); }

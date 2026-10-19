@@ -25,8 +25,8 @@
     <image wx:if="{{payCodePreview}}" class="paycode" src="{{payCodePreview}}" mode="aspectFit" />
     <view wx:elif="{{hasPayCode}}" class="muted">✓ 已设置本场收款码</view>
     <view class="pc-ops">
-      <button class="btn-plain pc-btn" loading="{{uploading}}" bindtap="onChoosePayCode">{{hasPayCode || payCodePreview ? '更换收款码' : '上传收款码'}}</button>
-      <text class="link" wx:if="{{hasPayCode || payCodePreview}}" bindtap="onClearPayCode">清除</text>
+      <button class="btn-outline pc-btn" loading="{{uploading}}" bindtap="onChoosePayCode">{{hasPayCode || payCodePreview ? '更换收款码' : '上传收款码'}}</button>
+      <text class="link danger" wx:if="{{hasPayCode || payCodePreview}}" bindtap="onClearPayCode">清除</text>
     </view>
   </view>
 

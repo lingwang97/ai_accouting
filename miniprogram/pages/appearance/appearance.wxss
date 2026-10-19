@@ -1,7 +1,7 @@
 /* 预览区域：根节点写入所选颜色的 --primary / --primary-soft */
-.preview { background: #F7F7F7; border-radius: 16rpx; padding: 24rpx; margin-bottom: 24rpx; }
+.preview { background: #F7F7F7; border-radius: var(--r-m); padding: 24rpx; margin-bottom: 24rpx; }
 .pv-book {
-  background: var(--primary); color: #fff; border-radius: 24rpx; padding: 28rpx;
+  background: var(--primary); color: #fff; border-radius: var(--r-l); padding: 28rpx;
   box-shadow: 0 12rpx 32rpx rgba(0, 0, 0, .12);
 }
 .pv-top { display: flex; justify-content: space-between; align-items: center; }
@@ -13,10 +13,7 @@
 .pv-label { font-size: 24rpx; opacity: .8; margin-top: 20rpx; }
 .pv-sum { font-size: 60rpx; font-weight: 700; margin: 4rpx 0 12rpx; }
 .pv-foot { display: flex; justify-content: space-between; font-size: 24rpx; opacity: .9; }
-.pv-btn {
-  margin-top: 24rpx; height: 80rpx; line-height: 80rpx; text-align: center; border-radius: 12rpx;
-  background: var(--primary); color: #fff; font-size: 30rpx;
-}
+.pv-btn { margin-top: 24rpx; }
 .pv-tabs { display: flex; margin-top: 24rpx; background: #fff; border-radius: 12rpx; padding: 12rpx 0; border-top: 1px solid #eee; }
 .pv-tab { flex: 1; display: flex; flex-direction: column; align-items: center; }
 .pv-icon { width: 24px; height: 24px; }

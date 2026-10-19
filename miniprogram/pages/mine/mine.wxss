@@ -16,13 +16,13 @@
 }
 .mi-icon { width: 40rpx; height: 40rpx; margin-right: 20rpx; flex-shrink: 0; }
 .mi-text { flex: 1; }
-.group-title { font-size: 24rpx; color: #999; margin: 8rpx 12rpx 12rpx; }
+.group-title { font-size: 24rpx; color: var(--text-3); margin: 8rpx 12rpx 12rpx; }
 .menu-item:last-child { border-bottom: none; }
 .arrow { color: #bbb; }
-.logout { color: #FA5151; justify-content: center; }
+.logout { color: var(--danger); justify-content: center; }
 
 
 .version { text-align: center; font-size: 22rpx; padding: 24rpx 0 8rpx; }
 
-.switch-id { color: #576B95; font-size: 26rpx; margin-left: auto; padding-left: 16rpx; white-space: nowrap; }
+.switch-id { color: var(--link); font-size: 26rpx; margin-left: auto; padding-left: 16rpx; white-space: nowrap; }
 .plan-tag { display: inline-block; margin-top: 8rpx; font-size: 22rpx; color: #B8860B; background: #FFF7E6; border-radius: 6rpx; padding: 2rpx 12rpx; }

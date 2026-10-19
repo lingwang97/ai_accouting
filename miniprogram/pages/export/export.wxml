@@ -8,7 +8,7 @@
 
   <view class="card" wx:if="{{bookIdx === 0}}">
     <view class="section-title">日期范围</view>
-    <view class="presets">
+    <view class="chips presets">
       <view wx:for="{{presets}}" wx:key="key"
             class="chip {{preset === item.key ? 'on' : ''}}" data-k="{{item.key}}" bindtap="onPreset">{{item.label}}</view>
     </view>
@@ -29,13 +29,13 @@
 
   <button wx:if="{{bookIdx > 0}}" class="btn-primary" loading="{{exporting === 'book'}}" disabled="{{!!exporting}}" bindtap="onExportBook">传统礼簿 PDF（竖排，适合打印留存）</button>
   <view wx:else class="muted hint">传统礼簿 PDF 需选择一本礼簿整本导出</view>
-  <button class="btn-plain" style="margin-top:24rpx" loading="{{exporting === 'pdf'}}" disabled="{{!!exporting}}" bindtap="onExportPdf">表格 PDF（明细 + 合计）</button>
-  <button class="btn-plain" style="margin-top:24rpx" loading="{{exporting === 'xlsx'}}" disabled="{{!!exporting}}" bindtap="onExportXlsx">Excel（适合再统计）</button>
+  <button class="btn-outline" style="margin-top:24rpx" loading="{{exporting === 'pdf'}}" disabled="{{!!exporting}}" bindtap="onExportPdf">表格 PDF（明细 + 合计）</button>
+  <button class="btn-outline" style="margin-top:24rpx" loading="{{exporting === 'xlsx'}}" disabled="{{!!exporting}}" bindtap="onExportXlsx">Excel（适合再统计）</button>
 
   <view class="card backup">
     <view class="section-title">一键备份</view>
     <view class="muted">把全部礼簿、礼金明细和送礼记录导出为一个 Excel，建议定期发到「文件传输助手」保存。</view>
-    <button class="btn-plain" style="margin-top:20rpx" loading="{{exporting === 'backup'}}" disabled="{{!!exporting}}" bindtap="onBackup">备份全部数据</button>
+    <button class="btn-outline" style="margin-top:20rpx" loading="{{exporting === 'backup'}}" disabled="{{!!exporting}}" bindtap="onBackup">备份全部数据</button>
   </view>
   <ad-slot slot="exportDone" book-type="{{books[bookIdx].type || ''}}" />
 </view>

@@ -1,37 +1,125 @@
 /* app.wxss — 全局样式 */
-/* 主题色：喜事等为中国红，白事素灰（页面根节点按礼簿类型覆盖，见 utils/theme.js） */
+/* 主题色：喜事等为中国红，白事素灰（页面根节点按礼簿类型覆盖 --primary / --primary-soft，见 utils/theme.js） */
+/* 注意：不用 flex gap（部分旧版 iOS 微信不支持），间距一律用 margin */
 page {
   --primary: #C8161D;
   --primary-soft: rgba(200, 22, 29, .1);
+  --danger: #FA5151;
+  --success: #07C160;
+  --link: #576B95;
+  --border: #e5e5e5;
+  --fill: #f2f3f5;
+  --text: #333;
+  --text-2: #666;
+  --text-3: #999;
+  --r-s: 12rpx;
+  --r-m: 16rpx;
+  --r-l: 24rpx;
   background: #F4F5F7;
   font-size: 28rpx;
-  color: #333;
+  color: var(--text);
 }
 .container { padding: 24rpx; }
 .card {
   background: #fff;
-  border-radius: 16rpx;
+  border-radius: var(--r-m);
   padding: 28rpx;
   margin-bottom: 24rpx;
   box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
 }
-.btn-primary {
-  background: var(--primary);
-  color: #fff;
-  border-radius: 12rpx;
-  font-size: 32rpx;
-}
-.btn-primary[disabled] { opacity: .5; }
-.btn-plain {
-  background: #fff;
-  color: var(--primary);
-  border: 2rpx solid var(--primary);
-  border-radius: 12rpx;
-  font-size: 30rpx;
-}
-.muted { color: #999; font-size: 24rpx; }
+.muted { color: var(--text-3); font-size: 24rpx; }
 .money { color: #FA5151; font-weight: 600; }
 .section-title { font-size: 30rpx; font-weight: 600; margin-bottom: 20rpx; }
 
 /* 自定义底部菜单占位（tab 页） */
 .tab-page { padding-bottom: calc(50px + env(safe-area-inset-bottom)); }
+
+/* ================= 按钮 =================
+ * 变体可单独用在原生 <button> 上（整行大按钮，沿用原生高度）：<button class="btn-primary">
+ * 加 .btn 得到统一的中号按钮（view 或 button 均可），再加 .btn-lg / .btn-sm 调尺寸
+ */
+.btn-primary, .btn-outline, .btn-plain, .btn-danger {
+  border-radius: var(--r-s);
+  font-size: 32rpx;
+  box-sizing: border-box;
+}
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-outline { background: #fff; color: var(--primary); border: 2rpx solid var(--primary); }
+.btn-plain { background: var(--fill); color: var(--text-2); }
+.btn-danger { background: #fff; color: var(--danger); border: 2rpx solid var(--danger); }
+.btn-text { background: none; color: var(--link); }
+/* 原生 button 的伪元素边框 */
+.btn::after, .btn-primary::after, .btn-outline::after, .btn-plain::after, .btn-danger::after, .btn-text::after { border: none; }
+
+.btn {
+  display: flex; align-items: center; justify-content: center;
+  margin: 0; padding: 0 32rpx; height: 72rpx; line-height: 1.2;
+  font-size: 28rpx; border-radius: var(--r-s); box-sizing: border-box; white-space: nowrap;
+}
+.btn-lg { height: 88rpx; font-size: 32rpx; font-weight: 600; }
+.btn-sm { height: 60rpx; padding: 0 24rpx; font-size: 26rpx; }
+.btn.btn-block { width: 100%; }
+.btn-primary[disabled], .btn-outline[disabled], .btn-plain[disabled], .btn-danger[disabled], .btn-text[disabled],
+.btn.disabled { opacity: .5; }
+/* 原生 button[disabled] 自带灰底灰字（选择器权重更高），属性写两次提高权重，保留变体颜色 */
+.btn-primary[disabled][disabled] { background: var(--primary); color: #fff; }
+.btn-outline[disabled][disabled] { background: #fff; color: var(--primary); }
+.btn-plain[disabled][disabled] { background: var(--fill); color: var(--text-2); }
+.btn-danger[disabled][disabled] { background: #fff; color: var(--danger); }
+.btn-hover { opacity: .8; }
+
+/* 一行并排按钮：各占一份，中间留 20rpx */
+.btn-row { display: flex; }
+.btn-row > .btn, .btn-row > button { flex: 1; }
+.btn-row > .btn:not(:last-child), .btn-row > button:not(:last-child) { margin-right: 20rpx; }
+
+/* ================= 文字链接 / 标签 ================= */
+.link { color: var(--link); font-size: 26rpx; white-space: nowrap; }
+.link.danger { color: var(--danger); }
+.tag {
+  display: inline-block; font-size: 22rpx; line-height: 1.5; padding: 2rpx 14rpx; border-radius: 999rpx;
+  background: var(--primary-soft); color: var(--primary); flex-shrink: 0;
+}
+
+/* ================= 选项胶囊 ================= */
+.chips { display: flex; flex-wrap: wrap; margin: 0 -14rpx -14rpx 0; }
+.chips .chip { margin: 0 14rpx 14rpx 0; }
+.chip { padding: 8rpx 26rpx; border-radius: 999rpx; background: var(--fill); color: var(--text-2); font-size: 26rpx; }
+.chip.on { background: var(--primary); color: #fff; }
+/* 胶囊下紧跟输入框或说明文字时留出间距 */
+.chips + .input, .chips + .muted { margin-top: 14rpx; }
+
+/* ================= 表单 ================= */
+.field { margin-bottom: 28rpx; }
+.label { display: block; color: var(--text-2); margin-bottom: 12rpx; }
+.input { border: 2rpx solid var(--border); border-radius: var(--r-s); padding: 18rpx 20rpx; }
+
+/* ================= 分段切换 ================= */
+.seg { display: flex; background: #fff; border-radius: var(--r-s); padding: 6rpx; }
+.seg-item { flex: 1; text-align: center; padding: 14rpx 0; border-radius: 10rpx; color: var(--text-2); font-size: 26rpx; white-space: nowrap; }
+.seg-item.on { background: var(--primary); color: #fff; font-weight: 600; }
+/* 小号胶囊（列表行内用） */
+.seg.seg-sm { background: none; padding: 0; border: 2rpx solid var(--primary); border-radius: 999rpx; overflow: hidden; }
+.seg.seg-sm .seg-item { flex: none; padding: 6rpx 22rpx; border-radius: 0; font-size: 24rpx; color: var(--primary); font-weight: normal; }
+.seg.seg-sm .seg-item.on { color: #fff; }
+
+/* ================= 底部弹层 ================= */
+.mask { position: fixed; left: 0; right: 0; top: 0; bottom: 0; background: rgba(0, 0, 0, .45); display: flex; align-items: flex-end; z-index: 10; }
+.sheet {
+  width: 100%; max-height: 92vh; overflow-y: auto; background: #fff; border-radius: var(--r-l) var(--r-l) 0 0;
+  padding: 32rpx 32rpx calc(32rpx + env(safe-area-inset-bottom)); box-sizing: border-box;
+}
+.sheet-title { font-size: 34rpx; font-weight: 700; margin-bottom: 12rpx; }
+.sheet-btns { display: flex; margin-top: 20rpx; }
+.sheet-btns .btn { flex: 1; }
+.sheet-btns .btn:not(:last-child) { margin-right: 20rpx; }
+
+/* ================= 底部操作栏 ================= */
+.bottom-bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; background: #fff;
+  padding: 20rpx 24rpx calc(20rpx + env(safe-area-inset-bottom)); box-sizing: border-box;
+  box-shadow: 0 -2rpx 12rpx rgba(0, 0, 0, .06);
+}
+
+/* ================= 空状态 ================= */
+.empty { text-align: center; color: var(--text-3); padding: 80rpx 0; }

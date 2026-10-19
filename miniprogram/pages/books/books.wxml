@@ -28,8 +28,8 @@
     <view class="b-foot">
       <text><text class="money">￥{{item.sumStr}}</text><text class="muted"> · {{item.count}} 份</text></text>
       <view class="b-ops">
-        <view class="op-btn" wx:if="{{pm.books}}" data-id="{{item._id}}" catchtap="onSetActive">设为当前</view>
-        <view class="op-btn" wx:if="{{canExport}}" data-id="{{item._id}}" catchtap="onExport">导出</view>
+        <view class="btn btn-sm btn-outline" wx:if="{{pm.books}}" data-id="{{item._id}}" catchtap="onSetActive">设为当前</view>
+        <view class="btn btn-sm btn-outline" wx:if="{{canExport}}" data-id="{{item._id}}" catchtap="onExport">导出</view>
         <view class="op-link" wx:if="{{pm.books}}" data-id="{{item._id}}" catchtap="onEdit">编辑</view>
         <view class="op-link gray" wx:if="{{pm.books}}" data-id="{{item._id}}" data-archived="{{false}}" catchtap="onArchive">归档</view>
       </view>
@@ -51,7 +51,7 @@
       <view class="b-foot">
         <text><text class="money">￥{{item.sumStr}}</text><text class="muted"> · {{item.count}} 份</text></text>
         <view class="b-ops">
-          <view class="op-btn" wx:if="{{canExport}}" data-id="{{item._id}}" catchtap="onExport">导出</view>
+          <view class="btn btn-sm btn-outline" wx:if="{{canExport}}" data-id="{{item._id}}" catchtap="onExport">导出</view>
           <view class="op-link" wx:if="{{pm.books}}" data-id="{{item._id}}" data-archived="{{true}}" catchtap="onArchive">取消归档</view>
         </view>
       </view>
@@ -62,7 +62,7 @@
 
   <!-- 底部并排：新建礼簿｜礼簿共享（共享给家人只读查看） -->
   <view class="bottom-bar" wx:if="{{(pm.books && !restricted) || pm.members}}">
-    <view class="bb-btn solid" wx:if="{{pm.books && !restricted}}" hover-class="bb-hover" bindtap="onAdd"><text class="bb-plus">＋</text>新建{{orgMode ? '场次' : '礼簿'}}</view>
-    <view class="bb-btn outline" wx:if="{{pm.members}}" hover-class="bb-hover" bindtap="goShare"><image class="bb-icon" src="/assets/icons/people-{{iconKey}}.svg" />礼簿共享</view>
+    <view class="btn btn-lg btn-primary" wx:if="{{pm.books && !restricted}}" hover-class="btn-hover" bindtap="onAdd"><text class="bb-plus">＋</text>新建{{orgMode ? '场次' : '礼簿'}}</view>
+    <view class="btn btn-lg btn-outline" wx:if="{{pm.members}}" hover-class="btn-hover" bindtap="goShare"><image class="bb-icon" src="/assets/icons/people-{{iconKey}}.svg" />礼簿共享</view>
   </view>
 </view>

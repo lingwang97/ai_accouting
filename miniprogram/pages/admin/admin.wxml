@@ -9,7 +9,7 @@
           <view>启用预热</view>
           <view class="muted">定时唤醒常用云函数，打开小程序更快</view>
         </view>
-        <switch checked="{{warmup.enabled}}" bindchange="onEnabled" color="#C8161D" />
+        <switch checked="{{warmup.enabled}}" bindchange="onEnabled" color="{{primary}}" />
       </view>
 
       <block wx:if="{{warmup.enabled}}">
@@ -41,7 +41,7 @@
           <view>展示广告</view>
           <view class="muted small">需先在小程序后台开通流量主，并创建 Banner 广告单元</view>
         </view>
-        <switch checked="{{ads.enabled}}" bindchange="onAdsEnabled" color="#C8161D" />
+        <switch checked="{{ads.enabled}}" bindchange="onAdsEnabled" color="{{primary}}" />
       </view>
       <view class="label">广告单元 ID</view>
       <input class="input" placeholder="adunit-xxxxxxxx" value="{{ads.bannerUnit}}" bindinput="onAdsUnit" />
@@ -51,11 +51,11 @@
       </view>
       <view class="row between" style="margin-top:24rpx">
         <view>白事礼簿相关页面不展示</view>
-        <switch checked="{{ads.hideFuneral}}" bindchange="onAdsFuneral" color="#C8161D" />
+        <switch checked="{{ads.hideFuneral}}" bindchange="onAdsFuneral" color="{{primary}}" />
       </view>
       <view class="row between" style="margin-top:16rpx">
         <view>付费套餐用户不展示</view>
-        <switch checked="{{ads.paidHide}}" bindchange="onAdsPaid" color="#C8161D" />
+        <switch checked="{{ads.paidHide}}" bindchange="onAdsPaid" color="{{primary}}" />
       </view>
       <button class="btn-primary save" bindtap="onSaveAds">保存广告设置</button>
     </view>
@@ -82,7 +82,7 @@
       <view class="label">手动开通 / 延期</view>
       <view class="row" style="margin-top:0">
         <input class="input flex1" placeholder="搜索主家称呼 / 机构名称" value="{{hostKeyword}}" bindinput="onHostKeyword" bindconfirm="onFindHosts" />
-        <button class="btn-plain find-btn" bindtap="onFindHosts">搜索</button>
+        <button class="btn btn-outline" bindtap="onFindHosts">搜索</button>
       </view>
       <view class="host {{hostIdx === index ? 'on' : ''}}" wx:for="{{hosts}}" wx:key="ownerOpenid" data-i="{{index}}" bindtap="onPickHost">
         <view>{{item.accountName}}<text class="muted small" wx:if="{{item.orgName}}"> · {{item.orgName}}</text></view>
@@ -97,7 +97,7 @@
         <input class="input days" type="number" placeholder="天数" value="{{subDays}}" bindinput="onSubDays" />
         <text class="muted">天</text>
       </view>
-      <button class="btn-plain save" bindtap="onSetPlan">确定</button>
+      <button class="btn-outline save" bindtap="onSetPlan">确定</button>
     </view>
   </block>
 </view>

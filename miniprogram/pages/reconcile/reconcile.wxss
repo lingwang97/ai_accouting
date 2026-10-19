@@ -1,14 +1,12 @@
 .head { display: flex; justify-content: space-between; align-items: center; }
-.head .seg { margin-left: 20rpx; }
+.head .seg { margin-left: 20rpx; flex-shrink: 0; background: var(--fill); padding: 4rpx; }
+.head .seg-item { padding: 10rpx 28rpx; }
 .book-pick { font-size: 30rpx; font-weight: 600; color: var(--primary); max-width: 400rpx; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.seg { display: flex; background: #f2f3f5; border-radius: 10rpx; padding: 4rpx; }
-.seg-item { padding: 10rpx 28rpx; border-radius: 8rpx; font-size: 26rpx; color: #666; }
-.seg-item.on { background: var(--primary); color: #fff; font-weight: 600; }
 .total { text-align: center; }
 .t-sum { font-size: 64rpx; margin: 8rpx 0; }
 .row { display: flex; justify-content: space-between; padding: 14rpx 0; font-size: 30rpx; }
 .row.sub { padding-left: 28rpx; font-size: 26rpx; color: #555; }
-.hot { color: #FA5151; }
+.hot { color: var(--danger); }
 .h-row { border-bottom: 2rpx solid #f5f5f5; padding-bottom: 8rpx; }
 .h-row:last-child { border-bottom: none; }
 .small { font-size: 22rpx; }

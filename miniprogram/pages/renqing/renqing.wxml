@@ -29,7 +29,7 @@
     <view class="search-row">
       <input class="search" placeholder="{{tab === 'people' ? '输入姓名查往来' : (tab === 'receipts' ? '搜索主家 / 礼簿' : (tab === 'in' ? '搜索随礼人姓名' : '搜索对方姓名'))}}" value="{{keyword}}"
              bindinput="onKeyword" bindconfirm="onSearch" confirm-type="search" />
-      <view class="add-btn" wx:if="{{tab !== 'receipts'}}" bindtap="onAddGift">＋ 记送礼</view>
+      <view class="btn btn-primary add-btn" hover-class="btn-hover" wx:if="{{tab !== 'receipts'}}" bindtap="onAddGift">＋ 记送礼</view>
     </view>
 
     <!-- 往来对比 -->

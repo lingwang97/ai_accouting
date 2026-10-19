@@ -28,7 +28,7 @@ Page({
   },
 
   onShow() {
-    theme.apply(this); // 主题色跟当前礼簿事由走
+    this.setData({ primary: theme.apply(this).primary }); // 主题色跟当前礼簿事由走
   },
 
   async onLoad(options) {

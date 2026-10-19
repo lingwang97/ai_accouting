@@ -29,7 +29,7 @@
           <view>批次录入</view>
           <view class="muted">帮多人一起登记（如一家人、同事一起随礼），每人单独记入礼簿，按合计转一笔账</view>
         </view>
-        <switch checked="{{batchMode}}" bindchange="onBatchMode" color="#C8161D" />
+        <switch checked="{{batchMode}}" bindchange="onBatchMode" color="{{primary}}" />
       </view>
       <view class="card">
         <block wx:if="{{batchMode}}">
@@ -113,7 +113,7 @@
         <view class="link-fold" wx:if="{{!onsite}}" bindtap="onSwitchOnsite">在现场？直接扫主家屏幕或台卡上的收款码</view>
       </view>
       <button class="btn-primary" loading="{{submitting}}" bindtap="onTransferred">我已完成转账</button>
-      <button class="btn-link" bindtap="onCancel">取消本次随礼</button>
+      <button class="btn-text btn-link" bindtap="onCancel">取消本次随礼</button>
     </block>
 
     <!-- 第 3 步：等待收款方确认 -->
@@ -127,7 +127,7 @@
         <view class="cash-tip" wx:if="{{record.mixed}}">转账 ￥{{record.payStr}} 已完成，请将现金 ￥{{record.cashStr}} 当面交给礼台</view>
         <view class="muted tip">主家确认收到后，礼金将记入礼簿，本页自动显示回执，请勿关闭</view>
       </view>
-      <button class="btn-plain" bindtap="onRefresh">刷新状态</button>
+      <button class="btn-outline" bindtap="onRefresh">刷新状态</button>
     </block>
 
     <!-- 成功：展示付款方留存收据 -->

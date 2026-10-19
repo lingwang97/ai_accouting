@@ -3,9 +3,9 @@
     <view class="row-head">
       <text class="no">第 {{ri + 1}} 位<text class="tag" wx:if="{{ri === 0 && firstLabel}}">{{firstLabel}}</text></text>
       <view class="head-r">
-        <view class="seg" wx:if="{{mixed}}">
-          <view class="seg-i {{item.method !== 'cash' ? 'on' : ''}}" data-i="{{ri}}" data-m="wechat" bindtap="onMethod">转账</view>
-          <view class="seg-i {{item.method === 'cash' ? 'on' : ''}}" data-i="{{ri}}" data-m="cash" bindtap="onMethod">现金</view>
+        <view class="seg seg-sm" wx:if="{{mixed}}">
+          <view class="seg-item {{item.method !== 'cash' ? 'on' : ''}}" data-i="{{ri}}" data-m="wechat" bindtap="onMethod">转账</view>
+          <view class="seg-item {{item.method === 'cash' ? 'on' : ''}}" data-i="{{ri}}" data-m="cash" bindtap="onMethod">现金</view>
         </view>
         <text class="del" wx:if="{{rows.length > 1}}" data-i="{{ri}}" bindtap="onDel">删除</text>
       </view>

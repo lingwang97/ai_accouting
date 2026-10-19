@@ -28,7 +28,4 @@
 .avatar-btn::after { border: none; }
 .avatar { width: 140rpx; height: 140rpx; border-radius: 50%; background: #eee; }
 .avatar-tip { margin-bottom: 28rpx; }
-.input {
-  border: 2rpx solid #e5e5e5; border-radius: 12rpx;
-  padding: 20rpx; margin-bottom: 32rpx; text-align: center;
-}
+.input { margin-bottom: 32rpx; text-align: center; }

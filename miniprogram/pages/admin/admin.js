@@ -32,7 +32,7 @@ Page({
     themeStyle: ''
   },
 
-  onShow() { theme.apply(this); },
+  onShow() { this.setData({ primary: theme.apply(this).primary }); },
 
   async onLoad() {
     try {

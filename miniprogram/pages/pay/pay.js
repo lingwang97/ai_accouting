@@ -28,6 +28,7 @@ function viewRecord(r) {
 Page({
   data: {
     aid: '',
+    primary: theme.DEFAULT, // 开关颜色，加载主家信息后按主题更新
     account: null,
     loadErr: '',
     step: 'form',      // form | transfer | waiting | success | failed
@@ -84,7 +85,7 @@ Page({
     try {
       const { account } = await req.accountGetByAid(aid);
       const t = theme.forType(account.book && account.book.type, account.theme && account.theme.chosen ? account.theme.primary : '');
-      this.setData({ account, isFuneral: !!(account.book && account.book.type === 'funeral'), themeStyle: theme.styleOf(t) });
+      this.setData({ account, isFuneral: !!(account.book && account.book.type === 'funeral'), themeStyle: theme.styleOf(t), primary: t.primary });
       wx.setNavigationBarColor({ frontColor: '#ffffff', backgroundColor: t.primary, fail() {} });
       wx.setNavigationBarTitle({ title: `向「${account.accountName}」随礼` });
     } catch (e) {

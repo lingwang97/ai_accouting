@@ -8,8 +8,8 @@
           <view class="muted">{{connected ? '已连接' : '未连接'}}</view>
         </view>
         <view class="dev-actions">
-          <button wx:if="{{!connected}}" class="btn-plain sm" bindtap="onTest">连接并测试</button>
-          <button wx:else class="btn-plain sm" bindtap="onDisconnect">断开</button>
+          <button wx:if="{{!connected}}" class="btn btn-sm btn-outline" bindtap="onTest">连接并测试</button>
+          <button wx:else class="btn btn-sm btn-outline" bindtap="onDisconnect">断开</button>
         </view>
       </view>
     </block>
@@ -28,7 +28,7 @@
           <view class="dev-name">{{item.name}}</view>
           <view class="muted">{{item.deviceId}}</view>
         </view>
-        <button class="btn-plain sm" data-id="{{item.deviceId}}" bindtap="onConnect">连接</button>
+        <button class="btn btn-sm btn-outline" data-id="{{item.deviceId}}" bindtap="onConnect">连接</button>
       </view>
       <view class="muted center pad">搜索中…（确认打印机已开机）</view>
       <button class="btn-plain" bindtap="onStopScan">停止搜索</button>

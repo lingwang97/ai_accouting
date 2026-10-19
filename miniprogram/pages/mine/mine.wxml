@@ -47,7 +47,7 @@
           <view>机构模式</view>
           <view class="muted">{{account.orgMode ? (account.orgName || '点此填写机构名称') : '一个账号办多场，每场单独设主家与收款码'}}</view>
         </view>
-        <switch checked="{{account.orgMode}}" catchtap="noop" bindchange="onOrgSwitch" color="#C8161D" />
+        <switch checked="{{account.orgMode}}" catchtap="noop" bindchange="onOrgSwitch" color="{{primary}}" />
       </view>
     </view>
 
