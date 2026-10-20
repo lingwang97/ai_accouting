@@ -7,7 +7,7 @@ const theme = require('../../utils/theme.js');
 // 字段定义（顺序可调）
 const FIELD_LABELS = {
   title: '标题', divider: '分隔线', theme: '事由', payDay: '日期', time: '时间',
-  payerName: '随礼人', relation: '关系', proxyFor: '代随礼', amount: '礼金', remark: '礼品/备注', thanks: '致谢语'
+  payerName: '随礼人', relation: '关系', amount: '礼金', remark: '礼品/备注', thanks: '致谢语'
 };
 const label = f => FIELD_LABELS[f] || f;
 
@@ -63,7 +63,7 @@ Page({
       thanks: tpl.thanks || '',
       showDivider: tpl.showDivider !== false,
       promo: tpl.promo !== false,
-      fields: tpl.fields || escpos.DEFAULT_FIELDS.slice()
+      fields: (tpl.fields || escpos.DEFAULT_FIELDS).filter(f => FIELD_LABELS[f]) // 去掉已下线的字段（如旧版的「代随礼」）
     }, () => this.refresh());
   },
 
@@ -127,7 +127,6 @@ Page({
         case 'title': lines.push({ big: true, t: this.data.title || '礼金回执' }); break;
         case 'theme': lines.push({ t: '事由：张三&李四 新婚之喜' }); break;
         case 'relation': lines.push({ t: '关系：同学' }); break;
-        case 'proxyFor': lines.push({ t: '代随礼：李四、王五' }); break;
         case 'divider': if (this.data.showDivider) lines.push({ t: '-'.repeat(w) }); break;
         case 'payDay': lines.push({ t: '日期：2026-10-10' }); break;
         case 'time': lines.push({ t: '时间：12:30' }); break;

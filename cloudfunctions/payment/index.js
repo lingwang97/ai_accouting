@@ -523,7 +523,7 @@ async function myReceipts(openid) {
 /** 收据只暴露必要字段 */
 const receiptRecord = r => ({
   _id: r._id, aid: r.aid, payerName: r.payerName, amount: r.amount, remark: r.remark,
-  relation: r.relation || '', proxyFor: r.proxyFor || '', proxyItems: r.proxyItems || [],
+  relation: r.relation || '',
   bookId: r.bookId || '', bookType: r.bookType || 'other', payMethod: r.payMethod || 'wechat',
   handlerName: r.handlerName || '', batchId: r.batchId || '', hostName: r.hostName || '',
   themeName: r.themeName, payDay: r.payDay, createdAt: r.createdAt, paidAt: r.paidAt
@@ -596,9 +596,6 @@ async function ownerUpdate(ctx, rid, fromList, to, actualAmount) {
     if (Math.round(cur.amount * 100) !== Math.round(amt * 100)) {
       data.amount = amt;
       data.declaredAmount = cur.amount;
-      // 代随礼金额之和不能超过实际金额，超出时清空分人金额，只保留名单
-      const proxyFen = (cur.proxyItems || []).reduce((t, x) => t + Math.round((x.amount || 0) * 100), 0);
-      if (proxyFen > Math.round(amt * 100)) data.proxyItems = (cur.proxyItems || []).map(x => ({ name: x.name, amount: null }));
     }
   }
   const res = await records.where({ _id: rid, ownerOpenid: openid, status: _.in(fromList) })

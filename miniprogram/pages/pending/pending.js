@@ -2,7 +2,6 @@
 const req = require('../../utils/request.js');
 const fmt = require('../../utils/format.js');
 const confirm = require('../../utils/confirm.js');
-const receipt = require('../../utils/receipt.js');
 const notify = require('../../utils/notify.js');
 const theme = require('../../utils/theme.js');
 const perm = require('../../utils/perm.js');
@@ -110,7 +109,7 @@ Page({
   filterList(keyword) {
     const k = (keyword || '').trim();
     return k
-      ? this._list.filter(g => g.records.some(r => r.payerName.includes(k) || (r.proxyFor || '').includes(k)))
+      ? this._list.filter(g => g.records.some(r => r.payerName.includes(k)))
       : this._list;
   },
 
@@ -358,7 +357,6 @@ function groupRecords(list) {
       amountStr: fmt.money(fen / 100),
       relation: batch ? '' : first.relation,
       remark: batch ? '' : first.remark,
-      proxyStr: batch ? '' : receipt.proxyText(first),
       timeStr: fmt.time(first.transferredAt || first.createdAt)
     };
   });

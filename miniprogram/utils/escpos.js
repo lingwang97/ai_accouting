@@ -1,7 +1,6 @@
 // utils/escpos.js — ESC/POS 小票字节流构造（文档 §6.5）
 const gbk = require('./gbk.js');
 const fmt = require('./format.js');
-const receipt = require('./receipt.js');
 
 const ESC = 0x1b, GS = 0x1d;
 
@@ -61,11 +60,6 @@ function buildReceipt(record, tpl) {
           bytes.push(...CMD.alignLeft, ...text(`关系：${record.relation}`), ...CMD.feed);
         }
         break;
-      case 'proxyFor':
-        if (record.proxyFor) {
-          bytes.push(...CMD.alignLeft, ...text(`代随礼：${receipt.proxyText(record)}`), ...CMD.feed);
-        }
-        break;
       case 'amount':
         bytes.push(...CMD.alignRight, ...CMD.sizeDouble, ...CMD.boldOn,
           ...text(`￥${fmt.money(record.amount)}`), ...CMD.feed,
@@ -104,6 +98,6 @@ function buildTestLine() {
   return new Uint8Array(bytes).buffer;
 }
 
-const DEFAULT_FIELDS = ['title', 'divider', 'theme', 'payDay', 'time', 'payerName', 'proxyFor', 'amount', 'remark', 'thanks'];
+const DEFAULT_FIELDS = ['title', 'divider', 'theme', 'payDay', 'time', 'payerName', 'amount', 'remark', 'thanks'];
 
 module.exports = { buildReceipt, buildTestLine, DEFAULT_FIELDS };

@@ -11,7 +11,6 @@ const FIELD_LABELS = {
   payee: '主家',
   payerName: '随礼人',
   relation: '关系',
-  proxyFor: '代随礼',
   amountUpper: '礼金大写',
   theme: '事由',
   remark: '礼品/备注',
@@ -26,14 +25,14 @@ const STYLES = [
 
 const DEFAULT_TPL = {
   ...scenes.byType('other').receipt,
-  fields: ['receiptNo', 'theme', 'payee', 'payerName', 'proxyFor', 'amountUpper', 'remark', 'paidAt']
+  fields: ['receiptNo', 'theme', 'payee', 'payerName', 'amountUpper', 'remark', 'paidAt']
 };
 
 /** 编辑页预览用示例数据 */
 const SAMPLE = {
   record: {
     _id: 'sample0000000000000000000a1b2c3', payerName: '张三', amount: 888, remark: '另送花篮一对',
-    relation: '同学', proxyFor: '李四、王五', themeName: '张三&李四 新婚之喜', bookType: 'wedding',
+    relation: '同学', themeName: '张三&李四 新婚之喜', bookType: 'wedding',
     createdAt: new Date(), paidAt: new Date()
   },
   accountName: '张府'
@@ -41,7 +40,8 @@ const SAMPLE = {
 
 /** 礼簿未自定义样式时，按事由类型套用场景默认（白事自动素色无红章） */
 function normalizeTpl(tpl, bookType) {
-  if (tpl) return { ...DEFAULT_TPL, ...tpl };
+  // 已保存的样式里可能有已下线的字段（如旧版的「代随礼」）：只保留现有字段
+  if (tpl) return { ...DEFAULT_TPL, ...tpl, fields: (tpl.fields || DEFAULT_TPL.fields).filter(k => FIELD_LABELS[k]) };
   return { ...DEFAULT_TPL, ...scenes.byType(bookType || 'other').receipt };
 }
 
@@ -92,14 +92,6 @@ function amountUpper(n) {
   return s;
 }
 
-/** 代随礼名单，填了金额的带上金额：王五 ￥300、赵六 */
-function proxyText(r) {
-  if (r.proxyItems && r.proxyItems.length) {
-    return r.proxyItems.map(p => (p.amount > 0 ? `${p.name} ￥${fmt.money(p.amount)}` : p.name)).join('、');
-  }
-  return r.proxyFor || '';
-}
-
 /** 生成展示模型（组件渲染与画图共用） */
 function buildModel(record, tpl, accountName) {
   const t = normalizeTpl(tpl, record.bookType);
@@ -109,7 +101,6 @@ function buildModel(record, tpl, accountName) {
     // 同名区分备注：只显示宾客自己填的；主家 / 礼台的私下备注不外露
     payerName: record.nameTag && record.nameTagBy === 'guest' ? `${record.payerName}（${record.nameTag}）` : record.payerName,
     relation: record.relation || '',
-    proxyFor: proxyText(record),
     amountUpper: amountUpper(record.amount),
     theme: record.themeName || '',
     remark: record.remark || '',
@@ -368,5 +359,5 @@ function saveImage(filePath) {
 
 module.exports = {
   FIELD_LABELS, STYLES, DEFAULT_TPL, SAMPLE,
-  normalizeTpl, amountUpper, receiptNo, proxyText, buildModel, toImage, saveImage, withAppCode
+  normalizeTpl, amountUpper, receiptNo, buildModel, toImage, saveImage, withAppCode
 };

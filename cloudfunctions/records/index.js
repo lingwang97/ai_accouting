@@ -325,9 +325,7 @@ async function list(openid, event, ctx) {
   if (event.relation) base.relation = String(event.relation).slice(0, 10);
   let kw = null;
   if (event.keyword) {
-    // 搜索姓名时同时匹配代随礼名单（搜"王五"能找到"李四 代 王五"）
-    const reg = db.RegExp({ regexp: escapeReg(String(event.keyword).slice(0, 20)), options: 'i' });
-    kw = _.or([{ payerName: reg }, { proxyFor: reg }]);
+    kw = { payerName: db.RegExp({ regexp: escapeReg(String(event.keyword).slice(0, 20)), options: 'i' }) };
   }
   const withKw = c => (kw ? _.and([c, kw]) : c);
   const paidCond = withKw({ ...base, status: 'paid' });

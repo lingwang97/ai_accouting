@@ -308,25 +308,9 @@ function subtitleLines(meta) {
   return lines;
 }
 
-/** 代随礼文字：优先 proxyItems（有金额时带金额，如「王五 ￥200、赵六」），否则用 proxyFor */
-function proxyText(r) {
-  if (Array.isArray(r.proxyItems) && r.proxyItems.length) {
-    const parts = r.proxyItems.map(p => {
-      const name = String((p && p.name) || '').trim();
-      if (!name) return '';
-      const a = p.amount;
-      const hasAmount = a !== undefined && a !== null && a !== '' && isFinite(Number(a));
-      return hasAmount ? `${name} ￥${fmtAmount(a)}` : name;
-    }).filter(Boolean);
-    if (parts.length) return parts.join('、');
-  }
-  return String(r.proxyFor || '').trim();
-}
-
-/** 宾客显示名：姓名 +（代 某某） */
+/** 宾客显示名（多人一起随礼用批次登记，每人一条记录） */
 function guestText(r) {
-  const proxy = proxyText(r);
-  return `${r.payerName || ''}${proxy ? `（代 ${proxy}）` : ''}`;
+  return r.payerName || '';
 }
 
 // —— 表格 PDF（A4 纵向） ——
@@ -487,7 +471,7 @@ async function buildXlsx(rows, meta) {
 }
 
 // —— 传统礼簿 PDF（A4 横向，竖排，从右到左） ——
-// 每页三栏：姓名（含代随礼）/ 金额（大写 + 小写）/ 礼品·备注；最右侧一列为栏目名
+// 每页三栏：姓名 / 金额（大写 + 小写）/ 礼品·备注；最右侧一列为栏目名
 const BK = {
   width: 841.89, height: 595.28,
   left: 36, right: 841.89 - 36,
@@ -664,7 +648,7 @@ function clip(tokens, n) {
   return tokens.slice(0, n - 1).concat('…');
 }
 
-/** 一位宾客一列：姓名栏（姓名 + 代随礼）/ 金额栏（大写 + 小写）/ 礼品·备注栏 */
+/** 一位宾客一列：姓名栏 / 金额栏（大写 + 小写）/ 礼品·备注栏 */
 function drawEntry(doc, r, i, slot, pal) {
   const x = slotX(slot), w = BK.colW, half = w / 2;
   const { gridTop: top, divider, divider2, gridBottom: bottom } = BK;
@@ -673,16 +657,12 @@ function drawEntry(doc, r, i, slot, pal) {
   // 序号
   doc.fontSize(7).fillColor(pal.sub).text(String(i + 1), x, top + 4, { width: w, align: 'center', lineBreak: false });
 
-  // 姓名栏：20 号字逐字竖排，代随礼小字写在姓名下方
-  const proxy = proxyText(r);
+  // 姓名栏：20 号字逐字竖排
   const nameSize = 20, nameLH = 23;
   const nameTop = top + 18, nameEnd = divider - 6;
-  const maxNameChars = proxy ? 5 : Math.floor((nameEnd - nameTop) / nameLH);
+  const maxNameChars = Math.floor((nameEnd - nameTop) / nameLH);
   doc.fillColor(pal.text);
-  const y = drawVertical(doc, clip(tokenize(r.payerName), maxNameChars), x, nameTop, w, nameSize, nameLH);
-  if (proxy) {
-    drawSmall(doc, tokenize('代' + proxy), x, y + 6, nameEnd, w, pal, pSize, pLH);
-  }
+  drawVertical(doc, clip(tokenize(r.payerName), maxNameChars), x, nameTop, w, nameSize, nameLH);
 
   // 金额栏：大写金额（字号随字数自适应）+ 底部小写金额
   const upper = tokenize(amountUpper(r.amount));
@@ -843,17 +823,17 @@ async function buildBackup({ records, books, gifts, extra }) {
 
   // 礼金明细：按礼簿、时间排序
   const ws2 = wb.addWorksheet('礼金明细');
-  headStyle(ws2.addRow(['序号', '礼簿', '时间', '宾客', '代随礼', '关系', '方式', '礼金(元)', '礼品/备注']));
+  headStyle(ws2.addRow(['序号', '礼簿', '时间', '宾客', '关系', '方式', '礼金(元)', '礼品/备注']));
   const ordered = [];
   groups.forEach(g => g.rows.forEach(r => ordered.push([g.book.name || '', r])));
   loose.forEach(r => ordered.push([NO_BOOK, r]));
   ordered.forEach(([name, r], i) => {
-    ws2.addRow([i + 1, name, fmtDateTime(r.paidAt || r.createdAt), r.payerName || '', proxyText(r),
+    ws2.addRow([i + 1, name, fmtDateTime(r.paidAt || r.createdAt), r.payerName || '',
       r.relation || '', methodText(r), Number(r.amount), remarkOf(r)]);
   });
-  totalStyle(ws2.addRow(['', '合计', `${ordered.length} 份`, '', '', '', '', sumCell('H', ordered.length, centsSum(records)), '']));
-  ws2.getColumn(8).numFmt = '#,##0.00';
-  [8, 20, 18, 14, 22, 10, 8, 12, 30].forEach((w, i) => { ws2.getColumn(i + 1).width = w; });
+  totalStyle(ws2.addRow(['', '合计', `${ordered.length} 份`, '', '', '', sumCell('G', ordered.length, centsSum(records)), '']));
+  ws2.getColumn(7).numFmt = '#,##0.00';
+  [8, 20, 18, 14, 10, 8, 12, 30].forEach((w, i) => { ws2.getColumn(i + 1).width = w; });
   ws2.views = [{ state: 'frozen', ySplit: 1 }];
 
   // 送礼记录：按日期排序
@@ -949,4 +929,4 @@ const ok = data => ({ code: 0, msg: 'ok', data });
 const err = msg => ({ code: 1, msg, data: null });
 
 // 仅供本地测试使用，不影响云函数入口
-module.exports._test = { buildPdf, buildXlsx, buildBook, buildBackup, buildMeta, amountUpper, sanitizeName, guestText, proxyText };
+module.exports._test = { buildPdf, buildXlsx, buildBook, buildBackup, buildMeta, amountUpper, sanitizeName, guestText };

@@ -12,8 +12,8 @@ async function ensureCol(name) {
   colReady[name] = true;
 }
 
-const ALLOWED_FIELDS = ['title', 'divider', 'theme', 'payDay', 'time', 'payerName', 'relation', 'proxyFor', 'amount', 'remark', 'thanks'];
-const DEFAULT_FIELDS = ['title', 'divider', 'theme', 'payDay', 'time', 'payerName', 'proxyFor', 'amount', 'remark', 'thanks'];
+const ALLOWED_FIELDS = ['title', 'divider', 'theme', 'payDay', 'time', 'payerName', 'relation', 'amount', 'remark', 'thanks'];
+const DEFAULT_FIELDS = ['title', 'divider', 'theme', 'payDay', 'time', 'payerName', 'amount', 'remark', 'thanks'];
 
 exports.main = async (event) => {
   const { OPENID } = cloud.getWXContext();

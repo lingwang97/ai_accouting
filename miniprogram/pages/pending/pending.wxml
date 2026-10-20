@@ -34,7 +34,7 @@
         <view class="name-row"><text class="payer">{{item.nameStr}}</text><text class="money amt">￥{{item.amountStr}}</text><text class="cash-tag" wx:if="{{item.mixed}}">转账+现金</text><text class="cash-tag" wx:elif="{{item.payMethod === 'cash'}}">💵 现金</text></view>
         <!-- 第 2 行：说明在左，操作在右（姓名独占第 1 行，不被按钮挤压） -->
         <view class="meta-row">
-          <view class="muted meta">{{item.timeStr}} {{item.mixed ? '转账+现金' : (item.payMethod === 'cash' ? '宾客现金' : '已转账')}}<text wx:if="{{item.relation}}"> · {{item.relation}}</text><text wx:if="{{item.proxyStr}}"> · 代 {{item.proxyStr}}</text><text wx:if="{{item.remark}}"> · {{item.remark}}</text></view>
+          <view class="muted meta">{{item.timeStr}} {{item.mixed ? '转账+现金' : (item.payMethod === 'cash' ? '宾客现金' : '已转账')}}<text wx:if="{{item.relation}}"> · {{item.relation}}</text><text wx:if="{{item.remark}}"> · {{item.remark}}</text></view>
           <view class="ops" wx:if="{{canConfirm && !selectMode}}">
             <view class="link danger" data-id="{{item._id}}" catchtap="onReject">未收到</view>
             <button class="btn btn-sm btn-primary ok-sm" data-id="{{item._id}}" catchtap="onConfirm">确认</button>
@@ -69,7 +69,6 @@
         <view class="big-cash" wx:if="{{current.mixed}}">转账+现金：转账 ￥{{current.wechatSumStr}} · 现金 ￥{{current.cashSumStr}}</view>
         <view class="big-cash" wx:elif="{{current.payMethod === 'cash'}}">💵 现金，请当面清点</view>
         <view class="big-meta" wx:if="{{current.relation}}">{{current.relation}}</view>
-        <view class="big-meta" wx:if="{{current.proxyStr}}">代 {{current.proxyStr}}</view>
         <view class="big-meta" wx:if="{{current.remark}}">礼品/备注：{{current.remark}}</view>
         <view class="batch-rows big" wx:if="{{current.batch}}">
           <view class="batch-row" wx:for="{{current.records}}" wx:for-item="r" wx:key="_id">

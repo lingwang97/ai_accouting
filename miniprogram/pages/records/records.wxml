@@ -44,7 +44,7 @@
       <text class="payer">{{item.nameStr}}</text>
       <text class="r-right"><text class="cash-tag" wx:if="{{item.payMethod === 'cash'}}">现金</text><text class="money r-amount">￥{{item.amountStr}}</text></text>
     </view>
-    <view class="muted">{{item.timeStr}}<text wx:if="{{item.relation}}"> · {{item.relation}}</text><text wx:if="{{item.proxyStr}}"> · 代 {{item.proxyStr}}</text><text wx:if="{{item.batchId}}"> · 批次录入</text><text wx:if="{{item.remark}}"> · {{item.remark}}</text><text wx:if="{{item.declaredStr}}" class="declared"> · 宾客登记 ￥{{item.declaredStr}}，按实收入簿</text></view>
+    <view class="muted">{{item.timeStr}}<text wx:if="{{item.relation}}"> · {{item.relation}}</text><text wx:if="{{item.batchId}}"> · 批次录入</text><text wx:if="{{item.remark}}"> · {{item.remark}}</text><text wx:if="{{item.declaredStr}}" class="declared"> · 宾客登记 ￥{{item.declaredStr}}，按实收入簿</text></view>
 
     <!-- 待确认：宾客已点"我已完成转账" -->
     <view class="r-actions" wx:if="{{item.status === 'transferred'}}">

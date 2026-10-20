@@ -14,9 +14,9 @@ const { resolveCtx, canBook, restricted, can, workBook } = require('./ctx.js');
 const TYPES = ['wedding', 'birthday', 'baby', 'house', 'funeral', 'other'];
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-const RECEIPT_FIELDS = ['receiptNo', 'payee', 'payerName', 'relation', 'proxyFor', 'amountUpper', 'theme', 'remark', 'paidAt'];
+const RECEIPT_FIELDS = ['receiptNo', 'payee', 'payerName', 'relation', 'amountUpper', 'theme', 'remark', 'paidAt'];
 const RECEIPT_STYLES = ['card', 'ticket', 'simple'];
-const PRINT_FIELDS = ['title', 'divider', 'theme', 'payDay', 'time', 'payerName', 'relation', 'proxyFor', 'amount', 'remark', 'thanks'];
+const PRINT_FIELDS = ['title', 'divider', 'theme', 'payDay', 'time', 'payerName', 'relation', 'amount', 'remark', 'thanks'];
 
 /** 幂等建集合（init 未跑完时自愈；同一实例只尝试一次） */
 let colReady = false;

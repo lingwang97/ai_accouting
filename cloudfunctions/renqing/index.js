@@ -1,5 +1,5 @@
 // 云函数 renqing — 人情往来：我送出的礼（手动登记）+ 按姓名查双方往来
-// 收到的礼来自 records（status=paid，含代随礼 proxyFor），送出的礼存 gifts_out
+// 收到的礼来自 records（status=paid），送出的礼存 gifts_out
 const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
@@ -64,7 +64,7 @@ async function inList(openid, event) {
     records.aggregate().match(cond)
       .group({ _id: null, fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) }).end(),
     records.where(cond).orderBy('paidAt', 'desc').skip((page - 1) * pageSize).limit(pageSize)
-      .field({ payerName: true, nameTag: true, personKey: true, payerOpenid: true, relation: true, amount: true, themeName: true, bookType: true, payDay: true, payMethod: true, remark: true, proxyFor: true, paidAt: true })
+      .field({ payerName: true, nameTag: true, personKey: true, payerOpenid: true, relation: true, amount: true, themeName: true, bookType: true, payDay: true, payMethod: true, remark: true, paidAt: true })
       .get()
   ]);
   return ok({
@@ -182,11 +182,10 @@ async function outList(openid, event) {
 
 /**
  * 自动"送出的礼"：我作为宾客扫码随礼、主家已确认入簿的记录
- * 金额只算我自己的部分（代随礼填了金额的，那部分是被代人的礼）
  */
 async function autoGiven(openid) {
   const recs = await fetchAll(records, { payerOpenid: openid, status: 'paid' }, {
-    aid: true, ownerOpenid: true, amount: true, proxyItems: true, proxyFor: true,
+    aid: true, ownerOpenid: true, amount: true,
     relation: true, remark: true, themeName: true, bookType: true, payDay: true, paidAt: true, createdAt: true,
     batchIdx: true
   });
@@ -200,7 +199,6 @@ async function autoGiven(openid) {
     res.data.forEach(a => { names[a._id] = a.accountName; });
   }
   return mine.map(r => {
-    const proxyFen = (r.proxyItems || []).reduce((t, x) => t + Math.round((x.amount || 0) * 100), 0);
     const toName = names[r.aid] || '主家';
     return {
       _id: 'auto_' + r._id,
@@ -212,9 +210,9 @@ async function autoGiven(openid) {
       relation: r.relation || '',
       event: r.themeName || '',
       eventType: r.bookType || 'other',
-      amount: (Math.round(r.amount * 100) - proxyFen) / 100,
+      amount: r.amount,
       date: r.payDay,
-      remark: r.proxyFor ? `含代随礼：${r.proxyFor}` : (r.remark || ''),
+      remark: r.remark || '',
       createdAt: r.paidAt || r.createdAt
     };
   });
@@ -259,8 +257,7 @@ async function outDelete(openid, id) {
 /*
  * 人情往来的"人"：
  *  - 宾客随礼时有微信身份，按「微信身份 + 姓名(去空格)」识别：同名不同人会分开，"张伟/张 伟"会合并
- *  - 代随礼名单里的人、手动送礼登记的人只有姓名：若只有一位同名宾客则并入该宾客，否则单独成一人
- *  - 代随礼填了每人金额的，计入被代的人；未填金额的，金额含在代随礼人的礼金里，仅作记录不计入合计
+ *  - 礼台登记、手动送礼登记的人只有姓名：按姓名（+ 区分备注）归为一人，同名的可提示合并
  */
 const MAX_ROWS = 3000;
 const norm = s => String(s || '').replace(/[\s\u3000]/g, '');
@@ -280,7 +277,7 @@ async function buildPersons(openid) {
   let aliases = {};
   const [recs, gifts, auto] = await Promise.all([
     fetchAll(records, { ownerOpenid: openid, status: 'paid' }, {
-      payerOpenid: true, payerName: true, amount: true, proxyFor: true, proxyItems: true, nameTag: true, personKey: true,
+      payerOpenid: true, payerName: true, amount: true, nameTag: true, personKey: true,
       relation: true, remark: true, themeName: true, bookType: true, payDay: true, createdAt: true
     }),
     fetchAll(giftsOut, { ownerOpenid: openid }, {
@@ -308,18 +305,7 @@ async function buildPersons(openid) {
       _id: r._id, date: r.payDay, event: r.themeName || '', eventType: r.bookType || 'other',
       relation: r.relation || '', remark: r.remark || ''
     };
-    const items = (r.proxyItems && r.proxyItems.length)
-      ? r.proxyItems
-      : String(r.proxyFor || '').split(/[、,，\s]+/).filter(Boolean).map(name => ({ name, amount: null }));
-    const knownFen = items.reduce((t, x) => t + Math.round((x.amount || 0) * 100), 0);
-    const unknownNames = items.filter(x => !(x.amount > 0)).map(x => x.name);
-
-    const payerEntry = {
-      ...base,
-      amount: (Math.round(r.amount * 100) - knownFen) / 100,
-      counted: true,
-      withProxy: unknownNames.join('、') // 含代随礼（未拆分金额）的人
-    };
+    const payerEntry = { ...base, amount: r.amount, counted: true };
     payerEntry.movable = true; // 本人礼簿的记录：可以移到同名的另一个人
     const pk = KEY_RE.test(r.personKey || '') ? r.personKey : '';
     if (pk || r.payerOpenid || r.nameTag) {
@@ -329,18 +315,6 @@ async function buildPersons(openid) {
     } else {
       // 礼台登记、没有区分备注的：按姓名归为一人（不再自动并入同名的扫码宾客，改为提示合并）
       pending.push({ name: r.payerName, entry: payerEntry, side: 'received' });
-    }
-    for (const x of items) {
-      pending.push({
-        name: x.name,
-        entry: {
-          ...base, _id: `${r._id}:${x.name}`, relation: '',
-          amount: x.amount > 0 ? x.amount : 0,
-          counted: x.amount > 0,
-          viaProxy: r.payerName
-        },
-        side: 'received'
-      });
     }
   }
   for (const g of gifts) {

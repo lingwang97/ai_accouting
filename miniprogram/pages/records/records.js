@@ -2,7 +2,6 @@
 const req = require('../../utils/request.js');
 const fmt = require('../../utils/format.js');
 const scenes = require('../../utils/scenes.js');
-const receiptUtil = require('../../utils/receipt.js');
 const printer = require('../../utils/printer.js');
 const confirm = require('../../utils/confirm.js');
 const theme = require('../../utils/theme.js');
@@ -370,7 +369,6 @@ function decorate(r) {
     ...r,
     amountStr: fmt.money(r.amount),
     nameStr: samename.nameStr(r.payerName, r.nameTag),
-    proxyStr: receiptUtil.proxyText(r),
     declaredStr: r.declaredAmount ? fmt.money(r.declaredAmount) : '',
     timeStr: fmt.dateTime(r.createdAt),
     statusText: STATUS_TEXT[r.status] || r.status

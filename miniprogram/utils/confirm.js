@@ -4,7 +4,6 @@ const req = require('./request.js');
 const printer = require('./printer.js');
 const fmt = require('./format.js');
 const notify = require('./notify.js');
-const receipt = require('./receipt.js');
 
 /**
  * 确认收到 → 自动打印；金额不符时可按实际到账入簿。返回是否已确认
@@ -16,7 +15,7 @@ function confirmTransfer(record) {
   const isBatch = isGroup(record);
   const who = isBatch
     ? `${record.payerName}（${record.records.map(r => r.payerName + ' ￥' + fmt.money(r.amount)).join('、')}）`
-    : `${record.payerName}${record.proxyFor ? '（代 ' + receipt.proxyText(record) + '）' : ''}`;
+    : record.payerName;
   const mixed = !!record.mixed; // 批次混合支付：部分转账、部分现金
   const cash = !mixed && record.payMethod === 'cash';
   return new Promise(resolve => {
