@@ -184,7 +184,7 @@ Page({
   goPrinter() { wx.navigateTo({ url: '/pages/printer/printer' }); },
   goStyle() { wx.navigateTo({ url: '/pages/receiptset/receiptset' }); },
   goExport() { wx.navigateTo({ url: '/pages/export/export' }); },
-  /** 使用说明：按身份打开对应分页（未完善主家信息的按宾客） */
+  /** 使用教程：按身份打开对应分页（未完善主家信息的按宾客） */
   goGuide() {
     const { role, account } = this.data;
     const tab = role === 'clerk' ? 'clerk' : (account ? 'host' : 'guest');

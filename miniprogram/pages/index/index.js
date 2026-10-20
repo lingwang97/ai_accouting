@@ -30,7 +30,7 @@ Page({
     printerName: '',
     pm: {},            // 当前身份的权限（记账人按各自权限显示操作）
     notifyTip: '',     // 新礼金提醒未开启 / 发送失败时的提示
-    guideTip: false,   // 「第一次使用？看看使用说明」小卡片（关闭后不再显示）
+    guideTip: false,   // 「第一次使用？看看使用教程」小卡片（关闭后不再显示）
     themeStyle: ''
   },
 
@@ -207,7 +207,7 @@ Page({
   goMembers() { wx.navigateTo({ url: '/pages/members/members' }); },
   goRecords() { wx.switchTab({ url: '/pages/records/records' }); },
   goLogin() { wx.navigateTo({ url: '/pages/login/login' }); },
-  /** 使用说明小卡片：记账人打开记账人分页 */
+  /** 使用教程小卡片：记账人打开记账人分页 */
   goGuide() {
     wx.navigateTo({ url: '/pages/guide/guide?tab=' + (this.data.role === 'clerk' ? 'clerk' : 'host') });
   },

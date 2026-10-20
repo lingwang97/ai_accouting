@@ -37,7 +37,7 @@
 .tip-icon { width: 36rpx; height: 36rpx; flex-shrink: 0; margin-right: 12rpx; }
 .tip-text { flex: 1; font-size: 26rpx; color: #333; margin-right: 12rpx; }
 .tip-go { font-size: 26rpx; color: var(--primary); white-space: nowrap; }
-/* 使用说明小卡片 */
+/* 使用教程小卡片 */
 .guide-tip .tip-text { color: var(--primary); }
 .guide-close { flex-shrink: 0; width: 56rpx; height: 56rpx; line-height: 56rpx; text-align: center; margin: -12rpx -12rpx -12rpx 0; color: #bbb; font-size: 28rpx; }
 

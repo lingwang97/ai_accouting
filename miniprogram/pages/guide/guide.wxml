@@ -4,13 +4,58 @@
     <view class="seg-item {{tab === 'clerk' ? 'on' : ''}}" data-t="clerk" bindtap="onTab">记账人</view>
     <view class="seg-item {{tab === 'guest' ? 'on' : ''}}" data-t="guest" bindtap="onTab">宾客</view>
   </view>
+  <view class="muted small intro" wx:if="{{tab === 'clerk'}}">能看到哪些入口由主家授予的权限决定，看不到的说明没有这项权限</view>
 
-  <view class="step" wx:for="{{steps}}" wx:key="title">
-    <view class="num">{{index + 1}}</view>
-    <view class="body">
-      <view class="title">{{item.title}}</view>
-      <view class="desc">{{item.desc}}</view>
-      <view class="go" wx:if="{{item.url}}" data-i="{{index}}" bindtap="onGo">{{item.go || '去设置'}} ›</view>
+  <block wx:for="{{secs}}" wx:for-item="sec" wx:for-index="si" wx:key="sec">
+    <view class="sec-title">{{sec.sec}}</view>
+    <view class="step" wx:for="{{sec.steps}}" wx:for-item="st" wx:for-index="i" wx:key="title">
+      <view class="num">{{st.no}}</view>
+      <view class="body">
+        <view class="title">{{st.title}}</view>
+        <view class="desc">{{st.desc}}</view>
+        <view class="where">在哪里：{{st.where}}</view>
+
+        <!-- 示意图：简化的界面，高亮要点的位置 -->
+        <view class="mock">
+          <!-- 工作台宫格 -->
+          <view class="m-grid" wx:if="{{st.mock.type === 'grid'}}">
+            <view class="m-tile {{item === st.mock.hl ? 'hl' : ''}}" wx:for="{{st.mock.items}}" wx:key="*this">
+              {{item}}<text class="m-tap" wx:if="{{item === st.mock.hl}}">点这里</text>
+            </view>
+          </view>
+          <!-- 「我的」菜单 -->
+          <view wx:elif="{{st.mock.type === 'menu'}}">
+            <view class="m-head">
+              <view class="m-avatar"></view><text class="m-nick">我的</text>
+              <text class="m-head-btn {{st.mock.head ? 'hl' : ''}}" wx:if="{{st.mock.head}}">{{st.mock.head}} ›<text class="m-tap">点这里</text></text>
+            </view>
+            <view class="m-row {{item === st.mock.hl ? 'hl' : ''}}" wx:for="{{st.mock.items}}" wx:key="*this">
+              <text>{{item}}</text><text class="m-tap" wx:if="{{item === st.mock.hl}}">点这里</text><text class="m-arrow" wx:else>›</text>
+            </view>
+          </view>
+          <!-- 某个底部菜单页 -->
+          <view wx:elif="{{st.mock.type === 'page'}}">
+            <view class="m-bar">
+              <text class="m-btn {{item === st.mock.hl ? 'hl' : ''}}" wx:for="{{st.mock.bar}}" wx:key="*this">{{item}}<text class="m-tap" wx:if="{{item === st.mock.hl}}">点这里</text></text>
+            </view>
+            <view class="m-line"></view>
+            <view class="m-rec" wx:if="{{st.mock.row}}"><text>张三 · 礼金 ￥200</text><text class="m-btn {{st.mock.row === st.mock.hl ? 'hl' : ''}}">{{st.mock.row}}<text class="m-tap" wx:if="{{st.mock.row === st.mock.hl}}">点这里</text></text></view>
+            <view class="m-line short"></view><view class="m-line"></view>
+            <view class="m-tabbar">
+              <text class="m-tabitem {{item === st.mock.tab ? 'on' : ''}}" wx:for="{{tabbar}}" wx:key="*this">{{item}}</text>
+            </view>
+          </view>
+          <!-- 操作顺序 -->
+          <view class="m-flow" wx:elif="{{st.mock.type === 'flow'}}">
+            <block wx:for="{{st.mock.items}}" wx:key="*this">
+              <text class="m-arrow-r" wx:if="{{index > 0}}">→</text>
+              <text class="m-node {{item === st.mock.hl ? 'hl' : ''}}">{{item}}</text>
+            </block>
+          </view>
+        </view>
+
+        <view class="go" wx:if="{{st.url}}" data-s="{{si}}" data-i="{{i}}" bindtap="onGo">{{st.go || '去设置'}} ›</view>
+      </view>
     </view>
-  </view>
+  </block>
 </view>

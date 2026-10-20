@@ -11,9 +11,9 @@
     </view>
     <view class="warn-card" wx:if="{{role === 'owner' && joinCount}}" bindtap="goMembers">有 {{joinCount}} 人通过邀请卡申请加入，请确认 ›</view>
 
-    <!-- 老用户：使用说明入口，✕ 关闭后不再显示 -->
+    <!-- 老用户：使用教程入口，✕ 关闭后不再显示 -->
     <view class="tip-bar guide-tip" wx:if="{{guideTip}}" bindtap="goGuide">
-      <text class="tip-text">第一次使用？看看使用说明 ›</text>
+      <text class="tip-text">第一次使用？看看使用教程 ›</text>
       <text class="guide-close" catchtap="onCloseGuideTip">✕</text>
     </view>
 
