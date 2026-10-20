@@ -20,10 +20,15 @@
       <picker mode="date" value="{{date}}" start="{{today}}" bindchange="onDate"><view class="input">{{date || '请选择'}}</view></picker>
     </view>
     <view class="field">
-      <text class="label">提前提醒</text>
-      <view class="chips">
-        <view class="chip {{before === item.v ? 'on' : ''}}" wx:for="{{befores}}" wx:key="v" data-v="{{item.v}}" bindtap="onBefore">{{item.t}}</view>
+      <text class="label">提醒时间 *</text>
+      <view class="chips" wx:if="{{presets.length}}">
+        <view class="chip {{item.on ? 'on' : ''}}" wx:for="{{presets}}" wx:key="t" data-i="{{index}}" bindtap="onPreset">{{item.t}}</view>
       </view>
+      <view class="time-row">
+        <picker class="tr-day" mode="date" value="{{remindDay}}" start="{{today}}" bindchange="onRemindDay"><view class="input">{{remindDay || '选择日期'}}</view></picker>
+        <picker class="tr-time" mode="time" value="{{remindTime}}" bindchange="onRemindTime"><view class="input">{{remindTime}}</view></picker>
+      </view>
+      <view class="muted small">到这个时间（5 分钟内）发送微信通知，并在「往来」顶部提醒</view>
     </view>
     <view class="field">
       <text class="label">备注</text>

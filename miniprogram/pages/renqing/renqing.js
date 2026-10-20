@@ -135,7 +135,9 @@ Page({
             typeLabel: scenes.label(r.eventType),
             dateStr: r.date.slice(5).replace('-', '月') + '日',
             leftStr: n > 0 ? `还有 ${n} 天` : (n === 0 ? '今天' : `已过 ${-n} 天`),
-            hot: n >= 0 && n <= (r.before || 0) + 1, // 已到提醒期
+            // 提醒时间（旧版提醒没有具体时间，按提醒日 9:00）
+            remindStr: r.remindStr ? `${r.remindStr.slice(5, 7)}月${r.remindStr.slice(8, 10)}日 ${r.remindStr.slice(11)}` : '',
+            hot: n >= 0 && Date.now() >= (r.remindAt ? new Date(r.remindAt).getTime() : new Date(`${r.notifyDay || r.date}T09:00:00`).getTime()), // 已到提醒时间
             past: n < 0
           };
         })

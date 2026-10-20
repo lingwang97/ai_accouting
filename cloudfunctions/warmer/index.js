@@ -11,9 +11,8 @@ exports.main = async (event) => {
   if (cloud.getWXContext().OPENID || !(event && (event.Type === 'Timer' || event.TriggerName === 'warm'))) {
     return { code: 1, msg: '仅限定时触发', data: null };
   }
-  // 北京时间 9:00～21:59 每一轮都推送当天到期、尚未推送的提醒（pushed 保证只推一次；某轮失败下一轮补推）
-  const bjHour = (new Date().getUTCHours() + 8) % 24;
-  if (bjHour >= 9 && bjHour < 22) {
+  // 每一轮都推送已到提醒时间、尚未推送的提醒（pushed 保证只推一次；某轮失败下一轮补推）
+  {
     try { await pushReminders(); } catch (e) { console.warn('提醒推送失败', e.message); }
   }
   const cfg = normalizeWarmup(await readSetting(db, 'warmup', DEFAULT_WARMUP));
@@ -52,10 +51,17 @@ async function pushReminders() {
   const remind = require('./remind.js');
   if (!remind.TMPL_ID) return;
   const _ = db.command;
-  const t = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10); // 北京时间今天
+  const now = new Date();
+  const bj = new Date(now.getTime() + 8 * 3600 * 1000);
+  const t = bj.toISOString().slice(0, 10); // 北京时间今天
   const col = db.collection('reminders');
+  // 已到提醒时间（remindAt）；旧版提醒没有 remindAt，按提醒日 9:00
+  const due = _.or([
+    { remindAt: _.lte(now) },
+    { remindAt: _.exists(false), notifyDay: bj.getUTCHours() >= 9 ? _.lte(t) : _.lt(t) }
+  ]);
   for (let round = 0; round < 4; round++) { // 每轮最多 200 条，避免超出 20 秒超时；没推完的下一轮继续
-    const res = await col.where({ done: false, pushed: false, subscribed: true, notifyDay: _.lte(t), date: _.gte(t), _openid: _.exists(false) })
+    const res = await col.where(_.and([{ done: false, pushed: false, subscribed: true, date: _.gte(t), _openid: _.exists(false) }, due]))
       .limit(50).get();
     if (!res.data.length) break;
     await Promise.all(res.data.map(async r => {

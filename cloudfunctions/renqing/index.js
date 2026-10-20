@@ -81,7 +81,6 @@ async function inList(openid, event) {
 }
 
 // —— 亲友办事提醒（手动添加）：到提醒日在「往来」顶部提示，订阅过的由 warmer 定时推送服务通知 ——
-const REMIND_DAYS = [0, 1, 3, 7]; // 提前几天提醒
 const reminders = db.collection('reminders');
 
 /** 未处理的提醒（按办事日期升序，最近的在前）+ 最近处理过的 */
@@ -104,13 +103,23 @@ async function remindSave(openid, r, subscribed, envVersion) {
     eventType: TYPES.includes(r.eventType) ? r.eventType : 'other',
     event: String(r.event || '').trim().slice(0, 20),
     date: DAY_RE.test(r.date || '') ? r.date : '',
-    before: REMIND_DAYS.includes(Number(r.before)) ? Number(r.before) : 1,
+
     note: String(r.note || '').trim().slice(0, 50),
     updatedAt: new Date()
   };
   if (!data.name) return err('请填写对方姓名');
   if (!data.date) return err('请选择办事日期');
-  data.notifyDay = shiftDay(data.date, -data.before); // 提醒日（北京时间）
+  // 提醒时间：remindAt 'YYYY-MM-DD HH:mm'（北京时间），具体到哪天几点；不能早于现在
+  const m = /^(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2})$/.exec(String(r.remindAt || ''));
+  if (!m || Number(m[2]) > 23 || Number(m[3]) > 59) return err('请选择提醒时间');
+  const at = new Date(`${m[1]}T${m[2]}:${m[3]}:00+08:00`);
+  if (isNaN(at.getTime())) return err('请选择提醒时间');
+  if (at.getTime() < Date.now() - 60 * 1000) return err('提醒时间已过，请重新选择');
+  data.remindAt = at;
+  data.remindStr = `${m[1]} ${m[2]}:${m[3]}`;
+  data.notifyDay = m[1]; // 提醒日（北京时间，兼容旧逻辑）
+  data.before = _.remove();
+  data.pushTries = 0;
   data.pushed = false;  // 修改后重新推送
   if (subscribed) data.subscribed = true;
   // 推送打开的小程序版本跟随订阅时的版本（开发版 / 体验版测试时能打开）
@@ -122,7 +131,8 @@ async function remindSave(openid, r, subscribed, envVersion) {
   }
   const n = await reminders.where({ ownerOpenid: openid, done: false }).count();
   if (n.total >= 200) return err('未处理的提醒太多，请先处理一些');
-  const added = await reminders.add({ data: { ownerOpenid: openid, ...data, done: false, subscribed: !!subscribed, createdAt: new Date() } });
+  const { before, ...fresh } = data; // 新建时没有旧的「提前天数」字段可删
+  const added = await reminders.add({ data: { ownerOpenid: openid, ...fresh, done: false, subscribed: !!subscribed, createdAt: new Date() } });
   return ok({ _id: added._id, ...data });
 }
 

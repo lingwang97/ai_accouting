@@ -1,3 +1,8 @@
 .btn-del { margin-top: 24rpx; }
 .tip { margin: 0 8rpx 20rpx; line-height: 1.6; }
 .sub-tip { margin-top: 12rpx; font-size: 24rpx; }
+.time-row { display: flex; margin-top: 8rpx; }
+.tr-day { flex: 3; }
+.tr-time { flex: 2; margin-left: 16rpx; }
+.chips + .time-row { margin-top: 0; }
+.small { font-size: 24rpx; margin-top: 10rpx; }

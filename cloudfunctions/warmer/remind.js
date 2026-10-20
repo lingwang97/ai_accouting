@@ -14,7 +14,7 @@ module.exports = {
       thing10: { value: cut(r.name, 20) },                                    // 对方姓名
       thing12: { value: cut(r.event || type, 20) },                           // 事由
       time11: { value: `${y}年${m}月${d}日` },                                // 办事日期
-      thing4: { value: cut(r.note || (r.before ? `还有${r.before}天，记得回礼` : '今天办事，记得回礼'), 20) } // 备注
+      thing4: { value: cut(r.note || `${Number(m)}月${Number(d)}日办事，记得回礼`, 20) } // 备注
     };
   }
 };

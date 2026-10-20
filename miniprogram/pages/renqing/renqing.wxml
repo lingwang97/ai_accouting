@@ -13,7 +13,7 @@
       </view>
       <view class="rm-row {{item.hot ? 'hot' : ''}} {{item.past ? 'past' : ''}}" wx:for="{{reminds}}" wx:key="_id" wx:if="{{remindAll || index < 3}}" data-idx="{{index}}" bindtap="onRemind">
         <text class="rm-name">{{item.name}} · {{item.event || item.typeLabel}}</text>
-        <text class="rm-date">{{item.dateStr}} · {{item.leftStr}}</text>
+        <text class="rm-date">{{item.dateStr}} · {{item.leftStr}}<text wx:if="{{item.remindStr && !item.past}}"> · {{item.remindStr}} 提醒</text></text>
       </view>
       <view class="rm-more" wx:if="{{reminds.length > 3}}" bindtap="onRemindAll">{{remindAll ? '收起' : '查看全部 ' + reminds.length + ' 条'}}</view>
       <view class="muted small" wx:if="{{!reminds.length}}">记下亲友办事的日期，到时提醒你回礼</view>

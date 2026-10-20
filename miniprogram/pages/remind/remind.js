@@ -1,4 +1,4 @@
-// pages/remind/remind.js — 亲友办事提醒：手动添加 / 修改（对方姓名、事由、办事日期、提前几天）
+// pages/remind/remind.js — 亲友办事提醒：手动添加 / 修改（对方姓名、事由、办事日期、提醒时间：具体到哪天几点）
 // 保存时请求一次订阅消息（配置了 REMIND_TMPL_ID 时），到提醒日由 warmer 云函数推送服务通知；
 // 未订阅也会在「往来」顶部提醒
 const req = require('../../utils/request.js');
@@ -15,11 +15,12 @@ Page({
     eventType: 'wedding',
     event: '',
     date: '',
-    before: 1,
+    remindDay: '',    // 提醒时间：日期（北京时间）
+    remindTime: '20:00', // 提醒时间：几点几分
+    presets: [],      // 快捷选项（按办事日期计算，已过去的不显示）
     note: '',
     today: '',
     scenes: scenes.SCENES.map(s => ({ type: s.type, label: s.label })),
-    befores: [{ v: 0, t: '当天' }, { v: 1, t: '提前 1 天' }, { v: 3, t: '提前 3 天' }, { v: 7, t: '提前 7 天' }],
     pushOn: !!REMIND_TMPL_ID,
     saving: false
   },
@@ -37,8 +38,13 @@ Page({
       wx.setNavigationBarTitle({ title: '修改提醒' });
       this.setData({
         _id: r._id, name: r.name, personKey: r.personKey || '', eventType: r.eventType || 'other',
-        event: r.event || '', date: r.date, before: r.before === undefined ? 1 : r.before, note: r.note || ''
+        event: r.event || '', date: r.date, note: r.note || '',
+        // 旧版提醒没有具体时间：按提醒日 9:00
+        remindDay: (r.remindStr || '').slice(0, 10) || r.notifyDay || r.date,
+        remindTime: (r.remindStr || '').slice(11) || '09:00'
       });
+      this._customTime = true;
+      this.refreshPresets();
       return;
     }
     this.setData({
@@ -50,14 +56,53 @@ Page({
 
   onInput(e) { this.setData({ [e.currentTarget.dataset.k]: e.detail.value }); },
   onType(e) { this.setData({ eventType: e.currentTarget.dataset.t }); },
-  onBefore(e) { this.setData({ before: e.currentTarget.dataset.v }); },
-  onDate(e) { this.setData({ date: e.detail.value }); },
+  /** 选了办事日期：没手动改过提醒时间时，默认"前一天 20:00"（已过去则当天 8:00，再不行用现在之后） */
+  onDate(e) {
+    this.setData({ date: e.detail.value });
+    this.refreshPresets();
+    if (!this._customTime) {
+      const p = this.data.presets[0];
+      if (p) this.setData({ remindDay: p.day, remindTime: p.time });
+    }
+  },
+  onRemindDay(e) { this._customTime = true; this.setData({ remindDay: e.detail.value }); this.markPreset(); },
+  onRemindTime(e) { this._customTime = true; this.setData({ remindTime: e.detail.value }); this.markPreset(); },
+  onPreset(e) {
+    const p = this.data.presets[e.currentTarget.dataset.i];
+    this._customTime = true;
+    this.setData({ remindDay: p.day, remindTime: p.time });
+    this.markPreset();
+  },
+  /** 快捷选项：前一天 20:00、当天 8:00、提前 3 天 9:00（已过去的不显示） */
+  refreshPresets() {
+    const d = this.data.date;
+    if (!d) return this.setData({ presets: [] });
+    const shift = n => {
+      const t = new Date(d + 'T00:00:00');
+      t.setDate(t.getDate() + n);
+      return fmt.day(t);
+    };
+    const now = Date.now();
+    const presets = [
+      { t: '前一天 20:00', day: shift(-1), time: '20:00' },
+      { t: '当天 8:00', day: d, time: '08:00' },
+      { t: '提前 3 天 9:00', day: shift(-3), time: '09:00' }
+    ].filter(p => new Date(`${p.day}T${p.time}:00`).getTime() > now);
+    this.setData({ presets });
+    this.markPreset();
+  },
+  markPreset() {
+    const { remindDay, remindTime } = this.data;
+    this.setData({ presets: this.data.presets.map(p => ({ ...p, on: p.day === remindDay && p.time === remindTime })) });
+  },
 
   /** 保存：先在点击里同步请求订阅（微信要求），再提交 */
   onSave() {
     if (this.data.saving) return;
     if (!(this.data.name || '').trim()) return wx.showToast({ title: '请填写对方姓名', icon: 'none' });
     if (!this.data.date) return wx.showToast({ title: '请选择办事日期', icon: 'none' });
+    if (!this.data.remindDay || !this.data.remindTime) return wx.showToast({ title: '请选择提醒时间', icon: 'none' });
+    if (new Date(`${this.data.remindDay}T${this.data.remindTime}:00`).getTime() < Date.now()) return wx.showToast({ title: '提醒时间已过，请重新选择', icon: 'none' });
     if (!REMIND_TMPL_ID) return this.submit(false);
     wx.requestSubscribeMessage({
       tmplIds: [REMIND_TMPL_ID],
@@ -72,7 +117,7 @@ Page({
       const d = this.data;
       await req.remindSave({
         _id: d._id || undefined, name: d.name.trim(), personKey: d.personKey, eventType: d.eventType,
-        event: d.event, date: d.date, before: d.before, note: d.note
+        event: d.event, date: d.date, remindAt: `${d.remindDay} ${d.remindTime}`, note: d.note
       }, subscribed);
       wx.showToast({ title: '已保存', icon: 'success' });
       setTimeout(() => wx.navigateBack(), 500);
