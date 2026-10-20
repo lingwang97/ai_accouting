@@ -77,6 +77,23 @@ Page({
     this.setData({ payCodePreview: '', payCodeFileID: '', payCodeChanged: true, hasPayCode: false });
   },
 
+  /** 新建礼簿是否设为当前：返回 true / false，取消返回 null */
+  askSetActive() {
+    const app = getApp();
+    const a = app.globalData.account || {};
+    const clerkOrg = app.globalData.role === 'clerk' && a.orgMode;
+    return new Promise(resolve => wx.showModal({
+      title: '设为当前礼簿？',
+      content: clerkOrg
+        ? '设为你现在记的一场：工作台、礼台记账、出示礼簿码都用这一本（不影响主家和其他人）。'
+        : '设为当前后，宾客扫主礼簿码随礼的礼金会记到这本新礼簿。正在办的这一场还没结束时，请选「暂不」。',
+      confirmText: '设为当前',
+      cancelText: '暂不',
+      success: r => resolve(r.confirm ? true : (r.cancel ? false : null)),
+      fail: () => resolve(null)
+    }));
+  },
+
   async onSave() {
     if (this.data.saving) return;
     const name = (this.data.name || '').trim();
@@ -86,7 +103,10 @@ Page({
     try {
       const { id, type, date, location, origType, orgMode, hostName, payCodeChanged, payCodeFileID } = this.data;
       const org = orgMode ? { hostName: (hostName || '').trim(), ...(payCodeChanged ? { payCodeFileID } : {}) } : {};
-      const { book, pendingPayCode } = await req.bookSave({ _id: id || undefined, name, type, date, location, ...org });
+      // 新建：询问是否设为当前（设为当前后，宾客扫主礼簿码的礼金会记到这本）
+      const setActive = id ? undefined : await this.askSetActive();
+      if (setActive === null) return;
+      const { book, pendingPayCode } = await req.bookSave({ _id: id || undefined, name, type, date, location, setActive, ...org });
       printer.clearTemplateCache(); // 新建即设为当前礼簿 / 事由类型可能变化
       if (pendingPayCode) {
         // 记账人上传的本场收款码：主家确认采用后才生效
@@ -94,7 +114,7 @@ Page({
           title: '收款码待主家确认', content: '礼簿已保存，新收款码待主家确认后生效', showCancel: false, complete: resolve
         }));
       } else {
-        wx.showToast({ title: id ? '已保存' : '已创建并设为当前', icon: 'success' });
+        wx.showToast({ title: id ? '已保存' : '已创建', icon: 'success' });
       }
       // 未自定义样式的礼簿自动按事由类型显示；改了事由类型时询问是否重新套用
       if (id && type !== origType) await sceneApply.askApply(type, book._id);

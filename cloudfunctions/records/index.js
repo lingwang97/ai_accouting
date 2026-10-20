@@ -124,6 +124,8 @@ async function dashboard(ctx) {
     restricted: !!ctx.bookIds,
     readonly: readonly(ctx),
     perms: ctx.perms || [],
+    // 没有可记的礼簿：ended 记账人负责的礼簿都已结束（归档 / 删除 / 移交）；none 主家还没有当前礼簿
+    noBook: activeId ? '' : (ctx.role === 'clerk' ? 'ended' : 'none'),
     // 机构模式下负责多场（或全部场次）的记账人：可切换自己正在记的一场，不影响别人
     mySwitch: ctx.role === 'clerk' && !!account.orgMode && (!ctx.bookIds || ctx.bookIds.length > 1),
     lastNotify,
@@ -378,15 +380,26 @@ async function markPrinted(openid, rids, ctx) {
   return ok({ updated: res.stats.updated });
 }
 
-/** 待收款方确认的转账（"我的"页置顶 + 角标） */
+/**
+ * 待收款方确认的转账（"我的"页置顶 + 角标）
+ * stalled：宾客登记后没点「我已完成转账」的（超过 STALL_MS 仍未点，或 24 小时内被自动取消的），
+ * 宾客常常转完账直接回聊天，主家核对微信到账后可直接入簿
+ */
+const STALL_MS = 3 * 60 * 1000;
 async function pending(openid, ctx) {
   const cond = { ownerOpenid: openid, status: 'transferred' };
   if (ctx.bookIds) cond.bookId = _.in(ctx.bookIds);
-  const [res, cnt] = await Promise.all([
-    records.where(cond).orderBy('createdAt', 'desc').limit(100).get(),
-    records.where(cond).count()
+  const now = Date.now();
+  const stallCond = _.or([
+    { ownerOpenid: openid, status: 'pending', createdAt: _.lt(new Date(now - STALL_MS)), ...(ctx.bookIds ? { bookId: _.in(ctx.bookIds) } : {}) },
+    { ownerOpenid: openid, status: 'cancelled', autoCancelled: true, createdAt: _.gt(new Date(now - 24 * 3600 * 1000)), ...(ctx.bookIds ? { bookId: _.in(ctx.bookIds) } : {}) }
   ]);
-  return ok({ list: res.data.map(strip), count: cnt.total });
+  const [res, cnt, stall] = await Promise.all([
+    records.where(cond).orderBy('createdAt', 'desc').limit(100).get(),
+    records.where(cond).count(),
+    records.where(stallCond).orderBy('createdAt', 'desc').limit(100).get()
+  ]);
+  return ok({ list: res.data.map(strip), count: cnt.total, stalled: stall.data.map(strip) });
 }
 
 /** 待确认份数与合计（工作台轮询用，只做计数 + 聚合） */

@@ -28,9 +28,11 @@ exports.main = async (event) => {
       try { book = (await db.collection('books').doc(String(event.bookId)).get()).data; } catch (e) { /* 不存在 */ }
       if (!trusted(book) || book.ownerOpenid !== ctx.ownerOpenid || !canBook(ctx, book._id)) return err('礼簿不存在');
       scene = book._id;
-    } else if (ctx.bookIds && !ctx.bookIds.includes(account.activeBookId)) {
-      // 只负责部分礼簿、且不负责主家当前礼簿：出示负责礼簿的本场礼簿码（负责当前礼簿时与主家相同，用主家礼簿码）
+    } else if (ctx.role === 'clerk' && workBook(ctx) !== account.activeBookId) {
+      // 记账人正在记的不是主家当前礼簿（只负责别的礼簿，或机构模式自己选了另一场）：出示这一本的本场礼簿码；
+      // 正在记的就是主家当前礼簿时与主家相同，用主家礼簿码
       const id = workBook(ctx);
+      if (!id) return err('你负责的礼簿已结束，请联系主家重新安排');
       try { book = (await db.collection('books').doc(id).get()).data; } catch (e) { /* 不存在 */ }
       if (!trusted(book) || book.ownerOpenid !== ctx.ownerOpenid) return err('你负责的礼簿已不存在，请联系主家');
       scene = book._id;

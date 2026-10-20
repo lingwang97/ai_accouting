@@ -9,7 +9,7 @@ const _ = db.command;
 const books = db.collection('books');
 const accounts = db.collection('accounts');
 const records = db.collection('records');
-const { resolveCtx, canBook, restricted, can, workBook } = require('./ctx.js');
+const { resolveCtx, canBook, restricted, can, workBook, soloBook } = require('./ctx.js');
 
 const TYPES = ['wedding', 'birthday', 'baby', 'house', 'funeral', 'other'];
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -44,14 +44,15 @@ exports.main = async (event) => {
     if (event.action === 'save' && event.book && event.book._id && !canBook(ctx, String(event.book._id))) return err('礼簿不存在');
     if (event.action === 'save' && event.book && !event.book._id && ctx.bookIds) return err('你只负责部分礼簿，不能新建礼簿');
     if (['setActive', 'archive', 'saveTpl'].includes(event.action) && !canBook(ctx, String(event.bookId || ''))) return err('礼簿不存在');
-    if (event.action === 'getTpl' && !event.bookId) event.bookId = account.activeBookId; // 未指定时为当前礼簿，同样校验负责场次
+    if (event.action === 'getTpl' && !event.bookId) event.bookId = workBook(ctx); // 未指定时为正在记的礼簿，同样校验负责场次
     if (['stats', 'getTpl'].includes(event.action) && event.bookId && !canBook(ctx, String(event.bookId))) return err('礼簿不存在');
     switch (event.action) {
       case 'list': return await list(OWNER, account, ctx);
       case 'save': return await save(OWNER, account, event.book, ctx, OPENID);
-      case 'setActive': return await setActive(OWNER, account, event.bookId);
+      // 机构模式的记账人「设为当前」只切换自己正在记的一场，不改主家的当前礼簿
+      case 'setActive': return ctx.role === 'clerk' && account.orgMode ? await setMine(ctx, String(event.bookId || '')) : await setActive(OWNER, account, event.bookId);
       case 'setMine': return await setMine(ctx, String(event.bookId || ''));
-      case 'archive': return await archive(OWNER, account, event.bookId, event.archived !== false);
+      case 'archive': return await archive(OWNER, account, event.bookId, event.archived !== false, ctx);
       case 'stats': return await stats(OWNER, event.bookId);
       case 'getTpl': return await getTpl(OWNER, account, event.bookId);
       case 'saveTpl': return await saveTpl(OWNER, event.bookId, event.receiptTpl, event.printTpl);
@@ -180,7 +181,8 @@ async function create(openid, b, id) {
 }
 
 /**
- * 新建或修改礼簿；新建的礼簿自动设为当前礼簿
+ * 新建或修改礼簿；新建时 input.setActive=true 才设为当前礼簿（还没有当前礼簿时总是设为当前）；
+ * 机构模式的记账人新建时不改主家的当前礼簿，设为自己正在记的一场
  * 机构版本场收款码：记账人新上传的先存为待确认（pendingPayCode），主家在「主家信息」页采用后才生效
  */
 async function save(openid, account, input, ctx, caller) {
@@ -230,10 +232,16 @@ async function save(openid, account, input, ctx, caller) {
     return ok({ book: { _id: input._id, ...shown }, pendingPayCode: pendingCode });
   }
   const book = await create(openid, b);
-  await accounts.doc(account._id).update({ data: { activeBookId: book._id, forwardTo: '' } });
-  await syncThemeName(account, book.name);
+  let active = account.activeBookId || '';
+  if (ctx.role === 'clerk' && account.orgMode) {
+    if (input.setActive === true && ctx.member) await db.collection('members').doc(ctx.member._id).update({ data: { curBookId: book._id } });
+  } else if (input.setActive === true || !account.activeBookId) {
+    await accounts.doc(account._id).update({ data: { activeBookId: book._id, forwardTo: '' } });
+    await syncThemeName(account, book.name);
+    active = book._id;
+  }
   const { pendingPayCode, ...shown } = book;
-  return ok({ book: shown, activeBookId: book._id, pendingPayCode: pendingCode });
+  return ok({ book: shown, activeBookId: active, pendingPayCode: pendingCode });
 }
 
 /** 机构模式：记账人切换自己正在记的一场（members.curBookId），不改主家的当前礼簿、不影响其他人 */
@@ -257,12 +265,25 @@ async function setActive(openid, account, bookId) {
   return ok({ activeBookId: book._id, book });
 }
 
-async function archive(openid, account, bookId, archived) {
+/**
+ * 归档 / 取消归档。归档时：自己选了这一场的机构记账人清掉选择（回到默认的礼簿）；
+ * 返回仍负责这本、之后没有礼簿可记的记账人姓名（前端提示主家重新安排）
+ */
+async function archive(openid, account, bookId, archived, ctx) {
   const book = await getBook(openid, bookId);
   if (!book) return err('礼簿不存在');
   if (archived && account.activeBookId === book._id) return err('当前礼簿不能归档，请先切换到其他礼簿');
   await books.doc(book._id).update({ data: { archived } });
-  return ok({ archived });
+  let affected = [];
+  if (archived) {
+    const members = db.collection('members');
+    await members.where({ aid: account._id, curBookId: book._id }).update({ data: { curBookId: '' } });
+    const ms = (await members.where({ aid: account._id, role: _.neq('viewer'), _openid: _.exists(false) }).limit(100).get()).data;
+    affected = ms.filter(m => (account.orgMode
+      ? !m.allBooks && Array.isArray(m.bookIds) && m.bookIds.length && m.bookIds.every(id => id === book._id)
+      : soloBook(m, account) === book._id)).map(m => m.displayName || '记账人');
+  }
+  return ok({ archived, affected });
 }
 
 /** 单本礼簿统计：合计、份数、按关系分组 */

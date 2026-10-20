@@ -59,7 +59,11 @@ Page({
   async load(silent) {
     if (this.data.busy) return;
     try {
-      const { list } = await req.recordPending();
+      const { list, stalled } = await req.recordPending();
+      // 宾客没点「我已完成转账」的（含 24 小时内被自动取消的）：主家核对微信到账后可直接入簿
+      this.setData({
+        stalled: groupRecords(stalled || []).map(g => ({ ...g, auto: g.status === 'cancelled', timeStr: fmt.time(g.createdAt) }))
+      });
       if (silent && list.length > countOf(this._list)) wx.vibrateShort({ type: 'heavy', fail() {} });
       const picked = new Set(this._list.filter(r => r.picked).map(r => r._id));
       // 批次录入的多位随礼人合成一组；按转账时间先后排列：逐笔模式先处理最早的
@@ -134,6 +138,16 @@ Page({
       pickedSum: fmt.money(pickedFen / 100)
     };
   },
+
+  /** 宾客未点完成的：核对到账后入簿（批次金额不符时逐人改金额） */
+  async onStallConfirm(e) {
+    const g = this.data.stalled.find(x => x._id === e.currentTarget.dataset.id);
+    if (!g) return;
+    const res = await this.run(() => confirm.confirmTransfer(g));
+    if (res === 'edit') this.openEditor(g);
+    else if (res) this.load(false);
+  },
+  onStallAll() { this.setData({ stallAll: !this.data.stallAll }); },
 
   async onConfirm(e) {
     const g = this.findById(e.currentTarget.dataset.id);
@@ -288,6 +302,7 @@ Page({
     this.setData({ editor: null });
     this.removeLocal(group._id);
     this.resumeTimer();
+    this.load(false); // 可能是「宾客未点完成」里的一批
   },
   resumeTimer() {
     this.clearTimer();

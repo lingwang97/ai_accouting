@@ -44,7 +44,8 @@ exports.main = async (event) => {
       // 收款方
       // 主家或其记账人（权限相同）
       // 批次录入的记录：确认 / 拒绝整批（amounts 为逐人实际金额 {rid: 金额}）
-      case 'confirm': return await groupUpdate(ctx, event.rid, ['transferred', 'pending'], 'paid', event.amount, event.amounts);
+      // 宾客没点「我已完成转账」的（pending，或已被自动取消）主家核对到账后也可直接入簿
+      case 'confirm': return await groupUpdate(ctx, event.rid, ['transferred', 'pending', 'cancelled'], 'paid', event.amount, event.amounts);
       case 'confirmBatch': return await confirmBatch(ctx, event.rids);
       case 'reject': return await groupUpdate(ctx, event.rid, ['transferred', 'pending'], 'rejected');
       case 'void': return await ownerUpdate(ctx, event.rid, ['paid'], 'void');
@@ -327,7 +328,8 @@ async function cashEntry(openid, ctx, event) {
     }
   }
   if (book && !canBook(ctx, book._id)) return err('请选择你负责的场次');
-  if (!book && ctx.bookIds) return err('请选择你负责的场次');
+  // 没有可记的礼簿：不登记成无礼簿的记录（之后会被悄悄归进默认礼簿）
+  if (!book) return err(ctx.role === 'clerk' ? '你负责的礼簿已结束，请联系主家重新安排' : '请先选择当前礼簿');
   const now = new Date();
   const base = {
     aid: account._id,
@@ -558,7 +560,7 @@ async function groupUpdate(ctx, rid, fromList, to, actualAmount, amounts) {
   const rec = await getRecord(rid);
   if (!rec || !rec.batchId) return ownerUpdate(ctx, rid, fromList, to, actualAmount);
   if (rec.ownerOpenid !== ctx.ownerOpenid || !canBook(ctx, rec.bookId)) return err('无权操作该账目');
-  const all = (await batchRecords(rec.batchId, { ownerOpenid: ctx.ownerOpenid })).filter(r => fromList.includes(r.status));
+  const all = (await batchRecords(rec.batchId, { ownerOpenid: ctx.ownerOpenid })).filter(r => fromList.includes(r.status) && (r.status !== 'cancelled' || r.autoCancelled));
   if (!all.length) return err('当前状态不可操作，请刷新');
   const map = (to === 'paid' && amounts && typeof amounts === 'object') ? amounts : {};
   for (const r of all) {
@@ -598,7 +600,12 @@ async function ownerUpdate(ctx, rid, fromList, to, actualAmount) {
       data.declaredAmount = cur.amount;
     }
   }
-  const res = await records.where({ _id: rid, ownerOpenid: openid, status: _.in(fromList) })
+  // 已取消的只有「自动取消」的可以操作（宾客自己取消的不行）
+  const statusCond = fromList.includes('cancelled')
+    ? _.or([{ status: _.in(fromList.filter(s => s !== 'cancelled')) }, { status: 'cancelled', autoCancelled: true }])
+    : { status: _.in(fromList) };
+  if (to === 'paid') data.autoCancelled = _.remove();
+  const res = await records.where(_.and([{ _id: rid, ownerOpenid: openid }, statusCond]))
     .update({ data });
   const rec = await getRecord(rid);
   if (!rec) return err('记录不存在');

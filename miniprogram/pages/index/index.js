@@ -110,6 +110,7 @@ Page({
         pm: perm.map(d.perms, d.role),
         // 能管理礼簿且不限礼簿范围才可切换；机构模式下负责多场的记账人切换的是自己正在记的一场（mySwitch）
         mySwitch: !!d.mySwitch,
+        noBook: d.noBook || '', // ended 记账人负责的礼簿已结束；none 主家还没有当前礼簿
         canSwitch: !!d.mySwitch || (d.role !== 'clerk' || !(d.account && d.account.orgMode)) && perm.map(d.perms, d.role).books && !d.restricted,
         notifyTip: notify.tipText(d.lastNotify),
         book: b ? { ...b, typeLabel: scenes.label(b.type), sumStr: fmt.money(b.sum), sumCls: sumCls(fmt.money(b.sum)) } : null,
@@ -171,7 +172,7 @@ Page({
   goQrcode() {
     const b = this.data.book;
     const a = this.data.account || {};
-    const perBook = b && (a.orgMode || (this.data.restricted && b._id !== a.activeBookId));
+    const perBook = b && (a.orgMode || (this.data.role === 'clerk' && b._id !== a.activeBookId));
     wx.navigateTo({ url: '/pages/qrcode/qrcode' + (perBook ? `?bookId=${b._id}` : '') });
   },
   goPending() { wx.navigateTo({ url: '/pages/pending/pending' }); },

@@ -13,6 +13,20 @@
   <view class="notify-tip" wx:if="{{!canConfirm}}">你没有「确认收礼」权限，只能查看待确认礼金，由主家或其他记账人确认</view>
   <view class="notify-tip" wx:elif="{{notifyTip}}" bindtap="onSubscribe">🔔 {{notifyTip}} <text class="nt-go">开启 ›</text></view>
 
+  <!-- 宾客登记后没点「我已完成转账」：常见于转完账直接回聊天，主家核对微信到账后可直接入簿 -->
+  <view class="card stall" wx:if="{{canConfirm && stalled.length}}">
+    <view class="stall-title">宾客未点「我已完成转账」（{{stalled.length}}）</view>
+    <view class="muted small">宾客可能转完账就离开了。请核对微信是否收到，收到的点「已收到」入簿</view>
+    <view class="stall-row" wx:for="{{stalled}}" wx:key="_id" wx:if="{{stallAll || index < 3}}">
+      <view class="stall-info">
+        <view class="stall-name"><text class="payer">{{item.nameStr}}</text><text class="money">￥{{item.amountStr}}</text></view>
+        <view class="muted small">{{item.timeStr}} 登记 · {{item.auto ? '已自动取消' : '未点完成'}}<text wx:if="{{item.mixed}}"> · 转账+现金</text></view>
+      </view>
+      <button class="btn btn-sm btn-outline" data-id="{{item._id}}" catchtap="onStallConfirm">已收到</button>
+    </view>
+    <view class="link center stall-more" wx:if="{{stalled.length > 3}}" bindtap="onStallAll">{{stallAll ? '收起' : '查看全部 ' + stalled.length + ' 笔'}}</view>
+  </view>
+
   <!-- 首次加载完成前显示加载中，避免空状态闪现 -->
   <view class="muted center pad" wx:if="{{!loaded}}">加载中…</view>
   <view class="empty" wx:elif="{{total === 0}}">

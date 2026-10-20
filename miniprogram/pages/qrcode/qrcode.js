@@ -50,7 +50,8 @@ Page({
       this.setData({ account, primary: theme.current().primary });
       this.lightOn();
 
-      if (this._bookId) return await this.loadBookQr(account);
+      // 本场礼簿码；记账人一律由服务端决定（正在记的是主家当前礼簿时为主家礼簿码，否则为本场码），不用本地缓存
+      if (this._bookId || getApp().globalData.role === 'clerk') return await this.loadBookQr(account);
 
       // 记账人读不到主家上传的收款码图片，优先用云函数生成的链接
       const payCodeUrl = account.payCodeUrl || await this.getTempUrl(account.payCodeFileID);
@@ -79,8 +80,14 @@ Page({
   /** 本场礼簿码：码里是礼簿 id，宾客扫码直接记入这一场；显示本场主家与本场收款码 */
   async loadBookQr(account) {
     try {
-      const r = await req.qrcodeGen(account._id, this._bookId);
+      const r = await req.qrcodeGen(account._id, this._bookId || undefined);
       const qrUrl = await this.getTempUrl(r.fileID);
+      if (!r.book) {
+        // 主家礼簿码（记账人正在记的就是主家当前礼簿）
+        const payCodeUrl = account.payCodeUrl || await this.getTempUrl(account.payCodeFileID);
+        this.setData({ qrFileID: r.fileID, qrUrl, payCodeUrl, errMsg: '' });
+        return;
+      }
       // 标题显示主家（机构版为本场主家），下方显示礼簿名称，避免礼簿名显示两次
       const name = (r.book && r.book.hostName) || account.accountName;
       this.setData({
@@ -90,13 +97,13 @@ Page({
         qrFileID: r.fileID, qrUrl, payCodeUrl: r.payCodeUrl || account.payCodeUrl || '', errMsg: ''
       });
       wx.setNavigationBarTitle({ title: '本场礼簿码' });
-      this._shareId = this._bookId;
+      this._shareId = r.book._id;
     } catch (e) {
       this.setData({ qrUrl: '', errMsg: '本场礼簿码生成失败：' + ((e && e.message) || '请稍后重试') });
     }
   },
 
-  /** 登记码按账户 + 小程序版本缓存，避免每次进入都重新生成上传 */
+  /** 主家礼簿码按账户 + 小程序版本缓存，避免每次进入都重新生成上传（只有主家本人走这里） */
   async getQrFileID(aid) {
     let env = 'release';
     try { env = wx.getAccountInfoSync().miniProgram.envVersion; } catch (e) { /* 默认正式版 */ }

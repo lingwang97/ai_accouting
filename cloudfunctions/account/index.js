@@ -474,6 +474,23 @@ async function acceptInvite(openid, token, displayName) {
     if (exist && exist.status === 'pending') return ok({ type: inv.type, pending: true, aid: acc._id, accountName: acc.accountName });
     if (exist) {
       if (viewer && exist.role !== 'viewer') return err('你已经是这位主家的记账人，可直接查看');
+      if (!viewer && exist.role === 'viewer') {
+        // 家人共享（只读）接受记账人邀请：升级为记账人，负责的礼簿与权限按这张卡；
+        // 记账人发的卡需主家重新同意（避免记账人把只读家人升级成记账人）
+        const fromOwner = inv.fromOpenid === acc.ownerOpenid;
+        if (!fromOwner && !(await takeUse(inv))) return err('这张邀请卡的人数已满，请让对方重新邀请');
+        await members.doc(exist._id).update({
+          data: {
+            role: 'clerk', perms: grant.perms, displayName: dn,
+            ...(grant.allBooks ? { allBooks: true, bookIds: [] } : { allBooks: false, bookIds: grant.bookIds }),
+            ...(inv.solo && grant.bookIds.length ? { soloBookId: grant.bookIds[0] } : {}),
+            ...(fromOwner ? {} : { status: 'pending', inviteId: inv._id, inviteFrom: inv.fromName || '' })
+          }
+        });
+        if (!fromOwner) return ok({ type: inv.type, pending: true, aid: acc._id, accountName: acc.accountName });
+        await setCurrent(openid, acc._id);
+        return ok({ type: inv.type, aid: acc._id, accountName: acc.accountName });
+      }
       if (viewer) {
         // 已共享过：合并新共享的礼簿
         const ids = [...new Set((exist.bookIds || []).concat(inv.bookIds || []))];
@@ -694,6 +711,8 @@ async function transferBooks(inv, acc, openid) {
   const firstId = ids.includes(acc.activeBookId) ? acc.activeBookId : ids[0];
   if (!mine.activeBookId) await accounts.doc(mine._id).update({ data: { activeBookId: firstId } });
   // 原主家的当前礼簿被移交：旧礼簿码转到接收人
+  // 原主家的机构记账人自己选的一场被移交走了：清掉选择
+  await members.where({ aid: acc._id, curBookId: _.in(ids) }).update({ data: { curBookId: '' } });
   if (ids.includes(acc.activeBookId)) {
     await accounts.doc(acc._id).update({ data: { activeBookId: '', forwardTo: mine._id } });
   }

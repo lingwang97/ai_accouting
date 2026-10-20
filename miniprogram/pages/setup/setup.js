@@ -177,7 +177,7 @@ Page({
       app.globalData.account = account;
       app.globalData.role = 'owner';
       theme.setAccount(account);
-      await req.bookSave({ name: bookName, type: d.bookType, date: d.bookDate, location: d.bookLocation.trim() });
+      await req.bookSave({ name: bookName, type: d.bookType, date: d.bookDate, location: d.bookLocation.trim(), setActive: true });
       setup.clearDraft();
       app.globalData.justSetup = true; // 工作台提示下一步：出示礼簿码
       require('../../utils/cache.js').clear();

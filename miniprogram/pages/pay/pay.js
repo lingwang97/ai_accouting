@@ -10,6 +10,7 @@ const theme = require('../../utils/theme.js');
 
 const POLL_MS = 3000;
 const POLL_MAX = 200; // 约 10 分钟
+const OPEN_KEY = 'pay_open'; // 本机最近一笔未点「我已完成转账」的随礼（{ aid, rid, record, payCodeUrl, at }）
 
 /** 页面展示用：金额文本、批次名单 */
 function viewRecord(r) {
@@ -70,7 +71,41 @@ Page({
     // 不再按进入场景自动展开：wx.getEnterOptionsSync 取的是小程序启动时的场景，之前从聊天卡片打开过小程序后，
     // 再扫码或从礼簿码页进入随礼页也会被误判为「不在现场」而展开收款码
     this.setData({ aid, onsite: true });
-    this.loadAccount(aid);
+    this.loadAccount(aid).then(() => this.resumeOpen(aid));
+  },
+
+  // —— 未完成的随礼：宾客常在微信转完账直接回聊天，没点「我已完成转账」；再次进入时接着处理 ——
+  saveOpen(record, payCodeUrl) {
+    try { wx.setStorageSync(OPEN_KEY, { aid: this.data.aid, rid: record._id, record, payCodeUrl, at: Date.now() }); } catch (e) { /* 忽略 */ }
+  },
+  clearOpen() {
+    try { wx.removeStorageSync(OPEN_KEY); } catch (e) { /* 忽略 */ }
+  },
+  async resumeOpen(aid) {
+    let o = null;
+    try { o = wx.getStorageSync(OPEN_KEY); } catch (e) { /* 忽略 */ }
+    if (!o || o.aid !== aid || Date.now() - o.at > 24 * 3600 * 1000 || this.data.step !== 'form') return;
+    let status = '';
+    try { status = (await req.payStatus(o.rid)).status; } catch (e) { return; }
+    if (status === 'transferred') {
+      this.setData({ record: viewRecord(o.record), step: 'waiting' });
+      return this.startPoll();
+    }
+    if (status !== 'pending' && status !== 'cancelled') return this.clearOpen();
+    const v = viewRecord(o.record);
+    wx.showModal({
+      title: '有一笔未完成的随礼',
+      content: `${v.payerName} ￥${v.payStr}：已经转账了吗？转了请点「继续」，再点「我已完成转账」。`,
+      confirmText: '继续',
+      cancelText: '不用了',
+      success: r => {
+        if (r.confirm) this.setData({ record: v, payCodeUrl: o.payCodeUrl || '', showFallback: false, codeSaved: false, step: 'transfer' });
+        else if (r.cancel) {
+          this.clearOpen();
+          if (status === 'pending') req.payCancel(o.rid).catch(() => {});
+        }
+      }
+    });
   },
 
   onUnload() {
@@ -164,6 +199,7 @@ Page({
         codeSaved: false,
         step: 'transfer'
       });
+      this.saveOpen(record, payCodeUrl);
     } catch (e) { /* toast 已提示 */ } finally {
       this.setData({ submitting: false });
     }
@@ -186,6 +222,7 @@ Page({
     this.setData({ submitting: true });
     try {
       await req.payTransferred(this.data.record._id);
+      this.clearOpen();
       this.setData({ step: 'waiting' });
       this.startPoll();
     } catch (e) { /* toast 已提示 */ } finally {
@@ -203,6 +240,7 @@ Page({
         try {
           await req.payCancel(this.data.record._id);
         } catch (e) { /* 忽略 */ }
+        this.clearOpen();
         this.setData({ step: 'form', record: null, payCodeUrl: '' });
       }
     });

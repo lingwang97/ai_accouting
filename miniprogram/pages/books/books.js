@@ -79,7 +79,7 @@ Page({
       printer.clearTemplateCache(); // 当前礼簿变了，打印样式随之变化
       const b = this.data.list.find(x => x._id === id);
       if (b) this.setData({ iconKey: theme.apply(this, b.type).icon }); // 主题色跟新的当前礼簿走
-      wx.showToast({ title: '已设为当前礼簿', icon: 'success' });
+      wx.showToast({ title: '已切换', icon: 'success' });
       this.load();
     } catch (err) { /* toast 已提示 */ }
   },
@@ -121,7 +121,7 @@ Page({
       success: async res => {
         if (!res.confirm) return;
         try {
-          await req.bookArchive(id, toArchive);
+          const r = await req.bookArchive(id, toArchive);
           if (toArchive) {
             // 归档时自动生成传统礼簿 PDF 存档（长期保留，可在礼簿统计页查看）
             wx.showLoading({ title: '生成存档 PDF…', mask: true });
@@ -131,6 +131,17 @@ Page({
               wx.showToast({ title: '已归档并存档', icon: 'success' });
             } catch (e) {
               wx.hideLoading(); // 无礼金等，request.js 已提示
+            }
+            // 只负责这一本的记账人：之后没有礼簿可记，提醒主家重新安排
+            const names = (r && r.affected) || [];
+            if (names.length) {
+              await new Promise(resolve => setTimeout(resolve, 1200));
+              wx.showModal({
+                title: '记账人需要重新安排',
+                content: `「${names.join('、')}」只负责这本礼簿，归档后不能再登记。可在「我的 → 记账人」里给他们换一本。`,
+                confirmText: '去设置',
+                success: m2 => { if (m2.confirm) wx.navigateTo({ url: '/pages/members/members' }); }
+              });
             }
           }
           this.load();

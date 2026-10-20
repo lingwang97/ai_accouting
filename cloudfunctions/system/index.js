@@ -257,6 +257,8 @@ async function purgeBook(admin, bookId, confirmName) {
   if (book.archivePdf && book.archivePdf.fileID) await db.collection('exports').where({ fileID: book.archivePdf.fileID }).remove();
   await db.collection('books').doc(bookId).remove();
   if (acc && acc.activeBookId === bookId) await db.collection('accounts').doc(acc._id).update({ data: { activeBookId: '' } });
+  // 自己选了这一场的机构记账人：清掉选择（只负责这本的记账人在工作台会提示「负责的礼簿已结束」）
+  if (acc) await db.collection('members').where({ aid: acc._id, curBookId: bookId }).update({ data: { curBookId: '' } });
   const removed = [{ label: '礼簿', count: 1 }, { label: '礼金记录', count: records }];
   await log(admin, 'purgeBook', { bookId, name: book.name, ownerOpenid: book.ownerOpenid, removed });
   return ok({ removed });
@@ -340,7 +342,7 @@ const WIPE_TEXT = '清除全部测试数据';
 /**
  * 清除全部测试数据：所有账户的礼簿、礼金、主家信息、用户、人员关系、邀请、送礼、提醒、样式、同名合并、导出 / 存档、订阅
  * 保留：settings（管理员、预热、广告、模板等系统设置）、操作日志；默认保留管理员自己的数据（keepAdmins）
- * 只在尚未标记正式上线时可用；doIt=false 只统计。数据多时分批删除，单次约 45 秒后返回 done=false，前端再调用继续
+ * 只在尚未标记正式上线时可用；doIt=false 只统计。数据多时分批删除，单次约 20 秒后返回 done=false，前端再调用继续
  */
 async function wipeAll(admin, doIt, e) {
   const launch = await P.readSetting(db, 'launch', { launched: false });
@@ -375,7 +377,7 @@ async function wipeAll(admin, doIt, e) {
     return ok({ rows, keepAdmins: keep, adminCount: admins.length });
   }
   const start = Date.now();
-  const timeUp = () => Date.now() - start > 45 * 1000;
+  const timeUp = () => Date.now() - start > 20 * 1000; // 函数超时为 30 秒，留出写日志的时间
   const removed = [];
   let files = 0;
   let done = true;

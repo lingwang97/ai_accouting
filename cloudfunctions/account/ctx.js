@@ -10,6 +10,7 @@
 // 非机构模式：记账人同一时间只负责一本礼簿（members.soloBookId，邀请时单选、可在记账人页修改）；
 // 没设过时按原负责范围取一本（含主家当前礼簿时取当前礼簿，全部礼簿的跟随主家当前礼簿）。bookIds / allBooks 原样保留，切回机构模式后恢复。
 // 机构模式：负责多场的记账人可在工作台切换「我现在记哪一场」（members.curBookId，只影响自己），见 workBook。
+// 记账人正在记的礼簿（workBookId）只取未归档、仍存在的礼簿；一本都没有时为空，前端提示「你负责的礼簿已结束，请联系主家」。
 // 礼簿共享：家人（members.role='viewer'）只能查看共享的礼簿（bookIds），不能做任何修改，用 readonly 校验。
 // 通过邀请卡加入的人员先是待同意（members.status='pending'），主家同意后才生效。
 //
@@ -69,9 +70,15 @@ async function resolveCtx(db, openid) {
     if (viewer && !bookIds) bookIds = ['__none__'];
     if (!viewer && !acc.data.orgMode) bookIds = [soloBook(m, acc.data)]; // 非机构模式：只负责一本
     const perms = viewer ? [] : (cleanPerms(m.perms) || (m.allBooks ? ALL_PERMS.slice() : DEFAULT_PERMS.slice()));
-    // 机构模式：自己选的「现在记哪一场」（须仍在负责范围内）
-    const cur = !viewer && acc.data.orgMode && m.curBookId && (!bookIds || bookIds.includes(m.curBookId)) ? m.curBookId : '';
-    return { role: viewer ? 'viewer' : 'clerk', ownerOpenid: acc.data.ownerOpenid, account: acc.data, user, member: m, bookIds, perms, curBookId: cur };
+    if (viewer) return { role: 'viewer', ownerOpenid: acc.data.ownerOpenid, account: acc.data, user, member: m, bookIds, perms, curBookId: '', workBookId: '' };
+    // 正在记的礼簿：机构模式自己选的一场 → 主家当前礼簿 → 负责的第一本；只取负责范围内、未归档、仍存在的
+    const act = acc.data.activeBookId || '';
+    const inScope = id => !!id && id !== '__none__' && (!bookIds || bookIds.includes(id));
+    const cands = [...new Set([acc.data.orgMode ? m.curBookId : '', act].concat(bookIds || []).filter(inScope))].slice(0, 100);
+    const valid = await liveBooks(db, acc.data.ownerOpenid, cands, safe);
+    const cur = acc.data.orgMode && valid.includes(m.curBookId) ? m.curBookId : '';
+    const work = cands.find(id => valid.includes(id)) || '';
+    return { role: 'clerk', ownerOpenid: acc.data.ownerOpenid, account: acc.data, user, member: m, bookIds, perms, curBookId: cur, workBookId: work };
   };
 
   const want = user && user.currentAid;
@@ -103,13 +110,24 @@ function soloBook(m, acc) {
   return ids.includes(act) ? act : ids[0];
 }
 
+/** ids 中属于该主家、未归档、仍存在的礼簿（保持 ids 的顺序；查询失败时按原样返回，不误判为已结束） */
+async function liveBooks(db, owner, ids, safe) {
+  if (!ids.length) return [];
+  const res = await safe(db.collection('books').where({ _id: db.command.in(ids), ownerOpenid: owner, _openid: db.command.exists(false) })
+    .field({ _id: true, archived: true }).limit(100).get());
+  if (!res) return ids;
+  const ok = new Set(res.data.filter(b => b.archived !== true).map(b => b._id));
+  return ids.filter(id => ok.has(id));
+}
+
 /**
- * 当前调用者正在记的礼簿（工作台、出示礼簿码、对账的默认礼簿）：
- * 机构模式记账人自己选的一场 → 主家当前礼簿（在负责范围内时）→ 负责的第一本
+ * 当前调用者正在记的礼簿（工作台、出示礼簿码、对账、礼台记账的默认礼簿）：
+ * 记账人为 resolveCtx 算好的 workBookId（机构模式自己选的一场 → 主家当前礼簿 → 负责的第一本，跳过已归档 / 已删除的）；
+ * 主家为当前礼簿；家人共享为主家当前礼簿（在共享范围内时）或共享的第一本
  */
 function workBook(ctx) {
   if (!ctx.account) return '';
-  if (ctx.curBookId) return ctx.curBookId;
+  if (ctx.role === 'clerk') return ctx.workBookId || '';
   const act = ctx.account.activeBookId || '';
   if (act && canBook(ctx, act)) return act;
   return ctx.bookIds ? (ctx.bookIds.find(id => id !== '__none__') || '') : act;

@@ -17,6 +17,10 @@
       <text class="guide-close" catchtap="onCloseGuideTip">✕</text>
     </view>
 
+    <!-- 没有可记的礼簿 -->
+    <view class="warn-card" wx:if="{{noBook === 'ended'}}">你负责的礼簿已结束（归档、删除或移交），暂时不能出示礼簿码和登记，请联系主家重新安排</view>
+    <view class="warn-card" wx:elif="{{noBook === 'none' && !readonly}}" bindtap="goBooks">还没有当前礼簿：请先在「礼簿管理」里新建或选择一本，宾客的礼金才知道记到哪里 ›</view>
+
     <!-- 当前礼簿 -->
     <view class="book-card" bindtap="goRecords">
       <view class="bc-top">
