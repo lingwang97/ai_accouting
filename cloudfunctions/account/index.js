@@ -478,16 +478,18 @@ async function acceptInvite(openid, token, displayName) {
         // 家人共享（只读）接受记账人邀请：升级为记账人，负责的礼簿与权限按这张卡；
         // 记账人发的卡需主家重新同意（避免记账人把只读家人升级成记账人）
         const fromOwner = inv.fromOpenid === acc.ownerOpenid;
-        if (!fromOwner && !(await takeUse(inv))) return err('这张邀请卡的人数已满，请让对方重新邀请');
-        await members.doc(exist._id).update({
-          data: {
-            role: 'clerk', perms: grant.perms, displayName: dn,
-            ...(grant.allBooks ? { allBooks: true, bookIds: [] } : { allBooks: false, bookIds: grant.bookIds }),
-            ...(inv.solo && grant.bookIds.length ? { soloBookId: grant.bookIds[0] } : {}),
-            ...(fromOwner ? {} : { status: 'pending', inviteId: inv._id, inviteFrom: inv.fromName || '' })
-          }
-        });
-        if (!fromOwner) return ok({ type: inv.type, pending: true, aid: acc._id, accountName: acc.accountName });
+        const upgrade = {
+          role: 'clerk', perms: grant.perms, displayName: dn,
+          ...(grant.allBooks ? { allBooks: true, bookIds: [] } : { allBooks: false, bookIds: grant.bookIds }),
+          ...(inv.solo && grant.bookIds.length ? { soloBookId: grant.bookIds[0] } : {})
+        };
+        if (!fromOwner) {
+          // 记账人发的卡：另记一条升级申请（addTo），主家同意前仍保留只读共享
+          if (!(await takeUse(inv))) return err('这张邀请卡的人数已满，请让对方重新邀请');
+          await members.add({ data: { aid: acc._id, ownerOpenid: acc.ownerOpenid, memberOpenid: openid, ...upgrade, upgrade: true, addTo: exist._id, status: 'pending', inviteId: inv._id, inviteFrom: inv.fromName || '', createdAt: new Date() } });
+          return ok({ type: inv.type, pending: true, aid: acc._id, accountName: acc.accountName });
+        }
+        await members.doc(exist._id).update({ data: upgrade });
         await setCurrent(openid, acc._id);
         return ok({ type: inv.type, aid: acc._id, accountName: acc.accountName });
       }
@@ -523,18 +525,24 @@ async function acceptInvite(openid, token, displayName) {
       await setCurrent(openid, acc._id);
       return ok({ type: inv.type, aid: acc._id, accountName: acc.accountName });
     }
-    // 新加入：占用一个名额，先记为待同意，主家同意后才能查看 / 记账
+    // 新加入：占用一个名额。主家本人发的卡直接生效；记账人发（转发）的卡先记为待同意，主家同意后才能查看 / 记账
     if (!(await takeUse(inv))) return err('这张邀请卡的人数已满，请让对方重新邀请');
+    const direct = inv.fromOpenid === acc.ownerOpenid;
     await members.add({
       data: {
         aid: acc._id, ownerOpenid: acc.ownerOpenid, memberOpenid: openid, role: viewer ? 'viewer' : 'clerk',
         ...(viewer ? { bookIds: grant.bookIds } : (grant.allBooks ? { allBooks: true, bookIds: [] } : { bookIds: grant.bookIds })),
         ...(viewer ? {} : { perms: grant.perms }),
         ...(!viewer && inv.solo && grant.bookIds.length ? { soloBookId: grant.bookIds[0] } : {}),
-        displayName: dn, status: 'pending', inviteId: inv._id, inviteFrom: inv.fromName || '', createdAt: new Date()
+        displayName: dn, status: direct ? 'active' : 'pending', ...(direct ? { approvedAt: new Date() } : {}),
+        inviteId: inv._id, inviteFrom: inv.fromName || '', createdAt: new Date()
       }
     });
-    return ok({ type: inv.type, pending: true, aid: acc._id, accountName: acc.accountName });
+    if (!direct) return ok({ type: inv.type, pending: true, aid: acc._id, accountName: acc.accountName });
+    // 还没有自己的主家信息：直接切到这个身份（有的在「我的 → 切换身份」切换，首页也会提示）
+    const own = await accounts.where({ ownerOpenid: openid, _openid: _.exists(false) }).count();
+    if (!own.total) await setCurrent(openid, acc._id);
+    return ok({ type: inv.type, aid: acc._id, accountName: acc.accountName, switched: !own.total });
   }
 
   // 移交主家
@@ -670,9 +678,12 @@ async function approveMember(openid, memberId, approve) {
     return ok({ approved: false });
   }
   if (m.addTo) {
-    // 已共享的家人通过记账人发的卡追加礼簿：并入原来那条，删掉这条申请
+    // 已共享的家人通过记账人发的卡：升级为记账人（upgrade）或追加共享的礼簿，并入原来那条，删掉这条申请
     const base = (await members.where({ _id: m.addTo, aid: ctx.account._id }).limit(1).get()).data[0];
-    if (base) await members.doc(base._id).update({ data: { bookIds: [...new Set((base.bookIds || []).concat(m.bookIds || []))] } });
+    if (base && m.upgrade) {
+      const { _id, addTo, upgrade, status, inviteId, inviteFrom, createdAt, ...up } = m;
+      await members.doc(base._id).update({ data: { ...up, approvedAt: new Date() } });
+    } else if (base) await members.doc(base._id).update({ data: { bookIds: [...new Set((base.bookIds || []).concat(m.bookIds || []))] } });
     await members.doc(m._id).remove();
     return ok({ approved: true });
   }

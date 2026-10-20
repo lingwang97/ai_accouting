@@ -53,6 +53,9 @@ exports.main = async (event) => {
       case 'setActive': return ctx.role === 'clerk' && account.orgMode ? await setMine(ctx, String(event.bookId || '')) : await setActive(OWNER, account, event.bookId);
       case 'setMine': return await setMine(ctx, String(event.bookId || ''));
       case 'archive': return await archive(OWNER, account, event.bookId, event.archived !== false, ctx);
+      // 删除礼簿（连同全部礼金记录，不可恢复）：只限主家本人；先预览，再输入礼簿名称确认
+      case 'removePreview': return ctx.role === 'owner' ? await removeBook(OWNER, account, String(event.bookId || ''), null) : err('只有主家本人可以删除礼簿');
+      case 'remove': return ctx.role === 'owner' ? await removeBook(OWNER, account, String(event.bookId || ''), String(event.confirmName || '')) : err('只有主家本人可以删除礼簿');
       case 'stats': return await stats(OWNER, event.bookId);
       case 'getTpl': return await getTpl(OWNER, account, event.bookId);
       case 'saveTpl': return await saveTpl(OWNER, event.bookId, event.receiptTpl, event.printTpl);
@@ -284,6 +287,48 @@ async function archive(openid, account, bookId, archived, ctx) {
       : soloBook(m, account) === book._id)).map(m => m.displayName || '记账人');
   }
   return ok({ archived, affected });
+}
+
+/**
+ * 删除礼簿：confirmName 为 null 时只预览（份数、合计、各状态笔数、受影响的记账人）；
+ * 否则须与礼簿名称一致，删除礼簿、全部礼金记录、存档 PDF、本场收款码与礼簿码文件
+ * 当前礼簿不能删（先切换到别的礼簿）
+ */
+async function removeBook(openid, account, bookId, confirmName) {
+  const book = await getBook(openid, bookId);
+  if (!book) return err('礼簿不存在');
+  if (account.activeBookId === book._id) return err('当前礼簿不能删除，请先切换到其他礼簿');
+  const members = db.collection('members');
+  const ms = (await members.where({ aid: account._id, role: _.neq('viewer'), _openid: _.exists(false) }).limit(100).get()).data;
+  const affected = ms.filter(m => (account.orgMode
+    ? !m.allBooks && Array.isArray(m.bookIds) && m.bookIds.length && m.bookIds.every(id => id === book._id)
+    : soloBook(m, account) === book._id)).map(m => m.displayName || '记账人');
+  if (confirmName === null) {
+    const [paid, all] = await Promise.all([
+      records.aggregate().match({ ownerOpenid: openid, bookId: book._id, status: 'paid' })
+        .group({ _id: null, count: _.aggregate.sum(1), fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) }).end(),
+      records.where({ ownerOpenid: openid, bookId: book._id }).count()
+    ]);
+    const t = (paid.list && paid.list[0]) || { count: 0, fen: 0 };
+    return ok({ name: book.name, count: t.count, sum: Math.round(t.fen) / 100, total: all.total, affected });
+  }
+  if (confirmName.trim() !== book.name) return err('输入的礼簿名称不一致');
+  // 文件：存档 PDF、本场收款码（本人上传的）、各版本礼簿码
+  const files = [];
+  if (book.archivePdf && book.archivePdf.fileID) files.push(book.archivePdf.fileID);
+  if (ownPayCode(book.payCodeFileID, openid)) files.push(book.payCodeFileID);
+  const prefix = account.payCodeFileID ? account.payCodeFileID.split('/paycodes/')[0] : '';
+  if (prefix) ['develop', 'trial', 'release'].forEach(env => files.push(`${prefix}/qrcodes/${book._id}-${env}.png`));
+  try { if (files.length) await cloud.deleteFile({ fileList: files }); } catch (e) { /* 忽略 */ }
+  for (let i = 0; i < 200; i++) {
+    const r = await records.where({ ownerOpenid: openid, bookId: book._id }).remove();
+    if (!r.stats.removed) break;
+  }
+  if (book.archivePdf && book.archivePdf.fileID) await db.collection('exports').where({ fileID: book.archivePdf.fileID }).remove();
+  await books.doc(book._id).remove();
+  // 自己选了这一场的机构记账人：清掉选择
+  await members.where({ aid: account._id, curBookId: book._id }).update({ data: { curBookId: '' } });
+  return ok({ removed: true, affected });
 }
 
 /** 单本礼簿统计：合计、份数、按关系分组 */

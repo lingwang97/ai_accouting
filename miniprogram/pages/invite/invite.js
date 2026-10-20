@@ -75,7 +75,8 @@ Page({
         title: r.type === 'transfer' ? '已接收为主家' : (r.type === 'viewer' ? '已接受共享' : '已成为记账人'),
         content: r.type === 'transfer'
           ? `${r.partial ? r.count + ' 本礼簿' : '「' + r.accountName + '」的礼簿'}已转到你名下。请到「我的 → 主家信息」确认收款码是你自己的微信收款码。`
-          : (r.type === 'viewer' ? `你现在可以查看「${r.accountName}」共享的礼簿了（只读）。` : `你现在可以为「${r.accountName}」记账了。`),
+          : (r.type === 'viewer' ? `你现在可以查看「${r.accountName}」共享的礼簿了（只读）。` : `你现在可以为「${r.accountName}」记账了。`)
+            + (r.switched === false ? '你还有自己的礼簿，请在「我的 → 切换身份」里切换。' : ''),
         showCancel: false,
         success: () => wx.switchTab({ url: r.type === 'viewer' ? '/pages/index/index' : '/pages/mine/mine' })
       });

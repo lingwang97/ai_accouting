@@ -43,8 +43,11 @@
 /* 第 2 行：说明在左（过长省略），操作在右 */
 .meta-row { display: flex; align-items: center; margin-top: 8rpx; }
 .meta { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-/* 写成与原生 button 默认样式同样的选择器，才能覆盖其 184px 宽度 */
-button.ok-sm:not([size=mini]) { width: 120rpx; height: 56rpx; line-height: 56rpx; padding: 0; margin-left: 20rpx; font-size: 26rpx; }
+/* 列表里的操作按钮：大小一致；写成与原生 button 默认样式同样的选择器，才能覆盖其 184px 宽度 */
+button.op-btn:not([size=mini]) { width: 120rpx; height: 56rpx; padding: 0; margin-left: 16rpx; font-size: 26rpx; }
+button.op-btn.wide:not([size=mini]) { width: auto; padding: 0 20rpx; margin-left: 0; margin-right: auto; }
+.batch-ops { margin: 12rpx 0 0; justify-content: flex-end; }
+.others { margin-top: 6rpx; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 /* 批量确认栏：基于全局 .bottom-bar；中间的已选合计过长时省略，不换行挤压 */
 .batch-bar { display: flex; align-items: center; justify-content: space-between; }
 .batch-bar .muted { flex: 1; min-width: 0; margin: 0 16rpx; text-align: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

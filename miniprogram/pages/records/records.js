@@ -1,5 +1,6 @@
 // pages/records/records.js — 礼簿：礼金明细 + 合计 + 确认收到（按礼簿 / 今日 / 关键字筛选）
 const req = require('../../utils/request.js');
+const { groupRecords } = require('../../utils/group.js');
 const fmt = require('../../utils/format.js');
 const scenes = require('../../utils/scenes.js');
 const printer = require('../../utils/printer.js');
@@ -272,25 +273,42 @@ Page({
   /** 确认收款：核对微信到账后点击 → 付款方页面显示成功 → 自动打印（需求 e） */
   async onConfirm(e) {
     const record = this.data.list[e.currentTarget.dataset.idx];
-    // 批次录入：需整批核对，到待确认页处理
-    if (record.batchId) return wx.navigateTo({ url: '/pages/pending/pending' });
     if (this.data.busy) return;
     this.setData({ busy: true });
     try {
-      if (await confirm.confirmTransfer(record)) this.reload();
+      // 批次录入：就地弹窗整批核对（列出这一批所有人和金额），不再跳到待确认页
+      const target = record.batchId ? await this.batchOf(record) : record;
+      if (!target) return;
+      const res = await confirm.confirmTransfer(target);
+      if (res === 'edit') {
+        // 批次金额不一致：逐人改金额在待确认页的批次明细里
+        wx.showToast({ title: '请在待确认页逐人修改金额', icon: 'none' });
+        return setTimeout(() => wx.navigateTo({ url: '/pages/pending/pending' }), 800);
+      }
+      if (res) this.reload();
     } finally {
       this.setData({ busy: false });
     }
   },
 
+  /** 取这一批的全部待确认记录并分组；已处理时提示刷新 */
+  async batchOf(record) {
+    try {
+      const { list } = await req.recordPending();
+      const g = groupRecords(list.filter(r => r.batchId === record.batchId))[0];
+      if (!g) { wx.showToast({ title: '这一批已处理，请刷新', icon: 'none' }); this.reload(); }
+      return g || null;
+    } catch (err) { return null; }
+  },
+
   /** 未收到款 */
   async onReject(e) {
     const record = this.data.list[e.currentTarget.dataset.idx];
-    if (record.batchId) return wx.navigateTo({ url: '/pages/pending/pending' });
     if (this.data.busy) return;
     this.setData({ busy: true });
     try {
-      if (await confirm.rejectTransfer(record)) this.reload();
+      const target = record.batchId ? await this.batchOf(record) : record; // 批次整批标记
+      if (target && await confirm.rejectTransfer(target)) this.reload();
     } finally {
       this.setData({ busy: false });
     }

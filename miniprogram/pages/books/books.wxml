@@ -32,6 +32,7 @@
         <view class="btn btn-sm btn-outline" wx:if="{{canExport}}" data-id="{{item._id}}" catchtap="onExport">导出</view>
         <view class="op-link" wx:if="{{pm.books}}" data-id="{{item._id}}" catchtap="onEdit">编辑</view>
         <view class="op-link gray" wx:if="{{pm.books}}" data-id="{{item._id}}" data-archived="{{false}}" catchtap="onArchive">归档</view>
+        <view class="op-link danger" wx:if="{{isOwner}}" data-id="{{item._id}}" catchtap="onDelete">删除</view>
       </view>
     </view>
   </view>
@@ -53,6 +54,7 @@
         <view class="b-ops">
           <view class="btn btn-sm btn-outline" wx:if="{{canExport}}" data-id="{{item._id}}" catchtap="onExport">导出</view>
           <view class="op-link" wx:if="{{pm.books}}" data-id="{{item._id}}" data-archived="{{true}}" catchtap="onArchive">取消归档</view>
+          <view class="op-link danger" wx:if="{{isOwner}}" data-id="{{item._id}}" catchtap="onDelete">删除</view>
         </view>
       </view>
     </view>

@@ -45,19 +45,25 @@
     <view class="item {{item.picked ? 'picked' : ''}}" wx:for="{{shown}}" wx:key="_id" data-id="{{item._id}}" bindtap="onPick">
       <view class="check {{item.picked ? 'on' : ''}}" wx:if="{{selectMode}}">{{item.picked ? '✓' : ''}}</view>
       <view class="info">
-        <view class="name-row"><text class="payer">{{item.nameStr}}</text><text class="money amt">￥{{item.amountStr}}</text><text class="cash-tag" wx:if="{{item.mixed}}">转账+现金</text><text class="cash-tag" wx:elif="{{item.payMethod === 'cash'}}">💵 现金</text></view>
-        <!-- 第 2 行：说明在左，操作在右（姓名独占第 1 行，不被按钮挤压） -->
+        <view class="name-row"><text class="payer">{{item.nameStr}}</text><text class="money amt">￥{{item.amountStr}}</text><text class="cash-tag" wx:if="{{!item.mixed && item.payMethod === 'cash'}}">💵 现金</text></view>
+        <!-- 批次：同一批的其余几位 -->
+        <view class="muted others" wx:if="{{item.batch}}">同批：{{item.othersStr}}</view>
+        <!-- 单笔：说明在左、操作在右；批次：说明独占一行，操作在下一行 -->
         <view class="meta-row">
-          <view class="muted meta">{{item.timeStr}} {{item.mixed ? '转账+现金' : (item.payMethod === 'cash' ? '宾客现金' : '已转账')}}<text wx:if="{{item.relation}}"> · {{item.relation}}</text><text wx:if="{{item.remark}}"> · {{item.remark}}</text></view>
-          <view class="ops" wx:if="{{canConfirm && !selectMode}}">
-            <view class="link danger" data-id="{{item._id}}" catchtap="onReject">未收到</view>
-            <button class="btn btn-sm btn-primary ok-sm" data-id="{{item._id}}" catchtap="onConfirm">确认</button>
+          <view class="muted meta">{{item.timeStr}} {{item.methodText}}<text wx:if="{{item.relation}}"> · {{item.relation}}</text><text wx:if="{{item.remark}}"> · {{item.remark}}</text></view>
+          <view class="ops" wx:if="{{canConfirm && !selectMode && !item.batch}}">
+            <button class="btn btn-sm btn-danger op-btn" data-id="{{item._id}}" catchtap="onReject">未收到</button>
+            <button class="btn btn-sm btn-primary op-btn" data-id="{{item._id}}" catchtap="onConfirm">确认</button>
           </view>
         </view>
-        <view class="muted" wx:if="{{item.mixed}}">转账 ￥{{item.wechatSumStr}} · 现金 ￥{{item.cashSumStr}}</view>
+        <view class="ops batch-ops" wx:if="{{item.batch && canConfirm && !selectMode}}">
+          <button class="btn btn-sm btn-outline op-btn wide" data-id="{{item._id}}" catchtap="onOpenSheet">明细（{{item.records.length}} 人）</button>
+          <button class="btn btn-sm btn-danger op-btn" data-id="{{item._id}}" catchtap="onReject">未收到</button>
+          <button class="btn btn-sm btn-primary op-btn" data-id="{{item._id}}" catchtap="onConfirm">确认</button>
+        </view>
       </view>
-      <!-- 批次：整行大按钮查看明细；catchtap 不触发勾选 -->
-      <view class="batch-more" wx:if="{{item.batch}}" hover-class="batch-more-hover" data-id="{{item._id}}" catchtap="onOpenSheet">查看明细（{{item.records.length}} 人）›</view>
+      <!-- 批次（没有确认权限或批量勾选时）：整行查看明细；catchtap 不触发勾选 -->
+      <view class="batch-more" wx:if="{{item.batch && (!canConfirm || selectMode)}}" hover-class="batch-more-hover" data-id="{{item._id}}" catchtap="onOpenSheet">查看明细（{{item.records.length}} 人）›</view>
     </view>
     <view class="muted center pad" wx:if="{{keyword && shown.length === 0}}">没有找到「{{keyword}}」</view>
 

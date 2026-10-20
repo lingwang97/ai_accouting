@@ -46,3 +46,5 @@
 @keyframes sk { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
 .sk-l1 { height: 34rpx; width: 55%; margin-bottom: 18rpx; }
 .sk-l2 { height: 24rpx; width: 80%; }
+/* 「未收到」「确认收到」两个按钮大小一致 */
+button.r-op:not([size=mini]) { width: 160rpx; padding: 0; }

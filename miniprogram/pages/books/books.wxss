@@ -48,3 +48,4 @@
 .bb-plus { font-size: 34rpx; line-height: 1; }
 .bb-icon { width: 36rpx; height: 36rpx; }
 .bb-plus, .bb-icon { margin-right: 10rpx; }
+.op-link.danger { color: var(--danger); }

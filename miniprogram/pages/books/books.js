@@ -32,6 +32,12 @@ Page({
   },
 
   onShow() {
+    // 删除礼簿：从备份文件预览页返回后，接着输入礼簿名称确认
+    if (this._pendingDelete) {
+      const d = this._pendingDelete;
+      this._pendingDelete = null;
+      setTimeout(() => this.askDeleteName(d), 300);
+    }
     this.setData({ iconKey: theme.apply(this).icon }); // 主题色跟当前礼簿事由走
     const a = getApp().globalData.account;
     wx.setNavigationBarTitle({ title: a && a.orgMode ? '场次管理' : '礼簿管理' }); // 机构模式称「场次」
@@ -54,6 +60,7 @@ Page({
         restricted: !!restricted,
         pm,
         canExport: pm.export || role === 'viewer',
+        isOwner: role === 'owner', // 删除礼簿只限主家本人
         orgMode: !!(acc && acc.orgMode),
         current: all.find(b => b._id === activeBookId) || null,
         list: all.filter(b => !b.archived && b._id !== activeBookId),
@@ -112,6 +119,73 @@ Page({
     } finally {
       this.setData({ exporting: false });
     }
+  },
+
+  // —— 删除礼簿：① 说明份数与合计 ② 先导出 Excel 备份 ③ 输入礼簿名称确认 ——
+  async onDelete(e) {
+    const id = e.currentTarget.dataset.id;
+    let pv;
+    try { pv = await req.bookRemovePreview(id); } catch (err) { return; }
+    const more = pv.total > pv.count ? `（另有 ${pv.total - pv.count} 条未入簿的登记）` : '';
+    const who = pv.affected && pv.affected.length ? `\n记账人「${pv.affected.join('、')}」只负责这本，删除后需重新安排。` : '';
+    wx.showModal({
+      title: '删除礼簿',
+      content: `「${pv.name}」共 ${pv.count} 份已入簿礼金，合计 ￥${fmt.money(pv.sum)}${more}。删除后礼簿和全部礼金记录都不可恢复。${pv.count ? '下一步会先导出一份 Excel 备份。' : ''}${who}`,
+      confirmText: '继续',
+      confirmColor: '#FA5151',
+      success: res => { if (res.confirm) this.backupThenDelete(id, pv); }
+    });
+  },
+  /** 有已入簿礼金时先导出 Excel 备份，打开预览供转发保存；返回本页后再确认删除 */
+  async backupThenDelete(id, pv) {
+    if (!pv.count) return this.askDeleteName({ id, name: pv.name, affected: pv.affected });
+    wx.showLoading({ title: '正在生成备份…', mask: true });
+    try {
+      const res = await req.exportFile({ format: 'xlsx', bookId: id });
+      const filePath = await openfile.download(res.fileID, res.fileName);
+      req.exportCleanup(res.fileID).catch(() => {});
+      wx.hideLoading();
+      await new Promise(resolve => wx.showModal({
+        title: '备份已生成',
+        content: '接下来打开备份文件，请点右上角「···」转发到「文件传输助手」保存。返回本页后输入礼簿名称完成删除。',
+        showCancel: false,
+        confirmText: '打开',
+        complete: resolve
+      }));
+      this._pendingDelete = { id, name: pv.name, affected: pv.affected };
+      openfile.open(filePath, res.fileName);
+    } catch (err) {
+      wx.hideLoading();
+      openfile.showError(err);
+      // 备份失败：不继续删除
+    }
+  },
+  askDeleteName(d) {
+    wx.showModal({
+      title: '输入礼簿名称确认删除',
+      editable: true,
+      placeholderText: d.name,
+      confirmText: '删除',
+      confirmColor: '#FA5151',
+      success: async res => {
+        if (!res.confirm) return;
+        if ((res.content || '').trim() !== d.name) return wx.showToast({ title: '名称不一致，未删除', icon: 'none' });
+        try {
+          const r = await req.bookRemove(d.id, d.name);
+          wx.showToast({ title: '已删除', icon: 'success' });
+          this.load();
+          const names = (r && r.affected) || [];
+          if (names.length) {
+            setTimeout(() => wx.showModal({
+              title: '记账人需要重新安排',
+              content: `「${names.join('、')}」只负责被删除的礼簿，现在不能登记。可在「我的 → 记账人」里给他们换一本。`,
+              confirmText: '去设置',
+              success: m2 => { if (m2.confirm) wx.navigateTo({ url: '/pages/members/members' }); }
+            }), 1200);
+          }
+        } catch (err) { /* toast 已提示 */ }
+      }
+    });
   },
 
   onArchive(e) {

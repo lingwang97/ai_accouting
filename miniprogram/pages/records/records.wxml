@@ -51,8 +51,8 @@
       <text class="badge warn">{{item.statusText}}</text>
       <view class="flex1"></view>
       <block wx:if="{{!readonly && pm.confirm}}">
-        <view class="link danger" data-idx="{{index}}" bindtap="onReject">未收到</view>
-        <button class="btn btn-sm btn-primary" data-idx="{{index}}" bindtap="onConfirm">确认收到</button>
+        <button class="btn btn-sm btn-danger r-op" data-idx="{{index}}" catchtap="onReject">未收到</button>
+        <button class="btn btn-sm btn-primary r-op" data-idx="{{index}}" catchtap="onConfirm">确认收到</button>
       </block>
     </view>
 
