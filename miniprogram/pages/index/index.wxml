@@ -66,8 +66,8 @@
       </view>
     </view>
 
-    <!-- 四个常用操作（记账人按权限显示；隐藏部分后仍两列排列） -->
-    <view class="grid" wx:elif="{{pm.show || pm.confirm || pm.desk}}">
+    <!-- 常用操作：三行两列（记账人按权限显示；隐藏部分后仍两列排列） -->
+    <view class="grid" wx:else>
       <view class="g-item" hover-class="g-hover" wx:if="{{pm.show}}" bindtap="goQrcode">
         <view class="g-icon"><image src="/assets/icons/qrcode-w.svg" /></view>
         <view class="g-title">出示礼簿码</view>
@@ -88,13 +88,21 @@
         <view class="g-title">打印机</view>
         <view class="g-sub {{printerName ? 'ok' : ''}}">{{printerName ? '已连接' : '未连接'}}</view>
       </view>
-    </view>
-
-    <!-- 次常用 -->
-    <view class="card links" wx:if="{{!readonly}}">
-      <view class="link-item" wx:if="{{pm.export}}" bindtap="goReconcile"><image src="/assets/icons/receipt-m.svg" /><text>一键对账</text></view>
-      <view class="link-item" bindtap="goBooks"><image src="/assets/icons/book-m.svg" /><text>{{account.orgMode ? '场次管理' : '礼簿管理'}}</text></view>
-      <view class="link-item" wx:if="{{account.orgMode}}" bindtap="goOrgSummary"><image src="/assets/icons/layers-m.svg" /><text>场次汇总</text></view>
+      <view class="g-item" hover-class="g-hover" wx:if="{{pm.export}}" bindtap="goReconcile">
+        <view class="g-icon"><image src="/assets/icons/receipt-w.svg" /></view>
+        <view class="g-title">一键对账</view>
+        <view class="g-sub">按方式、记账人汇总</view>
+      </view>
+      <view class="g-item" hover-class="g-hover" bindtap="goBooks">
+        <view class="g-icon"><image src="/assets/icons/book-w.svg" /></view>
+        <view class="g-title">{{account.orgMode ? '场次管理' : '礼簿管理'}}</view>
+        <view class="g-sub">切换、统计、导出</view>
+      </view>
+      <view class="g-item" hover-class="g-hover" wx:if="{{account.orgMode}}" bindtap="goOrgSummary">
+        <view class="g-icon"><image src="/assets/icons/layers-w.svg" /></view>
+        <view class="g-title">场次汇总</view>
+        <view class="g-sub">各场次合计</view>
+      </view>
     </view>
     <ad-slot slot="workbench" book-type="{{book ? book.type : ''}}" />
   </block>
@@ -103,7 +111,7 @@
   <block wx:elif="{{mode === 'loading'}}">
     <view class="sk sk-book"></view>
     <view class="grid">
-      <view class="g-item sk-item" wx:for="{{[1, 2, 3, 4]}}" wx:key="*this">
+      <view class="g-item sk-item" wx:for="{{[1, 2, 3, 4, 5, 6]}}" wx:key="*this">
         <view class="sk sk-icon"></view>
         <view class="sk sk-line"></view>
         <view class="sk sk-line short"></view>
