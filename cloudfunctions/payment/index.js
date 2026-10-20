@@ -48,6 +48,8 @@ exports.main = async (event) => {
       case 'confirm': return await groupUpdate(ctx, event.rid, ['transferred', 'pending', 'cancelled'], 'paid', event.amount, event.amounts);
       case 'confirmBatch': return await confirmBatch(ctx, event.rids);
       case 'reject': return await groupUpdate(ctx, event.rid, ['transferred', 'pending'], 'rejected');
+      // 「宾客未点完成」里已被自动取消的：主家核对确实没收到，从这一栏移除（整批）
+      case 'dismissStall': return await dismissStall(ctx, String(event.rid || ''));
       case 'void': return await ownerUpdate(ctx, event.rid, ['paid'], 'void');
       default: return err('未知 action');
     }
@@ -589,6 +591,16 @@ async function groupUpdate(ctx, rid, fromList, to, actualAmount, amounts) {
   const list = results.filter(x => x.code === 0).map(x => x.data.record);
   if (!list.length) return err(results[0].msg);
   return ok({ rid, status: to, record: list[0], list, failed: all.length - list.length });
+}
+
+/** 自动取消的记录标记为「主家已核对未收到」，不再出现在待确认的「宾客未点完成」里 */
+async function dismissStall(ctx, rid) {
+  if (readonly(ctx) || !can(ctx, 'confirm')) return err('你没有确认收礼的权限');
+  const rec = await getRecord(rid);
+  if (!rec || rec.ownerOpenid !== ctx.ownerOpenid || !canBook(ctx, rec.bookId)) return err('记录不存在');
+  const key = rec.batchId ? { batchId: rec.batchId } : { _id: rid };
+  await records.where({ ...key, ownerOpenid: ctx.ownerOpenid, status: 'cancelled', autoCancelled: true }).update({ data: { stallDismissed: true } });
+  return ok({ dismissed: true });
 }
 
 /** 收款方确认到账 / 拒绝 / 作废（带状态条件原子更新） */

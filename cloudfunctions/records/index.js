@@ -416,7 +416,7 @@ async function pending(openid, ctx) {
   const now = Date.now();
   const stallCond = _.or([
     { ownerOpenid: openid, status: 'pending', createdAt: _.lt(new Date(now - STALL_MS)), ...(ctx.bookIds ? { bookId: _.in(ctx.bookIds) } : {}) },
-    { ownerOpenid: openid, status: 'cancelled', autoCancelled: true, createdAt: _.gt(new Date(now - 24 * 3600 * 1000)), ...(ctx.bookIds ? { bookId: _.in(ctx.bookIds) } : {}) }
+    { ownerOpenid: openid, status: 'cancelled', autoCancelled: true, stallDismissed: _.neq(true), createdAt: _.gt(new Date(now - 24 * 3600 * 1000)), ...(ctx.bookIds ? { bookId: _.in(ctx.bookIds) } : {}) }
   ]);
   const [res, cnt, stall] = await Promise.all([
     records.where(cond).orderBy('createdAt', 'desc').limit(100).get(),

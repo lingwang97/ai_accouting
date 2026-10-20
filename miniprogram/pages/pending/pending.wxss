@@ -9,6 +9,8 @@
 .stall-name .payer { flex: 1; min-width: 4em; font-size: 28rpx; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .stall-name .money { flex-shrink: 0; white-space: nowrap; font-size: 28rpx; }
 .stall-more { padding-top: 12rpx; }
+.stall-ops { margin: 12rpx 0 0; justify-content: flex-end; }
+.stall-info { margin-right: 0; }
 .head { background: #fff; border-radius: var(--r-m); padding: 24rpx; margin-bottom: 20rpx; }
 .sum { font-size: 30rpx; color: var(--text); margin-bottom: 20rpx; }
 .sum .num { font-size: 40rpx; font-weight: 700; color: #FF9F1C; }

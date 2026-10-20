@@ -147,6 +147,29 @@ Page({
     if (res === 'edit') this.openEditor(g);
     else if (res) this.load(false);
   },
+  /** 宾客未点完成的：核对确实没收到。还没取消的标记为未收到（宾客那边显示主家未收到）；已自动取消的从这一栏移除 */
+  async onStallReject(e) {
+    const g = this.data.stalled.find(x => x._id === e.currentTarget.dataset.id);
+    if (!g) return;
+    if (!g.auto) {
+      if (await this.run(() => confirm.rejectTransfer(g))) this.load(false);
+      return;
+    }
+    const ok = await new Promise(resolve => wx.showModal({
+      title: '确认未收到',
+      content: `${g.payerName} ￥${g.amountStr} 已被自动取消。确认微信里没有收到这笔转账？确认后从这一栏移除。`,
+      confirmText: '未收到',
+      confirmColor: '#FA5151',
+      success: r => resolve(r.confirm),
+      fail: () => resolve(false)
+    }));
+    if (!ok) return;
+    try {
+      await this.run(() => req.payDismissStall(g._id));
+      wx.showToast({ title: '已移除', icon: 'success' });
+      this.load(false);
+    } catch (err) { /* toast 已提示 */ }
+  },
   onStallAll() { this.setData({ stallAll: !this.data.stallAll }); },
 
   async onConfirm(e) {
@@ -154,7 +177,7 @@ Page({
     if (!g) return;
     const res = await this.run(() => confirm.confirmTransfer(g));
     if (res === 'edit') { this.onCloseSheet(); this.openEditor(g); }
-    else if (res) this.removeLocal(g._id);
+    else if (res) { this.removeLocal(g._id); if (g.status !== 'transferred') this.load(false); }
   },
 
   /** 打开批次明细弹层（catchtap，不触发勾选） */
@@ -177,7 +200,10 @@ Page({
 
   async onReject(e) {
     const record = this.findById(e.currentTarget.dataset.id);
-    if (record && (await this.run(() => confirm.rejectTransfer(record)))) this.removeLocal(record._id);
+    if (!record) return;
+    // 弹层里打开的是「宾客未点完成」中已自动取消的批次：按移除处理
+    if (record.status === 'cancelled') { this.onCloseSheet(); return this.onStallReject({ currentTarget: { dataset: { id: record._id } } }); }
+    if (await this.run(() => confirm.rejectTransfer(record))) { this.removeLocal(record._id); if (record.status !== 'transferred') this.load(false); }
   },
 
   onToggleSelect() {
@@ -316,7 +342,7 @@ Page({
 
   // —— 工具 ——
   findById(id) {
-    return this._list.find(r => r._id === id);
+    return this._list.find(r => r._id === id) || (this.data.stalled || []).find(r => r._id === id);
   },
 
   /** 处理期间暂停轮询，避免列表跳动 */

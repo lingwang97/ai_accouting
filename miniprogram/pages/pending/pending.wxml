@@ -16,13 +16,18 @@
   <!-- 宾客登记后没点「我已完成转账」：常见于转完账直接回聊天，主家核对微信到账后可直接入簿 -->
   <view class="card stall" wx:if="{{canConfirm && stalled.length}}">
     <view class="stall-title">宾客未点「我已完成转账」（{{stalled.length}}）</view>
-    <view class="muted small">宾客可能转完账就离开了。请核对微信是否收到，收到的点「已收到」入簿</view>
+    <view class="muted small">宾客可能转完账就离开了，也可能还在转账（3 分钟内登记的不会出现在这里）。请核对微信是否收到：收到的点「已收到」入簿，确实没收到的点「未收到」</view>
     <view class="stall-row" wx:for="{{stalled}}" wx:key="_id" wx:if="{{stallAll || index < 3}}">
       <view class="stall-info">
         <view class="stall-name"><text class="payer">{{item.nameStr}}</text><text class="money">￥{{item.amountStr}}</text></view>
-        <view class="muted small">{{item.timeStr}} 登记 · {{item.auto ? '已自动取消' : '未点完成'}}<text wx:if="{{item.mixed}}"> · 转账+现金</text></view>
+        <view class="muted small">{{item.timeStr}} 登记 · {{item.auto ? '已自动取消' : '未点完成'}} · {{item.methodText}}</view>
+        <view class="muted small others" wx:if="{{item.batch}}">同批：{{item.othersStr}}</view>
+        <view class="ops stall-ops">
+          <button class="btn btn-sm btn-outline op-btn wide" wx:if="{{item.batch}}" data-id="{{item._id}}" catchtap="onOpenSheet">明细（{{item.records.length}} 人）</button>
+          <button class="btn btn-sm btn-danger op-btn" data-id="{{item._id}}" catchtap="onStallReject">未收到</button>
+          <button class="btn btn-sm btn-primary op-btn" data-id="{{item._id}}" catchtap="onStallConfirm">已收到</button>
+        </view>
       </view>
-      <button class="btn btn-sm btn-outline" data-id="{{item._id}}" catchtap="onStallConfirm">已收到</button>
     </view>
     <view class="link center stall-more" wx:if="{{stalled.length > 3}}" bindtap="onStallAll">{{stallAll ? '收起' : '查看全部 ' + stalled.length + ' 笔'}}</view>
   </view>

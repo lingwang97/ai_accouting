@@ -113,6 +113,7 @@ module.exports = {
   payConfirmBatch: rids => call('payment', { action: 'confirmBatch', rids }),
   cashEntry: d => call('payment', { action: 'cashEntry', ...d }),
   payReject: rid => call('payment', { action: 'reject', rid }),
+  payDismissStall: rid => call('payment', { action: 'dismissStall', rid }),
   payVoid: rid => call('payment', { action: 'void', rid }),
   recordList: d => call('records', { action: 'list', ...d }),
   markPrinted: rids => call('records', { action: 'markPrinted', rids }),
