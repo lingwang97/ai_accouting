@@ -1,4 +1,4 @@
-// pages/renqing/renqing.js — 人情往来：往来对比（收/送汇总）+ 我收到的礼 + 我送出的礼 + 随礼回执（扫码随礼后主家确认的电子回执）
+// pages/renqing/renqing.js — 人情往来：收礼往来（按人：收/送对比，可筛待回礼、多送；按笔：收到的每一笔）+ 送出的礼 + 随礼回执（扫码随礼后主家确认的电子回执）
 const req = require('../../utils/request.js');
 const fmt = require('../../utils/format.js');
 const scenes = require('../../utils/scenes.js');
@@ -7,8 +7,10 @@ const samename = require('../../utils/samename.js');
 
 Page({
   data: {
-    tab: 'people',     // people 往来对比 | in 我收到的礼 | out 我送出的礼 | receipts 随礼回执
-    inList: [],        // 我收到的礼（分页）
+    tab: 'people',     // 收礼往来（people 按人 | in 按笔）| out 送出的礼 | receipts 随礼回执
+    pFilter: 'all',    // 按人筛选：all 全部 | owe 待回礼 | given 多送
+    pFilters: [{ v: 'all', t: '全部' }, { v: 'owe', t: '待回礼' }, { v: 'given', t: '多送' }],
+    inList: [],        // 按笔：收到的每一笔（分页）
     inSum: '0.00',
     inTotal: 0,
     inPage: 1,
@@ -84,7 +86,15 @@ Page({
 
   filterPeople() {
     const k = (this.data.keyword || '').trim();
-    this.setData({ shownPeople: k ? this.data.people.filter(p => p.label.includes(k)) : this.data.people });
+    const f = this.data.pFilter;
+    this.setData({
+      shownPeople: this.data.people.filter(p => (!k || p.label.includes(k)) &&
+        (f === 'all' || (f === 'owe' ? p.balance > 0 : p.balance < 0)))
+    });
+  },
+  onPFilter(e) {
+    this.setData({ pFilter: e.currentTarget.dataset.v });
+    this.filterPeople();
   },
 
   /** 随礼回执按主家 / 随礼人 / 礼簿名筛选 */
@@ -100,8 +110,13 @@ Page({
     wx.navigateTo({ url: `/pages/receipt/receipt?rid=${e.currentTarget.dataset.id}` });
   },
 
+  /** 切换页签；「收礼往来」回到上次看的按人 / 按笔 */
   onTab(e) {
-    this.setData({ tab: e.currentTarget.dataset.t });
+    let t = e.currentTarget.dataset.t;
+    if (t === 'recv') t = this._recvView || 'people';
+    if (t === 'people' || t === 'in') this._recvView = t;
+    if (t === this.data.tab) return;
+    this.setData({ tab: t });
     this.load();
   },
 
@@ -177,7 +192,7 @@ Page({
     });
   },
 
-  /** 我收到的礼：按页加载（page=1 重新加载），可按姓名搜索 */
+  /** 按笔：收到的每一笔，按页加载（page=1 重新加载），可按姓名搜索 */
   async loadIn(page) {
     const res = await req.inList({ page, pageSize: 30, keyword: (this.data.keyword || '').trim() || undefined });
     const rows = res.list.map(r => ({

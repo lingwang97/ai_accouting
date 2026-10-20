@@ -170,16 +170,20 @@ Page({
 
   /** 切换当前礼簿：点哪本立即切换（超过 6 本时最后一项进礼簿管理） */
   async onSwitchBook() {
+    // 读取礼簿列表期间、选择框关闭之前不再响应，避免连点叠出多个选择框
+    if (this._switching) return;
+    this._switching = true;
     let list = [];
-    try { list = (await req.bookList()).list.filter(b => !b.archived); } catch (e) { return; }
+    try { list = (await req.bookList()).list.filter(b => !b.archived); } catch (e) { this._switching = false; return; }
     const cur = this.data.book && this.data.book._id;
     const max = list.length > 6 ? 5 : 6;
     const shown = list.slice(0, max);
     const items = shown.map(b => (b._id === cur ? '✓ ' : '') + (b.hostName ? `${b.hostName} · ${b.name}` : b.name));
     if (list.length > max) items.push('更多礼簿…');
-    if (!items.length) return this.goBooks();
+    if (!items.length) { this._switching = false; return this.goBooks(); }
     wx.showActionSheet({
       itemList: items,
+      complete: () => { this._switching = false; },
       success: async res => {
         const b = shown[res.tapIndex];
         if (!b) return this.goBooks();
