@@ -52,7 +52,8 @@ Page({
     this.setData({ loading: true, loggedIn: true });
     try {
       if (this.data.tab === 'people') {
-        const { list } = await req.rqPeople();
+        const { list, truncated } = await req.rqPeople();
+        this.setData({ truncated: !!truncated });
         const people = list.map(p => ({
           ...p,
           nameOnly: p.key.indexOf('n:') === 0,

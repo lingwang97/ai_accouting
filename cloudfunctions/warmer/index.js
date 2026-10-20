@@ -60,9 +60,12 @@ async function pushReminders() {
     { remindAt: _.lte(now) },
     { remindAt: _.exists(false), notifyDay: bj.getUTCHours() >= 9 ? _.lte(t) : _.lt(t) }
   ]);
+  const tried = []; // 本次触发已尝试过的：失败的留到下一次触发（5 分钟后）再试
   for (let round = 0; round < 4; round++) { // 每轮最多 200 条，避免超出 20 秒超时；没推完的下一轮继续
-    const res = await col.where(_.and([{ done: false, pushed: false, subscribed: true, date: _.gte(t), _openid: _.exists(false) }, due]))
+    const res = await col.where(_.and([{ done: false, pushed: false, subscribed: true, date: _.gte(t), _openid: _.exists(false) }, due,
+      ...(tried.length ? [{ _id: _.nin(tried) }] : [])]))
       .limit(50).get();
+    res.data.forEach(r => tried.push(r._id));
     if (!res.data.length) break;
     await Promise.all(res.data.map(async r => {
       let result;

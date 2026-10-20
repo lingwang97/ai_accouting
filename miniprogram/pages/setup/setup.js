@@ -28,8 +28,14 @@ Page({
   },
 
   onLoad() {
-    // 已有主家信息：不再走向导（避免覆盖已有的称呼和收款码）
-    if (getApp().globalData.account && getApp().globalData.role === 'owner') return wx.switchTab({ url: '/pages/index/index' });
+    // 已有主家信息：不再走向导（避免覆盖已有的称呼和收款码）；
+    // 上次主家信息已建好、礼簿没建成（中途失败）时，只补建第一本礼簿
+    const g = getApp().globalData;
+    if (g.account && g.role === 'owner') {
+      const dr = setup.draft();
+      if (!(dr && dr.book && dr.book.name)) return wx.switchTab({ url: '/pages/index/index' });
+      this._accountDone = true;
+    }
     // 接着上次的草稿：停在第一个没完成的步骤
     const d = setup.draft() || {};
     const p = setup.progress(d);
@@ -42,7 +48,7 @@ Page({
       bookType: b.type || 'wedding',
       bookDate: b.date || '',
       bookLocation: b.location || '',
-      step: !p.name ? 0 : (!p.code ? 1 : 2)
+      step: this._accountDone ? 2 : (!p.name ? 0 : (!p.code ? 1 : 2))
     });
     this._bookNameTouched = !!b.name;
     if (d.payCodeFileID) this.previewCode(d.payCodeFileID);
@@ -151,7 +157,7 @@ Page({
     const bookName = d.bookName.trim();
     if (!bookName) return wx.showToast({ title: '请填写礼簿名称', icon: 'none' });
     this.saveDraft();
-    if (!d.payCodeFileID) {
+    if (!d.payCodeFileID && !this._accountDone) {
       // 没有收款码：先存草稿，回首页按进度卡片继续
       wx.showModal({
         title: '还差收款码',
@@ -164,26 +170,36 @@ Page({
     }
     this.setData({ saving: true });
     try {
-      const { account } = await req.accountSave({
-        accountName: d.name.trim(),
-        payCodeFileID: d.payCodeFileID,
-        theme: { name: bookName, primary: '#C8161D' },
-        quickAmounts: [100, 200, 300, 500, 600, 800, 1000, 1500, 2000], // 默认快捷礼金，可在「主家信息」里修改
-        confirmPayCode: true,
-        own: true // 建本人自己的主家信息（记账人身份下也不会改到所记账的主家）
-      });
-      const app = getApp();
-      if (app.globalData.role && app.globalData.role !== 'owner') app.resetIdentity(); // 已切换到自己的身份
-      app.globalData.account = account;
-      app.globalData.role = 'owner';
-      theme.setAccount(account);
+      if (!this._accountDone) await this.saveAccount(bookName);
       await req.bookSave({ name: bookName, type: d.bookType, date: d.bookDate, location: d.bookLocation.trim(), setActive: true });
       setup.clearDraft();
-      app.globalData.justSetup = true; // 工作台提示下一步：出示礼簿码
+      getApp().globalData.justSetup = true; // 工作台提示下一步：出示礼簿码
       require('../../utils/cache.js').clear();
       wx.switchTab({ url: '/pages/index/index' });
-    } catch (e) { /* toast 已提示 */ } finally {
+    } catch (e) {
+      // 主家信息已建好、礼簿失败：停在这一步，再点「完成」只补建礼簿
+      if (getApp().globalData.account && getApp().globalData.role === 'owner') this._accountDone = true;
+    } finally {
       this.setData({ saving: false });
     }
+  },
+
+  /** 建主家信息（本人自己的） */
+  async saveAccount(bookName) {
+    const d = this.data;
+    const { account } = await req.accountSave({
+      accountName: d.name.trim(),
+      payCodeFileID: d.payCodeFileID,
+      theme: { name: bookName, primary: '#C8161D' },
+      quickAmounts: [100, 200, 300, 500, 600, 800, 1000, 1500, 2000], // 默认快捷礼金，可在「主家信息」里修改
+      confirmPayCode: true,
+      own: true // 建本人自己的主家信息（记账人身份下也不会改到所记账的主家）
+    });
+    const app = getApp();
+    if (app.globalData.role && app.globalData.role !== 'owner') app.resetIdentity(); // 已切换到自己的身份
+    app.globalData.account = account;
+    app.globalData.role = 'owner';
+    theme.setAccount(account);
+    this._accountDone = true;
   }
 });

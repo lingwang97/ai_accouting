@@ -92,7 +92,8 @@ async function expirePending(openid) {
 async function dashboard(ctx) {
   const account = ctx.account;
   const lastNotify = (ctx.user && ctx.user.lastNotify) || null;
-  if (!account) return ok({ account: null, role: ctx.role, lastNotify });
+  const joins = await myJoins(ctx);
+  if (!account) return ok({ account: null, role: ctx.role, lastNotify, joins });
   const owner = ctx.ownerOpenid;
   const today = bjDay(new Date());
   const scope = ctx.bookIds ? { bookId: _.in(ctx.bookIds) } : {};
@@ -136,8 +137,28 @@ async function dashboard(ctx) {
     needBooks: !book,
     today: { count: t.count, sum: Math.round(t.fen) / 100 },
     pending: { count: pendCount.total, sum: pendFen / 100 },
-    pendingMembers: joinRes ? joinRes.total : 0
+    pendingMembers: joinRes ? joinRes.total : 0,
+    joins
   });
+}
+
+/**
+ * 我申请加入的进度（首页提示）：待主家同意的；7 天内已同意、但当前不是这个身份的（提示去切换）
+ * 只返回主家称呼与状态
+ */
+async function myJoins(ctx) {
+  const me = ctx.user && ctx.user.openid;
+  if (!me) return [];
+  try {
+    const ms = (await db.collection('members').where({ memberOpenid: me, _openid: _.exists(false) }).limit(20).get()).data;
+    const week = Date.now() - 7 * 24 * 3600 * 1000;
+    const cur = ctx.account && ctx.account._id;
+    const show = ms.filter(m => m.status === 'pending' || (m.approvedAt && new Date(m.approvedAt).getTime() > week && m.aid !== cur));
+    if (!show.length) return [];
+    const accs = (await db.collection('accounts').where({ _id: _.in(show.map(m => m.aid)) }).field({ accountName: true }).get()).data;
+    const name = id => (accs.find(a => a._id === id) || {}).accountName || '主家';
+    return show.map(m => ({ aid: m.aid, name: name(m.aid), role: m.role, pending: m.status === 'pending' }));
+  } catch (e) { return []; }
 }
 
 /**
@@ -428,7 +449,7 @@ async function nameCheck(ctx, names) {
   if (!ctx.account) return ok({ map: {} });
   const list = (Array.isArray(names) ? names : []).map(s => String(s || '').trim().slice(0, 20)).filter(Boolean).slice(0, 10);
   if (!list.length) return ok({ map: {} });
-  const cond = { ownerOpenid: ctx.ownerOpenid, payerName: _.in(list), status: _.in(['paid', 'transferred']) };
+  const cond = { ownerOpenid: ctx.ownerOpenid, payerName: _.in(list), status: _.in(['paid', 'transferred', 'pending']) }; // 与宾客端口径一致
   if (ctx.bookIds) cond.bookId = _.in(ctx.bookIds);
   const res = await records.aggregate().match(cond)
     .group({

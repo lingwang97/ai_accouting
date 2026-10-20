@@ -53,7 +53,7 @@ button.ok-sm:not([size=mini]) { width: 120rpx; height: 56rpx; line-height: 56rpx
 /* 逐笔大字 */
 .remain { text-align: center; color: var(--text-3); font-size: 28rpx; margin: 8rpx 0 20rpx; }
 .big-card { background: #fff; border-radius: var(--r-l); padding: 56rpx 32rpx; text-align: center; }
-.big-name { font-size: 72rpx; font-weight: 700; color: var(--text); }
+.big-name { font-size: 72rpx; font-weight: 700; color: var(--text); word-break: break-all; }
 .big-amount { font-size: 96rpx; font-weight: 700; color: #FA5151; margin: 20rpx 0 24rpx; }
 .big-meta { font-size: 32rpx; color: #555; margin-bottom: 8rpx; word-break: break-all; }
 .tip { text-align: center; margin: 28rpx 0 20rpx; }
@@ -105,7 +105,7 @@ button.btn-big:not([size=mini]) { width: 100%; font-size: 40rpx; font-weight: 60
 
 /* 逐笔模式：左右切换 */
 .card-nav { display: flex; align-items: center; justify-content: space-between; margin: 8rpx 0 20rpx; }
-.card-nav .remain { flex: 1; margin: 0; }
+.card-nav .remain { flex: 1; min-width: 0; margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .nav-arrow { width: 72rpx; height: 72rpx; line-height: 68rpx; text-align: center; font-size: 52rpx; color: var(--primary); border-radius: 50%; background: #fff; flex-shrink: 0; }
 .nav-arrow.off { color: var(--text-3); opacity: .4; }
 .big-card.slide-l { animation: slideL .26s ease-out; }

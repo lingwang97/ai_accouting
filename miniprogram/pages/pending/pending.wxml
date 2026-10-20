@@ -74,7 +74,7 @@
       <!-- 左右滑动（或点两侧箭头）切换待确认的账单 -->
       <view class="card-nav">
         <view class="nav-arrow {{cardCount > 1 ? '' : 'off'}}" bindtap="onCardPrev">‹</view>
-        <view class="remain">第 {{cardIdx + 1}} / {{cardCount}} 笔 · 共 {{total}} 份 · 左右滑动切换</view>
+        <view class="remain">第 {{cardIdx + 1}} / {{cardCount}} 笔 · 共 {{total}} 份</view>
         <view class="nav-arrow {{cardCount > 1 ? '' : 'off'}}" bindtap="onCardNext">›</view>
       </view>
       <view class="big-card {{slide}}" bindtouchstart="onTouchStart" bindtouchend="onTouchEnd">

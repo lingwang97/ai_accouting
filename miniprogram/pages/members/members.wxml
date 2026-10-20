@@ -29,7 +29,7 @@
   </view>
 
   <view class="card">
-    <view class="section-title">记账人（{{list.length}}）</view>
+    <view class="section-title">{{orgMode ? '礼台人员' : '记账人'}}（{{list.length}}）</view>
     <view class="row" wx:for="{{list}}" wx:key="_id">
       <image class="avatar" src="{{item.avatar || '/assets/avatar-default.png'}}" mode="aspectFill" />
       <view class="name">{{item.name}}<text class="tag" wx:if="{{item.me}}">我</text><text class="tag" wx:if="{{orgMode && item.title}}">{{item.title}}</text>
@@ -40,11 +40,11 @@
       <view class="link" wx:if="{{canManage && !item.me}}" data-idx="{{index}}" bindtap="onEditMember">设置</view>
       <view class="link danger" wx:if="{{!item.me && canManage}}" data-idx="{{index}}" bindtap="onRemove">移除</view>
     </view>
-    <view class="muted" wx:if="{{!loading && list.length === 0}}">还没有记账人</view>
+    <view class="muted" wx:if="{{!loading && list.length === 0}}">还没有{{orgMode ? '礼台人员' : '记账人'}}</view>
   </view>
 
   <view class="card" wx:if="{{canManage}}">
-    <view class="section-title">邀请记账人 · 负责的礼簿与权限</view>
+    <view class="section-title">邀请{{orgMode ? '礼台人员 · 负责的场次' : '记账人 · 负责的礼簿'}}与权限</view>
     <view class="muted small" wx:if="{{!orgMode}}">每位记账人负责一本礼簿；同时办多场、分别安排人员请开启机构模式</view>
     <view class="book-row {{item.on && !inviteAll ? 'on' : ''}}" wx:for="{{inviteBooks}}" wx:key="_id" data-i="{{index}}" bindtap="onInviteBook">
       <view class="check {{item.on && !inviteAll ? 'on' : ''}}">{{item.on && !inviteAll ? '✓' : ''}}</view>
@@ -68,7 +68,7 @@
     </view>
     <view class="muted small invite-desc" wx:if="{{inviteDesc}}">{{inviteDesc}}</view>
   </view>
-  <button wx:if="{{canManage}}" class="btn-primary" open-type="share" data-type="clerk" disabled="{{!clerkToken}}">邀请记账人（发给微信好友）</button>
+  <button wx:if="{{canManage}}" class="btn-primary" open-type="share" data-type="clerk" disabled="{{!clerkToken}}">邀请{{orgMode ? '礼台人员' : '记账人'}}（发给微信好友）</button>
   <view class="muted hint">7 天内有效，最多 5 人；对方接受后需你同意</view>
 
   <block wx:if="{{role === 'owner'}}">

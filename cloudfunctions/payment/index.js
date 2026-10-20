@@ -213,7 +213,7 @@ async function sameNameOthers(ownerOpenid, openid, people) {
   const todo = people.filter(p => !p.tagged);
   if (!todo.length) return [];
   const res = await records.where({
-    ownerOpenid, payerName: _.in(todo.map(p => p.name)), status: _.neq('void')
+    ownerOpenid, payerName: _.in(todo.map(p => p.name)), status: _.in(['paid', 'transferred', 'pending'])
   }).field({ payerName: true, payerOpenid: true, batchIdx: true }).limit(500).get();
   const out = todo.filter(p => res.data.some(r => {
     if (r.payerName !== p.name) return false;

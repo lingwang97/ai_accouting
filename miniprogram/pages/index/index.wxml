@@ -17,6 +17,10 @@
       <text class="guide-close" catchtap="onCloseGuideTip">✕</text>
     </view>
 
+    <view class="warn-card" wx:for="{{joins}}" wx:key="aid" data-i="{{index}}" bindtap="onJoinSwitch">
+      <block wx:if="{{item.pending}}">已申请{{item.role === 'viewer' ? '查看' : '为'}}「{{item.name}}」{{item.role === 'viewer' ? '的礼簿' : '记账'}}，等待主家同意</block>
+      <block wx:else>「{{item.name}}」已同意你{{item.role === 'viewer' ? '查看礼簿' : '记账'}}，点这里切换身份 ›</block>
+    </view>
     <!-- 没有可记的礼簿 -->
     <view class="warn-card" wx:if="{{noBook === 'ended'}}">你负责的礼簿已结束（归档、删除或移交），暂时不能出示礼簿码和登记，请联系主家重新安排</view>
     <view class="warn-card" wx:elif="{{noBook === 'none' && !readonly}}" bindtap="goBooks">还没有当前礼簿：请先在「礼簿管理」里新建或选择一本，宾客的礼金才知道记到哪里 ›</view>
@@ -28,13 +32,13 @@
           <view class="bc-name">{{book ? (book.hostName ? book.hostName + ' · ' + book.name : book.name) : '我的礼簿'}}</view>
           <view class="bc-meta" wx:if="{{book}}">{{book.typeLabel}}<text wx:if="{{book.date}}"> · {{book.date}}</text></view>
         </view>
-        <view class="bc-switch-btn" wx:if="{{canSwitch}}" hover-class="bc-switch-hover" catchtap="onSwitchBook">⇅ 切换礼簿</view>
+        <view class="bc-switch-btn" wx:if="{{canSwitch}}" hover-class="bc-switch-hover" catchtap="onSwitchBook">⇅ 切换{{account.orgMode ? '场次' : '礼簿'}}</view>
       </view>
       <view class="bc-label">礼金合计</view>
       <view class="bc-sum {{book ? book.sumCls : ''}}">￥{{book ? book.sumStr : '0.00'}}</view>
       <view class="bc-foot">
         <text>{{book ? book.count : 0}} 份</text>
-        <text>今日 ￥{{todaySum}} · {{todayCount}} 份</text>
+        <text>今日{{restricted ? '' : '（全部礼簿）'}} ￥{{todaySum}} · {{todayCount}} 份</text>
         <text>明细 ›</text>
       </view>
     </view>
@@ -126,6 +130,10 @@
 
   <!-- ===== 首页：宾客 / 未登录 ===== -->
   <block wx:elif="{{mode === 'guest'}}">
+    <view class="warn-card" wx:for="{{joins}}" wx:key="aid" data-i="{{index}}" bindtap="onJoinSwitch">
+      <block wx:if="{{item.pending}}">已申请{{item.role === 'viewer' ? '查看' : '为'}}「{{item.name}}」{{item.role === 'viewer' ? '的礼簿' : '记账'}}，等待主家同意</block>
+      <block wx:else>「{{item.name}}」已同意你{{item.role === 'viewer' ? '查看礼簿' : '记账'}}，点这里切换身份 ›</block>
+    </view>
     <!-- 选了「办事收礼」、还没建好主家信息：接着创建 -->
     <view class="card setup-card" wx:if="{{setupCard}}">
       <view class="sc-title">开始办事 · 3 步</view>

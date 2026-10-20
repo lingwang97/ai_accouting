@@ -1,6 +1,7 @@
 .center { text-align: center; }
 .row { display: flex; align-items: center; margin-top: 16rpx; }
-.row switch, .row .btn { margin-left: 16rpx; }
+.row switch, .row .btn { margin-left: 16rpx; flex-shrink: 0; }
+.row > text:first-child { flex: 1; min-width: 0; }
 .row .days { margin: 0 16rpx; }
 .row.between { justify-content: space-between; margin-top: 0; }
 .label { margin-top: 28rpx; }

@@ -44,6 +44,7 @@
 
     <!-- 按人：收送对比 -->
     <block wx:if="{{tab === 'people'}}">
+      <view class="muted small pad-s" wx:if="{{truncated}}">记录较多（超过 3000 条），往来统计只含最近的部分</view>
       <view class="card person" wx:for="{{shownPeople}}" wx:key="key" data-key="{{item.key}}" bindtap="onPerson">
         <view class="p-top">
           <text class="p-name">{{item.label}}<text class="muted" wx:if="{{item.dup && item.relation}}"> · {{item.relation}}</text></text>

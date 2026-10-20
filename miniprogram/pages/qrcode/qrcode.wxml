@@ -17,7 +17,7 @@
   <view class="s-ops">
     <view class="s-op" bindtap="onMakeCard">生成礼簿台卡</view>
     <view class="s-op" bindtap="onSave">保存礼簿码</view>
-    <button class="s-op s-share" open-type="share">分享给宾客</button>
+    <button class="s-op s-share" hover-class="none" open-type="share">分享给宾客</button>
   </view>
   <view class="s-hint">屏幕已调至最亮并保持常亮，离开本页自动恢复</view>
   <view class="try s-try" bindtap="onTry">自己试一下（模拟宾客随礼）›</view>

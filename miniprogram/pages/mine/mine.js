@@ -97,6 +97,17 @@ Page({
   async onOrgSwitch(e) {
     const on = e.detail.value;
     const a = this.data.account;
+    // 开关会改变记账人的负责范围：先说明
+    const ok = await new Promise(resolve => wx.showModal({
+      title: on ? '开启机构模式' : '关闭机构模式',
+      content: on
+        ? '开启后：记账人按「礼台人员」设置可负责多个场次，各自出示本场礼簿码；底部「往来」隐藏。记账人负责的场次恢复为机构模式下的设置。'
+        : '关闭后：每位记账人只负责一本礼簿（按你在非机构模式下给他选的那本，没选过的跟随当前礼簿）；底部「往来」恢复显示。',
+      confirmText: on ? '开启' : '关闭',
+      success: r => resolve(r.confirm),
+      fail: () => resolve(false)
+    }));
+    if (!ok) return this.setData({ 'account.orgMode': !on }); // 取消：开关复位
     if (!on) return this.saveOrg(false, a.orgName);
     // 打开时填写机构名称（默认沿用已填的或主家称呼）
     const name = await askOrgName(a.orgName || a.accountName);
@@ -160,21 +171,30 @@ Page({
     const items = list.map(x => (x.aid === (this.data.account && this.data.account._id) ? '✓ ' : '') +
       (x.role === 'owner' ? `我的礼簿（${x.name}）` : (x.role === 'viewer' ? `查看「${x.name}」的礼簿（家人共享）` : `为「${x.name}」记账`)));
     if (!hasOwn) items.push('＋ 新建我自己的礼簿');
+    this.pickIdentity(items, 0, idx => this.doSwitch(list, idx));
+  },
+  /** 操作菜单最多 6 项：超出时每页 5 项 +「更多…」 */
+  pickIdentity(items, start, done) {
+    const page = items.length - start > 6 ? items.slice(start, start + 5).concat('更多…') : items.slice(start);
     wx.showActionSheet({
-      itemList: items,
-      success: async res => {
-        // 记账人自己办事：填写自己的主家信息、上传自己的收款码
-        if (res.tapIndex === list.length) return wx.navigateTo({ url: '/pages/account/account?own=1' });
-        const target = list[res.tapIndex];
-        if (!target || (this.data.account && target.aid === this.data.account._id)) return;
-        try {
-          await req.identitySwitch(target.aid);
-          getApp().resetIdentity();
-          wx.showToast({ title: '已切换', icon: 'success' });
-          this.refresh();
-        } catch (e) { /* toast 已提示 */ }
+      itemList: page,
+      success: res => {
+        if (items.length - start > 6 && res.tapIndex === 5) return this.pickIdentity(items, start + 5, done);
+        done(start + res.tapIndex);
       }
     });
+  },
+  async doSwitch(list, tapIndex) {
+    // 记账人自己办事：走创建向导，建自己的主家信息与礼簿
+    if (tapIndex === list.length) return wx.navigateTo({ url: '/pages/setup/setup' });
+    const target = list[tapIndex];
+    if (!target || (this.data.account && target.aid === this.data.account._id)) return;
+    try {
+      await req.identitySwitch(target.aid);
+      getApp().resetIdentity();
+      wx.showToast({ title: '已切换', icon: 'success' });
+      this.refresh();
+    } catch (e) { /* toast 已提示 */ }
   },
 
   goLogin() { wx.navigateTo({ url: '/pages/login/login' }); },
@@ -242,6 +262,7 @@ Page({
 
   onLogout() {
     const app = getApp();
+    require('../../utils/setup.js').clearAll(); // 创建向导的草稿与身份选择只属于这个账号
     app.globalData.user = null;
     // 清主家信息、角色、缓存、套餐、打印模板，并刷新底部菜单（「工作台」变回「首页」）
     app.resetIdentity();

@@ -32,6 +32,7 @@ Page({
     pm: {},            // 当前身份的权限（记账人按各自权限显示操作）
     notifyTip: '',     // 新礼金提醒未开启 / 发送失败时的提示
     guideTip: false,   // 「第一次使用？看看使用教程」小卡片（关闭后不再显示）
+    joins: [],         // 申请加入的进度 [{ aid, name, role, pending }]
     setupCard: null,   // 已登录、选了办事收礼但还没建好主家信息：「开始办事 · 3 步」进度 { name, code, book }
     themeStyle: ''
   },
@@ -89,6 +90,7 @@ Page({
       if (!user) return this.toGuest();
 
       const d = (dP && (await dP)) || (await req.dashboard());
+      this.setData({ joins: d.joins || [] }); // 申请加入的进度：待同意 / 已同意待切换
       app.globalData.account = d.account;
       app.globalData.role = d.role;
       app.globalData.perms = d.perms || [];
@@ -220,6 +222,17 @@ Page({
     if (b) wx.navigateTo({ url: `/pages/bookdetail/bookdetail?id=${b._id}` });
   },
   goAccount() { wx.navigateTo({ url: '/pages/account/account' }); },
+  /** 主家已同意加入：切换到这个身份 */
+  async onJoinSwitch(e) {
+    const j = this.data.joins[e.currentTarget.dataset.i];
+    if (!j || j.pending) return;
+    try {
+      await req.identitySwitch(j.aid);
+      getApp().resetIdentity();
+      wx.showToast({ title: '已切换', icon: 'success' });
+      this.refresh();
+    } catch (err) { /* toast 已提示 */ }
+  },
   /** 主家创建向导（还没有主家信息时） */
   goSetup() { wx.navigateTo({ url: '/pages/setup/setup' }); },
   /** 「开始办事」卡片：我只是来随礼 */

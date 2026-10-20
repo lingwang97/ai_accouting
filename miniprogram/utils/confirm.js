@@ -61,7 +61,7 @@ function askActual(record) {
 async function doConfirm(record, actual) {
   try {
     const r = await req.payConfirm(record._id, actual);
-    wx.showToast({ title: actual ? `已按 ￥${fmt.money(actual)} 入簿` : '已记入礼簿', icon: 'success' });
+    wx.showToast({ title: '已记入礼簿', icon: 'success' }); // 成功图标最多显示 7 个字
     await autoPrint(r.list || [r.record || { ...record, amount: actual || record.amount }]);
     getApp().refreshBadge();
     return true;

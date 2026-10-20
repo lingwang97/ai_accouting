@@ -2,8 +2,10 @@
 .book-name { color: var(--text); font-weight: 600; }
 .done { margin-top: 36rpx; }
 .done-item {
-  display: flex; justify-content: space-between; background: #fff; border-radius: var(--r-s);
+  display: flex; justify-content: space-between; align-items: center; background: #fff; border-radius: var(--r-s);
   padding: 22rpx 24rpx; margin-bottom: 12rpx; font-size: 30rpx;
 }
+.done-item > text:first-child { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin-right: 16rpx; }
+.done-item .money { flex-shrink: 0; white-space: nowrap; }
 .batch-switch { display: flex; justify-content: space-between; align-items: center; }
 .batch-switch switch { margin-left: 24rpx; }

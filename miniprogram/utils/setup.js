@@ -5,16 +5,20 @@
 const INTENT_KEY = 'start_intent';
 const DRAFT_KEY = 'host_draft';
 
+// 按微信账号区分（同一台手机换号登录不继承上一个人的草稿）
+const own = k => `${k}_${(getApp().globalData && getApp().globalData.openid) || ''}`;
 const read = (k, d) => { try { return wx.getStorageSync(k) || d; } catch (e) { return d; } };
 const write = (k, v) => { try { wx.setStorageSync(k, v); } catch (e) { /* 忽略 */ } };
 const remove = k => { try { wx.removeStorageSync(k); } catch (e) { /* 忽略 */ } };
 
 module.exports = {
-  intent: () => read(INTENT_KEY, ''),
-  setIntent: v => (v ? write(INTENT_KEY, v) : remove(INTENT_KEY)),
-  draft: () => read(DRAFT_KEY, null),
-  saveDraft: d => write(DRAFT_KEY, d),
-  clearDraft: () => remove(DRAFT_KEY),
+  intent: () => read(own(INTENT_KEY), ''),
+  setIntent: v => (v ? write(own(INTENT_KEY), v) : remove(own(INTENT_KEY))),
+  draft: () => read(own(DRAFT_KEY), null),
+  saveDraft: d => write(own(DRAFT_KEY), d),
+  clearDraft: () => remove(own(DRAFT_KEY)),
+  /** 退出登录：清掉本账号的身份选择与草稿 */
+  clearAll() { remove(own(INTENT_KEY)); remove(own(DRAFT_KEY)); },
   /** 进度：三步各自是否完成 */
   progress(d) {
     d = d || {};

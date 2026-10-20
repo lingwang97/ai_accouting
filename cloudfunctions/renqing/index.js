@@ -160,13 +160,15 @@ async function remindSave(openid, r, subscribed, envVersion) {
   const at = new Date(`${m[1]}T${m[2]}:${m[3]}:00+08:00`);
   if (isNaN(at.getTime())) return err('请选择提醒时间');
   if (at.getTime() < Date.now() - 60 * 1000) return err('提醒时间已过，请重新选择');
+  if (m[1] > data.date) return err('提醒时间不能晚于办事日期'); // 推送只发办事当天及以前的提醒
   data.remindAt = at;
   data.remindStr = `${m[1]} ${m[2]}:${m[3]}`;
   data.notifyDay = m[1]; // 提醒日（北京时间，兼容旧逻辑）
   data.before = _.remove();
   data.pushTries = 0;
   data.pushed = false;  // 修改后重新推送
-  if (subscribed) data.subscribed = true;
+  // 每条订阅只能推送一次：修改时按这次是否同意了订阅（拒绝了就只在小程序里提醒）
+  data.subscribed = !!subscribed;
   // 推送打开的小程序版本跟随订阅时的版本（开发版 / 体验版测试时能打开）
   if (['develop', 'trial', 'release'].includes(envVersion)) data.envVersion = envVersion;
   if (r._id) {
@@ -306,6 +308,7 @@ async function outDelete(openid, id) {
 const MAX_ROWS = 3000;
 const norm = s => String(s || '').replace(/[\s\u3000]/g, '');
 
+let truncated = false; // 本次统计是否因超过 MAX_ROWS 被截断（每次调用前重置）
 async function fetchAll(col, cond, fields) {
   const out = [];
   while (out.length < MAX_ROWS) {
@@ -313,6 +316,7 @@ async function fetchAll(col, cond, fields) {
     out.push(...res.data);
     if (res.data.length < 100) break;
   }
+  if (out.length >= MAX_ROWS) truncated = true;
   return out;
 }
 
@@ -490,12 +494,13 @@ async function moveEntry(openid, e) {
 
 /** 往来人名单（按往来次数排序，最多 300 人） */
 async function people(openid) {
+  truncated = false;
   const persons = await buildPersons(openid);
   const list = [...persons.values()]
     .map(({ received, given, ...p }) => p)
     .sort((a, b) => (b.inCount + b.outCount) - (a.inCount + a.outCount))
     .slice(0, 300);
-  return ok({ list });
+  return ok({ list, truncated }); // truncated：记录超过 3000 条，统计不全
 }
 
 /** 某人的往来明细：key 来自名单；只输入姓名时传 n:姓名 */

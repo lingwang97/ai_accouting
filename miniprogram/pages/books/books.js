@@ -33,6 +33,8 @@ Page({
 
   onShow() {
     this.setData({ iconKey: theme.apply(this).icon }); // 主题色跟当前礼簿事由走
+    const a = getApp().globalData.account;
+    wx.setNavigationBarTitle({ title: a && a.orgMode ? '场次管理' : '礼簿管理' }); // 机构模式称「场次」
     this.load();
   },
 

@@ -8,8 +8,10 @@
 .search-row .add-btn { margin-left: 16rpx; }
 .search { flex: 1; background: #fff; border-radius: var(--r-s); padding: 16rpx 20rpx; }
 .p-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8rpx; }
-.p-name { font-size: 30rpx; font-weight: 600; }
+.p-name { flex: 1; min-width: 0; font-size: 30rpx; font-weight: 600; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin-right: 16rpx; }
+.p-top .money, .bal { flex-shrink: 0; white-space: nowrap; }
 .bal { font-size: 24rpx; color: var(--text-3); }
+.pad-s { padding: 0 8rpx 16rpx; }
 .bal.owe { color: var(--danger); }
 .bal.given { color: var(--success); }
 .out-sum { text-align: center; }
@@ -23,8 +25,8 @@
 .rm-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8rpx; }
 .rm-title { font-size: 28rpx; font-weight: 600; }
 .rm-row { display: flex; justify-content: space-between; padding: 14rpx 0; border-top: 2rpx solid #f7f7f7; font-size: 26rpx; }
-.rm-name { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin-right: 16rpx; }
-.rm-date { color: #888; white-space: nowrap; }
+.rm-name { flex: 1; min-width: 6em; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin-right: 16rpx; }
+.rm-date { color: #888; white-space: nowrap; flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .rm-row.hot .rm-date { color: var(--primary); font-weight: 600; }
 .rm-row.past { opacity: .6; }
 .rm-more { text-align: center; color: var(--link); font-size: 24rpx; padding-top: 12rpx; }

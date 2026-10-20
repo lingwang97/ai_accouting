@@ -104,6 +104,7 @@ Page({
     if (!this.data.date) return wx.showToast({ title: '请选择办事日期', icon: 'none' });
     if (!this.data.remindDay || !this.data.remindTime) return wx.showToast({ title: '请选择提醒时间', icon: 'none' });
     if (new Date(`${this.data.remindDay}T${this.data.remindTime}:00`).getTime() < Date.now()) return wx.showToast({ title: '提醒时间已过，请重新选择', icon: 'none' });
+    if (this.data.remindDay > this.data.date) return wx.showToast({ title: '提醒时间不能晚于办事日期', icon: 'none' });
     if (!REMIND_TMPL_ID) return this.submit(false);
     wx.requestSubscribeMessage({
       tmplIds: [REMIND_TMPL_ID],

@@ -1,6 +1,6 @@
 <view class="container" style="{{themeStyle}}">
   <picker wx:if="{{books.length}}" range="{{books}}" range-key="name" value="{{bookIdx}}" bindchange="onPickBook">
-    <view class="book-tip muted">记入{{orgMode ? '场次' : '礼簿'}}：<text class="book-name">{{books[bookIdx].name}} ▾</text> · 入簿即生效，自动打印回执</view>
+    <view class="book-tip muted">记入{{orgMode ? '场次' : '礼簿'}}：<text class="book-name">{{bookIdx >= 0 ? books[bookIdx].name : '请选择'}} ▾</text> · 入簿即生效，自动打印回执</view>
   </picker>
   <view wx:else class="book-tip muted">记入当前礼簿：<text class="book-name">{{bookName || '默认礼簿'}}</text> · 入簿即生效，自动打印回执</view>
 

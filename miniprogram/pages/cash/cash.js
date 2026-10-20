@@ -59,7 +59,7 @@ Page({
       this.setData({
         orgMode: !!account.orgMode,
         books: pickBook ? books : [],
-        bookIdx: Math.max(0, books.findIndex(b => b._id === activeBookId)),
+        bookIdx: books.findIndex(b => b._id === activeBookId), // -1：没有当前礼簿，须先选
         bookName: book ? book.name : '',
         quick: Array.isArray(account.quickAmounts) ? account.quickAmounts : DEFAULT_QUICK
       });
@@ -101,6 +101,7 @@ Page({
       // 同名区分：礼簿里已有同名宾客时，逐个确认是哪一位（取消即中止，不提示）
       if (!(await this.pickSameName(payload))) return;
       const b = this.data.books[this.data.bookIdx];
+      if (this.data.books.length && !b) return wx.showToast({ title: '请先选择记入哪本礼簿', icon: 'none' });
       if (this.data.books.length && b) payload.bookId = b._id;
       payload.payMethod = this.data.payMethod;
       // 转账+现金只填了一位：按这一位的方式提交，不算混合

@@ -30,6 +30,7 @@
   background: rgba(255, 255, 255, .2); color: #fff; border: 2rpx solid rgba(255, 255, 255, .6);
 }
 .s-share::after { border: none; }
+button.s-op:not([size=mini]) { width: auto; font-weight: normal; }
 .s-hint { color: rgba(255, 255, 255, .8); font-size: 22rpx; margin-top: 20rpx; }
 
 /* 台卡画布放到屏幕外 */

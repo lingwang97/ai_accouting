@@ -25,7 +25,7 @@
 .stay-row switch { margin-left: 20rpx; }
 .transfer-desc { background: #F7F7F7; border-radius: var(--r-s); padding: 16rpx 20rpx; font-size: 26rpx; color: #555; margin: 20rpx 0; line-height: 1.6; }
 .chips { margin-top: 12rpx; }
-.ed-list { max-height: 560rpx; margin: 8rpx 0 16rpx; }
+.ed-list { max-height: 38vh; margin: 8rpx 0 16rpx; } /* 按屏幕高度，小屏不至于把「保存」挤到很下面 */
 .row .link { margin-left: 36rpx; white-space: nowrap; flex-shrink: 0; }
 .invite-desc { margin-top: 12rpx; }
 /* 权限勾选：两列，不用 flex gap（旧版 iOS 不支持），用外边距 */

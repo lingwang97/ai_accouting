@@ -158,7 +158,6 @@ async function save(openid, event) {
   if (event.own === true && ctx.role !== 'owner') {
     const mine = (await accounts.where({ ownerOpenid: openid, _openid: _.exists(false) }).limit(1).get()).data[0] || null;
     ctx = { role: mine ? 'owner' : 'none', ownerOpenid: openid, account: mine, user: ctx.user };
-    if (mine) await setCurrent(openid, mine._id);
   }
 
   // 收款码关系到钱进谁的账户：新上传的必须是本人刚上传的图片（不能填别人的文件）
@@ -238,6 +237,7 @@ async function save(openid, event) {
     }
   }
   await accounts.doc(ctx.account._id).update({ data });
+  if (event.own === true) await setCurrent(openid, ctx.account._id); // 校验、保存都成功后才切换到自己的身份
   const merged = { ...ctx.account, ...data };
   if (data.pendingPayCode && !pendingCode) delete merged.pendingPayCode;
   return ok({ account: safeAccount(merged, ctx), pendingPayCode: pendingCode });
@@ -780,7 +780,11 @@ async function listMembers(openid) {
   if (!ctx.account) return ok({ list: [], role: ctx.role });
   const ms = (await members.where({ aid: ctx.account._id }).limit(100).get()).data.filter(m => m.role !== 'viewer' && m.status !== 'pending');
   const ids = [ctx.account.ownerOpenid, ...ms.map(m => m.memberOpenid)];
-  const users = (await db.collection('users').where({ openid: _.in(ids) }).field({ openid: true, nickname: true, avatar: true }).get()).data;
+  // 主家 + 最多 100 位成员：分两批取（单次查询最多 100 条）
+  const users = [];
+  for (let i = 0; i < ids.length; i += 100) {
+    users.push(...(await db.collection('users').where({ openid: _.in(ids.slice(i, i + 100)) }).field({ openid: true, nickname: true, avatar: true }).limit(100).get()).data);
+  }
   const u = {};
   users.forEach(x => { u[x.openid] = x; });
   const ownerNick = (u[ctx.account.ownerOpenid] || {}).nickname || '';

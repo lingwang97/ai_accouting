@@ -59,6 +59,7 @@ Page({
           res.list.forEach(b => { bookName[b._id] = b.hostName ? `${b.hostName} · ${b.name}` : b.name; });
         } catch (e) { /* 忽略 */ }
       }
+      wx.setNavigationBarTitle({ title: orgMode ? '礼台人员' : '记账人' }); // 机构模式称「礼台人员」
       this.setData({
         role: r.role,
         owner: r.owner || null,

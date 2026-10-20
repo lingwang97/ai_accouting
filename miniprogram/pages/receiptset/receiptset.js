@@ -133,7 +133,7 @@ Page({
       }
       await req.bookSaveTpl(book._id, tpls);
       printer.clearTemplateCache();
-      wx.showToast({ title: this.data.sceneType ? '已保存（打印同步）' : '已保存', icon: 'success' });
+      wx.showToast({ title: this.data.sceneType ? '已保存' : '已保存', icon: 'success' });
     } catch (e) { /* toast 已提示 */ } finally {
       this.setData({ saving: false });
     }

@@ -25,7 +25,7 @@
         <view class="chip {{item.on ? 'on' : ''}}" wx:for="{{presets}}" wx:key="t" data-i="{{index}}" bindtap="onPreset">{{item.t}}</view>
       </view>
       <view class="time-row">
-        <picker class="tr-day" mode="date" value="{{remindDay}}" start="{{today}}" bindchange="onRemindDay"><view class="input">{{remindDay || '选择日期'}}</view></picker>
+        <picker class="tr-day" mode="date" value="{{remindDay}}" start="{{today}}" end="{{date}}" bindchange="onRemindDay"><view class="input">{{remindDay || '选择日期'}}</view></picker>
         <picker class="tr-time" mode="time" value="{{remindTime}}" bindchange="onRemindTime"><view class="input">{{remindTime}}</view></picker>
       </view>
       <view class="muted small">到这个时间（5 分钟内）发送微信通知，并在「往来」顶部提醒</view>
