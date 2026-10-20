@@ -9,7 +9,7 @@
 
 /* 列表批量 */
 .tools { display: flex; align-items: center; margin-bottom: 16rpx; }
-.tools .link { margin-left: 20rpx; }
+.tools .link { margin-left: 20rpx; flex-shrink: 0; }
 .search { flex: 1; background: #fff; border-radius: var(--r-s); padding: 16rpx 20rpx; }
 .item {
   display: flex; flex-wrap: wrap; align-items: center; background: #fff; border-radius: var(--r-m);
@@ -25,18 +25,20 @@
 .payer { font-size: 32rpx; font-weight: 600; margin-right: 16rpx; }
 /* 姓名过长省略，金额与标签不换行 */
 .name-row { display: flex; align-items: center; }
-.name-row .payer { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.name-row .payer { flex: 1; min-width: 4em; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; } /* 窄屏至少留出 4 个字 */
 .name-row .amt, .name-row .cash-tag { flex-shrink: 0; white-space: nowrap; }
 .amt { font-size: 34rpx; }
 .ops { display: flex; align-items: center; margin-left: 20rpx; flex-shrink: 0; }
-.ops .btn { margin-left: 20rpx; }
+.ops .link { padding: 10rpx 0; } /* 加大点击区域 */
 /* 第 2 行：说明在左（过长省略），操作在右 */
 .meta-row { display: flex; align-items: center; margin-top: 8rpx; }
 .meta { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.ok-sm { width: 120rpx; height: 56rpx; line-height: 56rpx; padding: 0; font-size: 26rpx; }
-/* 批量确认栏：基于全局 .bottom-bar */
+/* 写成与原生 button 默认样式同样的选择器，才能覆盖其 184px 宽度 */
+button.ok-sm:not([size=mini]) { width: 120rpx; height: 56rpx; line-height: 56rpx; padding: 0; margin-left: 20rpx; font-size: 26rpx; }
+/* 批量确认栏：基于全局 .bottom-bar；中间的已选合计过长时省略，不换行挤压 */
 .batch-bar { display: flex; align-items: center; justify-content: space-between; }
-.batch-bar .muted { margin: 0 16rpx; }
+.batch-bar .muted { flex: 1; min-width: 0; margin: 0 16rpx; text-align: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.batch-bar button.btn:not([size=mini]) { flex-shrink: 0; }
 
 /* 逐笔大字 */
 .remain { text-align: center; color: var(--text-3); font-size: 28rpx; margin: 8rpx 0 20rpx; }
@@ -46,7 +48,7 @@
 .big-meta { font-size: 32rpx; color: #555; margin-bottom: 8rpx; word-break: break-all; }
 .tip { text-align: center; margin: 28rpx 0 20rpx; }
 /* 逐笔大按钮：特大点击区域，颜色取全局 .btn-primary / .btn-danger */
-.btn-big { font-size: 40rpx; font-weight: 600; border-radius: var(--r-m); padding: 16rpx 0; margin-bottom: 24rpx; }
+button.btn-big:not([size=mini]) { width: 100%; font-size: 40rpx; font-weight: 600; border-radius: var(--r-m); padding: 16rpx 0; margin-bottom: 24rpx; }
 .mismatch { font-size: 28rpx; padding: 12rpx 0; }
 .center { text-align: center; }
 .pad { padding: 40rpx 0; }
