@@ -19,6 +19,7 @@ Page({
     remindTime: '20:00', // 提醒时间：几点几分
     presets: [],      // 快捷选项（按办事日期计算，已过去的不显示）
     note: '',
+    location: '',     // 办事地点（选填）
     today: '',
     scenes: scenes.SCENES.map(s => ({ type: s.type, label: s.label })),
     pushOn: !!REMIND_TMPL_ID,
@@ -38,7 +39,7 @@ Page({
       wx.setNavigationBarTitle({ title: '修改提醒' });
       this.setData({
         _id: r._id, name: r.name, personKey: r.personKey || '', eventType: r.eventType || 'other',
-        event: r.event || '', date: r.date, note: r.note || '',
+        event: r.event || '', date: r.date, note: r.note || '', location: r.location || '',
         // 旧版提醒没有具体时间：按提醒日 9:00
         remindDay: (r.remindStr || '').slice(0, 10) || r.notifyDay || r.date,
         remindTime: (r.remindStr || '').slice(11) || '09:00'
@@ -117,7 +118,7 @@ Page({
       const d = this.data;
       await req.remindSave({
         _id: d._id || undefined, name: d.name.trim(), personKey: d.personKey, eventType: d.eventType,
-        event: d.event, date: d.date, remindAt: `${d.remindDay} ${d.remindTime}`, note: d.note
+        event: d.event, date: d.date, remindAt: `${d.remindDay} ${d.remindTime}`, note: d.note, location: d.location
       }, subscribed);
       wx.showToast({ title: '已保存', icon: 'success' });
       setTimeout(() => wx.navigateBack(), 500);

@@ -31,6 +31,10 @@
       <view class="muted small">到这个时间（5 分钟内）发送微信通知，并在「往来」顶部提醒</view>
     </view>
     <view class="field">
+      <text class="label">地点</text>
+      <input class="input" placeholder="选填，如：县城大酒店" maxlength="30" value="{{location}}" data-k="location" bindinput="onInput" />
+    </view>
+    <view class="field">
       <text class="label">备注</text>
       <input class="input" placeholder="选填，如：上次随我 ￥600" maxlength="50" value="{{note}}" data-k="note" bindinput="onInput" />
     </view>

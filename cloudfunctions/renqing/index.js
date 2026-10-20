@@ -105,6 +105,7 @@ async function remindSave(openid, r, subscribed, envVersion) {
     date: DAY_RE.test(r.date || '') ? r.date : '',
 
     note: String(r.note || '').trim().slice(0, 50),
+    location: String(r.location || '').trim().slice(0, 30), // 办事地点（推送的「详细地址」）
     updatedAt: new Date()
   };
   if (!data.name) return err('请填写对方姓名');
