@@ -30,9 +30,12 @@ exports.main = async (event) => {
     switch (event.action) {
       case 'dashboard':
         return await dashboard(ctx);
+      // 对账、多场汇总：记账人需有「对账与导出」权限（家人共享可查看）
       case 'orgSummary':
+        if (ctx.role === 'clerk' && !can(ctx, 'export')) return err('你没有对账与导出的权限');
         return await orgSummary(ctx, event);
       case 'reconcile':
+        if (ctx.role === 'clerk' && !can(ctx, 'export')) return err('你没有对账与导出的权限');
         return await reconcile(ctx, event);
       case 'list':
         return await list(OWNER, event, ctx);
@@ -47,7 +50,7 @@ exports.main = async (event) => {
       case 'pendingStat':
         return await pendingStat(OWNER, ctx);
       case 'themes':
-        return await themes(OWNER);
+        return await themes(OWNER, ctx);
       // 同名区分：礼台记账前查礼簿里同名的人；给某位宾客设区分备注
       case 'nameCheck':
         if (!can(ctx, 'desk')) return err('无权查询');
@@ -467,12 +470,14 @@ async function setNameTag(ctx, rid, tag) {
 }
 
 /** 返回给前端的账目去掉宾客与经办人的 openid（前端用不到） */
-const strip = ({ payerOpenid, handlerOpenid, enteredBy, _openid, ...r }) => r;
+// 返回给前端的记录：去掉各方 openid，以及含宾客 openid 的往来人标识
+const strip = ({ payerOpenid, handlerOpenid, enteredBy, ownerOpenid, personKey, _openid, ...r }) => r;
 
 /** 出现过的记账主题（导出筛选用） */
-async function themes(openid) {
+async function themes(openid, ctx) {
+  // 只负责部分礼簿的记账人、家人共享：只列负责 / 共享的礼簿
   const res = await records.aggregate()
-    .match({ ownerOpenid: openid, status: 'paid' })
+    .match({ ownerOpenid: openid, status: 'paid', ...(ctx.bookIds ? { bookId: _.in(ctx.bookIds) } : {}) })
     .group({ _id: '$themeName' })
     .limit(100)
     .end();

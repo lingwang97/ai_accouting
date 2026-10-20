@@ -119,9 +119,10 @@ exports.main = async (event) => {
     const ext = format === 'xlsx' ? 'xlsx' : 'pdf';
     const base = book ? book.name : (themeName ? `${themeName}_${startDay}_${endDay}` : `${startDay}_${endDay}`);
     const fileName = `礼簿_${sanitizeName(base)}.${ext}`;
+    // 文件名加随机串：路径不可推算（下载走云存储，路径可猜时别人可能直接下载）
     const cloudPath = archive
-      ? `archives/${OWNER}/${bookId}-${Date.now()}.pdf`
-      : `exports/${OWNER}/${Date.now()}.${ext}`;
+      ? `archives/${OWNER}/${bookId}-${Date.now()}-${rnd()}.pdf`
+      : `exports/${OWNER}/${Date.now()}-${rnd()}.${ext}`;
     stage = '上传';
     const up = await cloud.uploadFile({ cloudPath, fileContent: buffer });
     stage = '记录';
@@ -169,6 +170,7 @@ async function deleteFiles(fileIDs) {
  * 只删导出 / 存档目录下的文件；客户端直接写库伪造的登记行（带 _openid）不删文件，只清掉登记行
  */
 const OWN_DIR = /^cloud:\/\/[^/]+\/(exports|archives)\//;
+const rnd = () => require('crypto').randomBytes(8).toString('hex');
 async function removeTracked(rows) {
   if (!rows.length) return 0;
   await deleteFiles(rows.filter(r => !r._openid && OWN_DIR.test(String(r.fileID || ''))).map(r => r.fileID));
@@ -754,7 +756,7 @@ async function exportBackup(openid, withGifts = true, opts = {}) {
   const buffer = await buildBackup({ records, books, gifts, extra });
   // 管理员备份存在 exports/admin/ 下、登记在 admin 名下（清除该账户时不会被一起删掉），7 天后自动清理
   const up = await cloud.uploadFile({
-    cloudPath: opts.admin ? `exports/admin/${openid}-${Date.now()}.xlsx` : `exports/${openid}/backup-${Date.now()}.xlsx`,
+    cloudPath: opts.admin ? `exports/admin/${openid}-${Date.now()}-${rnd()}.xlsx` : `exports/${openid}/backup-${Date.now()}-${rnd()}.xlsx`,
     fileContent: buffer
   });
   if (opts.admin) {

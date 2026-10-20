@@ -253,7 +253,7 @@ async function setMine(ctx, bookId) {
   if (!book) return err('礼簿不存在');
   if (book.archived) return err('已归档的礼簿不能切换');
   await db.collection('members').doc(ctx.member._id).update({ data: { curBookId: book._id } });
-  return ok({ activeBookId: book._id, book });
+  return ok({ activeBookId: book._id, book: safeBook(book) });
 }
 
 async function setActive(openid, account, bookId) {
@@ -262,7 +262,7 @@ async function setActive(openid, account, bookId) {
   if (book.archived) return err('已归档的礼簿不能设为当前礼簿');
   await accounts.doc(account._id).update({ data: { activeBookId: book._id, forwardTo: '' } });
   await syncThemeName(account, book.name);
-  return ok({ activeBookId: book._id, book });
+  return ok({ activeBookId: book._id, book: safeBook(book) });
 }
 
 /**
@@ -313,7 +313,7 @@ async function stats(openid, bookId) {
   });
   const t = (total.list && total.list[0]) || { count: 0, fen: 0, maxAmount: 0 };
   return ok({
-    book,
+    book: safeBook(book),
     count: t.count,
     sum: Math.round(t.fen) / 100,
     maxAmount: t.maxAmount || 0,
@@ -322,6 +322,16 @@ async function stats(openid, bookId) {
       .map(r => ({ relation: r._id || '未填写', count: r.count, sum: Math.round(r.fen) / 100 }))
       .sort((a, b) => b.sum - a.sum)
   });
+}
+
+/** 返回给前端的礼簿：不带主家 openid、收款码文件路径和待确认收款码的提交人 */
+function safeBook(b) {
+  return {
+    _id: b._id, name: b.name, type: b.type, date: b.date || '', location: b.location || '',
+    archived: !!b.archived, archivePdf: b.archivePdf || null, hostName: b.hostName || '',
+    hasPayCode: !!b.payCodeFileID, pendingPayCode: !!b.pendingPayCode,
+    count: b.statCount || 0, sum: (b.statFen || 0) / 100
+  };
 }
 
 /** 读取礼簿的回执 / 打印样式；未设置时返回 null，由前端按事由类型套用场景默认 */

@@ -7,7 +7,7 @@ const samename = require('../../utils/samename.js');
 
 /** 往来人 key 显示为姓名：o:身份:张伟 → 张伟（扫码）；n:张伟#李村 → 张伟（李村） */
 function keyName(k) {
-  if (k.indexOf('o:') === 0) return k.split(':').slice(2).join(':') + '（扫码）';
+  if (k.indexOf('o:') === 0 || k.indexOf('h:') === 0) return k.split(':').slice(2).join(':') + '（扫码）';
   const [name, tag] = k.slice(2).split('#');
   return samename.nameStr(name, tag);
 }
@@ -56,7 +56,7 @@ Page({
         sameStr: same.slice(0, 3).map(x => x.label).join('、') + (same.length > 3 ? '…' : ''),
         merged: r.merged || [],
         dup: r.dup,
-        byWx: r.key.indexOf('o:') === 0,
+        byWx: r.key.indexOf('h:') === 0, // 扫码宾客（服务端返回加密后的 h: 标识）
         received: r.received.map(deco),
         given: r.given.map(deco),
         receivedSum: fmt.money(r.receivedSum),
@@ -125,7 +125,7 @@ Page({
 
   /** 记下此人家办事的日期，到时提醒回礼 */
   onAddRemind() {
-    const key = this.data.key.startsWith('o:') ? this.data.key : '';
+    const key = this.data.key.startsWith('h:') ? this.data.key : '';
     wx.navigateTo({ url: `/pages/remind/remind?name=${encodeURIComponent(this.data.name)}&key=${encodeURIComponent(key)}` });
   },
 

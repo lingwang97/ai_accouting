@@ -7,6 +7,43 @@ const _ = db.command;
 const giftsOut = db.collection('gifts_out');
 const records = db.collection('records');
 
+const crypto = require('crypto');
+
+/*
+ * 往来人标识 o:<微信身份>:<姓名> 里含宾客（或主家）的 openid，不直接交给前端：
+ * 出参里的 o: 标识确定性加密为 h:<密文>:<姓名>，入参再解密还原，云函数内部和数据库仍用 o: 标识
+ */
+const KEY_SECRET = crypto.createHash('sha256').update('huilj.person-key.v1').digest();
+const KEY_IV = Buffer.alloc(16, 0); // 固定 IV：同一个人每次得到同一个标识，前端可用来比较
+function hideKey(k) {
+  const m = /^o:([\w-]{1,64}):(.*)$/.exec(k);
+  if (!m) return k;
+  const c = crypto.createCipheriv('aes-256-cbc', KEY_SECRET, KEY_IV);
+  const enc = Buffer.concat([c.update(m[1], 'utf8'), c.final()]).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `h:${enc}:${m[2]}`;
+}
+function showKey(k) {
+  const m = /^h:([\w-]{1,128}):(.*)$/.exec(k);
+  if (!m) return k;
+  try {
+    const d = crypto.createDecipheriv('aes-256-cbc', KEY_SECRET, KEY_IV);
+    const b64 = m[1].replace(/-/g, '+').replace(/_/g, '/');
+    const oid = Buffer.concat([d.update(Buffer.from(b64, 'base64')), d.final()]).toString('utf8');
+    return /^[\w-]{1,64}$/.test(oid) ? `o:${oid}:${m[2]}` : '';
+  } catch (e) { return ''; }
+}
+/** 递归替换对象里的标识：出参 hideKey，入参 showKey */
+function mapKeys(v, fn) {
+  if (typeof v === 'string') return fn(v);
+  if (Array.isArray(v)) return v.map(x => mapKeys(x, fn));
+  if (v && typeof v === 'object' && !(v instanceof Date)) {
+    const o = {};
+    Object.keys(v).forEach(k => { o[k] = mapKeys(v[k], fn); });
+    return o;
+  }
+  return v;
+}
+
 const TYPES = ['wedding', 'birthday', 'baby', 'house', 'funeral', 'other'];
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -25,6 +62,16 @@ exports.main = async (event) => {
   if (!OPENID) return err('未获取到用户身份');
   try {
     await ensureCol('gifts_out');
+    event = mapKeys(event, showKey); // 前端传回的 h: 标识还原为 o:
+    return mapKeys(await route(OPENID, event), hideKey); // 返回前把 o: 标识加密
+  } catch (e) {
+    console.error('renqing', event.action, e);
+    return err('人情往来操作失败，请稍后重试');
+  }
+};
+
+async function route(OPENID, event) {
+  {
     switch (event.action) {
       case 'outList': return await outList(OPENID, event);
       case 'inList': return await inList(OPENID, event);
@@ -43,11 +90,8 @@ exports.main = async (event) => {
       case 'moveEntry': return await moveEntry(OPENID, event);
       default: return err('未知 action');
     }
-  } catch (e) {
-    console.error('renqing', event.action, e);
-    return err('人情往来操作失败，请稍后重试');
   }
-};
+}
 
 /**
  * 我收到的礼：本人礼簿里已入簿的礼金（按入簿时间倒序，数据库分页），可按姓名搜索；附全部笔数与合计
@@ -172,7 +216,7 @@ async function outList(openid, event) {
   all.sort((a, b) => String(b.date).localeCompare(String(a.date)) || (new Date(b.createdAt) - new Date(a.createdAt)));
   const fen = all.reduce((t, g) => t + Math.round(g.amount * 100), 0);
   return ok({
-    list: all.slice((page - 1) * pageSize, page * pageSize),
+    list: all.slice((page - 1) * pageSize, page * pageSize).map(({ ownerOpenid, ...g }) => g), // 不把主家的 openid 给前端
     total: all.length,
     sum: fen / 100,
     page,

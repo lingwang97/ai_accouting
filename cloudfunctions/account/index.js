@@ -492,9 +492,20 @@ async function acceptInvite(openid, token, displayName) {
         return ok({ type: inv.type, aid: acc._id, accountName: acc.accountName });
       }
       if (viewer) {
-        // 已共享过：合并新共享的礼簿
-        const ids = [...new Set((exist.bookIds || []).concat(inv.bookIds || []))];
-        await members.doc(exist._id).update({ data: { bookIds: ids } });
+        // 已共享过：合并新共享的礼簿（按发卡人现在的范围收窄过的 grant）；记账人发的卡需主家同意后才生效
+        const add = (grant.bookIds || []).filter(id => !(exist.bookIds || []).includes(id));
+        if (!add.length) return ok({ type: inv.type, aid: acc._id, accountName: acc.accountName });
+        if (inv.fromOpenid !== acc.ownerOpenid) {
+          if (!(await takeUse(inv))) return err('这张邀请卡的人数已满，请让对方重新邀请');
+          await members.add({
+            data: {
+              aid: acc._id, ownerOpenid: acc.ownerOpenid, memberOpenid: openid, role: 'viewer', bookIds: add, addTo: exist._id,
+              displayName: dn || exist.displayName || '', status: 'pending', inviteId: inv._id, inviteFrom: inv.fromName || '', createdAt: new Date()
+            }
+          });
+          return ok({ type: inv.type, pending: true, aid: acc._id, accountName: acc.accountName });
+        }
+        await members.doc(exist._id).update({ data: { bookIds: (exist.bookIds || []).concat(add) } });
       } else {
         // 已是记账人：只有主家本人发的卡才合并新的礼簿与权限（记账人发的卡不能给别的记账人扩权）
         const upd = dn ? { displayName: dn } : {};
@@ -555,6 +566,8 @@ async function acceptInvite(openid, token, displayName) {
     await invites.doc(token).update({ data: { used: false, usedBy: _.remove(), usedAt: _.remove() } });
     return err('主家已变更，请重新发起移交');
   }
+  // 整体移交后，这个账户之前未完成的其他移交卡一并作废（避免续跑时按旧卡搬走新主家的礼簿）
+  await invites.where({ aid: acc._id, type: 'transfer', done: _.neq(true), _id: _.neq(token) }).update({ data: { voided: true } });
   await resumeTransfer({ ...acc, ownerOpenid: openid, transferPending: { from: oldOwner, stayClerk: inv.stayClerk !== false, mergeFrom: mineAcc && mineAcc._id !== acc._id ? mineAcc._id : '', invite: token } }, openid);
   return ok({ type: 'transfer', aid: acc._id, accountName: acc.accountName });
 }
@@ -564,6 +577,8 @@ async function resumeInvite(inv, openid) {
   let acc;
   try { acc = (await accounts.doc(inv.aid).get()).data; } catch (e) { return err('主家信息已不存在'); }
   if (inv.full === false) {
+    // 续跑前确认原主家没变（期间账户可能已整体移交给别人），不能把第三方的礼簿搬走
+    if (acc.ownerOpenid !== inv.fromOpenid) return err('主家已变更，请重新发起移交');
     const res = await transferBooks(inv, acc, openid);
     if (res.code === 0) await invites.doc(inv._id).update({ data: { done: true } });
     return res;
@@ -653,6 +668,13 @@ async function approveMember(openid, memberId, approve) {
   if (!approve) {
     await members.doc(m._id).remove();
     return ok({ approved: false });
+  }
+  if (m.addTo) {
+    // 已共享的家人通过记账人发的卡追加礼簿：并入原来那条，删掉这条申请
+    const base = (await members.where({ _id: m.addTo, aid: ctx.account._id }).limit(1).get()).data[0];
+    if (base) await members.doc(base._id).update({ data: { bookIds: [...new Set((base.bookIds || []).concat(m.bookIds || []))] } });
+    await members.doc(m._id).remove();
+    return ok({ approved: true });
   }
   await members.doc(m._id).update({ data: { status: 'active', approvedAt: new Date() } });
   // 对方还没有自己的主家信息时，直接切到这个身份
@@ -790,6 +812,15 @@ async function listMembers(openid) {
   });
 }
 
+/** 对方（记账人）的权限或负责礼簿是否超出操作人（记账人）的范围；非机构模式按实际负责的那一本比较 */
+function wider(ctx, m) {
+  if (ctx.role === 'owner' || m.role === 'viewer') return false;
+  const mp = cleanPerms(m.perms) || (m.allBooks ? ALL_PERMS : DEFAULT_PERMS);
+  const mAll = ctx.account.orgMode ? !!m.allBooks : false;
+  const mIds = ctx.account.orgMode ? (m.bookIds || []) : [soloBook(m, ctx.account)];
+  return mp.some(k => !can(ctx, k)) || (!!ctx.bookIds && (mAll || mIds.some(id => !ctx.bookIds.includes(id))));
+}
+
 /** 移除记账人 / 取消家人共享（主家或有「邀请与管理记账人」权限的记账人；记账人移除自己用 leave） */
 async function removeMember(openid, memberId) {
   const ctx = await resolveCtx(db, openid);
@@ -798,14 +829,7 @@ async function removeMember(openid, memberId) {
   if (ctx.role !== 'owner') {
     // 记账人不能移除权限或礼簿比自己大的人
     const m = (await members.where({ _id: String(memberId || ''), aid: ctx.account._id }).limit(1).get()).data[0];
-    if (m && m.role !== 'viewer') {
-      const mp = cleanPerms(m.perms) || (m.allBooks ? ALL_PERMS : DEFAULT_PERMS);
-      // 非机构模式按实际负责的那一本比较
-      const mAll = ctx.account.orgMode ? !!m.allBooks : false;
-      const mIds = ctx.account.orgMode ? (m.bookIds || []) : [soloBook(m, ctx.account)];
-      const wider = mp.some(k => !can(ctx, k)) || (ctx.bookIds && (mAll || mIds.some(id => !ctx.bookIds.includes(id))));
-      if (wider) return err('对方的权限或负责礼簿超出你的范围，请让主家处理');
-    }
+    if (m && wider(ctx, m)) return err('对方的权限或负责礼簿超出你的范围，请让主家处理');
   }
   const res = await members.where({ _id: String(memberId || ''), aid: ctx.account._id }).remove();
   if (!res.stats.removed) return err('记账人不存在');
@@ -904,6 +928,8 @@ async function memberUpdate(openid, memberId, title, bookIds, allBooks, perms) {
   const m = (await members.where({ _id: String(memberId || ''), aid: ctx.account._id }).limit(1).get()).data[0];
   if (!m) return err('人员不存在');
   if (m.memberOpenid === openid) return err('不能修改自己的权限');
+  if (m.status === 'pending') return err('对方还在等待主家同意，同意后再设置');
+  if (wider(ctx, m)) return err('对方的权限或负责礼簿超出你的范围，请让主家处理');
   const data = {};
   if (title !== undefined) data.title = TITLES.includes(title) ? title : '';
   if (bookIds !== undefined || allBooks !== undefined) {
@@ -1013,10 +1039,11 @@ async function getByAid(aid) {
   } catch (e) {
     try {
       fixed = (await db.collection('books').doc(aid).get()).data;
-      a = (await accounts.where({ ownerOpenid: fixed.ownerOpenid }).limit(1).get()).data[0] || null;
+      a = (await accounts.where({ ownerOpenid: fixed.ownerOpenid, _openid: _.exists(false) }).limit(1).get()).data[0] || null;
     } catch (e2) { /* 都不是 */ }
   }
-  if (!a) return err('收款账户不存在');
+  // 只认云函数写入的主家信息与礼簿（客户端伪造的带 _openid）
+  if (!a || !trusted(a) || (fixed && !trusted(fixed))) return err('收款账户不存在');
   if (fixed && fixed.archived) return err('本场礼簿已结束');
   const book = fixed ? publicBook(fixed) : await activeBook(a);
   return ok({

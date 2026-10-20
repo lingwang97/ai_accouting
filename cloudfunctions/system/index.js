@@ -179,7 +179,7 @@ async function purgePreview(admin, ownerOpenid, guestRecords) {
 async function adminBackup(admin, ownerOpenid) {
   const t = await target(ownerOpenid);
   if (t.error) return err(t.error);
-  const token = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const token = require('crypto').randomBytes(24).toString('hex'); // 一次性口令：不可预测
   await P.writeSetting(db, 'admin_backup', { token, ownerOpenid, exp: Date.now() + 2 * 60 * 1000 });
   const res = await cloud.callFunction({ name: 'export', data: { action: 'adminBackup', ownerOpenid, token } });
   const r = res.result || {};
