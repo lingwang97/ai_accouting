@@ -117,3 +117,14 @@
 .sk-line.short { width: 60%; height: 24rpx; }
 .sk-bar { height: 140rpx; border-radius: 16rpx; }
 .role-line.ro { color: var(--primary); font-weight: 600; }
+
+/* 开始办事 · 3 步（创建向导进度） */
+.setup-card { border: 3rpx solid var(--primary); }
+.sc-title { font-size: 32rpx; font-weight: 700; color: var(--primary); margin-bottom: 6rpx; }
+.sc-row { display: flex; align-items: center; font-size: 28rpx; color: var(--text-2); margin-top: 16rpx; }
+.sc-dot { width: 40rpx; height: 40rpx; line-height: 40rpx; border-radius: 50%; text-align: center; background: #ddd; color: #fff; font-size: 22rpx; margin-right: 16rpx; flex-shrink: 0; }
+.sc-row.done { color: var(--text-3); }
+.sc-row.done .sc-dot { background: var(--primary); }
+.sc-btn { margin-top: 28rpx; }
+.sc-skip { margin-top: 20rpx; font-size: 26rpx; }
+.center { text-align: center; }

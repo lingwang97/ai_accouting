@@ -1,0 +1,66 @@
+<view class="container" style="{{themeStyle}}">
+  <!-- 步骤条 -->
+  <view class="bar">
+    <block wx:for="{{steps}}" wx:key="*this">
+      <view class="bar-line {{index <= step ? 'on' : ''}}" wx:if="{{index > 0}}"></view>
+      <view class="bar-item {{index <= step ? 'on' : ''}}">
+        <view class="bar-dot">{{index < step ? '✓' : index + 1}}</view>
+        <view class="bar-text">{{item}}</view>
+      </view>
+    </block>
+  </view>
+
+  <!-- 第 1 步：主家称呼 -->
+  <view class="card" wx:if="{{step === 0}}">
+    <view class="s-title">主家怎么称呼？</view>
+    <view class="s-sub">显示在宾客的随礼页、电子回执和小票上，建议用真实姓名，宾客一看就知道是给谁随礼</view>
+    <input class="input" placeholder="如：张三、李府" value="{{name}}" maxlength="20" bindinput="onName" />
+  </view>
+
+  <!-- 第 2 步：收款码 -->
+  <view class="card" wx:if="{{step === 1}}">
+    <view class="s-title">上传微信收款码</view>
+    <view class="s-sub">宾客随礼时转账到这个收款码，钱直接进你的微信零钱，小程序不经手</view>
+    <view class="code-box" bindtap="onChooseCode">
+      <image wx:if="{{payCodeUrl}}" class="code-img" src="{{payCodeUrl}}" mode="aspectFit" />
+      <view wx:else class="code-empty"><text class="plus">＋</text><text>选择收款码图片</text></view>
+      <view class="code-state muted" wx:if="{{uploading}}">上传中…</view>
+    </view>
+    <view class="how">
+      <view class="how-title">怎么获取收款码？</view>
+      <view class="muted">微信 → 我 → 服务 → 收付款 → 二维码收款 → 保存收款码，再回来选择这张图片</view>
+    </view>
+    <view class="link center skip" wx:if="{{!payCodeFileID}}" bindtap="onSkipCode">先跳过，稍后上传 ›</view>
+  </view>
+
+  <!-- 第 3 步：第一本礼簿 -->
+  <view class="card" wx:if="{{step === 2}}">
+    <view class="s-title">第一本礼簿</view>
+    <view class="s-sub">一场办事一本礼簿，礼金分开记；以后可以在「礼簿管理」里新建</view>
+    <view class="field">
+      <text class="label">事由</text>
+      <view class="chips">
+        <view class="chip {{bookType === item.type ? 'on' : ''}}" wx:for="{{scenes}}" wx:key="type" data-t="{{item.type}}" bindtap="onBookType">{{item.label}}</view>
+      </view>
+    </view>
+    <view class="field">
+      <text class="label">礼簿名称 *</text>
+      <input class="input" placeholder="如：张三婚礼" value="{{bookName}}" maxlength="20" bindinput="onBookName" />
+    </view>
+    <view class="field">
+      <text class="label">办事日期</text>
+      <picker mode="date" value="{{bookDate}}" bindchange="onBookDate">
+        <view class="input">{{bookDate || '选择日期（选填）'}}</view>
+      </picker>
+    </view>
+    <view class="field">
+      <text class="label">地点</text>
+      <input class="input" placeholder="选填，如：XX酒店" value="{{bookLocation}}" maxlength="30" bindinput="onBookLocation" />
+    </view>
+  </view>
+
+  <view class="ops">
+    <button class="btn btn-lg btn-plain" wx:if="{{step > 0}}" bindtap="onPrev">上一步</button>
+    <button class="btn btn-lg btn-primary" loading="{{saving}}" bindtap="onNext">{{step < steps.length - 1 ? '下一步' : (payCodeFileID ? '完成，进入工作台' : '完成')}}</button>
+  </view>
+</view>

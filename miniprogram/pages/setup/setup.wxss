@@ -1,0 +1,26 @@
+/* 步骤条（不用 gap，用 margin） */
+.bar { display: flex; align-items: flex-start; padding: 16rpx 8rpx 32rpx; }
+.bar-item { display: flex; flex-direction: column; align-items: center; width: 140rpx; flex-shrink: 0; }
+.bar-dot { width: 48rpx; height: 48rpx; line-height: 48rpx; border-radius: 50%; text-align: center; background: #ddd; color: #fff; font-size: 26rpx; font-weight: 600; }
+.bar-text { font-size: 24rpx; color: var(--text-3); margin-top: 10rpx; white-space: nowrap; }
+.bar-item.on .bar-dot { background: var(--primary); }
+.bar-item.on .bar-text { color: var(--primary); font-weight: 600; }
+.bar-line { flex: 1; height: 4rpx; background: #ddd; margin-top: 22rpx; }
+.bar-line.on { background: var(--primary); }
+
+.s-title { font-size: 36rpx; font-weight: 700; color: #333; }
+.s-sub { font-size: 26rpx; color: #888; line-height: 1.6; margin: 10rpx 0 28rpx; }
+
+.code-box { position: relative; height: 420rpx; border: 2rpx dashed var(--border); border-radius: var(--r-m); display: flex; align-items: center; justify-content: center; background: var(--fill); }
+.code-img { width: 100%; height: 100%; }
+.code-empty { display: flex; flex-direction: column; align-items: center; color: var(--text-3); font-size: 26rpx; }
+.plus { font-size: 72rpx; line-height: 1; margin-bottom: 12rpx; }
+.code-state { position: absolute; bottom: 12rpx; }
+.how { margin-top: 24rpx; line-height: 1.6; }
+.how-title { font-size: 26rpx; font-weight: 600; color: var(--text-2); margin-bottom: 4rpx; }
+.center { text-align: center; }
+.skip { margin-top: 28rpx; }
+
+.ops { display: flex; margin-top: 32rpx; }
+.ops .btn { flex: 1; }
+.ops .btn:not(:last-child) { margin-right: 20rpx; }

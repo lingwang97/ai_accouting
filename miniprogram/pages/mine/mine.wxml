@@ -21,9 +21,9 @@
 
     <!-- 未完善主家信息 -->
     <view class="card center" wx:if="{{!account}}">
-      <view class="section-title">还未完善主家信息</view>
-      <view class="muted" style="margin-bottom:20rpx">填写主家称呼、上传微信收款码后即可生成礼簿码</view>
-      <button class="btn-primary" bindtap="goAccount">立即完善</button>
+      <view class="section-title">还没有礼簿</view>
+      <view class="muted" style="margin-bottom:20rpx">要办事收礼？3 步创建：主家称呼、微信收款码、第一本礼簿</view>
+      <button class="btn-primary" bindtap="goSetup">立即创建</button>
     </view>
 
     <block wx:if="{{role !== 'viewer'}}">

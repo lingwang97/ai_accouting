@@ -1,6 +1,6 @@
 // pages/index/index.js — 首页 / 工作台（按身份切换）
 // 主家、记账人：工作台——当前礼簿概览 + 出示礼簿码 / 待确认 / 礼台记账 / 打印机 四个常用操作
-// 宾客、未登录：扫码随礼
+// 宾客、未登录：扫码随礼；已登录、选了办事收礼还没建好主家信息时，顶部显示「开始办事 · 3 步」进度卡片
 const req = require('../../utils/request.js');
 const fmt = require('../../utils/format.js');
 const notify = require('../../utils/notify.js');
@@ -9,6 +9,7 @@ const theme = require('../../utils/theme.js');
 const cache = require('../../utils/cache.js');
 const perm = require('../../utils/perm.js');
 const device = require('../../utils/device.js');
+const setup = require('../../utils/setup.js');
 
 const POLL_MS = 5000;
 const POLL_MS_READONLY = 30000; // 家人只读：不处理待确认，放慢轮询
@@ -31,6 +32,7 @@ Page({
     pm: {},            // 当前身份的权限（记账人按各自权限显示操作）
     notifyTip: '',     // 新礼金提醒未开启 / 发送失败时的提示
     guideTip: false,   // 「第一次使用？看看使用教程」小卡片（关闭后不再显示）
+    setupCard: null,   // 已登录、选了办事收礼但还没建好主家信息：「开始办事 · 3 步」进度 { name, code, book }
     themeStyle: ''
   },
 
@@ -121,6 +123,17 @@ Page({
       // 身份变化（是否只读）后按对应间隔重新轮询；页面已隐藏时不重启
       if (this._timer && this._pollMs !== (view.readonly ? POLL_MS_READONLY : POLL_MS)) this.startTimer();
       cache.set('dashboard', view);
+      // 刚通过创建向导建好：提示下一步
+      if (app.globalData.justSetup) {
+        app.globalData.justSetup = false;
+        wx.showModal({
+          title: '礼簿已创建',
+          content: '下一步：出示礼簿码，宾客用微信扫码就能随礼，礼金自动记到这本礼簿。',
+          confirmText: '去出示',
+          cancelText: '稍后',
+          success: res => { if (res.confirm) this.goQrcode(); }
+        });
+      }
       app.setBadge(d.pending.count); // 同时刷新底部菜单：首个菜单显示为「工作台」
       theme.apply(this, b ? b.type : 'other');
     } catch (e) {
@@ -131,7 +144,9 @@ Page({
   toGuest() {
     this.clearTimer();
     cache.set('dashboard', null);
-    this.setData({ mode: 'guest', account: null });
+    // 选了「办事收礼」、还没建好主家信息：显示进度卡片，可接着创建
+    const card = this.data.loggedIn && setup.intent() === 'host' ? setup.progress(setup.draft()) : null;
+    this.setData({ mode: 'guest', account: null, setupCard: card });
     theme.apply(this, '');
     getApp().setBadge(0);
   },
@@ -204,6 +219,13 @@ Page({
     if (b) wx.navigateTo({ url: `/pages/bookdetail/bookdetail?id=${b._id}` });
   },
   goAccount() { wx.navigateTo({ url: '/pages/account/account' }); },
+  /** 主家创建向导（还没有主家信息时） */
+  goSetup() { wx.navigateTo({ url: '/pages/setup/setup' }); },
+  /** 「开始办事」卡片：我只是来随礼 */
+  onDismissSetup() {
+    setup.setIntent('guest');
+    this.setData({ setupCard: null });
+  },
   goMembers() { wx.navigateTo({ url: '/pages/members/members' }); },
   goRecords() { wx.switchTab({ url: '/pages/records/records' }); },
   goLogin() { wx.navigateTo({ url: '/pages/login/login' }); },

@@ -179,6 +179,7 @@ Page({
 
   goLogin() { wx.navigateTo({ url: '/pages/login/login' }); },
   goAccount() { wx.navigateTo({ url: '/pages/account/account' }); },
+  goSetup() { wx.navigateTo({ url: '/pages/setup/setup' }); }, // 主家创建向导
   goAppearance() { wx.navigateTo({ url: '/pages/appearance/appearance' }); },
   goQrcode() { wx.navigateTo({ url: '/pages/qrcode/qrcode' }); },
   goPrinter() { wx.navigateTo({ url: '/pages/printer/printer' }); },

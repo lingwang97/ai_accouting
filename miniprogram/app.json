@@ -30,7 +30,9 @@
     "pages/bookshare/bookshare",
     "pages/appearance/appearance",
     "pages/guide/guide",
-    "pages/welcome/welcome"
+    "pages/welcome/welcome",
+    "pages/start/start",
+    "pages/setup/setup"
   ],
   "window": {
     "backgroundTextStyle": "light",

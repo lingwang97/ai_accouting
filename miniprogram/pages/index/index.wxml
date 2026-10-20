@@ -122,6 +122,17 @@
 
   <!-- ===== 首页：宾客 / 未登录 ===== -->
   <block wx:elif="{{mode === 'guest'}}">
+    <!-- 选了「办事收礼」、还没建好主家信息：接着创建 -->
+    <view class="card setup-card" wx:if="{{setupCard}}">
+      <view class="sc-title">开始办事 · 3 步</view>
+      <view class="muted">完成后就能出示礼簿码，宾客扫码随礼自动记账</view>
+      <view class="sc-row {{setupCard.name ? 'done' : ''}}"><text class="sc-dot">{{setupCard.name ? '✓' : '1'}}</text>主家称呼</view>
+      <view class="sc-row {{setupCard.code ? 'done' : ''}}"><text class="sc-dot">{{setupCard.code ? '✓' : '2'}}</text>微信收款码</view>
+      <view class="sc-row {{setupCard.book ? 'done' : ''}}"><text class="sc-dot">{{setupCard.book ? '✓' : '3'}}</text>第一本礼簿</view>
+      <button class="btn-primary sc-btn" bindtap="goSetup">{{setupCard.name ? '继续创建' : '开始创建'}}</button>
+      <view class="link center sc-skip" bindtap="onDismissSetup">我只是来随礼</view>
+    </view>
+
     <view class="hero">
       <view class="hero-title">扫码随礼</view>
       <view class="hero-sub">扫描主家的礼簿码，登记姓名礼金，完成随礼</view>
@@ -152,7 +163,7 @@
         <view class="he-title">我是主家，要办事收礼</view>
         <view class="muted">创建礼簿，宾客扫码随礼自动记账、打印回执</view>
       </view>
-      <button wx:if="{{loggedIn}}" class="btn btn-primary he-btn" bindtap="goAccount">创建礼簿</button>
+      <button wx:if="{{loggedIn}}" class="btn btn-primary he-btn" bindtap="goSetup">创建礼簿</button>
       <button wx:else class="btn btn-primary he-btn" bindtap="goLogin">登录</button>
     </view>
   </block>

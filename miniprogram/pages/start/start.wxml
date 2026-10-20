@@ -1,0 +1,46 @@
+<view class="container" style="{{themeStyle}}">
+  <view class="head">
+    <view class="h-title">欢迎使用慧礼记</view>
+    <view class="h-sub">你要做什么？选一个，我们带你开始</view>
+  </view>
+
+  <view class="choice" hover-class="choice-hover" bindtap="onHost">
+    <view class="c-icon"><image src="/assets/icons/book-w.svg" /></view>
+    <view class="c-body">
+      <view class="c-title">我要办事收礼</view>
+      <view class="c-sub">我是主家：建礼簿，宾客扫码随礼自动记账</view>
+    </view>
+    <text class="arrow">›</text>
+  </view>
+
+  <view class="choice" hover-class="choice-hover" bindtap="onGuest">
+    <view class="c-icon"><image src="/assets/icons/qrcode-w.svg" /></view>
+    <view class="c-body">
+      <view class="c-title">我去随礼</view>
+      <view class="c-sub">扫主家的礼簿码，登记礼金并转账</view>
+    </view>
+    <text class="arrow">›</text>
+  </view>
+
+  <view class="choice {{clerkTip ? 'on' : ''}}" hover-class="choice-hover" bindtap="onClerk">
+    <view class="c-icon"><image src="/assets/icons/cash-w.svg" /></view>
+    <view class="c-body">
+      <view class="c-title">帮别人记账</view>
+      <view class="c-sub">替主家在礼台登记、确认礼金</view>
+    </view>
+    <text class="arrow">›</text>
+  </view>
+
+  <view class="card clerk-tip" wx:if="{{clerkTip}}">
+    <view class="t-title">需要主家邀请你</view>
+    <view class="t-line">1. 请主家在「我的 → 记账人」里生成邀请卡，发给你的微信</view>
+    <view class="t-line">2. 你在微信里点开邀请卡，填写真实姓名后接受</view>
+    <view class="t-line">3. 主家同意后，就可以开始记账了</view>
+    <view class="t-ops">
+      <view class="link" bindtap="goClerkGuide">看记账人教程 ›</view>
+      <view class="link" bindtap="goHome">先去首页 ›</view>
+    </view>
+  </view>
+
+  <view class="muted foot">选错了没关系，之后在首页也可以办事收礼或扫码随礼</view>
+</view>

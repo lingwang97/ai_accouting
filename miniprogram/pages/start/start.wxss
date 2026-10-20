@@ -1,0 +1,20 @@
+.head { padding: 40rpx 8rpx 36rpx; }
+.h-title { font-size: 44rpx; font-weight: 700; color: #333; }
+.h-sub { font-size: 28rpx; color: #888; margin-top: 12rpx; }
+
+/* 身份选项（不用 gap，用 margin） */
+.choice { display: flex; align-items: center; background: #fff; border-radius: var(--r-m); padding: 32rpx 28rpx; margin-bottom: 20rpx; border: 3rpx solid transparent; }
+.choice.on { border-color: var(--primary); }
+.choice-hover { opacity: .8; }
+.c-icon { width: 88rpx; height: 88rpx; border-radius: 50%; background: var(--primary); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-right: 24rpx; }
+.c-icon image { width: 48rpx; height: 48rpx; }
+.c-body { flex: 1; min-width: 0; }
+.c-title { font-size: 32rpx; font-weight: 600; color: #333; }
+.c-sub { font-size: 24rpx; color: #888; margin-top: 8rpx; line-height: 1.5; }
+.arrow { color: #ccc; font-size: 36rpx; margin-left: 12rpx; }
+
+.clerk-tip { line-height: 1.7; }
+.t-title { font-size: 30rpx; font-weight: 600; margin-bottom: 8rpx; }
+.t-line { font-size: 26rpx; color: var(--text-2); }
+.t-ops { display: flex; justify-content: space-between; margin-top: 16rpx; }
+.foot { text-align: center; margin-top: 32rpx; }

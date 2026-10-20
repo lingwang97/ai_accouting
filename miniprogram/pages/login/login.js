@@ -34,8 +34,8 @@ Page({
       const token = app.globalData.pendingInvite;
       setTimeout(() => {
         if (token) wx.redirectTo({ url: `/pages/invite/invite?token=${token}` });
-        else if (data.isNew) wx.redirectTo({ url: '/pages/welcome/welcome' }); // 新用户：先看快速介绍
-        else wx.switchTab({ url: '/pages/mine/mine' });
+        else if (data.isNew) wx.redirectTo({ url: '/pages/start/start' }); // 新用户：先选身份（办事收礼 / 去随礼 / 帮别人记账）
+        else wx.switchTab({ url: '/pages/index/index' }); // 老用户：首页按身份显示工作台或扫码随礼
       }, 600);
     } catch (e) {
       // request.js 已 toast
