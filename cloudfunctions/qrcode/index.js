@@ -2,7 +2,7 @@
 const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const ENVS = ['develop', 'trial', 'release'];
-const { resolveCtx, canBook, readonly, trusted, can } = require('./ctx.js');
+const { resolveCtx, canBook, readonly, trusted, can, workBook } = require('./ctx.js');
 
 exports.main = async (event) => {
   const { OPENID } = cloud.getWXContext();
@@ -30,7 +30,7 @@ exports.main = async (event) => {
       scene = book._id;
     } else if (ctx.bookIds && !ctx.bookIds.includes(account.activeBookId)) {
       // 只负责部分礼簿、且不负责主家当前礼簿：出示负责礼簿的本场礼簿码（负责当前礼簿时与主家相同，用主家礼簿码）
-      const id = ctx.bookIds[0];
+      const id = workBook(ctx);
       try { book = (await db.collection('books').doc(id).get()).data; } catch (e) { /* 不存在 */ }
       if (!trusted(book) || book.ownerOpenid !== ctx.ownerOpenid) return err('你负责的礼簿已不存在，请联系主家');
       scene = book._id;

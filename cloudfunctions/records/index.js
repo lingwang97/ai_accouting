@@ -4,7 +4,7 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
 const records = db.collection('records');
-const { resolveCtx, canBook, readonly, can } = require('./ctx.js');
+const { resolveCtx, canBook, readonly, can, workBook } = require('./ctx.js');
 const PENDING_TTL = 30 * 60 * 1000;
 
 /** 幂等建集合（init 未跑完时自愈；同一实例每个集合只尝试一次） */
@@ -93,7 +93,7 @@ async function dashboard(ctx) {
   const owner = ctx.ownerOpenid;
   const today = bjDay(new Date());
   const scope = ctx.bookIds ? { bookId: _.in(ctx.bookIds) } : {};
-  const activeId = canBook(ctx, account.activeBookId) ? account.activeBookId : (ctx.bookIds ? ctx.bookIds[0] : '');
+  const activeId = workBook(ctx); // 机构模式记账人：自己选的一场
   const pendCond = { ownerOpenid: owner, status: 'transferred', ...scope };
   const [bookRes, todayRes, pendRes, pendCount, joinRes] = await Promise.all([
     activeId ? db.collection('books').doc(activeId).get().catch(() => null) : null,
@@ -124,6 +124,8 @@ async function dashboard(ctx) {
     restricted: !!ctx.bookIds,
     readonly: readonly(ctx),
     perms: ctx.perms || [],
+    // 机构模式下负责多场（或全部场次）的记账人：可切换自己正在记的一场，不影响别人
+    mySwitch: ctx.role === 'clerk' && !!account.orgMode && (!ctx.bookIds || ctx.bookIds.length > 1),
     lastNotify,
     book,
     needBooks: !book,
@@ -216,8 +218,8 @@ async function reconcile(ctx, event) {
   const account = ctx.account;
   if (!account) return err('请先完善主家信息');
   const owner = ctx.ownerOpenid;
-  let bookId = String(event.bookId || '') || account.activeBookId || '';
-  if (ctx.bookIds && !canBook(ctx, bookId)) bookId = ctx.bookIds[0];
+  let bookId = String(event.bookId || '') || workBook(ctx);
+  if (ctx.bookIds && !canBook(ctx, bookId)) bookId = workBook(ctx);
   if (!bookId) return err('还没有礼簿');
   let book;
   try { book = (await db.collection('books').doc(bookId).get()).data; } catch (e) { return err('礼簿不存在'); }

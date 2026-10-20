@@ -9,7 +9,7 @@ const _ = db.command;
 const books = db.collection('books');
 const accounts = db.collection('accounts');
 const records = db.collection('records');
-const { resolveCtx, canBook, restricted, can } = require('./ctx.js');
+const { resolveCtx, canBook, restricted, can, workBook } = require('./ctx.js');
 
 const TYPES = ['wedding', 'birthday', 'baby', 'house', 'funeral', 'other'];
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -50,6 +50,7 @@ exports.main = async (event) => {
       case 'list': return await list(OWNER, account, ctx);
       case 'save': return await save(OWNER, account, event.book, ctx, OPENID);
       case 'setActive': return await setActive(OWNER, account, event.bookId);
+      case 'setMine': return await setMine(ctx, String(event.bookId || ''));
       case 'archive': return await archive(OWNER, account, event.bookId, event.archived !== false);
       case 'stats': return await stats(OWNER, event.bookId);
       case 'getTpl': return await getTpl(OWNER, account, event.bookId);
@@ -86,7 +87,7 @@ async function list(openid, account, ctx) {
 
   const visible = res.data.filter(b => canBook(ctx, b._id)); // 礼台人员只看负责的场次
   return ok({
-    activeBookId: canBook(ctx, account.activeBookId) ? (account.activeBookId || '') : '',
+    activeBookId: canBook(ctx, workBook(ctx)) ? workBook(ctx) : '', // 机构模式记账人：自己选的一场
     restricted: restricted(ctx),
     perms: ctx.perms || [],
     list: visible.map(b => ({
@@ -233,6 +234,18 @@ async function save(openid, account, input, ctx, caller) {
   await syncThemeName(account, book.name);
   const { pendingPayCode, ...shown } = book;
   return ok({ book: shown, activeBookId: book._id, pendingPayCode: pendingCode });
+}
+
+/** 机构模式：记账人切换自己正在记的一场（members.curBookId），不改主家的当前礼簿、不影响其他人 */
+async function setMine(ctx, bookId) {
+  if (ctx.role !== 'clerk' || !ctx.member) return err('参数错误');
+  if (!ctx.account.orgMode) return err('只有机构模式可以切换场次');
+  if (!canBook(ctx, bookId)) return err('礼簿不存在');
+  const book = await getBook(ctx.ownerOpenid, bookId);
+  if (!book) return err('礼簿不存在');
+  if (book.archived) return err('已归档的礼簿不能切换');
+  await db.collection('members').doc(ctx.member._id).update({ data: { curBookId: book._id } });
+  return ok({ activeBookId: book._id, book });
 }
 
 async function setActive(openid, account, bookId) {

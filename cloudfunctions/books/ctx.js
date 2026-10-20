@@ -7,6 +7,9 @@
 // 记账人 = 负责的礼簿（members.bookIds；allBooks=true 为全部礼簿，含以后新建的）+ 授予的权限（members.perms，见 PERMS）。
 // 邀请时由主家（或有「邀请与管理记账人」权限的记账人）勾选，之后可在记账人页修改；各云函数用 canBook 校验礼簿、can 校验权限。
 // 早期记账人没有 perms：allBooks 的给全部权限，其余给默认权限；也没有 bookIds 的迁移为主家当时的当前礼簿。
+// 非机构模式：记账人同一时间只负责一本礼簿（members.soloBookId，邀请时单选、可在记账人页修改）；
+// 没设过时按原负责范围取一本（含主家当前礼簿时取当前礼簿，全部礼簿的跟随主家当前礼簿）。bookIds / allBooks 原样保留，切回机构模式后恢复。
+// 机构模式：负责多场的记账人可在工作台切换「我现在记哪一场」（members.curBookId，只影响自己），见 workBook。
 // 礼簿共享：家人（members.role='viewer'）只能查看共享的礼簿（bookIds），不能做任何修改，用 readonly 校验。
 // 通过邀请卡加入的人员先是待同意（members.status='pending'），主家同意后才生效。
 //
@@ -64,8 +67,11 @@ async function resolveCtx(db, openid) {
     }
     if (!viewer && m.allBooks) bookIds = null;
     if (viewer && !bookIds) bookIds = ['__none__'];
+    if (!viewer && !acc.data.orgMode) bookIds = [soloBook(m, acc.data)]; // 非机构模式：只负责一本
     const perms = viewer ? [] : (cleanPerms(m.perms) || (m.allBooks ? ALL_PERMS.slice() : DEFAULT_PERMS.slice()));
-    return { role: viewer ? 'viewer' : 'clerk', ownerOpenid: acc.data.ownerOpenid, account: acc.data, user, member: m, bookIds, perms };
+    // 机构模式：自己选的「现在记哪一场」（须仍在负责范围内）
+    const cur = !viewer && acc.data.orgMode && m.curBookId && (!bookIds || bookIds.includes(m.curBookId)) ? m.curBookId : '';
+    return { role: viewer ? 'viewer' : 'clerk', ownerOpenid: acc.data.ownerOpenid, account: acc.data, user, member: m, bookIds, perms, curBookId: cur };
   };
 
   const want = user && user.currentAid;
@@ -83,6 +89,30 @@ async function resolveCtx(db, openid) {
     if (c) return c;
   }
   return { role: 'none', ownerOpenid: openid, account: null, user, bookIds: null, perms: [] };
+}
+
+/**
+ * 非机构模式下记账人负责的那一本礼簿：设过的 soloBookId；否则原负责范围含主家当前礼簿时取当前礼簿，
+ * 全部礼簿（或没有范围）的跟随主家当前礼簿，其余取第一本
+ */
+function soloBook(m, acc) {
+  if (m.soloBookId) return m.soloBookId;
+  const act = acc.activeBookId || '';
+  const ids = Array.isArray(m.bookIds) ? m.bookIds : [];
+  if (m.allBooks || !ids.length) return act || '__none__';
+  return ids.includes(act) ? act : ids[0];
+}
+
+/**
+ * 当前调用者正在记的礼簿（工作台、出示礼簿码、对账的默认礼簿）：
+ * 机构模式记账人自己选的一场 → 主家当前礼簿（在负责范围内时）→ 负责的第一本
+ */
+function workBook(ctx) {
+  if (!ctx.account) return '';
+  if (ctx.curBookId) return ctx.curBookId;
+  const act = ctx.account.activeBookId || '';
+  if (act && canBook(ctx, act)) return act;
+  return ctx.bookIds ? (ctx.bookIds.find(id => id !== '__none__') || '') : act;
 }
 
 /** 云函数写入的文档（不是客户端直接写库伪造的） */
@@ -121,4 +151,4 @@ function handlerName(ctx) {
   return (ctx.user && ctx.user.nickname) || '';
 }
 
-module.exports = { resolveCtx, handlerName, canBook, restricted, readonly, trusted, can, PERMS, ALL_PERMS, DEFAULT_PERMS, cleanPerms };
+module.exports = { resolveCtx, handlerName, canBook, restricted, readonly, trusted, can, soloBook, workBook, PERMS, ALL_PERMS, DEFAULT_PERMS, cleanPerms };

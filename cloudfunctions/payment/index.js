@@ -6,7 +6,7 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
 const notify = require('./notify.js');
-const { resolveCtx, handlerName, canBook, readonly, can } = require('./ctx.js');
+const { resolveCtx, handlerName, canBook, readonly, can, workBook } = require('./ctx.js');
 const accounts = db.collection('accounts');
 const records = db.collection('records');
 
@@ -318,10 +318,11 @@ async function cashEntry(openid, ctx, event) {
     if (!book || book.ownerOpenid !== ctx.ownerOpenid) return err('礼簿不存在');
     if (book.archived) return err('该礼簿已归档');
   } else {
-    book = await activeBookOf(account);
-    // 只负责部分礼簿：未指定时记入负责的礼簿（当前礼簿不在其中时取第一本）
-    if (ctx.bookIds && (!book || !canBook(ctx, book._id))) {
-      try { book = (await db.collection('books').doc(ctx.bookIds[0]).get()).data; } catch (e) { book = null; }
+    // 未指定时记入正在记的礼簿：主家当前礼簿；只负责部分礼簿的取负责的那本，机构模式记账人取自己选的一场（见 ctx.workBook）
+    const id = workBook(ctx);
+    if (id === account.activeBookId) book = await activeBookOf(account);
+    else {
+      try { book = id ? (await db.collection('books').doc(id).get()).data : null; } catch (e) { book = null; }
       if (book && (book.ownerOpenid !== ctx.ownerOpenid || book.archived)) book = null;
     }
   }

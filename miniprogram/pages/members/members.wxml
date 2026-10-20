@@ -45,11 +45,12 @@
 
   <view class="card" wx:if="{{canManage}}">
     <view class="section-title">邀请记账人 · 负责的礼簿与权限</view>
+    <view class="muted small" wx:if="{{!orgMode}}">每位记账人负责一本礼簿；同时办多场、分别安排人员请开启机构模式</view>
     <view class="book-row {{item.on && !inviteAll ? 'on' : ''}}" wx:for="{{inviteBooks}}" wx:key="_id" data-i="{{index}}" bindtap="onInviteBook">
       <view class="check {{item.on && !inviteAll ? 'on' : ''}}">{{item.on && !inviteAll ? '✓' : ''}}</view>
       <view class="b-info">{{item.name}}</view>
     </view>
-    <view class="book-row {{inviteAll ? 'on' : ''}}" wx:if="{{myAllBooks}}" bindtap="onInviteAll">
+    <view class="book-row {{inviteAll ? 'on' : ''}}" wx:if="{{myAllBooks && orgMode}}" bindtap="onInviteAll">
       <view class="check {{inviteAll ? 'on' : ''}}">{{inviteAll ? '✓' : ''}}</view>
       <view class="b-info">全部礼簿<text class="muted small">（含以后新建的）</text></view>
     </view>
@@ -118,8 +119,8 @@
           <view class="chip {{editor.title === item ? 'on' : ''}}" wx:for="{{titles}}" wx:key="*this" data-t="{{item}}" bindtap="onEdTitle">{{item}}</view>
         </view>
       </block>
-      <view class="muted" style="margin-top:20rpx">负责的礼簿</view>
-      <view class="book-row {{editor.all ? 'on' : ''}}" wx:if="{{myAllBooks || editor.all}}" bindtap="onEdAll">
+      <view class="muted" style="margin-top:20rpx">负责的礼簿{{orgMode ? '' : '（选一本）'}}</view>
+      <view class="book-row {{editor.all ? 'on' : ''}}" wx:if="{{orgMode && (myAllBooks || editor.all)}}" bindtap="onEdAll">
         <view class="check {{editor.all ? 'on' : ''}}">{{editor.all ? '✓' : ''}}</view>
         <view class="b-info">全部礼簿<text class="muted small">{{myAllBooks ? '（含以后新建的）' : '（你无权修改）'}}</text></view>
       </view>

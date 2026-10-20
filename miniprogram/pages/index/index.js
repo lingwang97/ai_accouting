@@ -106,7 +106,9 @@ Page({
         restricted: !!d.restricted,
         readonly: !!d.readonly,     // 家人共享：只读
         pm: perm.map(d.perms, d.role),
-        canSwitch: perm.map(d.perms, d.role).books && !d.restricted, // 能管理礼簿且不限礼簿范围才可切换
+        // 能管理礼簿且不限礼簿范围才可切换；机构模式下负责多场的记账人切换的是自己正在记的一场（mySwitch）
+        mySwitch: !!d.mySwitch,
+        canSwitch: !!d.mySwitch || (d.role !== 'clerk' || !(d.account && d.account.orgMode)) && perm.map(d.perms, d.role).books && !d.restricted,
         notifyTip: notify.tipText(d.lastNotify),
         book: b ? { ...b, typeLabel: scenes.label(b.type), sumStr: fmt.money(b.sum), sumCls: sumCls(fmt.money(b.sum)) } : null,
         todaySum: fmt.money(d.today.sum),
@@ -183,7 +185,7 @@ Page({
         if (!b) return this.goBooks();
         if (b._id === cur) return;
         try {
-          await req.bookSetActive(b._id);
+          await (this.data.mySwitch ? req.bookSetMine(b._id) : req.bookSetActive(b._id));
           require('../../utils/printer.js').clearTemplateCache(); // 打印样式跟礼簿走
           theme.apply(this, b.type);
           wx.showToast({ title: '已切换', icon: 'success' });

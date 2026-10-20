@@ -52,6 +52,8 @@ module.exports = {
     return r;
   }),
   bookSetActive: bookId => call('books', { action: 'setActive', bookId }).then(r => { activeBookChanged(); return r; }),
+  // 机构模式记账人：切换自己正在记的一场（不影响主家和其他记账人）
+  bookSetMine: bookId => call('books', { action: 'setMine', bookId }).then(r => { activeBookChanged(); return r; }),
   bookArchive: (bookId, archived) => call('books', { action: 'archive', bookId, archived })
     .then(r => { ['books', 'dashboard'].forEach(k => require('./cache.js').set(k, null)); return r; }),
   bookStats: bookId => call('books', { action: 'stats', bookId }),

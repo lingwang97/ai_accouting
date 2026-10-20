@@ -7,7 +7,7 @@ const _ = db.command;
 const accounts = db.collection('accounts');
 const members = db.collection('members');
 const invites = db.collection('invites');
-const { resolveCtx, restricted, readonly, trusted, can, PERMS, ALL_PERMS, DEFAULT_PERMS, cleanPerms } = require('./ctx.js');
+const { resolveCtx, restricted, readonly, trusted, can, soloBook, PERMS, ALL_PERMS, DEFAULT_PERMS, cleanPerms } = require('./ctx.js');
 const P = require('./plans.js');
 const Purge = require('./purge.js');
 const TITLES = ['', '礼台', '收银', '主管']; // 机构版礼台人员岗位
@@ -340,9 +340,13 @@ async function createInvite(openid, type, opts = {}) {
   }
   if (type === 'clerk') {
     // 负责的礼簿 + 授予的权限；都不能超出邀请人自己拥有的
+    // 非机构模式：只能选一本礼簿（solo），不能选全部礼簿
+    const solo = !ctx.account.orgMode;
+    if (solo && (opts.allBooks === true || (Array.isArray(opts.bookIds) && opts.bookIds.length > 1))) return err('记账人只能负责一本礼簿；同时办多场请开启机构模式');
     const scope = await pickScope(ctx, opts.bookIds, opts.allBooks === true, [ctx.account.activeBookId]);
     if (scope.error) return err(scope.error);
     Object.assign(data, scope);
+    if (solo) data.solo = true;
     const perms = grantable(ctx, opts.perms);
     if (perms.error) return err(perms.error);
     data.perms = perms.perms;
@@ -478,7 +482,9 @@ async function acceptInvite(openid, token, displayName) {
         // 已是记账人：只有主家本人发的卡才合并新的礼簿与权限（记账人发的卡不能给别的记账人扩权）
         const upd = dn ? { displayName: dn } : {};
         if (inv.fromOpenid === acc.ownerOpenid) {
-          if (grant.allBooks) upd.allBooks = true;
+          // 非机构模式的邀请：改为负责这一本（原来的负责范围保留，切回机构模式后恢复）
+          if (inv.solo && grant.bookIds.length) upd.soloBookId = grant.bookIds[0];
+          else if (grant.allBooks) upd.allBooks = true;
           else if (!exist.allBooks && grant.bookIds.length) upd.bookIds = [...new Set((exist.bookIds || []).concat(grant.bookIds))];
           upd.perms = ALL_PERMS.filter(k => grant.perms.includes(k) || (cleanPerms(exist.perms) || (exist.allBooks ? ALL_PERMS : DEFAULT_PERMS)).includes(k));
         } else if (!Object.keys(upd).length) {
@@ -496,6 +502,7 @@ async function acceptInvite(openid, token, displayName) {
         aid: acc._id, ownerOpenid: acc.ownerOpenid, memberOpenid: openid, role: viewer ? 'viewer' : 'clerk',
         ...(viewer ? { bookIds: grant.bookIds } : (grant.allBooks ? { allBooks: true, bookIds: [] } : { bookIds: grant.bookIds })),
         ...(viewer ? {} : { perms: grant.perms }),
+        ...(!viewer && inv.solo && grant.bookIds.length ? { soloBookId: grant.bookIds[0] } : {}),
         displayName: dn, status: 'pending', inviteId: inv._id, inviteFrom: inv.fromName || '', createdAt: new Date()
       }
     });
@@ -757,6 +764,7 @@ async function listMembers(openid) {
       title: m.title || '',          // 机构版：岗位
       bookIds: m.bookIds || [],      // 负责的礼簿
       allBooks: !!m.allBooks,        // 全部礼簿（含以后新建的）
+      soloBookId: ctx.account.orgMode ? '' : soloBook(m, ctx.account), // 非机构模式：只负责这一本
       perms: cleanPerms(m.perms) || (m.allBooks ? ALL_PERMS : DEFAULT_PERMS), // 授予的权限
       createdAt: m.createdAt
     }))
@@ -773,7 +781,10 @@ async function removeMember(openid, memberId) {
     const m = (await members.where({ _id: String(memberId || ''), aid: ctx.account._id }).limit(1).get()).data[0];
     if (m && m.role !== 'viewer') {
       const mp = cleanPerms(m.perms) || (m.allBooks ? ALL_PERMS : DEFAULT_PERMS);
-      const wider = mp.some(k => !can(ctx, k)) || (ctx.bookIds && (m.allBooks || (m.bookIds || []).some(id => !ctx.bookIds.includes(id))));
+      // 非机构模式按实际负责的那一本比较
+      const mAll = ctx.account.orgMode ? !!m.allBooks : false;
+      const mIds = ctx.account.orgMode ? (m.bookIds || []) : [soloBook(m, ctx.account)];
+      const wider = mp.some(k => !can(ctx, k)) || (ctx.bookIds && (mAll || mIds.some(id => !ctx.bookIds.includes(id))));
       if (wider) return err('对方的权限或负责礼簿超出你的范围，请让主家处理');
     }
   }
@@ -882,6 +893,12 @@ async function memberUpdate(openid, memberId, title, bookIds, allBooks, perms) {
       data.bookIds = want.length
         ? (await db.collection('books').where({ _id: _.in(want), ownerOpenid: ctx.ownerOpenid }).field({ _id: true }).get()).data.map(b => b._id)
         : [];
+    } else if (!ctx.account.orgMode) {
+      // 非机构模式：只能负责一本，写 soloBookId；原来的负责范围（bookIds / allBooks）保留，切回机构模式后恢复
+      if (allBooks === true || !Array.isArray(bookIds) || bookIds.length !== 1) return err('记账人只能负责一本礼簿；同时办多场请开启机构模式');
+      const scope = await pickScope(ctx, bookIds, false);
+      if (scope.error) return err(scope.error);
+      data.soloBookId = scope.bookIds[0];
     } else {
       // 未传 allBooks 时沿用旧约定：空列表为全部礼簿（机构版场次设置）
       const all = allBooks === true || (allBooks === undefined && !(Array.isArray(bookIds) && bookIds.length));

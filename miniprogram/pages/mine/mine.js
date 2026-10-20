@@ -119,6 +119,7 @@ Page({
       getApp().globalData.account = account;
       this.setData({ account });
       cache.clear(); // 工作台入口随模式变化
+      if (typeof this.getTabBar === 'function' && this.getTabBar()) this.getTabBar().refresh(); // 机构模式不显示「往来」
       wx.showToast({ title: on ? '已开启机构模式' : '已关闭机构模式', icon: 'none' });
     } catch (err) {
       this.setData({ 'account.orgMode': !on }); // 失败复位（request.js 已提示原因）

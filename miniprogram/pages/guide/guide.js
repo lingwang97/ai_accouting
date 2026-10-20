@@ -11,7 +11,7 @@ const STEPS = {
     { title: '连接打印机、设置回执样式', desc: '确认后自动打印小票，回执样式可自定义', url: '/pages/printer/printer' },
     { title: '邀请记账人、共享给家人', desc: '记账人分工记账，家人只读查看', url: '/pages/members/members' },
     { title: '对账与导出', desc: '按支付方式汇总核对，导出 PDF / Excel', url: '/pages/reconcile/reconcile', go: '去对账' },
-    { title: '人情往来与回礼提醒', desc: '收礼送礼一本账，亲友办事到期提醒', url: '/pages/renqing/renqing', tab: true, go: '去看看' }
+    { title: '人情往来与回礼提醒', desc: '收礼送礼一本账，亲友办事到期提醒', url: '/pages/renqing/renqing', tab: true, go: '去看看', hideOrg: true }
   ],
   clerk: [
     { title: '接受邀请', desc: '打开邀请卡，填写真实姓名接受，等主家同意' },
@@ -39,7 +39,13 @@ Page({
 
   onLoad(options) {
     const tab = TABS.includes(options.tab) ? options.tab : 'host';
-    this.setData({ tab, steps: STEPS[tab] });
+    this.setData({ tab, steps: this.stepsOf(tab) });
+  },
+
+  /** 机构模式不显示「往来」，对应的说明也不显示 */
+  stepsOf(tab) {
+    const a = getApp().globalData.account;
+    return STEPS[tab].filter(s => !(s.hideOrg && a && a.orgMode));
   },
 
   onShow() {
@@ -48,7 +54,7 @@ Page({
 
   onTab(e) {
     const tab = e.currentTarget.dataset.t;
-    if (tab !== this.data.tab) this.setData({ tab, steps: STEPS[tab] });
+    if (tab !== this.data.tab) this.setData({ tab, steps: this.stepsOf(tab) });
   },
 
   /** 去设置：底部菜单页用 switchTab */

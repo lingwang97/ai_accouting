@@ -1,5 +1,6 @@
 // pages/members/members.js — 记账人管理：邀请记账人（选负责的礼簿与权限）、设置礼簿与权限、移除、退出；主家本人可"移交给主家"
 // 每位记账人各自设置：负责的礼簿（或全部礼簿，含以后新建的）+ 权限（见 utils/perm.js）；只能授予自己拥有的礼簿和权限
+// 非机构模式：每位记账人只负责一本礼簿（单选，存 soloBookId）；机构模式才能多选、选全部礼簿
 const req = require('../../utils/request.js');
 const perm = require('../../utils/perm.js');
 const fmt = require('../../utils/format.js');
@@ -69,7 +70,8 @@ Page({
         list: (r.list || []).map(m => ({
           ...m,
           timeStr: m.createdAt ? fmt.day(m.createdAt) : '',
-          booksText: m.allBooks || !(m.bookIds && m.bookIds.length) ? '全部礼簿' : m.bookIds.map(id => bookName[id] || '已删除的礼簿').join('、'),
+          booksText: !orgMode ? (bookName[m.soloBookId] || '已删除的礼簿')
+            : m.allBooks || !(m.bookIds && m.bookIds.length) ? '全部礼簿' : m.bookIds.map(id => bookName[id] || '已删除的礼簿').join('、'),
           permCount: (m.perms || []).length
         }))
       });
@@ -87,7 +89,12 @@ Page({
         const invitePerms = this.permItems(perm.DEFAULT);
         this.setData({ invitePerms, inviteTpl: this.tplOf(invitePerms) });
       }
-      if (!this.data.myAllBooks && this.data.inviteAll) this.setData({ inviteAll: false, clerkToken: '' });
+      if ((!this.data.myAllBooks || !orgMode) && this.data.inviteAll) this.setData({ inviteAll: false, clerkToken: '' });
+      // 非机构模式只能单选：切换模式后多选的只留一本（优先当前礼簿）
+      if (!orgMode && this.data.inviteBooks.filter(b => b.on).length > 1) {
+        const keep = this.data.inviteBooks.find(b => b.on && b._id === activeBookId) || this.data.inviteBooks.find(b => b.on);
+        this.setData({ inviteBooks: this.data.inviteBooks.map(b => ({ ...b, on: b === keep })), clerkToken: '' });
+      }
       if (!this.data.inviteBooks.length && this._books) {
         this.setData({
           inviteBooks: this._books.filter(b => !b.archived)
@@ -144,11 +151,16 @@ Page({
   },
   onInviteBook(e) {
     const i = e.currentTarget.dataset.i;
-    this.setData({ [`inviteBooks[${i}].on`]: !this.data.inviteBooks[i].on, inviteAll: false, clerkToken: '' });
+    if (!this.data.orgMode) {
+      // 非机构模式：单选一本
+      this.setData({ inviteBooks: this.data.inviteBooks.map((b, j) => ({ ...b, on: j === i })), clerkToken: '' });
+    } else {
+      this.setData({ [`inviteBooks[${i}].on`]: !this.data.inviteBooks[i].on, inviteAll: false, clerkToken: '' });
+    }
     this.makeClerkInvite();
   },
   onInviteAll() {
-    if (!this.data.myAllBooks) return;
+    if (!this.data.myAllBooks || !this.data.orgMode) return;
     this.setData({ inviteAll: !this.data.inviteAll, clerkToken: '' });
     this.makeClerkInvite();
   },
@@ -201,7 +213,8 @@ Page({
     const idx = e.currentTarget.dataset.idx;
     const m = this.data.list[idx];
     if (!m || m.me) return; // 不能设置自己
-    const ids = m.bookIds || [];
+    const solo = !this.data.orgMode;
+    const ids = solo ? [m.soloBookId] : (m.bookIds || []);
     const perms = this.permItems(m.perms || []);
     this.setData({
       editor: {
@@ -209,7 +222,7 @@ Page({
         name: m.name,
         title: m.title || '',
         // 我不是「全部礼簿」时不能改对方的「全部礼簿」：原样保留，不降级
-        all: this.data.myAllBooks ? (!!m.allBooks || !ids.length) : !!m.allBooks,
+        all: solo ? false : this.data.myAllBooks ? (!!m.allBooks || !ids.length) : !!m.allBooks,
         books: (this._books || []).filter(b => !b.archived || ids.includes(b._id))
           .map(b => ({ _id: b._id, name: b.hostName ? `${b.hostName} · ${b.name}` : b.name, date: b.date || '', on: ids.includes(b._id) })),
         perms,
@@ -232,11 +245,15 @@ Page({
   },
   onEdBook(e) {
     const i = e.currentTarget.dataset.i;
+    if (!this.data.orgMode) {
+      // 非机构模式：单选一本
+      return this.setData({ 'editor.books': this.data.editor.books.map((b, j) => ({ ...b, on: j === i })), 'editor.all': false });
+    }
     if (!this.data.myAllBooks && this.data.editor.all) return; // 对方负责全部礼簿，我无权改
     this.setData({ [`editor.books[${i}].on`]: !this.data.editor.books[i].on, 'editor.all': false });
   },
   onEdAll() {
-    if (!this.data.myAllBooks) return;
+    if (!this.data.myAllBooks || !this.data.orgMode) return;
     this.setData({ 'editor.all': !this.data.editor.all });
   },
   onEdCancel() { this.setData({ editor: null }); },
@@ -246,9 +263,9 @@ Page({
     try {
       const picked = ed.books.filter(b => b.on).map(b => b._id);
       if (!ed.all && !picked.length) return wx.showToast({ title: '请选择负责的礼簿', icon: 'none' });
-      // 我看不到的礼簿不在列表里：保留对方原有的，不随这次保存改动
-      const hidden = (m.bookIds || []).filter(id => !(this._books || []).some(b => b._id === id));
-      const bookIds = ed.all ? [] : picked.concat(hidden);
+      // 我看不到的礼簿不在列表里：保留对方原有的，不随这次保存改动（非机构模式只负责选中的一本）
+      const hidden = !this.data.orgMode ? [] : (m.bookIds || []).filter(id => !(this._books || []).some(b => b._id === id));
+      const bookIds = ed.all ? [] : picked.slice(0, this.data.orgMode ? 100 : 1).concat(hidden);
       // 我没有的权限不在列表里：保留对方原有的，不随这次保存改动
       const perms = ed.perms.filter(x => x.on).map(x => x.key)
         .concat((m.perms || []).filter(k => !this.data.myPerms.includes(k)));
