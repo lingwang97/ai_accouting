@@ -10,6 +10,7 @@ const books = db.collection('books');
 const accounts = db.collection('accounts');
 const records = db.collection('records');
 const { resolveCtx, canBook, restricted, can, workBook, soloBook } = require('./ctx.js');
+const trash = require('./trash.js');
 
 const TYPES = ['wedding', 'birthday', 'baby', 'house', 'funeral', 'other'];
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -53,9 +54,13 @@ exports.main = async (event) => {
       case 'setActive': return ctx.role === 'clerk' && account.orgMode ? await setMine(ctx, String(event.bookId || '')) : await setActive(OWNER, account, event.bookId);
       case 'setMine': return await setMine(ctx, String(event.bookId || ''));
       case 'archive': return await archive(OWNER, account, event.bookId, event.archived !== false, ctx);
-      // 删除礼簿（连同全部礼金记录，不可恢复）：只限主家本人；先预览，再输入礼簿名称确认
-      case 'removePreview': return ctx.role === 'owner' ? await removeBook(OWNER, account, String(event.bookId || ''), null) : err('只有主家本人可以删除礼簿');
-      case 'remove': return ctx.role === 'owner' ? await removeBook(OWNER, account, String(event.bookId || ''), String(event.confirmName || '')) : err('只有主家本人可以删除礼簿');
+      // 删除礼簿（移入回收站，15 天内可恢复）：只限主家本人，只能删已归档的；先预览再确认
+      case 'removePreview': return ctx.role === 'owner' ? await removeBook(OWNER, account, String(event.bookId || ''), false) : err('只有主家本人可以删除礼簿');
+      case 'remove': return ctx.role === 'owner' ? await removeBook(OWNER, account, String(event.bookId || ''), true) : err('只有主家本人可以删除礼簿');
+      // 回收站（只限主家本人）
+      case 'trashList': return ctx.role === 'owner' ? await trashList(OWNER) : err('只有主家本人可以查看回收站');
+      case 'trashRestore': return ctx.role === 'owner' ? await trashOp(OWNER, String(event.bookId || ''), 'restore') : err('只有主家本人可以恢复');
+      case 'trashPurge': return ctx.role === 'owner' ? await trashOp(OWNER, String(event.bookId || ''), 'purge', event.confirmName) : err('只有主家本人可以删除');
       case 'stats': return await stats(OWNER, event.bookId);
       case 'getTpl': return await getTpl(OWNER, account, event.bookId);
       case 'saveTpl': return await saveTpl(OWNER, event.bookId, event.receiptTpl, event.printTpl);
@@ -290,45 +295,63 @@ async function archive(openid, account, bookId, archived, ctx) {
 }
 
 /**
- * 删除礼簿：confirmName 为 null 时只预览（份数、合计、各状态笔数、受影响的记账人）；
- * 否则须与礼簿名称一致，删除礼簿、全部礼金记录、存档 PDF、本场收款码与礼簿码文件
- * 当前礼簿不能删（先切换到别的礼簿）
+ * 删除礼簿（移入回收站，见 trash.js）：只能删已归档的；confirm=false 只预览（份数、合计、各状态笔数、受影响的记账人）
+ * 数据多时分批移动，返回 done=false 时前端再调用一次接着移
  */
-async function removeBook(openid, account, bookId, confirmName) {
+async function removeBook(openid, account, bookId, confirm) {
+  // 上次没移完：按回收站里的进度继续
+  let t = null;
+  try { t = (await db.collection('trash_books').doc(bookId).get()).data; } catch (e) { /* 不在回收站 */ }
+  if (t && confirm && t.ownerOpenid === openid && t.trashStatus === 'moving') return ok({ done: await trash.moveToTrash(db, openid, bookId, null) });
   const book = await getBook(openid, bookId);
   if (!book) return err('礼簿不存在');
+  if (!book.archived) return err('请先归档这本礼簿，再删除');
   if (account.activeBookId === book._id) return err('当前礼簿不能删除，请先切换到其他礼簿');
   const members = db.collection('members');
   const ms = (await members.where({ aid: account._id, role: _.neq('viewer'), _openid: _.exists(false) }).limit(100).get()).data;
   const affected = ms.filter(m => (account.orgMode
     ? !m.allBooks && Array.isArray(m.bookIds) && m.bookIds.length && m.bookIds.every(id => id === book._id)
     : soloBook(m, account) === book._id)).map(m => m.displayName || '记账人');
-  if (confirmName === null) {
-    const [paid, all] = await Promise.all([
-      records.aggregate().match({ ownerOpenid: openid, bookId: book._id, status: 'paid' })
-        .group({ _id: null, count: _.aggregate.sum(1), fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) }).end(),
-      records.where({ ownerOpenid: openid, bookId: book._id }).count()
-    ]);
-    const t = (paid.list && paid.list[0]) || { count: 0, fen: 0 };
-    return ok({ name: book.name, count: t.count, sum: Math.round(t.fen) / 100, total: all.total, affected });
-  }
-  if (confirmName.trim() !== book.name) return err('输入的礼簿名称不一致');
-  // 文件：存档 PDF、本场收款码（本人上传的）、各版本礼簿码
-  const files = [];
-  if (book.archivePdf && book.archivePdf.fileID) files.push(book.archivePdf.fileID);
-  if (ownPayCode(book.payCodeFileID, openid)) files.push(book.payCodeFileID);
-  const prefix = account.payCodeFileID ? account.payCodeFileID.split('/paycodes/')[0] : '';
-  if (prefix) ['develop', 'trial', 'release'].forEach(env => files.push(`${prefix}/qrcodes/${book._id}-${env}.png`));
-  try { if (files.length) await cloud.deleteFile({ fileList: files }); } catch (e) { /* 忽略 */ }
-  for (let i = 0; i < 200; i++) {
-    const r = await records.where({ ownerOpenid: openid, bookId: book._id }).remove();
-    if (!r.stats.removed) break;
-  }
-  if (book.archivePdf && book.archivePdf.fileID) await db.collection('exports').where({ fileID: book.archivePdf.fileID }).remove();
-  await books.doc(book._id).remove();
+  const [paid, all] = await Promise.all([
+    records.aggregate().match({ ownerOpenid: openid, bookId: book._id, status: 'paid' })
+      .group({ _id: null, count: _.aggregate.sum(1), fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) }).end(),
+    records.where({ ownerOpenid: openid, bookId: book._id }).count()
+  ]);
+  const st = (paid.list && paid.list[0]) || { count: 0, fen: 0 };
+  const summary = { name: book.name, count: st.count, sum: Math.round(st.fen) / 100, total: all.total, affected };
+  if (!confirm) return ok({ ...summary, days: trash.TRASH_DAYS });
+  const done = await trash.moveToTrash(db, openid, book._id, book, {
+    aid: account._id, count: summary.count, sum: summary.sum, files: trash.filesOf(book, account, ownPayCode)
+  });
   // 自己选了这一场的机构记账人：清掉选择
   await members.where({ aid: account._id, curBookId: book._id }).update({ data: { curBookId: '' } });
-  return ok({ removed: true, affected });
+  return ok({ done, affected });
+}
+
+/** 回收站列表（含删除中 / 恢复中的） */
+async function trashList(openid) {
+  let res = { data: [] };
+  try {
+    res = await db.collection('trash_books').where({ ownerOpenid: openid, _openid: _.exists(false) }).orderBy('deletedAt', 'desc').limit(100)
+      .field({ name: true, type: true, hostName: true, count: true, sum: true, deletedAt: true, purgeAt: true, trashStatus: true }).get();
+  } catch (e) { /* 集合还不存在 */ }
+  return ok({ list: res.data, days: trash.TRASH_DAYS });
+}
+
+/** 回收站里的一本：恢复 / 彻底删除（须输入礼簿名称） */
+async function trashOp(openid, bookId, op, confirmName) {
+  let t;
+  try { t = (await db.collection('trash_books').doc(bookId).get()).data; } catch (e) { return err('回收站里没有这本礼簿'); }
+  if (t.ownerOpenid !== openid || t._openid) return err('回收站里没有这本礼簿');
+  if (op === 'restore') {
+    const r = await trash.restore(db, openid, bookId);
+    return r.error ? err(r.error) : ok({ done: r.done });
+  }
+  if (t.trashStatus === 'restoring') return err('这本礼簿正在恢复，请稍后再试');
+  if (String(confirmName || '').trim() !== t.name) return err('输入的礼簿名称不一致');
+  if (t.trashStatus === 'moving') await trash.moveToTrash(db, openid, bookId, null); // 先移完再删
+  await trash.purge(db, cloud, { ...t, _id: bookId });
+  return ok({ purged: true });
 }
 
 /** 单本礼簿统计：合计、份数、按关系分组 */

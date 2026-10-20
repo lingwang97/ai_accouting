@@ -87,6 +87,7 @@ async function create(openid, event) {
       account = (await accounts.where({ ownerOpenid: fixed.ownerOpenid, _openid: _.exists(false) }).limit(1).get()).data[0] || null;
     } catch (e2) { /* 都不是 */ }
   }
+  if (!account && (await inTrash(aid))) return err('本场礼簿已结束');
   // 只认云函数写入的主家信息与礼簿（客户端绕过云函数伪造的带 _openid，可能挂着别人的收款码）
   if (!trusted(account) || (fixed && !trusted(fixed))) return err('收款账户不存在');
   if (fixed && fixed.archived) return err('本场礼簿已结束');
@@ -591,6 +592,11 @@ async function groupUpdate(ctx, rid, fromList, to, actualAmount, amounts) {
   const list = results.filter(x => x.code === 0).map(x => x.data.record);
   if (!list.length) return err(results[0].msg);
   return ok({ rid, status: to, record: list[0], list, failed: all.length - list.length });
+}
+
+/** 礼簿码对应的礼簿已被删除（在回收站里） */
+async function inTrash(id) {
+  try { return !!(await db.collection('trash_books').doc(id).get()).data; } catch (e) { return false; }
 }
 
 /** 自动取消的记录标记为「主家已核对未收到」，不再出现在待确认的「宾客未点完成」里 */

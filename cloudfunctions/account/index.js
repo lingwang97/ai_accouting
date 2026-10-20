@@ -1057,6 +1057,10 @@ async function getByAid(aid) {
       a = (await accounts.where({ ownerOpenid: fixed.ownerOpenid, _openid: _.exists(false) }).limit(1).get()).data[0] || null;
     } catch (e2) { /* 都不是 */ }
   }
+  if (!a) {
+    // 礼簿已删除（在回收站里）
+    try { if ((await db.collection('trash_books').doc(aid).get()).data) return err('本场礼簿已结束'); } catch (e) { /* 不在回收站 */ }
+  }
   // 只认云函数写入的主家信息与礼簿（客户端伪造的带 _openid）
   if (!a || !trusted(a) || (fixed && !trusted(fixed))) return err('收款账户不存在');
   if (fixed && fixed.archived) return err('本场礼簿已结束');

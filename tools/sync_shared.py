@@ -10,6 +10,7 @@ TARGETS = {
     'ctx.js': ['account', 'books', 'records', 'payment', 'export', 'qrcode', 'system'],
     'plans.js': ['system', 'warmer', 'account'],
     'purge.js': ['account', 'system'],
+    'trash.js': ['books', 'warmer'],
 }
 
 for name, funcs in TARGETS.items():

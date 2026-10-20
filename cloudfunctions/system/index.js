@@ -360,6 +360,8 @@ async function wipeAll(admin, doIt, e) {
     ['邀请卡', 'invites', not ? { ownerOpenid: not } : null],
     ['送礼记录', 'gifts_out', not ? { ownerOpenid: not } : null],
     ['办事提醒', 'reminders', not ? { ownerOpenid: not } : null],
+    ['回收站礼金记录', 'trash_records', not ? { ownerOpenid: not } : null],
+    ['回收站礼簿', 'trash_books', not ? { ownerOpenid: not } : null],
     ['打印样式', 'print_templates', not ? { ownerOpenid: not } : null],
     ['同名合并', 'person_alias', not ? { ownerOpenid: not } : null],
     ['套餐订阅', 'subscriptions', not ? { _id: not } : null],
@@ -385,7 +387,7 @@ async function wipeAll(admin, doIt, e) {
     let count = 0;
     for (let i = 0; i < 500; i++) {
       if (timeUp()) { done = false; break; }
-      if (col === 'exports' || col === 'accounts' || col === 'books') {
+      if (col === 'exports' || col === 'accounts' || col === 'books' || col === 'trash_books') {
         // 先删文件：导出 / 存档文件、收款码、礼簿存档与本场收款码
         let rows = [];
         try { rows = (await db.collection(col).where(condOf(c)).limit(50).get()).data; } catch (x) { break; }
@@ -395,6 +397,7 @@ async function wipeAll(admin, doIt, e) {
           if (col === 'exports' && !r._openid) ids.push(r.fileID);
           if (col === 'accounts') { ids.push(r.payCodeFileID); if (r.pendingPayCode) ids.push(r.pendingPayCode.fileID); }
           if (col === 'books') { ids.push(r.payCodeFileID); if (r.archivePdf) ids.push(r.archivePdf.fileID); }
+          if (col === 'trash_books') (r.files || []).forEach(f => ids.push(f));
         });
         const list = ids.filter(Boolean);
         if (list.length) { try { await cloud.deleteFile({ fileList: list }); files += list.length; } catch (x) { /* 忽略 */ } }

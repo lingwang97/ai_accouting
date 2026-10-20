@@ -55,9 +55,13 @@ module.exports = {
   // 机构模式记账人：切换自己正在记的一场（不影响主家和其他记账人）
   bookSetMine: bookId => call('books', { action: 'setMine', bookId }).then(r => { activeBookChanged(); return r; }),
   bookArchive: (bookId, archived) => call('books', { action: 'archive', bookId, archived }),
-  // 删除礼簿（主家本人）：先预览份数与合计，再输入礼簿名称确认
+  // 删除礼簿（主家本人，只能删已归档的）：先预览份数与合计，确认后移入回收站（done=false 时再调用接着移）
   bookRemovePreview: bookId => call('books', { action: 'removePreview', bookId }),
-  bookRemove: (bookId, confirmName) => call('books', { action: 'remove', bookId, confirmName }).then(r => { require('./cache.js').set('books', null); require('./cache.js').set('dashboard', null); return r; })
+  bookRemove: bookId => call('books', { action: 'remove', bookId }).then(r => { require('./cache.js').set('books', null); require('./cache.js').set('dashboard', null); return r; }),
+  // 回收站：列表、恢复（done=false 时再调用）、彻底删除（输入礼簿名称）
+  trashList: () => call('books', { action: 'trashList' }),
+  trashRestore: bookId => call('books', { action: 'trashRestore', bookId }).then(r => { require('./cache.js').set('books', null); return r; }),
+  trashPurge: (bookId, confirmName) => call('books', { action: 'trashPurge', bookId, confirmName })
     .then(r => { ['books', 'dashboard'].forEach(k => require('./cache.js').set(k, null)); return r; }),
   bookStats: bookId => call('books', { action: 'stats', bookId }),
   bookGetTpl: bookId => call('books', { action: 'getTpl', bookId }),

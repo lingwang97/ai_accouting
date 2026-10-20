@@ -1,5 +1,5 @@
 // 云函数 warmer — 预热调度：定时触发器每 5 分钟调用一次，按 settings.warmup 配置唤醒常用云函数，减少冷启动
-// 另外每天北京时间 9:00 那一轮推送到期的亲友办事提醒（reminders，见 remind.js），与预热开关无关
+// 另外每轮推送到期的亲友办事提醒（reminders，见 remind.js），每小时清理一次回收站里过期的礼簿（见 trash.js），都与预热开关无关
 // 配置在小程序「我的 → 系统设置」修改（system 云函数），无需重新上传触发器
 const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
@@ -14,6 +14,10 @@ exports.main = async (event) => {
   // 每一轮都推送已到提醒时间、尚未推送的提醒（pushed 保证只推一次；某轮失败下一轮补推）
   {
     try { await pushReminders(); } catch (e) { console.warn('提醒推送失败', e.message); }
+  }
+  // 每小时第一轮：永久删除回收站里超过保留期的礼簿（每次最多 5 本，没删完的下个小时继续）
+  if (new Date().getMinutes() < 5) {
+    try { await require('./trash.js').purgeExpired(db, cloud, 5); } catch (e) { console.warn('回收站清理失败', e.message); }
   }
   const cfg = normalizeWarmup(await readSetting(db, 'warmup', DEFAULT_WARMUP));
   // 关闭时不做任何读写（不再每 5 分钟写一次状态）

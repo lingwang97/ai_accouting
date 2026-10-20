@@ -2,7 +2,7 @@
 // 源文件在 tools/cloud-shared/purge.js，由 tools/sync_shared.py 复制到 account、system 云函数目录，勿在云函数目录里直接修改。
 //
 // 范围（openid 为被清除的用户）：
-//   作为主家：主家信息（含合并别名）、礼簿、礼金记录、打印样式、导出 / 存档登记及文件、收款码与礼簿码图片、
+//   作为主家：主家信息（含合并别名）、礼簿、礼金记录、回收站里的礼簿与礼金记录、打印样式、导出 / 存档登记及文件、收款码与礼簿码图片、
 //             记账人与家人共享关系、发出的邀请卡
 //   本人数据：送礼记录、办事提醒、同名合并记录、作为记账人 / 家人的加入关系、用户信息
 //   opts.subscription：套餐订阅（管理员清除时删，用户自己注销时保留开通记录）
@@ -17,6 +17,8 @@ function targets(openid, opts) {
   const list = [
     ['礼金记录', 'records', { ownerOpenid: openid }],
     ['礼簿', 'books', { ownerOpenid: openid }],
+    ['回收站礼金记录', 'trash_records', { ownerOpenid: openid }],
+    ['回收站礼簿', 'trash_books', { ownerOpenid: openid }],
     ['送礼记录', 'gifts_out', { ownerOpenid: openid }],
     ['办事提醒', 'reminders', { ownerOpenid: openid }],
     ['打印样式', 'print_templates', { ownerOpenid: openid }],
@@ -66,6 +68,11 @@ async function fileIds(db, openid, ownPayCode) {
       ENVS.forEach(env => files.push(`${prefix}/qrcodes/${id}-${env}.png`));
     });
   }
+  // 回收站里的礼簿：删除时登记的文件（存档 PDF、本场收款码、礼簿码）
+  try {
+    (await db.collection('trash_books').where({ ownerOpenid: openid }).field({ files: true }).limit(1000).get()).data
+      .forEach(t => (t.files || []).forEach(f => files.push(f)));
+  } catch (e) { /* 集合不存在 */ }
   return [...new Set(files.filter(Boolean))];
 }
 

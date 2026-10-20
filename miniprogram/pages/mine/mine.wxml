@@ -70,6 +70,9 @@
       <view class="menu-item" bindtap="goExport" wx:if="{{account && role !== 'viewer' && pm.export}}">
         <image class="mi-icon" src="/assets/icons/export-m.svg" /><text class="mi-text">导出与备份</text><text class="arrow">›</text>
       </view>
+      <view class="menu-item" bindtap="goTrash" wx:if="{{account && role === 'owner'}}">
+        <image class="mi-icon" src="/assets/icons/layers-m.svg" /><text class="mi-text">回收站</text><text class="arrow"><text class="muted">删除的礼簿保留 15 天</text> ›</text>
+      </view>
       <view class="menu-item" bindtap="onPrivacy">
         <image class="mi-icon" src="/assets/icons/lock-m.svg" /><text class="mi-text">隐私与数据</text><text class="arrow">›</text>
       </view>

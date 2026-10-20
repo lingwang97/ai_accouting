@@ -32,7 +32,8 @@
     "pages/guide/guide",
     "pages/welcome/welcome",
     "pages/start/start",
-    "pages/setup/setup"
+    "pages/setup/setup",
+    "pages/trash/trash"
   ],
   "window": {
     "backgroundTextStyle": "light",
