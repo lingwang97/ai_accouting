@@ -1,4 +1,6 @@
 .page { padding: 24rpx; }
+/* 本页的 .page 会覆盖全局 .tab-page 的底部留白：补回底部菜单高度，内容多时（如机构模式 7 格）也能滑到最底 */
+.page.tab-page { padding-bottom: calc(50px + 24rpx + env(safe-area-inset-bottom)); }
 
 /* ===== 工作台 ===== */
 .role-line { font-size: 24rpx; color: #888; margin: 0 8rpx 16rpx; }
