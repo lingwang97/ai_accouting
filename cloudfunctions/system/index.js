@@ -37,6 +37,10 @@ exports.main = async (event) => {
       case 'adminOrphanPreview': return await guard(OPENID, () => orphans(OPENID, false));
       case 'adminOrphanPurge': return await guard(OPENID, () => orphans(OPENID, true));
       case 'adminLogs': return await guard(OPENID, () => adminLogs());
+      // 清除全部测试数据（只在尚未标记正式上线时可用）；标记正式上线（不可撤销）
+      case 'adminWipePreview': return await guard(OPENID, () => wipeAll(OPENID, false, event));
+      case 'adminWipeAll': return await guard(OPENID, () => wipeAll(OPENID, true, event));
+      case 'adminMarkLaunched': return await guard(OPENID, () => markLaunched(OPENID, event.confirm === true));
       default: return err('未知 action');
     }
   } catch (e) {
@@ -64,9 +68,11 @@ async function adminGet() {
     P.readSetting(db, 'plans', P.DEFAULT_PLANS),
     P.readSetting(db, 'ads', P.DEFAULT_ADS)
   ]);
+  const launch = await P.readSetting(db, 'launch', { launched: false });
   return ok({
     warmup: P.normalizeWarmup(warmup), status, plans, warmable: P.WARMABLE,
-    ads: P.normalizeAds(ads), adSlots: P.AD_SLOTS
+    ads: P.normalizeAds(ads), adSlots: P.AD_SLOTS,
+    launched: launch.launched === true // 已标记正式上线：不再提供「清除全部测试数据」
   });
 }
 
@@ -326,6 +332,93 @@ async function orphans(admin, doIt) {
   }
   if (doIt) await log(admin, 'purgeOrphans', { removed: rows, files });
   return ok({ rows, files });
+}
+
+// —— 清除全部测试数据（上线前一次性使用） ——
+const WIPE_TEXT = '清除全部测试数据';
+
+/**
+ * 清除全部测试数据：所有账户的礼簿、礼金、主家信息、用户、人员关系、邀请、送礼、提醒、样式、同名合并、导出 / 存档、订阅
+ * 保留：settings（管理员、预热、广告、模板等系统设置）、操作日志；默认保留管理员自己的数据（keepAdmins）
+ * 只在尚未标记正式上线时可用；doIt=false 只统计。数据多时分批删除，单次约 45 秒后返回 done=false，前端再调用继续
+ */
+async function wipeAll(admin, doIt, e) {
+  const launch = await P.readSetting(db, 'launch', { launched: false });
+  if (launch.launched === true) return err('已标记正式上线，不能再清除全部数据');
+  if (doIt && String(e.confirmText || '').trim() !== WIPE_TEXT) return err(`请输入「${WIPE_TEXT}」确认`);
+  const keep = e.keepAdmins !== false;
+  const admins = keep ? ((await P.readSetting(db, 'admins', { openids: [] })).openids || []) : [];
+  const not = admins.length ? _.nin(admins) : null;
+  const targets = [
+    ['礼金记录', 'records', not ? { ownerOpenid: not } : null],
+    ['礼簿', 'books', not ? { ownerOpenid: not } : null],
+    ['主家信息', 'accounts', not ? { ownerOpenid: _.nin(admins.concat(admins.map(a => 'merged:' + a))) } : null],
+    ['用户', 'users', not ? { openid: not } : null],
+    ['记账人 / 家人', 'members', not ? { ownerOpenid: not, memberOpenid: not } : null],
+    ['邀请卡', 'invites', not ? { ownerOpenid: not } : null],
+    ['送礼记录', 'gifts_out', not ? { ownerOpenid: not } : null],
+    ['办事提醒', 'reminders', not ? { ownerOpenid: not } : null],
+    ['打印样式', 'print_templates', not ? { ownerOpenid: not } : null],
+    ['同名合并', 'person_alias', not ? { ownerOpenid: not } : null],
+    ['套餐订阅', 'subscriptions', not ? { _id: not } : null],
+    ['导出 / 存档', 'exports', not ? { ownerOpenid: not } : null]
+  ];
+  // 不保留管理员时用恒真条件（where({}) 不能直接 remove）
+  const condOf = c => c || { _id: _.exists(true) };
+  if (!doIt) {
+    const rows = [];
+    for (const [label, col, c] of targets) {
+      let count = 0;
+      try { count = (await db.collection(col).where(condOf(c)).count()).total; } catch (x) { /* 集合不存在 */ }
+      if (count) rows.push({ label, count });
+    }
+    return ok({ rows, keepAdmins: keep, adminCount: admins.length });
+  }
+  const start = Date.now();
+  const timeUp = () => Date.now() - start > 45 * 1000;
+  const removed = [];
+  let files = 0;
+  let done = true;
+  for (const [label, col, c] of targets) {
+    let count = 0;
+    for (let i = 0; i < 500; i++) {
+      if (timeUp()) { done = false; break; }
+      if (col === 'exports' || col === 'accounts' || col === 'books') {
+        // 先删文件：导出 / 存档文件、收款码、礼簿存档与本场收款码
+        let rows = [];
+        try { rows = (await db.collection(col).where(condOf(c)).limit(50).get()).data; } catch (x) { break; }
+        if (!rows.length) break;
+        const ids = [];
+        rows.forEach(r => {
+          if (col === 'exports' && !r._openid) ids.push(r.fileID);
+          if (col === 'accounts') { ids.push(r.payCodeFileID); if (r.pendingPayCode) ids.push(r.pendingPayCode.fileID); }
+          if (col === 'books') { ids.push(r.payCodeFileID); if (r.archivePdf) ids.push(r.archivePdf.fileID); }
+        });
+        const list = ids.filter(Boolean);
+        if (list.length) { try { await cloud.deleteFile({ fileList: list }); files += list.length; } catch (x) { /* 忽略 */ } }
+        const res = await db.collection(col).where({ _id: _.in(rows.map(r => r._id)) }).remove();
+        count += res.stats.removed;
+        if (rows.length < 50) break;
+      } else {
+        let res;
+        try { res = await db.collection(col).where(condOf(c)).remove(); } catch (x) { break; }
+        count += res.stats.removed;
+        if (!res.stats.removed) break;
+      }
+    }
+    if (count) removed.push({ label, count });
+    if (!done) break;
+  }
+  await log(admin, 'wipeAll', { name: '全部测试数据', keepAdmins: keep, removed, files, done });
+  return ok({ removed, files, done });
+}
+
+/** 标记正式上线：之后「清除全部测试数据」永久不可用（只能在云开发控制台删除 settings.launch 撤销） */
+async function markLaunched(admin, confirm) {
+  if (!confirm) return err('参数错误');
+  await P.writeSetting(db, 'launch', { launched: true, at: new Date(), by: admin });
+  await log(admin, 'markLaunched', { name: '标记正式上线' });
+  return ok({ launched: true });
 }
 
 /** 操作日志 */

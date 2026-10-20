@@ -136,6 +136,10 @@ module.exports = {
   adminOrphanPreview: () => call('system', { action: 'adminOrphanPreview' }),
   adminOrphanPurge: () => call('system', { action: 'adminOrphanPurge' }),
   adminLogs: () => call('system', { action: 'adminLogs' }),
+  // 清除全部测试数据（上线前一次性）、标记正式上线
+  adminWipePreview: keepAdmins => call('system', { action: 'adminWipePreview', keepAdmins: keepAdmins !== false }),
+  adminWipeAll: (confirmText, keepAdmins) => call('system', { action: 'adminWipeAll', confirmText, keepAdmins: keepAdmins !== false }),
+  adminMarkLaunched: () => call('system', { action: 'adminMarkLaunched', confirm: true }),
   adsConfig: () => call('system', { action: 'ads' }, { silent: true }),
   adminSetAds: ads => call('system', { action: 'adminSetAds', ads })
 };

@@ -15,6 +15,7 @@ Page({
     loaded: false,
     // 数据清除
     purgeTab: 'account', purgeOpenid: '', purgeGuest: false, purgePv: null, purgeBackup: null, purgeBackedUp: false,
+    launched: true, wipeKeepAdmins: true, wipeRows: null, wiping: false, // 清除全部测试数据（未上线时可用）
     backingUp: false, purging: false, bookKeyword: '', purgeBooks: [], orphanRows: null, orphanLoading: false, logs: [],
     warmup: null,
     funcs: [],          // [{ name, label, on }]
@@ -48,6 +49,7 @@ Page({
       }));
       this.setData({
         loaded: true,
+        launched: !!d.launched,
         warmup: d.warmup,
         funcs: d.warmable.map(n => ({ name: n, label: FUNC_LABEL[n] || n, on: d.warmup.functions.includes(n) })),
         statusText: statusText(d.status),
@@ -265,10 +267,67 @@ Page({
     });
   },
 
+  // —— 清除全部测试数据（上线前一次性）——
+  onWipeKeep(e) { this.setData({ wipeKeepAdmins: e.detail.value, wipeRows: null }); },
+  async onWipePreview() {
+    try {
+      const { rows } = await req.adminWipePreview(this.data.wipeKeepAdmins);
+      this.setData({ wipeRows: rows });
+    } catch (e) { /* toast 已提示 */ }
+  },
+  onWipeAll() {
+    if (this.data.wiping) return;
+    wx.showModal({
+      title: '清除全部测试数据',
+      editable: true,
+      placeholderText: '请输入「清除全部测试数据」',
+      confirmText: '清除',
+      confirmColor: '#FA5151',
+      success: res => {
+        if (!res.confirm) return;
+        const text = (res.content || '').trim();
+        if (text !== '清除全部测试数据') return wx.showToast({ title: '输入不一致，未清除', icon: 'none' });
+        this.runWipe(text, 0);
+      }
+    });
+  },
+  /** 数据多时云函数分批返回 done=false，自动继续，直到删完 */
+  async runWipe(text, total) {
+    this.setData({ wiping: true });
+    wx.showLoading({ title: '清除中…', mask: true });
+    try {
+      const r = await req.adminWipeAll(text, this.data.wipeKeepAdmins);
+      total += r.removed.reduce((t, x) => t + x.count, 0);
+      if (!r.done) return this.runWipe(text, total);
+      wx.hideLoading();
+      wx.showModal({ title: '已清除', content: `共删除 ${total} 条测试数据。确认已清理干净后，可点「标记正式上线」永久关闭此功能。`, showCancel: false });
+      this.setData({ wipeRows: null, wiping: false });
+      require('../../utils/cache.js').clear();
+    } catch (e) {
+      wx.hideLoading();
+      this.setData({ wiping: false });
+    }
+  },
+  onMarkLaunched() {
+    wx.showModal({
+      title: '标记正式上线',
+      content: '标记后「清除全部测试数据」将永久关闭，无法在小程序里恢复。确定已完成测试数据清理？',
+      confirmText: '标记',
+      success: async res => {
+        if (!res.confirm) return;
+        try {
+          await req.adminMarkLaunched();
+          this.setData({ launched: true, purgeTab: 'account' });
+          wx.showToast({ title: '已标记上线', icon: 'success' });
+        } catch (e) { /* toast 已提示 */ }
+      }
+    });
+  },
+
   async loadLogs() {
     try {
       const { list } = await req.adminLogs();
-      const T = { purgeAccount: '清除账户', purgeBook: '删除礼簿', purgeOrphans: '清理无主数据' };
+      const T = { purgeAccount: '清除账户', purgeBook: '删除礼簿', purgeOrphans: '清理无主数据', wipeAll: '清除全部测试数据', markLaunched: '标记正式上线' };
       this.setData({
         logs: list.map(l => ({
           _id: l._id,

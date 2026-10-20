@@ -108,6 +108,7 @@
         <view class="seg-item {{purgeTab === 'book' ? 'on' : ''}}" data-t="book" bindtap="onPurgeTab">按礼簿</view>
         <view class="seg-item {{purgeTab === 'orphan' ? 'on' : ''}}" data-t="orphan" bindtap="onPurgeTab">无主数据</view>
         <view class="seg-item {{purgeTab === 'logs' ? 'on' : ''}}" data-t="logs" bindtap="onPurgeTab">日志</view>
+        <view class="seg-item {{purgeTab === 'wipe' ? 'on' : ''}}" wx:if="{{!launched}}" data-t="wipe" bindtap="onPurgeTab">全部</view>
       </view>
 
       <!-- 按账户 -->
@@ -164,6 +165,24 @@
       </block>
 
       <!-- 操作日志 -->
+      <!-- 清除全部测试数据：上线前一次性使用，标记正式上线后永久消失 -->
+      <block wx:if="{{purgeTab === 'wipe' && !launched}}">
+        <view class="muted small tip">清除所有账户的礼簿、礼金、主家信息、用户、记账人、邀请、送礼、提醒、导出文件等测试数据；保留系统设置（管理员、预热、广告、模板）与操作日志。仅限正式上线前使用。</view>
+        <view class="row between">
+          <text>保留管理员自己的数据</text>
+          <switch checked="{{wipeKeepAdmins}}" bindchange="onWipeKeep" color="{{primary}}" />
+        </view>
+        <button class="btn-outline save" bindtap="onWipePreview">预览将删除的数据</button>
+        <block wx:if="{{wipeRows}}">
+          <view class="idx-row" wx:for="{{wipeRows}}" wx:key="label"><text>{{item.label}}</text><text>{{item.count}}</text></view>
+          <view class="muted small" wx:if="{{!wipeRows.length}}">没有可清除的数据</view>
+          <button wx:if="{{wipeRows.length}}" class="btn-danger save" loading="{{wiping}}" bindtap="onWipeAll">清除全部测试数据</button>
+        </block>
+        <view class="divider-line"></view>
+        <view class="muted small">测试数据清理完成、准备正式上线时：</view>
+        <button class="btn-outline save" bindtap="onMarkLaunched">标记正式上线（永久关闭此功能）</button>
+      </block>
+
       <block wx:if="{{purgeTab === 'logs'}}">
         <view class="log" wx:for="{{logs}}" wx:key="_id">
           <view>{{item.title}}</view>
