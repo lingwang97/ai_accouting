@@ -5,7 +5,7 @@ const scenes = require('../../utils/scenes.js');
 const theme = require('../../utils/theme.js');
 const samename = require('../../utils/samename.js');
 
-const QUICK = [200, 500, 600, 800, 1000, 1888];
+const QUICK = [100, 200, 300, 500, 600, 800, 1000, 1500, 2000];
 
 Page({
   data: {

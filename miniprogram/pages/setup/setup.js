@@ -168,7 +168,7 @@ Page({
         accountName: d.name.trim(),
         payCodeFileID: d.payCodeFileID,
         theme: { name: bookName, primary: '#C8161D' },
-        quickAmounts: [],
+        quickAmounts: [100, 200, 300, 500, 600, 800, 1000, 1500, 2000], // 默认快捷礼金，可在「主家信息」里修改
         confirmPayCode: true,
         own: true // 建本人自己的主家信息（记账人身份下也不会改到所记账的主家）
       });

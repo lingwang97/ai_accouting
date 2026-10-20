@@ -9,7 +9,7 @@ const theme = require('../../utils/theme.js');
 const perm = require('../../utils/perm.js');
 const samename = require('../../utils/samename.js');
 
-const DEFAULT_QUICK = [200, 500, 600, 800, 1000, 1888];
+const DEFAULT_QUICK = [100, 200, 300, 500, 600, 800, 1000, 1500, 2000];
 const DONE_MAX = 20; // 本次已登记列表最多显示的份数
 const emptyForm = () => ({
   payerName: '',

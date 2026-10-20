@@ -4,7 +4,7 @@ const req = require('../../utils/request.js');
 const theme = require('../../utils/theme.js');
 
 const PRESET_COLORS = ['#C8161D', '#07C160', '#B8860B', '#2B7FFF', '#333333'];
-const DEFAULT_QUICK = [200, 500, 600, 800, 1000, 1888];
+const DEFAULT_QUICK = [100, 200, 300, 500, 600, 800, 1000, 1500, 2000];
 
 Page({
   data: {

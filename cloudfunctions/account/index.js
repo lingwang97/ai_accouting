@@ -195,7 +195,7 @@ async function save(openid, event) {
     data.quickAmounts = event.quickAmounts.map(Number)
       .filter(n => Number.isFinite(n) && n > 0 && n <= 100000)
       .map(n => Math.round(n * 100) / 100)
-      .slice(0, 8);
+      .slice(0, 12); // 最多 12 个
   }
   // 机构模式（机构版）：需要专业版套餐；关闭随时可以
   if (isOwner && typeof event.orgMode === 'boolean') {
@@ -953,7 +953,7 @@ async function getInvite(token) {
   } catch (e) { return null; }
 }
 
-const DEFAULT_QUICK = [200, 500, 600, 800, 1000, 1888];
+const DEFAULT_QUICK = [100, 200, 300, 500, 600, 800, 1000, 1500, 2000];
 
 /** 当前礼簿的公开信息（宾客随礼页显示） */
 async function activeBook(a) {
