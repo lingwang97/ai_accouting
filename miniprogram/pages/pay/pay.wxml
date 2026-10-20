@@ -93,7 +93,7 @@
           <view class="sr-item"><text class="sr-num">②</text>扫台卡收款码</view>
           <view class="sr-item"><text class="sr-num">③</text>回来点完成</view>
         </view>
-        <view class="link-fold" bindtap="onToggleFallback">{{showFallback ? '收起' : '扫不到收款码？存到相册转账'}}</view>
+        <view class="fold-btn {{showFallback ? 'open' : ''}}" bindtap="onToggleFallback">{{showFallback ? '收起收款码' : '看不到 / 扫不到礼台收款码？点这里显示'}}</view>
       </view>
 
       <!-- 不在现场（或在现场看不到收款码）：存相册后用扫一扫识别 -->

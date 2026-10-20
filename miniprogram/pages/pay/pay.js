@@ -65,9 +65,10 @@ Page({
       this.setData({ loadErr: '二维码无效，请联系收款方' });
       return;
     }
-    // 一律先引导「扫一扫」扫主家屏幕 / 台卡上的收款码，扫不到再存相册转账；
-    // 从聊天里的卡片、图片进入（多半不在现场）时，同时展开「存相册」方式，但不自动保存
-    this._remote = !isOnsite(options);
+    // 不论什么身份、从哪里进入，一律先引导「扫一扫」扫礼台（主家屏幕 / 台卡）上的收款码，
+    // 收款码图片默认收起，看不到 / 扫不到时点开，再存相册转账。
+    // 不再按进入场景自动展开：wx.getEnterOptionsSync 取的是小程序启动时的场景，之前从聊天卡片打开过小程序后，
+    // 再扫码或从礼簿码页进入随礼页也会被误判为「不在现场」而展开收款码
     this.setData({ aid, onsite: true });
     this.loadAccount(aid);
   },
@@ -159,7 +160,7 @@ Page({
       this.setData({
         record: viewRecord(record),
         payCodeUrl,
-        showFallback: !!this._remote,
+        showFallback: false, // 收款码默认收起，看不到时点开
         codeSaved: false,
         step: 'transfer'
       });
@@ -353,14 +354,3 @@ Page({
   }
 });
 
-/**
- * 是否在现场：点聊天里的转发卡片进入视为不在现场；扫码进入（扫主家屏幕、台卡、印刷的礼簿码，
- * 或首页「扫码随礼」）及其他方式都按在现场处理。判断错了页面上可一键切换
- */
-const SHARE_SCENES = [1007, 1008, 1036, 1044, 1048, 1049, 1073, 1074]; // 单聊 / 群聊卡片、长按识别聊天图片里的码、App 分享等
-function isOnsite(options) {
-  if (options.via === 'scan') return true;
-  let scene = 0;
-  try { scene = (wx.getEnterOptionsSync() || {}).scene; } catch (e) { /* 低版本 */ }
-  return !SHARE_SCENES.includes(scene);
-}
