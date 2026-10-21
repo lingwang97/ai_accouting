@@ -20,26 +20,23 @@
     </view>
 
     <view class="seg">
-      <view class="seg-item {{tab === 'people' || tab === 'in' ? 'on' : ''}}" data-t="recv" bindtap="onTab">收礼往来</view>
+      <view class="seg-item {{tab === 'people' ? 'on' : ''}}" data-t="recv" bindtap="onTab">收礼往来</view>
       <view class="seg-item {{tab === 'out' ? 'on' : ''}}" data-t="out" bindtap="onTab">送出的礼</view>
       <view class="seg-item {{tab === 'receipts' ? 'on' : ''}}" data-t="receipts" bindtap="onTab">随礼回执</view>
     </view>
 
     <view class="search-row">
-      <input class="search" placeholder="{{tab === 'people' ? '输入姓名查往来' : (tab === 'receipts' ? '搜索主家 / 礼簿' : (tab === 'in' ? '搜索随礼人姓名' : '搜索对方姓名'))}}" value="{{keyword}}"
+      <input class="search" placeholder="{{tab === 'people' ? '输入姓名查往来' : (tab === 'receipts' ? '搜索主家 / 礼簿' : '搜索对方姓名')}}" value="{{keyword}}"
              bindinput="onKeyword" bindconfirm="onSearch" confirm-type="search" />
       <view class="btn btn-primary add-btn" hover-class="btn-hover" wx:if="{{tab !== 'receipts'}}" bindtap="onAddGift">＋ 记送礼</view>
     </view>
 
-    <loading show="{{loading && (tab === 'people' ? !shownPeople.length : (tab === 'in' ? !inList.length : (tab === 'receipts' ? !shownReceipts.length : !outList.length)))}}" rows="4" />
+    <loading show="{{loading && (tab === 'people' ? !shownPeople.length : (tab === 'receipts' ? !shownReceipts.length : !outList.length))}}" rows="4" />
 
-    <!-- 收礼往来：按人（收送对比）/ 按笔（收到的每一笔） -->
-    <view class="sub-row" wx:if="{{tab === 'people' || tab === 'in'}}">
-      <view class="seg seg-sm">
-        <view class="seg-item {{tab === 'people' ? 'on' : ''}}" data-t="people" bindtap="onTab">按人</view>
-        <view class="seg-item {{tab === 'in' ? 'on' : ''}}" data-t="in" bindtap="onTab">按笔</view>
-      </view>
-      <view class="pf-chips" wx:if="{{tab === 'people'}}">
+    <!-- 收礼往来：按人（收送对比；逐笔在人详情里看） -->
+    <view class="card out-sum" wx:if="{{tab === 'people' && people.length}}">共收到 {{inTotal}} 笔 · <text class="money">￥{{inSum}}</text></view>
+    <view class="sub-row" wx:if="{{tab === 'people'}}">
+      <view class="pf-chips">
         <view class="chip {{pFilter === item.v ? 'on' : ''}}" wx:for="{{pFilters}}" wx:key="v" data-v="{{item.v}}" bindtap="onPFilter">{{item.t}}</view>
       </view>
     </view>
@@ -59,20 +56,6 @@
       <view class="muted center pad" wx:if="{{!loading && shownPeople.length === 0}}">
         {{keyword ? '名单中没有「' + keyword + '」，按回车直接查询' : (pFilter !== 'all' && people.length ? '没有符合条件的往来人' : '暂无往来记录。宾客随礼入簿后会自动出现在这里，也可点「记送礼」登记你送出的礼')}}
       </view>
-    </block>
-
-    <!-- 按笔：本人礼簿里已入簿的每一笔礼金 -->
-    <block wx:elif="{{tab === 'in'}}">
-      <view class="card out-sum">共收到 {{inTotal}} 笔 · <text class="money">￥{{inSum}}</text></view>
-      <view class="card gift" wx:for="{{inList}}" wx:key="_id" data-key="{{item.personKey}}" bindtap="onInPerson">
-        <view class="p-top">
-          <text class="p-name">{{item.nameStr}}<text class="muted" wx:if="{{item.relation}}"> · {{item.relation}}</text></text>
-          <text class="money">￥{{item.amountStr}}</text>
-        </view>
-        <view class="muted">{{item.payDay}} · {{item.typeLabel}}<text wx:if="{{item.themeName}}"> · {{item.themeName}}</text> · {{item.methodStr}}<text wx:if="{{item.remark}}"> · {{item.remark}}</text><text class="link-r" data-name="{{item.payerName}}" data-amount="{{item.amountStr}}" catchtap="onInRemind"> 办事提醒 ›</text></view>
-      </view>
-      <view class="fold-more" wx:if="{{inList.length < inTotal}}" bindtap="onInMore">加载更多（{{inList.length}}/{{inTotal}}）</view>
-      <view class="muted center pad" wx:if="{{!loading && inList.length === 0}}">{{keyword ? '没有找到「' + keyword + '」' : '宾客随礼入簿后会出现在这里'}}</view>
     </block>
 
     <!-- 随礼回执：扫码随礼、主家确认后的电子回执 -->

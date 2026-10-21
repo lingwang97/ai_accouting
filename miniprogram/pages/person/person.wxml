@@ -30,7 +30,7 @@
   <view class="card item" wx:for="{{received}}" wx:key="_id">
     <view class="i-top"><text class="i-name">{{item.event || item.typeLabel}}</text><text class="money i-amt">￥{{item.amountStr}}</text></view>
     <view class="muted">{{item.date}}<text wx:if="{{item.relation}}"> · {{item.relation}}</text></view>
-    <view class="move-row" wx:if="{{item.movable}}"><text class="link" data-side="received" data-idx="{{index}}" catchtap="onMove">不是TA ›</text></view>
+    <view class="move-row"><text class="link" data-amount="{{item.amountStr}}" catchtap="onRemindRecv">办事提醒 ›</text><text class="link move-gap" wx:if="{{item.movable}}" data-side="received" data-idx="{{index}}" catchtap="onMove">不是TA ›</text></view>
   </view>
   <view class="muted empty" wx:if="{{!loading && received.length === 0}}">暂无</view>
 

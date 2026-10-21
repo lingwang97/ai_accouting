@@ -129,6 +129,13 @@ Page({
     wx.navigateTo({ url: `/pages/remind/remind?name=${encodeURIComponent(this.data.name)}&key=${encodeURIComponent(key)}` });
   },
 
+  /** 这一笔收礼：记下 TA 家办事日期，到时提醒回礼（备注带上当时的金额） */
+  onRemindRecv(e) {
+    const key = this.data.key.startsWith('h:') ? this.data.key : '';
+    const note = `曾随我 ￥${e.currentTarget.dataset.amount}`;
+    wx.navigateTo({ url: `/pages/remind/remind?name=${encodeURIComponent(this.data.name)}&key=${encodeURIComponent(key)}&note=${encodeURIComponent(note)}` });
+  },
+
   onEditGift(e) {
     const g = this.data.given[e.currentTarget.dataset.idx];
     if (g.auto) return wx.navigateTo({ url: `/pages/receipt/receipt?rid=${g.rid}` });

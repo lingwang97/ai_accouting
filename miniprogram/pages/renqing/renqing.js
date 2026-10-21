@@ -10,10 +10,8 @@ Page({
     tab: 'people',     // 收礼往来（people 按人 | in 按笔）| out 送出的礼 | receipts 随礼回执
     pFilter: 'all',    // 按人筛选：all 全部 | owe 待回礼 | given 多送
     pFilters: [{ v: 'all', t: '全部' }, { v: 'owe', t: '待回礼' }, { v: 'given', t: '多送' }],
-    inList: [],        // 按笔：收到的每一笔（分页）
-    inSum: '0.00',
+    inSum: '0.00',     // 收礼合计（按人列表汇总：总笔数 / 总金额）
     inTotal: 0,
-    inPage: 1,
     reminds: [],       // 亲友办事提醒（未处理，最近的在前）
     remindAll: false,  // 展开全部提醒
     receipts: [],      // 随礼回执
@@ -32,7 +30,7 @@ Page({
     // 已退出登录：立即清空上一个账户的往来（不等登录状态恢复，也不再查询身份）
     if (getApp().isLoggedOut()) {
       getApp().refreshTabBar();
-      return this.setData({ loading: false, loggedIn: false, people: [], shownPeople: [], outList: [], inList: [], receipts: [], shownReceipts: [], reminds: [] });
+      return this.setData({ loading: false, loggedIn: false, people: [], shownPeople: [], outList: [], receipts: [], shownReceipts: [], reminds: [] });
     }
     // 记账人身份不显示「往来」（切换身份后可能停留在本页）：回到工作台
     if ((await getApp().ensureRole()) === 'clerk') return wx.switchTab({ url: '/pages/index/index' });
@@ -47,7 +45,7 @@ Page({
   async load() {
     await getApp().loginReady;
     if (!getApp().globalData.user) {
-      return this.setData({ loading: false, loggedIn: false, people: [], shownPeople: [], outList: [], inList: [], receipts: [], shownReceipts: [], reminds: [] });
+      return this.setData({ loading: false, loggedIn: false, people: [], shownPeople: [], outList: [], receipts: [], shownReceipts: [], reminds: [] });
     }
     this.setData({ loading: true, loggedIn: true });
     try {
@@ -62,10 +60,12 @@ Page({
           outSumStr: fmt.money(p.outSum),
           balanceStr: fmt.money(Math.abs(p.balance))
         }));
-        this.setData({ people });
+        this.setData({
+          people,
+          inTotal: people.reduce((t, p) => t + (p.inCount || 0), 0),
+          inSum: fmt.money(people.reduce((t, p) => t + Math.round((p.inSum || 0) * 100), 0) / 100)
+        });
         this.filterPeople();
-      } else if (this.data.tab === 'in') {
-        await this.loadIn(1);
       } else if (this.data.tab === 'receipts') {
         const { list } = await req.myReceipts();
         this.setData({
@@ -111,11 +111,10 @@ Page({
     wx.navigateTo({ url: `/pages/receipt/receipt?rid=${e.currentTarget.dataset.id}` });
   },
 
-  /** 切换页签；「收礼往来」回到上次看的按人 / 按笔 */
+  /** 切换页签（收礼往来即按人） */
   onTab(e) {
     let t = e.currentTarget.dataset.t;
-    if (t === 'recv') t = this._recvView || 'people';
-    if (t === 'people' || t === 'in') this._recvView = t;
+    if (t === 'recv') t = 'people';
     if (t === this.data.tab) return;
     this.setData({ tab: t, loading: true }); // 先置加载中，避免切换瞬间空文案闪现
     this.load();
@@ -130,7 +129,7 @@ Page({
   /** 搜索：名单里没有时也可直接查询该姓名 */
   onSearch() {
     const k = (this.data.keyword || '').trim();
-    if (this.data.tab === 'out' || this.data.tab === 'in') return this.load();
+    if (this.data.tab === 'out') return this.load();
     if (this.data.tab === 'receipts') return this.filterReceipts();
     if (k && this.data.shownPeople.length === 0) this.openPerson('n:' + k);
   },
@@ -162,10 +161,6 @@ Page({
   },
   onRemindAll() { this.setData({ remindAll: !this.data.remindAll }); },
   onAddRemind() { wx.navigateTo({ url: '/pages/remind/remind' }); },
-  onInRemind(e) {
-    const { name, amount } = e.currentTarget.dataset;
-    wx.navigateTo({ url: `/pages/remind/remind?name=${encodeURIComponent(name)}&note=${encodeURIComponent(`曾随我 ￥${amount}`)}` });
-  },
   onRemind(e) {
     const r = this.data.reminds[e.currentTarget.dataset.idx];
     if (!r) return;
@@ -192,32 +187,6 @@ Page({
       }
     });
   },
-
-  /** 按笔：收到的每一笔，按页加载（page=1 重新加载），可按姓名搜索 */
-  async loadIn(page) {
-    const res = await req.inList({ page, pageSize: 30, keyword: (this.data.keyword || '').trim() || undefined });
-    const rows = res.list.map(r => ({
-      ...r,
-      amountStr: fmt.money(r.amount),
-      typeLabel: scenes.label(r.bookType),
-      methodStr: r.payMethod === 'cash' ? '现金' : '微信',
-      nameStr: samename.nameStr(r.payerName, r.nameTag),
-      // 往来人：有区分备注按 n:姓名#备注，否则按姓名（唯一同名时服务端直接返回该宾客）
-      personKey: r.key || ('n:' + r.payerName + (r.nameTag ? '#' + r.nameTag : '')) // 服务端算好的往来人 key
-    }));
-    const patch = { inPage: page, inTotal: res.total, inSum: fmt.money(res.sum) };
-    if (page === 1) patch.inList = rows;
-    else {
-      // 加载更多：按下标追加，不重传整张列表
-      const start = this.data.inList.length;
-      rows.forEach((r, i) => { patch[`inList[${start + i}]`] = r; });
-    }
-    this.setData(patch);
-  },
-  onInMore() {
-    if (this.data.inList.length < this.data.inTotal) this.loadIn(this.data.inPage + 1).catch(() => {});
-  },
-  onInPerson(e) { this.openPerson(e.currentTarget.dataset.key); },
 
   /** key：o:微信身份:姓名 或 n:姓名（只输入姓名查询时） */
   openPerson(key) {
