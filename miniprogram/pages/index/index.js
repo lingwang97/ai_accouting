@@ -29,6 +29,7 @@ Page({
     pendingCount: 0,
     pendingSum: '0.00',
     otherPending: 0,   // 其他礼簿的待确认份数（提示用）
+    todayBook: 0,      // 当前礼簿今日入簿份数
     printerName: '',
     pm: {},            // 当前身份的权限（记账人按各自权限显示操作）
     notifyTip: '',     // 新礼金提醒未开启 / 发送失败时的提示
@@ -119,6 +120,7 @@ Page({
         book: b ? { ...b, typeLabel: scenes.label(b.type), sumStr: fmt.money(b.sum), sumCls: sumCls(fmt.money(b.sum)) } : null,
         todaySum: fmt.money(d.today.sum),
         todayCount: d.today.count,
+        todayBook: d.today.book || 0, // 当前礼簿的今日份数
         pendingCount: d.pending.count,
         pendingSum: fmt.money(d.pending.sum),
         otherPending: d.pending.other || 0,

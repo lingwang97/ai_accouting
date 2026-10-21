@@ -578,9 +578,9 @@ async function confirmBatch(ctx, rids) {
  */
 async function groupUpdate(ctx, rid, fromList, to, actualAmount, amounts) {
   const rec = await getRecord(rid);
-  if (!rec || !rec.batchId) return ownerUpdate(ctx, rid, fromList, to, actualAmount);
+  if (!rec || !rec.batchId) return ownerUpdate(ctx, rid, fromList, to, actualAmount, rec);
   if (rec.ownerOpenid !== ctx.ownerOpenid || !canBook(ctx, rec.bookId)) return err('无权操作该账目');
-  if (notCurrentBook(ctx, rec)) return err(SWITCH_MSG);
+  if (notCurrentBook(ctx, rec)) return err(switchMsg(ctx));
   const all = (await batchRecords(rec.batchId, { ownerOpenid: ctx.ownerOpenid })).filter(r => fromList.includes(r.status) && (r.status !== 'cancelled' || r.autoCancelled));
   if (!all.length) return err('当前状态不可操作，请刷新');
   const map = (to === 'paid' && amounts && typeof amounts === 'object') ? amounts : {};
@@ -588,7 +588,7 @@ async function groupUpdate(ctx, rid, fromList, to, actualAmount, amounts) {
     const v = map[r._id];
     if (v !== undefined && v !== null && !(Number(v) > 0 && Number(v) <= 100000)) return err(`${r.payerName} 的实际金额不正确`);
   }
-  const results = await Promise.all(all.map(r => ownerUpdate(ctx, r._id, fromList, to, map[r._id])
+  const results = await Promise.all(all.map(r => ownerUpdate(ctx, r._id, fromList, to, map[r._id], r)
     .catch(e => ({ code: 1, msg: e.message }))));
   const list = results.filter(x => x.code === 0).map(x => x.data.record);
   if (!list.length) return err(results[0].msg);
@@ -596,7 +596,9 @@ async function groupUpdate(ctx, rid, fromList, to, actualAmount, amounts) {
 }
 
 /** 确认 / 拒绝限定在当前礼簿（workBook）：待确认只显示当前礼簿，防止跨礼簿误确认；旧数据没有 bookId 的不限 */
-const SWITCH_MSG = '请先切换到该礼簿';
+function switchMsg(ctx) {
+  return ctx.account && ctx.account.orgMode ? '请先切换到该场次' : '请先切换到该礼簿';
+}
 function notCurrentBook(ctx, rec) {
   return !!rec.bookId && rec.bookId !== workBook(ctx);
 }
@@ -611,22 +613,24 @@ async function dismissStall(ctx, rid) {
   if (readonly(ctx) || !can(ctx, 'confirm')) return err('你没有确认收礼的权限');
   const rec = await getRecord(rid);
   if (!rec || rec.ownerOpenid !== ctx.ownerOpenid || !canBook(ctx, rec.bookId)) return err('记录不存在');
-  if (notCurrentBook(ctx, rec)) return err(SWITCH_MSG);
+  if (notCurrentBook(ctx, rec)) return err(switchMsg(ctx));
   const key = rec.batchId ? { batchId: rec.batchId } : { _id: rid };
   await records.where({ ...key, ownerOpenid: ctx.ownerOpenid, status: 'cancelled', autoCancelled: true }).update({ data: { stallDismissed: true } });
   return ok({ dismissed: true });
 }
 
-/** 收款方确认到账 / 拒绝 / 作废（带状态条件原子更新） */
-async function ownerUpdate(ctx, rid, fromList, to, actualAmount) {
+/**
+ * 收款方确认到账 / 拒绝 / 作废（带状态条件原子更新）
+ * pre：调用方刚读过的这条记录（groupUpdate 已读），用于范围校验与原金额，省一次读库；状态以原子更新条件为准
+ */
+async function ownerUpdate(ctx, rid, fromList, to, actualAmount, pre) {
   if (!validId(rid)) return err('记录不存在');
   const openid = ctx.ownerOpenid; // 数据属于主家，记账人代为操作
-  if (ctx.bookIds || to !== 'void') {
-    const r0 = await getRecord(rid);
-    if (ctx.bookIds && (!r0 || !canBook(ctx, r0.bookId))) return err('该礼金不在你负责的场次');
-    // 确认 / 拒绝只能在当前礼簿内进行（作废已入簿的不限）
-    if (r0 && to !== 'void' && notCurrentBook(ctx, r0)) return err(SWITCH_MSG);
-  }
+  const hasAmt = to === 'paid' && actualAmount !== undefined && actualAmount !== null;
+  const r0 = (pre && pre._id === rid) ? pre : ((ctx.bookIds || to !== 'void' || hasAmt) ? await getRecord(rid) : null);
+  if (ctx.bookIds && (!r0 || !canBook(ctx, r0.bookId))) return err('该礼金不在你负责的场次');
+  // 确认 / 拒绝只能在当前礼簿内进行（作废已入簿的不限）
+  if (r0 && to !== 'void' && notCurrentBook(ctx, r0)) return err(switchMsg(ctx));
   const data = { status: to };
   if (to === 'paid') {
     data.paidAt = new Date();
@@ -635,10 +639,10 @@ async function ownerUpdate(ctx, rid, fromList, to, actualAmount) {
     data.handlerName = handlerName(ctx);
   }
   // 主家按实际到账金额入簿：保留宾客原登记金额备查
-  if (to === 'paid' && actualAmount !== undefined && actualAmount !== null) {
+  if (hasAmt) {
     const amt = Math.round(Number(actualAmount) * 100) / 100;
     if (!Number.isFinite(amt) || amt <= 0 || amt > 100000) return err('实际金额不正确');
-    const cur = await getRecord(rid);
+    const cur = r0;
     if (!cur || cur.ownerOpenid !== openid) return err('记录不存在');
     if (Math.round(cur.amount * 100) !== Math.round(amt * 100)) {
       data.amount = amt;

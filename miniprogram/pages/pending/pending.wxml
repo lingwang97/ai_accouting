@@ -4,7 +4,11 @@
     <view class="sum">
       <text class="num">{{total}}</text> 份待确认礼金 · 共 <text class="money">￥{{sumStr}}</text>
     </view>
-    <view class="cur-book" wx:if="{{bookName}}">当前礼簿：{{bookName}}（只处理这一本）</view>
+    <view class="cur-book" wx:if="{{bookName}}">当前{{unit}}：{{bookName}}（只处理这一{{unit === '场次' ? '场' : '本'}}）</view>
+    <view class="other-tip" wx:if="{{otherCount > 0}}" bindtap="goSwitch">
+      <text class="other-text">其他{{unit}}还有 {{otherCount}} 份待确认礼金</text>
+      <text class="other-go">去切换 ›</text>
+    </view>
     <view class="seg" wx:if="{{canConfirm}}">
       <view class="seg-item {{mode === 'list' ? 'on' : ''}}" data-m="list" bindtap="onMode">列表批量</view>
       <view class="seg-item {{mode === 'card' ? 'on' : ''}}" data-m="card" bindtap="onMode">逐笔确认</view>

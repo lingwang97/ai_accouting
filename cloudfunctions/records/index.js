@@ -100,7 +100,7 @@ async function dashboard(ctx) {
   const activeId = workBook(ctx); // 机构模式记账人：自己选的一场
   // 待确认只算当前礼簿；其他礼簿的只给个数（工作台小提示），确认要先切换礼簿
   const pendCond = { ownerOpenid: owner, status: 'transferred', bookId: activeId || '__none__' };
-  const [bookRes, todayRes, pendRes, pendCount, otherCount, joinRes] = await Promise.all([
+  const [bookRes, todayRes, pendRes, pendCount, otherCount, todayBookRes, joinRes] = await Promise.all([
     activeId ? db.collection('books').doc(activeId).get().catch(() => null) : null,
     records.aggregate()
       .match({ ownerOpenid: owner, status: 'paid', payDay: today, ...scope })
@@ -112,6 +112,8 @@ async function dashboard(ctx) {
       .end(),
     records.where(pendCond).count(),
     records.where(otherPendCond(ctx, activeId)).count(),
+    // 当前礼簿的今日入簿份数：前端据此判断「今日新增」是否与礼簿合计重复
+    activeId ? records.where({ ownerOpenid: owner, status: 'paid', payDay: today, bookId: activeId }).count() : null,
     // 主家：通过邀请卡申请加入、待同意的人数
     ctx.role === 'owner' ? db.collection('members').where({ aid: account._id, status: 'pending' }).count() : null
   ]);
@@ -137,7 +139,7 @@ async function dashboard(ctx) {
     lastNotify,
     book,
     needBooks: !book,
-    today: { count: t.count, sum: Math.round(t.fen) / 100 },
+    today: { count: t.count, sum: Math.round(t.fen) / 100, book: todayBookRes ? todayBookRes.total : 0 },
     pending: { count: pendCount.total, sum: pendFen / 100, other: otherCount.total },
     pendingMembers: joinRes ? joinRes.total : 0,
     joins
@@ -380,6 +382,7 @@ async function list(openid, event, ctx) {
     list: listRes.data.map(strip),
     total: totalRes.total,          // 已确认笔数
     pendingCount: pendingRes.total, // 待确认笔数
+    workBookId: workBook(ctx) || '', // 当前礼簿：只有这一本的待确认可在列表里直接确认
     listTotal: listTotalRes.total,  // 列表总条数（分页用）
     sum: Math.round(totalFen) / 100, // 整数分累加后还原，避免浮点误差
     page,
@@ -434,12 +437,15 @@ async function pending(openid, ctx) {
   return ok({ list: res.data.map(strip), count: cnt.total, stalled: stall.data.map(strip), bookName, otherCount: other.total });
 }
 
-/** 其他礼簿（非当前礼簿，且在可见范围内）的待确认条件：只用来计数提示 */
+/**
+ * 其他礼簿（非当前礼簿，且在可见范围内）的待确认条件：只用来计数提示
+ * 不计没有 bookId（缺字段或空串）的旧数据：它们不属于任何礼簿，切换后也看不到，会由 books.list 归入默认礼簿
+ */
 function otherPendCond(ctx, cur) {
   const ids = ctx.bookIds ? ctx.bookIds.filter(id => id !== cur && id !== '__none__') : null;
   return {
     ownerOpenid: ctx.ownerOpenid, status: 'transferred',
-    bookId: ids ? _.in(ids.length ? ids : ['__none__']) : _.neq(cur || '__none__')
+    bookId: ids ? _.in(ids.length ? ids : ['__none__']) : _.exists(true).and(_.nin([cur || '__none__', '']))
   };
 }
 

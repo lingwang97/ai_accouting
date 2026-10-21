@@ -30,7 +30,9 @@ Page({
     busy: false,
     canConfirm: true, // 没有「确认收礼」权限：只能查看列表
     loaded: false,
-    bookName: ''      // 当前礼簿名：待确认只处理当前礼簿
+    bookName: '',     // 当前礼簿名：待确认只处理当前礼簿
+    otherCount: 0,    // 其他礼簿的待确认份数（提示回工作台切换）
+    unit: '礼簿'       // 机构模式称「场次」
   },
 
   onLoad() {
@@ -42,6 +44,8 @@ Page({
 
   onShow() {
     theme.apply(this); // 主题色跟当前礼簿事由走
+    const acc = getApp().globalData.account;
+    this.setData({ unit: acc && acc.orgMode ? '场次' : '礼簿' });
     getApp().ensureRole().then(() => {
       const canConfirm = perm.can('confirm');
       this.setData(canConfirm ? { canConfirm } : { canConfirm, mode: 'list', selectMode: false });
@@ -50,6 +54,9 @@ Page({
     this.load(false);
     this._timer = setInterval(() => this.load(true), POLL_MS);
   },
+  /** 其他礼簿有待确认：回工作台切换当前礼簿 */
+  goSwitch() { wx.switchTab({ url: '/pages/index/index' }); },
+
   onHide() { this.clearTimer(); },
   onUnload() { this.clearTimer(); },
   clearTimer() {
@@ -60,7 +67,7 @@ Page({
   async load(silent) {
     if (this.data.busy) return;
     try {
-      const { list, stalled, bookName } = await req.recordPending();
+      const { list, stalled, bookName, otherCount } = await req.recordPending();
       // 宾客没点「我已完成转账」的（含 24 小时内被自动取消的）：主家核对微信到账后可直接入簿
       this.setData({
         stalled: groupRecords(stalled || []).map(g => ({ ...g, auto: g.status === 'cancelled', timeStr: fmt.time(g.createdAt) }))
@@ -73,7 +80,7 @@ Page({
         .sort((a, b) => new Date(a.transferredAt || a.createdAt) - new Date(b.transferredAt || b.createdAt));
       this._list = items;
       // 轮询只做一次 setData
-      const patch = { ...this.derive(), loaded: true, bookName: bookName || '' };
+      const patch = { ...this.derive(), loaded: true, bookName: bookName || '', otherCount: otherCount || 0 };
       if (!items.length) patch.selectMode = false;
       this.setData(patch);
     } catch (e) {

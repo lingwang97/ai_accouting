@@ -34,6 +34,8 @@ Page({
     loggedIn: true,
     readonly: false,  // 家人共享：只读
     pm: {},           // 当前身份的权限：确认 / 作废 / 打印 / 礼台记账按权限显示
+    curBook: null,    // 当前礼簿 id（服务端返回）：只有这一本的待确认可直接确认；null 表示未知
+    unit: '礼簿',      // 机构模式称「场次」
     busy: false
   },
 
@@ -51,6 +53,8 @@ Page({
     theme.apply(this); // 主题色跟当前礼簿事由走
     app.refreshTabBar();
     await app.loginReady;
+    const acc = app.globalData.account;
+    this.setData({ unit: acc && acc.orgMode ? '场次' : '礼簿' });
     if (!app.globalData.user) {
       this.setData({ loggedIn: false, list: [], books: [{ _id: '', name: '全部礼簿' }], bookIdx: 0 });
       return;
@@ -147,6 +151,7 @@ Page({
       sum: fmt.money(res.sum),
       total: res.total,
       pendingCount: res.pendingCount,
+      curBook: res.workBookId === undefined ? null : res.workBookId,
       page: 2,
       hasMore: res.list.length < res.listTotal
     });
@@ -159,9 +164,9 @@ Page({
     try {
       const res = await req.recordList(this.buildParams(1));
       if (res.pendingCount > before) wx.vibrateShort({ type: 'heavy', fail() {} });
-      if (res.pendingCount !== before) getApp().setBadge(res.pendingCount);
+      // 角标统一按当前礼簿的待确认（工作台 / 待确认页设置），这里按筛选礼簿计数，不改角标
       // 合计与份数总是刷新
-      this.setData({ sum: fmt.money(res.sum), total: res.total, pendingCount: res.pendingCount });
+      this.setData({ sum: fmt.money(res.sum), total: res.total, pendingCount: res.pendingCount, curBook: res.workBookId === undefined ? null : res.workBookId });
       const changed = res.listTotal !== this._listTotal || res.pendingCount !== before;
       if (!changed) return;
       if (this.data.page <= 2) {

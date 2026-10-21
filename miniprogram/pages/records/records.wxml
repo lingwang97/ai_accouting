@@ -47,8 +47,12 @@
       <text class="badge warn">{{item.statusText}}</text>
       <view class="flex1"></view>
       <block wx:if="{{!readonly && pm.confirm}}">
-        <button class="btn btn-sm btn-danger r-op" data-idx="{{index}}" catchtap="onReject">未收到</button>
-        <button class="btn btn-sm btn-primary r-op" data-idx="{{index}}" catchtap="onConfirm">确认收到</button>
+        <!-- 非当前礼簿：确认只能在当前礼簿进行，提示切换（旧数据无 bookId 的照常可确认） -->
+        <text class="muted" wx:if="{{curBook !== null && item.bookId && item.bookId !== curBook}}">切换{{unit}}后处理</text>
+        <block wx:else>
+          <button class="btn btn-sm btn-danger r-op" data-idx="{{index}}" catchtap="onReject">未收到</button>
+          <button class="btn btn-sm btn-primary r-op" data-idx="{{index}}" catchtap="onConfirm">确认收到</button>
+        </block>
       </block>
     </view>
 
