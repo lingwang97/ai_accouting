@@ -26,11 +26,11 @@ exports.main = async (event) => {
   try {
     await ensureCol('records');
     // 收款方操作：身份只解析一次；家人共享（只读）不能做任何收款方操作
-    const OWNER_ACTIONS = ['cashEntry', 'confirm', 'confirmBatch', 'reject', 'void'];
+    const OWNER_ACTIONS = ['cashEntry', 'confirm', 'confirmBatch', 'reject', 'dismissStall', 'void'];
     const ctx = OWNER_ACTIONS.includes(event.action) ? await resolveCtx(db, OPENID) : null;
     if (ctx && readonly(ctx)) return err('家人共享为只读，不能修改');
     // 记账人按权限：礼台记账 / 确认收礼 / 作废
-    const NEED = { cashEntry: 'desk', confirm: 'confirm', confirmBatch: 'confirm', reject: 'confirm', void: 'void' };
+    const NEED = { cashEntry: 'desk', confirm: 'confirm', confirmBatch: 'confirm', reject: 'confirm', dismissStall: 'confirm', void: 'void' };
     if (ctx && !can(ctx, NEED[event.action])) return err('你没有「' + { desk: '礼台记账', confirm: '确认收礼', void: '作废' }[NEED[event.action]] + '」权限');
     switch (event.action) {
       // 付款方
