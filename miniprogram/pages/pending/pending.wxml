@@ -95,7 +95,7 @@
       </view>
       <view class="big-card {{slide}}" bindtouchstart="onTouchStart" bindtouchend="onTouchEnd">
         <view class="big-name">{{current.nameStr}}</view>
-        <view class="big-amount">￥{{current.amountStr}}</view>
+        <view class="big-amount {{current.amountStr.length >= 11 ? 'md' : ''}}">￥{{current.amountStr}}</view>
         <view class="big-cash" wx:if="{{current.mixed}}">转账+现金：转账 ￥{{current.wechatSumStr}} · 现金 ￥{{current.cashSumStr}}</view>
         <view class="big-cash" wx:elif="{{current.payMethod === 'cash'}}">💵 现金，请当面清点</view>
         <view class="big-meta" wx:if="{{current.relation}}">{{current.relation}}</view>

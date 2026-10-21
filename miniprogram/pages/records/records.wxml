@@ -12,7 +12,7 @@
         </picker>
         <text class="book-manage" bindtap="goBooks">管理礼簿 ›</text>
         <view class="muted">礼金合计</view>
-        <view class="sum money">￥{{sum}}</view>
+        <view class="sum money {{sum.length >= 12 ? 'long' : ''}}">￥{{sum}}</view>
         <view class="muted">{{total}} 份<text wx:if="{{pendingCount > 0}}" class="pending-hint"> · {{pendingCount}} 份待确认</text></view>
       </view>
     </view>
