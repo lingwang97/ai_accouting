@@ -26,7 +26,6 @@ Page({
     page: 1,
     hasMore: true,
     loading: false,
-    filterDay: 'all',     // all 全部（默认）| today 今日
     keyword: '',
     books: [{ _id: '', name: '全部礼簿' }],
     bookIdx: 0,
@@ -221,7 +220,6 @@ Page({
     const book = this.data.books[this.data.bookIdx];
     if (book && book._id) params.bookId = book._id;
     if (this.data.relIdx > 0) params.relation = this.data.relations[this.data.relIdx];
-    if (this.data.filterDay === 'today') params.payDay = fmt.day(new Date());
     return params;
   },
 
@@ -257,11 +255,6 @@ Page({
 
   onRelation(e) {
     this.setData({ relIdx: Number(e.detail.value) });
-    this.reload();
-  },
-
-  onFilterChange(e) {
-    this.setData({ filterDay: e.currentTarget.dataset.v });
     this.reload();
   },
 

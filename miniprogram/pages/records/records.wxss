@@ -1,8 +1,6 @@
 .sum-row { display: flex; justify-content: space-between; align-items: flex-start; }
 .sum { font-size: 60rpx; margin: 8rpx 0; }
 .pending-hint { color: #FF9F1C; }
-.filters { display: flex; }
-.filters .chip:not(:last-child) { margin-right: 12rpx; }
 .search-row { display: flex; align-items: center; margin-top: 20rpx; }
 .search-row .rel-btn, .search-row .export-btn { margin-left: 16rpx; }
 .search {
@@ -17,7 +15,6 @@
 /* 姓名过长省略，金额不换行 */
 .r-right { flex-shrink: 0; white-space: nowrap; margin-left: 16rpx; }
 .sum-left { flex: 1; min-width: 0; }
-.filters { flex-shrink: 0; margin-left: 16rpx; }
 .r-amount { font-size: 34rpx; }
 .r-actions {
   display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end;

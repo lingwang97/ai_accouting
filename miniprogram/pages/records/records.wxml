@@ -15,10 +15,6 @@
         <view class="sum money">￥{{sum}}</view>
         <view class="muted">{{total}} 份<text wx:if="{{pendingCount > 0}}" class="pending-hint"> · {{pendingCount}} 份待确认</text></view>
       </view>
-      <view class="filters">
-        <view class="chip {{filterDay === 'today' ? 'on' : ''}}" data-v="today" bindtap="onFilterChange">今日</view>
-        <view class="chip {{filterDay === 'all' ? 'on' : ''}}" data-v="all" bindtap="onFilterChange">全部</view>
-      </view>
     </view>
     <view class="search-row">
       <input class="search" placeholder="搜索宾客姓名" value="{{keyword}}" bindconfirm="onSearch" confirm-type="search" />
