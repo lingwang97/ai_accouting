@@ -90,7 +90,6 @@ module.exports = {
   identitySwitch: aid => call('account', { action: 'switch', aid }),
   exportCleanup: fileID => call('export', { action: 'cleanup', fileID }),
   exportPurge: () => call('export', { action: 'purge' }),
-  inList: d => call('renqing', { action: 'inList', ...d }),
   // 同名区分：人情往来里同名的人、合并 / 取消合并、把某条记录移到别的人
   rqNameCheck: name => call('renqing', { action: 'nameCheck', name }, { silent: true }),
   rqMerge: (from, to) => call('renqing', { action: 'merge', from, to }),

@@ -1,7 +1,6 @@
 .seg { margin-bottom: 20rpx; }
 /* 收礼往来：按人 / 按笔 + 按人时的筛选 */
 .sub-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20rpx; }
-.sub-row .seg { margin-bottom: 0; }
 .pf-chips { display: flex; }
 .pf-chips .chip { margin-left: 12rpx; padding: 6rpx 20rpx; font-size: 24rpx; }
 .search-row { display: flex; margin-bottom: 20rpx; }

@@ -74,7 +74,6 @@ async function route(OPENID, event) {
   {
     switch (event.action) {
       case 'outList': return await outList(OPENID, event);
-      case 'inList': return await inList(OPENID, event);
       case 'remindList': return await remindList(OPENID);
       case 'remindSave': return await remindSave(OPENID, event.remind, event.subscribed === true, event.envVersion);
       case 'remindDone': return await remindDone(OPENID, event.id, event.done !== false);
@@ -91,37 +90,6 @@ async function route(OPENID, event) {
       default: return err('未知 action');
     }
   }
-}
-
-/**
- * 我收到的礼：本人礼簿里已入簿的礼金（按入簿时间倒序，数据库分页），可按姓名搜索；附全部笔数与合计
- * 只算本人作为主家的礼簿（为别人记账的不算，与往来对比一致）
- */
-async function inList(openid, event) {
-  const page = Math.max(1, Number(event.page) || 1);
-  const pageSize = Math.min(50, Math.max(1, Number(event.pageSize) || 20));
-  const cond = { ownerOpenid: openid, status: 'paid' };
-  const kw = String(event.keyword || '').trim().slice(0, 20);
-  if (kw) cond.payerName = db.RegExp({ regexp: kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), options: 'i' });
-  const [cnt, sum, res] = await Promise.all([
-    records.where(cond).count(),
-    records.aggregate().match(cond)
-      .group({ _id: null, fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) }).end(),
-    records.where(cond).orderBy('paidAt', 'desc').skip((page - 1) * pageSize).limit(pageSize)
-      .field({ payerName: true, nameTag: true, personKey: true, payerOpenid: true, relation: true, amount: true, themeName: true, bookType: true, payDay: true, payMethod: true, remark: true, paidAt: true })
-      .get()
-  ]);
-  return ok({
-    // key：点开往来明细用（与往来对比的人一致）；不返回宾客 openid
-    list: res.data.map(({ payerOpenid, personKey, ...r }) => ({
-      ...r,
-      key: KEY_RE.test(personKey || '') ? personKey : (payerOpenid ? `o:${payerOpenid}:${norm(r.payerName)}` : nameKey(r.payerName, r.nameTag))
-    })),
-    total: cnt.total,
-    sum: Math.round(((sum.list && sum.list[0]) || { fen: 0 }).fen) / 100,
-    page,
-    pageSize
-  });
 }
 
 // —— 亲友办事提醒（手动添加）：到提醒日在「往来」顶部提示，订阅过的由 warmer 定时推送服务通知 ——

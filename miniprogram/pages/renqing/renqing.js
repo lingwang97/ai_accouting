@@ -3,7 +3,6 @@ const req = require('../../utils/request.js');
 const fmt = require('../../utils/format.js');
 const scenes = require('../../utils/scenes.js');
 const theme = require('../../utils/theme.js');
-const samename = require('../../utils/samename.js');
 
 Page({
   data: {
