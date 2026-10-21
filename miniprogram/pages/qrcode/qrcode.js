@@ -32,7 +32,13 @@ Page({
   },
 
   onShow() {
-    if (this.data.account) this.lightOn();
+    if (this.data.account) { this.lightOn(); this.setNavColor(this.data.primary); }
+  },
+
+  /** 导航栏跟随本页主题色（本场是白事时素灰） */
+  setNavColor(primary) {
+    if (!primary) return;
+    wx.setNavigationBarColor({ frontColor: '#ffffff', backgroundColor: primary, fail() {} });
   },
 
   onHide() { this.lightOff(); },
@@ -47,7 +53,9 @@ Page({
         setTimeout(() => wx.redirectTo({ url: '/pages/account/account' }), 800);
         return;
       }
-      this.setData({ account, primary: theme.current().primary });
+      const primary = theme.current().primary;
+      this.setData({ account, primary });
+      this.setNavColor(primary);
       this.lightOn();
 
       // 本场礼簿码；记账人一律由服务端决定（正在记的是主家当前礼簿时为主家礼簿码，否则为本场码），不用本地缓存
@@ -90,8 +98,10 @@ Page({
       }
       // 标题显示主家（机构版为本场主家），下方显示礼簿名称，避免礼簿名显示两次
       const name = (r.book && r.book.hostName) || account.accountName;
+      const bookPrimary = theme.forType(r.book && r.book.type).primary; // 本场是白事时素灰
+      this.setNavColor(bookPrimary);
       this.setData({
-        primary: theme.forType(r.book && r.book.type).primary, // 本场是白事时素灰
+        primary: bookPrimary,
         account: { ...account, accountName: name },
         bookName: r.book ? r.book.name : '',
         qrFileID: r.fileID, qrUrl, payCodeUrl: r.payCodeUrl || account.payCodeUrl || '', errMsg: ''
