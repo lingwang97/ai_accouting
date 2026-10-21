@@ -111,7 +111,8 @@
 
   <!-- 设置负责的礼簿与权限（机构版另可设岗位） -->
   <view class="mask" wx:if="{{editor}}">
-    <view class="sheet">
+    <view class="sheet ed-sheet">
+      <view class="ed-body">
       <view class="sheet-title">设置「{{editor.name}}」</view>
       <block wx:if="{{orgMode}}">
         <view class="muted">岗位</view>
@@ -143,7 +144,8 @@
         </view>
       </view>
       <view class="muted small">记账人只能看到、操作负责的礼簿；能做哪些事由上面的权限决定，只能授予你自己拥有的权限</view>
-      <view class="sheet-btns">
+      </view>
+      <view class="sheet-btns ed-btns">
         <button class="btn btn-lg btn-plain" bindtap="onEdCancel">取消</button>
         <button class="btn btn-lg btn-primary" bindtap="onEdSave">保存</button>
       </view>

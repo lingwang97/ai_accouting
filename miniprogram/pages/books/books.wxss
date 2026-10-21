@@ -29,8 +29,9 @@
 .b-top .tag.wedding, .b-top .tag.baby, .b-top .tag.other { background: var(--primary-soft); color: var(--primary); }
 .b-top .tag.birthday, .b-top .tag.house { background: #B8860B1A; color: #B8860B; }
 .b-top .tag.funeral { background: #3333331A; color: var(--text); }
-.b-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 16rpx; }
-.b-ops { display: flex; align-items: center; }
+.b-foot { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-top: 16rpx; }
+.b-foot > text { white-space: nowrap; margin-right: 16rpx; }
+.b-ops { display: flex; align-items: center; flex-wrap: wrap; margin-left: auto; }
 .b-ops .btn:not(:first-child), .b-ops .op-link { margin-left: 20rpx; }
 .b-ops .btn { border-radius: 999rpx; }
 .op-link { font-size: 24rpx; color: var(--link); }

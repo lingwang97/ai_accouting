@@ -72,23 +72,33 @@ Page({
   onPurge(e) {
     const t = this.data.list[e.currentTarget.dataset.i];
     if (!t || this.data.busy) return;
+    // 先用普通弹窗完整显示礼簿名称与后果（editable 弹窗的 content 是输入框初始值，不能放说明），再弹输入框
     wx.showModal({
       title: '彻底删除',
-      editable: true,
-      placeholderText: `输入「${t.name}」确认，删除后不可恢复`,
-      confirmText: '删除',
+      content: `将彻底删除「${t.name}」及其全部记录，删除后不可恢复。`,
+      confirmText: '继续',
       confirmColor: '#FA5151',
-      success: async res => {
-        if (!res.confirm) return;
-        if ((res.content || '').trim() !== t.name) return wx.showToast({ title: '名称不一致，未删除', icon: 'none' });
-        this.setData({ busy: true });
-        try {
-          await req.trashPurge(t._id, t.name);
-          wx.showToast({ title: '已删除', icon: 'success' });
-          this.load();
-        } catch (err) { /* toast 已提示 */ } finally {
-          this.setData({ busy: false });
-        }
+      success: res1 => {
+        if (!res1.confirm) return;
+        wx.showModal({
+          title: '输入礼簿名称确认',
+          editable: true,
+          placeholderText: '输入礼簿名称',
+          confirmText: '删除',
+          confirmColor: '#FA5151',
+          success: async res => {
+            if (!res.confirm) return;
+            if ((res.content || '').trim() !== t.name) return wx.showToast({ title: '名称不一致，未删除', icon: 'none' });
+            this.setData({ busy: true });
+            try {
+              await req.trashPurge(t._id, t.name);
+              wx.showToast({ title: '已删除', icon: 'success' });
+              this.load();
+            } catch (err) { /* toast 已提示 */ } finally {
+              this.setData({ busy: false });
+            }
+          }
+        });
       }
     });
   }

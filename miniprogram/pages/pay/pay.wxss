@@ -49,6 +49,6 @@
 .host-cta { margin: 24rpx 0; padding: 22rpx 24rpx; background: var(--primary-soft); color: var(--primary); border-radius: var(--r-s); font-size: 26rpx; line-height: 1.6; text-align: center; }
 /* 转账步骤：一行三步（不用 gap，用 margin） */
 .step-row { display: flex; justify-content: center; margin: 12rpx 0 20rpx; }
-.sr-item { flex: 1; font-size: 26rpx; color: #333; background: #F7F7F7; border-radius: 10rpx; padding: 14rpx 8rpx; text-align: center; white-space: nowrap; }
+.sr-item { flex: 1; font-size: 26rpx; color: #333; background: #F7F7F7; border-radius: 10rpx; padding: 14rpx 6rpx; text-align: center; min-width: 0; word-break: break-all; }
 .sr-item:not(:last-child) { margin-right: 12rpx; }
 .sr-num { color: var(--primary); font-weight: 600; margin-right: 4rpx; }

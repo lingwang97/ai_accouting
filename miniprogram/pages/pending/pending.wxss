@@ -3,7 +3,7 @@
 .stall { border: 2rpx solid #FFD591; background: #FFFBF0; }
 .stall-title { font-size: 28rpx; font-weight: 600; color: #D46B08; margin-bottom: 6rpx; }
 .stall-row { display: flex; align-items: center; padding: 16rpx 0; border-top: 2rpx solid #F5E6C8; }
-.stall-row:first-of-type { margin-top: 12rpx; }
+.stall .muted.small { margin-bottom: 12rpx; }
 .stall-info { flex: 1; min-width: 0; margin-right: 16rpx; }
 .stall-name { display: flex; align-items: center; }
 .stall-name .payer { flex: 1; min-width: 4em; font-size: 28rpx; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

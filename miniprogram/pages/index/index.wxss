@@ -39,7 +39,7 @@
 .tip-go { font-size: 26rpx; color: var(--primary); white-space: nowrap; }
 /* 使用教程小卡片 */
 .guide-tip .tip-text { color: var(--primary); }
-.guide-close { flex-shrink: 0; width: 56rpx; height: 56rpx; line-height: 56rpx; text-align: center; margin: -12rpx -12rpx -12rpx 0; color: #bbb; font-size: 28rpx; }
+.guide-close { flex-shrink: 0; width: 80rpx; height: 80rpx; line-height: 80rpx; text-align: center; margin: -24rpx -24rpx -24rpx 0; color: #bbb; font-size: 28rpx; }
 
 /* 不用 flex gap（部分旧版 iOS 微信不支持，会塌成一列）：两端对齐 + 下边距 */
 .grid { display: flex; flex-wrap: wrap; justify-content: space-between; margin-bottom: 4rpx; }

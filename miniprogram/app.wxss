@@ -19,7 +19,7 @@ page {
   font-size: 28rpx;
   color: var(--text);
 }
-.container { padding: 24rpx; }
+.container { padding: 24rpx 24rpx calc(24rpx + env(safe-area-inset-bottom)); }
 .card {
   background: #fff;
   border-radius: var(--r-m);
