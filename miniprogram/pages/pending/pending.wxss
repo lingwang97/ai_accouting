@@ -15,6 +15,7 @@
 .sum { font-size: 30rpx; color: var(--text); margin-bottom: 20rpx; }
 .sum .num { font-size: 40rpx; font-weight: 700; color: #FF9F1C; }
 .head .seg { background: var(--fill); }
+.cur-book { font-size: 24rpx; color: var(--text-3); margin-bottom: 16rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .empty { padding: 120rpx 0; color: var(--text); }
 .empty-icon { font-size: 96rpx; color: var(--success); }

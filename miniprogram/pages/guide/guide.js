@@ -3,7 +3,7 @@
 const theme = require('../../utils/theme.js');
 
 // 示意图里的界面元素（与实际页面保持一致）
-const GRID = ['出示礼簿码', '待确认', '礼台记账', '打印机', '一键对账', '礼簿管理']; // 工作台宫格（三行两列）
+const GRID = ['出示礼簿码', '待确认礼金', '礼台记账', '打印机', '一键对账', '礼簿管理']; // 工作台宫格（三行两列）
 const MENU = ['主家信息与收款码', '记账人', '蓝牙打印机', '回执样式', '导出与备份']; // 「我的」菜单
 const TABBAR = ['工作台', '礼簿', '往来', '我的'];
 const GUEST_FLOW = ['扫礼簿码', '填写礼金', '扫一扫付款', '我已完成转账'];
@@ -36,7 +36,7 @@ const GUIDES = {
       sec: '办事当天收礼',
       steps: [
         { title: '出示礼簿码', desc: '宾客扫码填写姓名和礼金，再扫收款码转账；也可以打印台卡摆在礼台上', where: '工作台 → 出示礼簿码', mock: grid('出示礼簿码'), url: '/pages/qrcode/qrcode', go: '去出示' },
-        { title: '确认收到礼金', desc: '核对微信到账后点确认，礼金即入簿；可一键全部确认，没收到的点「未收到」', where: '工作台 → 待确认', mock: grid('待确认'), url: '/pages/pending/pending', go: '去确认' },
+        { title: '确认收到礼金', desc: '核对微信到账后点确认，礼金即入簿；可一键全部确认，没收到的点「未收到」', where: '工作台 → 待确认礼金', mock: grid('待确认礼金'), url: '/pages/pending/pending', go: '去确认' },
         { title: '礼台记账', desc: '收到现金或当面转账，直接登记入簿，可当场打印小票', where: '工作台 → 礼台记账', mock: grid('礼台记账'), url: '/pages/cash/cash', go: '去记账' }
       ]
     },
@@ -67,7 +67,7 @@ const GUIDES = {
       sec: '办事当天',
       steps: [
         { title: '出示礼簿码', desc: '和主家出示的一样，宾客扫码登记、转账', where: '工作台 → 出示礼簿码', mock: grid('出示礼簿码'), url: '/pages/qrcode/qrcode', go: '去出示' },
-        { title: '确认收到', desc: '核对宾客转账到账后确认入簿', where: '工作台 → 待确认', mock: grid('待确认'), url: '/pages/pending/pending', go: '去确认' },
+        { title: '确认收到', desc: '核对宾客转账到账后确认入簿', where: '工作台 → 待确认礼金', mock: grid('待确认礼金'), url: '/pages/pending/pending', go: '去确认' },
         { title: '礼台记账', desc: '现金、微信、转账+现金，当场登记入簿', where: '工作台 → 礼台记账', mock: grid('礼台记账'), url: '/pages/cash/cash', go: '去记账' },
         { title: '补打小票', desc: '找到那笔礼金，点「补打」', where: '礼簿 → 礼金记录 → 补打', mock: page('礼簿', ['搜索'], '补打', '补打'), url: '/pages/records/records', tab: true, go: '去补打' }
       ]

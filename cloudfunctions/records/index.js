@@ -98,8 +98,9 @@ async function dashboard(ctx) {
   const today = bjDay(new Date());
   const scope = ctx.bookIds ? { bookId: _.in(ctx.bookIds) } : {};
   const activeId = workBook(ctx); // 机构模式记账人：自己选的一场
-  const pendCond = { ownerOpenid: owner, status: 'transferred', ...scope };
-  const [bookRes, todayRes, pendRes, pendCount, joinRes] = await Promise.all([
+  // 待确认只算当前礼簿；其他礼簿的只给个数（工作台小提示），确认要先切换礼簿
+  const pendCond = { ownerOpenid: owner, status: 'transferred', bookId: activeId || '__none__' };
+  const [bookRes, todayRes, pendRes, pendCount, otherCount, joinRes] = await Promise.all([
     activeId ? db.collection('books').doc(activeId).get().catch(() => null) : null,
     records.aggregate()
       .match({ ownerOpenid: owner, status: 'paid', payDay: today, ...scope })
@@ -110,6 +111,7 @@ async function dashboard(ctx) {
       .group({ _id: null, fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) })
       .end(),
     records.where(pendCond).count(),
+    records.where(otherPendCond(ctx, activeId)).count(),
     // 主家：通过邀请卡申请加入、待同意的人数
     ctx.role === 'owner' ? db.collection('members').where({ aid: account._id, status: 'pending' }).count() : null
   ]);
@@ -136,7 +138,7 @@ async function dashboard(ctx) {
     book,
     needBooks: !book,
     today: { count: t.count, sum: Math.round(t.fen) / 100 },
-    pending: { count: pendCount.total, sum: pendFen / 100 },
+    pending: { count: pendCount.total, sum: pendFen / 100, other: otherCount.total },
     pendingMembers: joinRes ? joinRes.total : 0,
     joins
   });
@@ -411,33 +413,49 @@ async function markPrinted(openid, rids, ctx) {
  */
 const STALL_MS = 3 * 60 * 1000;
 async function pending(openid, ctx) {
-  const cond = { ownerOpenid: openid, status: 'transferred' };
-  if (ctx.bookIds) cond.bookId = _.in(ctx.bookIds);
+  // 只取当前礼簿（workBook）的待确认；确认接口同样限定当前礼簿，避免跨礼簿确认
+  const cur = workBook(ctx);
+  const bk = cur || '__none__';
+  const cond = { ownerOpenid: openid, status: 'transferred', bookId: bk };
   const now = Date.now();
   const stallCond = _.or([
-    { ownerOpenid: openid, status: 'pending', createdAt: _.lt(new Date(now - STALL_MS)), ...(ctx.bookIds ? { bookId: _.in(ctx.bookIds) } : {}) },
-    { ownerOpenid: openid, status: 'cancelled', autoCancelled: true, stallDismissed: _.neq(true), createdAt: _.gt(new Date(now - 24 * 3600 * 1000)), ...(ctx.bookIds ? { bookId: _.in(ctx.bookIds) } : {}) }
+    { ownerOpenid: openid, status: 'pending', createdAt: _.lt(new Date(now - STALL_MS)), bookId: bk },
+    { ownerOpenid: openid, status: 'cancelled', autoCancelled: true, stallDismissed: _.neq(true), createdAt: _.gt(new Date(now - 24 * 3600 * 1000)), bookId: bk }
   ]);
-  const [res, cnt, stall] = await Promise.all([
+  const [res, cnt, stall, other, bookRes] = await Promise.all([
     records.where(cond).orderBy('createdAt', 'desc').limit(100).get(),
     records.where(cond).count(),
-    records.where(stallCond).orderBy('createdAt', 'desc').limit(100).get()
+    records.where(stallCond).orderBy('createdAt', 'desc').limit(100).get(),
+    records.where(otherPendCond(ctx, cur)).count(),
+    cur ? db.collection('books').doc(cur).get().catch(() => null) : null
   ]);
-  return ok({ list: res.data.map(strip), count: cnt.total, stalled: stall.data.map(strip) });
+  const b = bookRes && bookRes.data;
+  const bookName = b && b.ownerOpenid === openid ? (b.hostName ? `${b.hostName} · ${b.name}` : b.name) : '';
+  return ok({ list: res.data.map(strip), count: cnt.total, stalled: stall.data.map(strip), bookName, otherCount: other.total });
+}
+
+/** 其他礼簿（非当前礼簿，且在可见范围内）的待确认条件：只用来计数提示 */
+function otherPendCond(ctx, cur) {
+  const ids = ctx.bookIds ? ctx.bookIds.filter(id => id !== cur && id !== '__none__') : null;
+  return {
+    ownerOpenid: ctx.ownerOpenid, status: 'transferred',
+    bookId: ids ? _.in(ids.length ? ids : ['__none__']) : _.neq(cur || '__none__')
+  };
 }
 
 /** 待确认份数与合计（工作台轮询用，只做计数 + 聚合） */
 async function pendingStat(openid, ctx) {
   if (!ctx.account) return ok({ count: 0, sum: 0 });
-  const cond = { ownerOpenid: openid, status: 'transferred' };
-  if (ctx.bookIds) cond.bookId = _.in(ctx.bookIds);
-  const [cnt, agg] = await Promise.all([
+  const cur = workBook(ctx);
+  const cond = { ownerOpenid: openid, status: 'transferred', bookId: cur || '__none__' };
+  const [cnt, agg, other] = await Promise.all([
     records.where(cond).count(),
     records.aggregate().match(cond)
       .group({ _id: null, fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) })
-      .end()
+      .end(),
+    records.where(otherPendCond(ctx, cur)).count()
   ]);
-  return ok({ count: cnt.total, sum: Math.round(((agg.list && agg.list[0]) || { fen: 0 }).fen) / 100 });
+  return ok({ count: cnt.total, sum: Math.round(((agg.list && agg.list[0]) || { fen: 0 }).fen) / 100, other: other.total });
 }
 
 /**

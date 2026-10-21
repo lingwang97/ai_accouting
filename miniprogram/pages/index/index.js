@@ -28,6 +28,7 @@ Page({
     todayCount: 0,
     pendingCount: 0,
     pendingSum: '0.00',
+    otherPending: 0,   // 其他礼簿的待确认份数（提示用）
     printerName: '',
     pm: {},            // 当前身份的权限（记账人按各自权限显示操作）
     notifyTip: '',     // 新礼金提醒未开启 / 发送失败时的提示
@@ -120,6 +121,7 @@ Page({
         todayCount: d.today.count,
         pendingCount: d.pending.count,
         pendingSum: fmt.money(d.pending.sum),
+        otherPending: d.pending.other || 0,
         joinCount: d.pendingMembers || 0  // 申请加入、待主家同意的人数
       };
       this.setData({ mode: 'host', ...view });
@@ -161,7 +163,7 @@ Page({
       const pending = await req.pendingStat();
       if (!pending) return;
       if (silent && pending.count > this.data.pendingCount) wx.vibrateShort({ type: 'heavy', fail() {} });
-      this.setData({ pendingCount: pending.count, pendingSum: fmt.money(pending.sum) });
+      this.setData({ pendingCount: pending.count, pendingSum: fmt.money(pending.sum), otherPending: pending.other || 0 });
       getApp().setBadge(pending.count);
     } catch (e) { /* 静默 */ }
   },

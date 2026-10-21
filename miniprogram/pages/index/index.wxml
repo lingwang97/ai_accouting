@@ -43,6 +43,12 @@
       </view>
     </view>
 
+    <!-- 其他礼簿有待确认：待确认礼金只处理当前礼簿，提示去切换 -->
+    <view class="tip-bar" wx:if="{{pm.confirm && otherPending > 0}}" catchtap="{{canSwitch ? 'onSwitchBook' : ''}}">
+      <text class="tip-text">其他{{account.orgMode ? '场次' : '礼簿'}}还有 {{otherPending}} 份待确认礼金{{canSwitch ? '，切换后处理' : ''}}</text>
+      <text class="tip-go" wx:if="{{canSwitch}}">切换 ›</text>
+    </view>
+
     <!-- 提醒未开启（家人共享不提醒） -->
     <view class="tip-bar" wx:if="{{notifyTip && !readonly}}" bindtap="onSubscribe">
       <image class="tip-icon" src="/assets/icons/bell-r.svg" />
@@ -83,7 +89,7 @@
       </view>
       <view class="g-item" hover-class="g-hover" wx:if="{{pm.confirm}}" bindtap="goPending">
         <view class="g-icon"><image src="/assets/icons/check-w.svg" /><text class="g-badge" wx:if="{{pendingCount > 0}}">{{pendingCount}}</text></view>
-        <view class="g-title">待确认</view>
+        <view class="g-title">待确认礼金</view>
         <view class="g-sub {{pendingCount > 0 ? 'hot' : ''}}">{{pendingCount > 0 ? pendingCount + ' 份 ￥' + pendingSum : '暂无'}}</view>
       </view>
       <view class="g-item" hover-class="g-hover" wx:if="{{pm.desk}}" bindtap="goCash">

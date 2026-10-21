@@ -29,7 +29,8 @@ Page({
     notifyTip: '',    // 新礼金提醒未开启时提示
     busy: false,
     canConfirm: true, // 没有「确认收礼」权限：只能查看列表
-    loaded: false
+    loaded: false,
+    bookName: ''      // 当前礼簿名：待确认只处理当前礼簿
   },
 
   onLoad() {
@@ -59,7 +60,7 @@ Page({
   async load(silent) {
     if (this.data.busy) return;
     try {
-      const { list, stalled } = await req.recordPending();
+      const { list, stalled, bookName } = await req.recordPending();
       // 宾客没点「我已完成转账」的（含 24 小时内被自动取消的）：主家核对微信到账后可直接入簿
       this.setData({
         stalled: groupRecords(stalled || []).map(g => ({ ...g, auto: g.status === 'cancelled', timeStr: fmt.time(g.createdAt) }))
@@ -72,7 +73,7 @@ Page({
         .sort((a, b) => new Date(a.transferredAt || a.createdAt) - new Date(b.transferredAt || b.createdAt));
       this._list = items;
       // 轮询只做一次 setData
-      const patch = { ...this.derive(), loaded: true };
+      const patch = { ...this.derive(), loaded: true, bookName: bookName || '' };
       if (!items.length) patch.selectMode = false;
       this.setData(patch);
     } catch (e) {

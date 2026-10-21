@@ -580,6 +580,7 @@ async function groupUpdate(ctx, rid, fromList, to, actualAmount, amounts) {
   const rec = await getRecord(rid);
   if (!rec || !rec.batchId) return ownerUpdate(ctx, rid, fromList, to, actualAmount);
   if (rec.ownerOpenid !== ctx.ownerOpenid || !canBook(ctx, rec.bookId)) return err('无权操作该账目');
+  if (notCurrentBook(ctx, rec)) return err(SWITCH_MSG);
   const all = (await batchRecords(rec.batchId, { ownerOpenid: ctx.ownerOpenid })).filter(r => fromList.includes(r.status) && (r.status !== 'cancelled' || r.autoCancelled));
   if (!all.length) return err('当前状态不可操作，请刷新');
   const map = (to === 'paid' && amounts && typeof amounts === 'object') ? amounts : {};
@@ -594,6 +595,12 @@ async function groupUpdate(ctx, rid, fromList, to, actualAmount, amounts) {
   return ok({ rid, status: to, record: list[0], list, failed: all.length - list.length });
 }
 
+/** 确认 / 拒绝限定在当前礼簿（workBook）：待确认只显示当前礼簿，防止跨礼簿误确认；旧数据没有 bookId 的不限 */
+const SWITCH_MSG = '请先切换到该礼簿';
+function notCurrentBook(ctx, rec) {
+  return !!rec.bookId && rec.bookId !== workBook(ctx);
+}
+
 /** 礼簿码对应的礼簿已被删除（在回收站里） */
 async function inTrash(id) {
   try { return !!(await db.collection('trash_books').doc(id).get()).data; } catch (e) { return false; }
@@ -604,6 +611,7 @@ async function dismissStall(ctx, rid) {
   if (readonly(ctx) || !can(ctx, 'confirm')) return err('你没有确认收礼的权限');
   const rec = await getRecord(rid);
   if (!rec || rec.ownerOpenid !== ctx.ownerOpenid || !canBook(ctx, rec.bookId)) return err('记录不存在');
+  if (notCurrentBook(ctx, rec)) return err(SWITCH_MSG);
   const key = rec.batchId ? { batchId: rec.batchId } : { _id: rid };
   await records.where({ ...key, ownerOpenid: ctx.ownerOpenid, status: 'cancelled', autoCancelled: true }).update({ data: { stallDismissed: true } });
   return ok({ dismissed: true });
@@ -613,9 +621,11 @@ async function dismissStall(ctx, rid) {
 async function ownerUpdate(ctx, rid, fromList, to, actualAmount) {
   if (!validId(rid)) return err('记录不存在');
   const openid = ctx.ownerOpenid; // 数据属于主家，记账人代为操作
-  if (ctx.bookIds) {
+  if (ctx.bookIds || to !== 'void') {
     const r0 = await getRecord(rid);
-    if (!r0 || !canBook(ctx, r0.bookId)) return err('该礼金不在你负责的场次');
+    if (ctx.bookIds && (!r0 || !canBook(ctx, r0.bookId))) return err('该礼金不在你负责的场次');
+    // 确认 / 拒绝只能在当前礼簿内进行（作废已入簿的不限）
+    if (r0 && to !== 'void' && notCurrentBook(ctx, r0)) return err(SWITCH_MSG);
   }
   const data = { status: to };
   if (to === 'paid') {
