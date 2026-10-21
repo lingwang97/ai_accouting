@@ -12,6 +12,10 @@ const device = require('../../utils/device.js');
 const setup = require('../../utils/setup.js');
 
 const POLL_MS = 5000;
+const DISMISS_KEY = 'idx_dismissed';
+function loadDismissed() {
+  try { const d = wx.getStorageSync(DISMISS_KEY); return d && typeof d === 'object' ? d : {}; } catch (e) { return {}; }
+}
 const POLL_MS_READONLY = 30000; // 家人只读：不处理待确认，放慢轮询
 const LOGOUT_KEY = 'logged_out';
 // 礼金合计位数多时缩小字号（如 1234567.89 共 10 位）
@@ -34,7 +38,8 @@ Page({
     pm: {},            // 当前身份的权限（记账人按各自权限显示操作）
     notifyTip: '',     // 新礼金提醒未开启 / 发送失败时的提示
     guideTip: false,   // 「第一次使用？看看使用教程」小卡片（关闭后不再显示）
-    joins: [],         // 申请加入的进度 [{ aid, name, role, pending }]
+    joins: [],         // 申请加入的进度 [{ aid, name, role, pending, dk }]
+    dismissed: {},     // 本地已读签名：notify=提示文案；j_<aid>=已同意的身份。签名变化（文案 / 身份不同）再提醒
     setupCard: null,   // 已登录、选了办事收礼但还没建好主家信息：「开始办事 · 3 步」进度 { name, code, book }
     themeStyle: ''
   },
@@ -47,7 +52,7 @@ Page({
       return;
     }
     theme.apply(this);
-    this.setData({ guideTip: !wx.getStorageSync('guide_tip_closed') });
+    this.setData({ guideTip: !wx.getStorageSync('guide_tip_closed'), dismissed: loadDismissed() });
     // 秒开：先显示上次的工作台数据，后台刷新
     if (this.data.mode === 'loading' && !wx.getStorageSync(LOGOUT_KEY)) {
       let c = cache.get('dashboard');
@@ -92,7 +97,7 @@ Page({
       if (!user) return this.toGuest();
 
       const d = (dP && (await dP)) || (await req.dashboard());
-      this.setData({ joins: d.joins || [] }); // 申请加入的进度：待同意 / 已同意待切换
+      this.setData({ joins: (d.joins || []).map(j => ({ ...j, dk: 'j_' + j.aid })) }); // 申请加入的进度：待同意 / 已同意待切换
       app.globalData.account = d.account;
       app.globalData.role = d.role;
       app.globalData.perms = d.perms || [];
@@ -250,6 +255,18 @@ Page({
   /** 使用教程小卡片：记账人打开记账人分页 */
   goGuide() {
     wx.navigateTo({ url: '/pages/guide/guide?tab=' + (this.data.role === 'clerk' ? 'clerk' : 'host') });
+  },
+  /** 关闭「新礼金提醒未开启」：记下当前提示文案，文案变化（如发送失败码不同）再提醒 */
+  onCloseNotify() { this.markDismissed('notify', this.data.notifyTip); },
+  /** 关闭「已同意」的加入提示：记下身份，之后不再提示（再次被同意为别的身份会再提醒） */
+  onCloseJoin(e) {
+    const j = this.data.joins[e.currentTarget.dataset.i];
+    if (j) this.markDismissed(j.dk, j.role);
+  },
+  markDismissed(key, sig) {
+    const d = { ...this.data.dismissed, [key]: sig };
+    this.setData({ dismissed: d });
+    try { wx.setStorageSync(DISMISS_KEY, d); } catch (e) { /* 忽略 */ }
   },
   onCloseGuideTip() {
     try { wx.setStorageSync('guide_tip_closed', true); } catch (e) { /* 忽略 */ }

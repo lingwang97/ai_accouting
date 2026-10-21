@@ -37,6 +37,13 @@
 .tip-icon { width: 36rpx; height: 36rpx; flex-shrink: 0; margin-right: 12rpx; }
 .tip-text { flex: 1; font-size: 26rpx; color: #333; margin-right: 12rpx; }
 .tip-go { font-size: 26rpx; color: var(--primary); white-space: nowrap; }
+/* 主家待办：一行小红点 */
+.todo-line { display: flex; flex-wrap: wrap; margin-bottom: 12rpx; }
+.todo-item { font-size: 24rpx; color: #D46B08; background: #FFF7E6; border: 2rpx solid #FFC069; border-radius: 999rpx; padding: 6rpx 20rpx; margin: 0 12rpx 8rpx 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.todo-dot { display: inline-block; width: 12rpx; height: 12rpx; border-radius: 50%; background: #f5222d; margin-right: 10rpx; vertical-align: middle; }
+.join-card { display: flex; align-items: center; }
+.join-text { flex: 1; min-width: 0; }
+.join-close { flex-shrink: 0; width: 80rpx; height: 80rpx; line-height: 80rpx; text-align: center; margin: -20rpx -24rpx -20rpx 0; color: #D46B08; font-size: 28rpx; }
 /* 使用教程小卡片 */
 .guide-tip .tip-text { color: var(--primary); }
 .guide-close { flex-shrink: 0; width: 80rpx; height: 80rpx; line-height: 80rpx; text-align: center; margin: -24rpx -24rpx -24rpx 0; color: #bbb; font-size: 28rpx; }

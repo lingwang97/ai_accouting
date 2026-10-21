@@ -5,11 +5,11 @@
     <view class="role-line" wx:elif="{{account.orgMode}}">机构 · {{account.orgName || account.accountName}}<text wx:if="{{role === 'clerk'}}"> · 礼台人员</text></view>
     <view class="role-line" wx:elif="{{role === 'clerk'}}">记账人 · 为「{{account.accountName}}」记账</view>
 
-    <view class="warn-card" wx:if="{{role === 'owner' && account.payCodeCheck}}" bindtap="goAccount">
-      <block wx:if="{{account.payCodeBy}}">记账人「{{account.payCodeBy}}」提交了新的收款码，你确认采用后才生效 ›</block>
-      <block wx:else>礼簿已移交给你，请确认收款码是你本人的微信收款码 ›</block>
+    <!-- 主家待办（不可忽略，处理后才消失）：收成一行小红点，不占首屏 -->
+    <view class="todo-line" wx:if="{{role === 'owner' && (account.payCodeCheck || joinCount)}}">
+      <view class="todo-item" wx:if="{{account.payCodeCheck}}" bindtap="goAccount"><text class="todo-dot"></text>{{account.payCodeBy ? '新收款码待确认' : '请确认收款码'}} ›</view>
+      <view class="todo-item" wx:if="{{joinCount}}" bindtap="goMembers"><text class="todo-dot"></text>{{joinCount}} 人申请加入 ›</view>
     </view>
-    <view class="warn-card" wx:if="{{role === 'owner' && joinCount}}" bindtap="goMembers">有 {{joinCount}} 人通过邀请卡申请加入，请确认 ›</view>
 
     <!-- 老用户：使用教程入口，✕ 关闭后不再显示 -->
     <view class="tip-bar guide-tip" wx:if="{{guideTip}}" bindtap="goGuide">
@@ -17,10 +17,15 @@
       <text class="guide-close" catchtap="onCloseGuideTip">✕</text>
     </view>
 
-    <view class="warn-card" wx:for="{{joins}}" wx:key="aid" data-i="{{index}}" bindtap="onJoinSwitch">
-      <block wx:if="{{item.pending}}">已申请{{item.role === 'viewer' ? '查看' : '为'}}「{{item.name}}」{{item.role === 'viewer' ? '的礼簿' : '记账'}}，等待主家同意</block>
-      <block wx:else>「{{item.name}}」已同意你{{item.role === 'viewer' ? '查看礼簿' : '记账'}}，点这里切换身份 ›</block>
-    </view>
+    <block wx:for="{{joins}}" wx:key="aid">
+      <view class="warn-card join-card" wx:if="{{item.pending || dismissed[item.dk] !== item.role}}" data-i="{{index}}" bindtap="onJoinSwitch">
+        <view class="join-text">
+          <block wx:if="{{item.pending}}">已申请{{item.role === 'viewer' ? '查看' : '为'}}「{{item.name}}」{{item.role === 'viewer' ? '的礼簿' : '记账'}}，等待主家同意</block>
+          <block wx:else>「{{item.name}}」已同意你{{item.role === 'viewer' ? '查看礼簿' : '记账'}}，点这里切换身份 ›</block>
+        </view>
+        <text class="join-close" wx:if="{{!item.pending}}" data-i="{{index}}" catchtap="onCloseJoin">✕</text>
+      </view>
+    </block>
     <!-- 没有可记的礼簿 -->
     <view class="warn-card" wx:if="{{noBook === 'ended'}}">你负责的礼簿已结束（归档、删除或移交），暂时不能出示礼簿码和登记，请联系主家重新安排</view>
     <view class="warn-card" wx:elif="{{noBook === 'none' && !readonly}}" bindtap="goBooks">还没有当前礼簿：请先在「礼簿管理」里新建或选择一本，宾客的礼金才知道记到哪里 ›</view>
@@ -50,10 +55,11 @@
     </view>
 
     <!-- 提醒未开启（家人共享不提醒） -->
-    <view class="tip-bar" wx:if="{{notifyTip && !readonly}}" bindtap="onSubscribe">
+    <view class="tip-bar" wx:if="{{notifyTip && !readonly && dismissed.notify !== notifyTip}}" bindtap="onSubscribe">
       <image class="tip-icon" src="/assets/icons/bell-r.svg" />
       <text class="tip-text">{{notifyTip}}</text>
       <text class="tip-go">开启 ›</text>
+      <text class="guide-close" catchtap="onCloseNotify">✕</text>
     </view>
 
     <!-- 家人共享：只读入口 -->
