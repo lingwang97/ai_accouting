@@ -80,7 +80,8 @@ Page({
       confirmColor: '#FA5151',
       success: res1 => {
         if (!res1.confirm) return;
-        wx.showModal({
+        // 上一个弹窗关闭动画结束后再弹（部分机型在 success 里立刻弹第二个会不显示）
+        setTimeout(() => wx.showModal({
           title: '输入礼簿名称确认',
           editable: true,
           placeholderText: '输入礼簿名称',
@@ -98,7 +99,7 @@ Page({
               this.setData({ busy: false });
             }
           }
-        });
+        }), 300);
       }
     });
   }
