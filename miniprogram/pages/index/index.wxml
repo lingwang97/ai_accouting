@@ -38,7 +38,7 @@
       <view class="bc-sum {{book ? book.sumCls : ''}}">￥{{book ? book.sumStr : '0.00'}}</view>
       <view class="bc-foot">
         <text>{{book ? book.count : 0}} 份</text>
-        <text>今日{{restricted ? '' : '（全部礼簿）'}} ￥{{todaySum}} · {{todayCount}} 份</text>
+        <text wx:if="{{todayCount !== (book ? book.count : 0)}}">今日新增{{restricted ? '' : '（全部礼簿）'}} ￥{{todaySum}} · {{todayCount}} 份</text>
         <text>明细 ›</text>
       </view>
     </view>
