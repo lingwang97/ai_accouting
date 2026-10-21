@@ -12,7 +12,7 @@
     </view>
     <view class="line">
       <input class="input name" placeholder="姓名 *" maxlength="20" value="{{item.name}}" data-i="{{ri}}" data-k="name" bindinput="onInput" />
-      <input class="input amt" type="digit" placeholder="金额 *" value="{{item.amount}}" data-i="{{ri}}" data-k="amount" bindinput="onInput" />
+      <input class="input amt" type="digit" maxlength="11" placeholder="金额 *" value="{{item.amount}}" data-i="{{ri}}" data-k="amount" bindinput="onInput" />
     </view>
     <view class="chips" wx:if="{{quick.length}}">
       <view class="chip {{item.amount == q ? 'on' : ''}}" wx:for="{{quick}}" wx:for-item="q" wx:key="*this" data-i="{{ri}}" data-v="{{q}}" bindtap="onQuick">{{q}}</view>

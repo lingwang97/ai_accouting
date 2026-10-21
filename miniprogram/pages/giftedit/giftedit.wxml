@@ -25,7 +25,7 @@
       <view class="chips">
         <view class="chip {{amount == item ? 'on' : ''}}" wx:for="{{quick}}" wx:key="*this" data-v="{{item}}" bindtap="onQuick">{{item}}</view>
       </view>
-      <input class="input" type="digit" placeholder="其他金额" value="{{amount}}" data-k="amount" bindinput="onInput" />
+      <input class="input" type="digit" maxlength="11" placeholder="其他金额" value="{{amount}}" data-k="amount" bindinput="onInput" />
     </view>
     <view class="field">
       <text class="label">日期 *</text>

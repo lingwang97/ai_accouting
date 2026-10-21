@@ -282,7 +282,7 @@ async function outSave(openid, g) {
     updatedAt: new Date()
   };
   if (!data.toName) return err('请填写对方姓名');
-  if (!Number.isFinite(amount) || amount <= 0 || amount > 1000000) return err('请填写正确金额');
+  if (!Number.isFinite(amount) || amount <= 0 || amount > 10000000) return err('请填写正确金额');
   if (!data.date) return err('请选择送礼日期');
 
   if (g._id) {

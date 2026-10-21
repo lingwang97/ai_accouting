@@ -53,7 +53,7 @@
             </view>
             <view class="amount-row">
               <text class="yen">￥</text>
-              <input class="input amount" type="digit" placeholder="其他金额" value="{{amount}}" bindinput="onAmount" />
+              <input class="input amount" type="digit" maxlength="11" placeholder="其他金额" value="{{amount}}" bindinput="onAmount" />
             </view>
           </view>
           <view class="field">

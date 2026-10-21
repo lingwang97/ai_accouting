@@ -107,7 +107,7 @@ button.btn-big:not([size=mini]) { width: 100%; font-size: 40rpx; font-weight: 60
 .ed-name { font-size: 30rpx; flex: 1; min-width: 0; margin-right: 20rpx; }
 .ed-nm { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .small { font-size: 22rpx; }
-.ed-input { width: 220rpx; flex-shrink: 0; border: 2rpx solid var(--border); border-radius: var(--r-s); padding: 12rpx 16rpx; text-align: right; font-size: 32rpx; }
+.ed-input { width: 280rpx; flex-shrink: 0; border: 2rpx solid var(--border); border-radius: var(--r-s); padding: 12rpx 16rpx; text-align: right; font-size: 32rpx; }
 .ed-sum { text-align: right; font-size: 30rpx; margin: 20rpx 0; }
 .notify-tip { background: #FFF7E6; color: #D46B08; border-radius: var(--r-s); padding: 18rpx 24rpx; font-size: 26rpx; margin-bottom: 20rpx; }
 .nt-go { float: right; color: var(--primary); }

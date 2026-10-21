@@ -6,6 +6,10 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
 const notify = require('./notify.js');
+
+// 单笔礼金上限（元）：1000 万；换算成分为 1e9，仍在安全整数内
+const MAX_AMOUNT = 10000000;
+const MAX_MSG = '单笔金额不能超过1000万元';
 const { resolveCtx, handlerName, canBook, readonly, can, workBook, soloBook, trusted } = require('./ctx.js');
 const accounts = db.collection('accounts');
 const records = db.collection('records');
@@ -73,7 +77,7 @@ async function create(openid, event) {
   if (parsed.error) return err(parsed.error);
   const items = parsed.items;
   const totalFen = items.reduce((t, x) => t + Math.round(x.amount * 100), 0);
-  if (totalFen > 100000 * 100) return err('单笔金额超限');
+  if (totalFen > MAX_AMOUNT * 100) return err(MAX_MSG);
 
   let account = null;
   let fixed = null; // 「本场礼簿码」：aid 实际是礼簿 id，礼金记入这一场
@@ -247,7 +251,7 @@ function parseItems(raw, mixed, desk) {
   for (const it of items) {
     if (!it.payerName) return { error: '请填写随礼人姓名' };
     if (!Number.isFinite(it.amount) || it.amount <= 0) return { error: `请填写${items.length > 1 ? ' ' + it.payerName + ' 的' : '正确'}金额` };
-    if (it.amount > 100000) return { error: '单笔金额超限' };
+    if (it.amount > MAX_AMOUNT) return { error: MAX_MSG };
   }
   if (new Set(items.map(x => x.payerName + '#' + (x.nameTag || ''))).size !== items.length) return { error: '随礼人姓名有重复' };
   return { items };
@@ -316,7 +320,7 @@ async function cashEntry(openid, ctx, event) {
     }
     if (items[i].nameTag && !items[i].nameTagBy) items[i].nameTagBy = 'desk';
   }
-  if (items.reduce((t, x) => t + Math.round(x.amount * 100), 0) > 100000 * 100) return err('单笔金额超限');
+  if (items.reduce((t, x) => t + Math.round(x.amount * 100), 0) > MAX_AMOUNT * 100) return err(MAX_MSG);
   if (method === 'mixed') {
     const split = splitFen(items);
     if (!split.wechat) method = 'cash';
@@ -586,7 +590,7 @@ async function groupUpdate(ctx, rid, fromList, to, actualAmount, amounts) {
   const map = (to === 'paid' && amounts && typeof amounts === 'object') ? amounts : {};
   for (const r of all) {
     const v = map[r._id];
-    if (v !== undefined && v !== null && !(Number(v) > 0 && Number(v) <= 100000)) return err(`${r.payerName} 的实际金额不正确`);
+    if (v !== undefined && v !== null && !(Number(v) > 0 && Number(v) <= MAX_AMOUNT)) return err(`${r.payerName} 的实际金额不正确`);
   }
   const results = await Promise.all(all.map(r => ownerUpdate(ctx, r._id, fromList, to, map[r._id], r)
     .catch(e => ({ code: 1, msg: e.message }))));
@@ -641,7 +645,7 @@ async function ownerUpdate(ctx, rid, fromList, to, actualAmount, pre) {
   // 主家按实际到账金额入簿：保留宾客原登记金额备查
   if (hasAmt) {
     const amt = Math.round(Number(actualAmount) * 100) / 100;
-    if (!Number.isFinite(amt) || amt <= 0 || amt > 100000) return err('实际金额不正确');
+    if (!Number.isFinite(amt) || amt <= 0 || amt > MAX_AMOUNT) return err('实际金额不正确');
     const cur = r0;
     if (!cur || cur.ownerOpenid !== openid) return err('记录不存在');
     if (Math.round(cur.amount * 100) !== Math.round(amt * 100)) {

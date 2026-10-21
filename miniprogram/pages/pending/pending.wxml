@@ -149,7 +149,7 @@
       <scroll-view scroll-y class="ed-list">
         <view class="ed-row" wx:for="{{editor.rows}}" wx:key="_id">
           <view class="ed-name"><view class="ed-nm">{{item.name}}</view><view class="muted small">登记 ￥{{item.declared}}</view></view>
-          <input class="ed-input" type="digit" cursor-spacing="120" adjust-position value="{{item.value}}" data-i="{{index}}" bindinput="onEditInput" />
+          <input class="ed-input" type="digit" maxlength="11" cursor-spacing="120" adjust-position value="{{item.value}}" data-i="{{index}}" bindinput="onEditInput" />
         </view>
       </scroll-view>
       <view class="ed-sum">实际合计 <text class="money">￥{{editor.sumStr}}</text></view>
