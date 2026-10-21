@@ -213,28 +213,19 @@ Page({
     wx.navigateTo({ url: '/pages/guide/guide?tab=' + tab });
   },
 
-  /** 隐私与数据：查看说明 / 清除我的全部数据（注销） */
+  /** 隐私说明（清除全部数据已拆成独立入口 confirmPurge） */
   onPrivacy() {
-    wx.showActionSheet({
-      itemList: ['隐私说明', '清除我的全部数据'],
-      success: res => {
-        if (res.tapIndex === 0) {
-          wx.showModal({
-            title: '隐私说明',
-            content: '慧礼记仅保存你登记的礼簿、礼金、送礼记录和收款码图片，用于记账、回执与导出；数据存于微信云开发，仅你和你授权的记账人、家人可见。宾客的姓名、礼金仅对主家和宾客本人可见。导出文件下载后即从云端删除；删除的礼簿在回收站保留 15 天后永久删除。你可随时在此清除全部数据（含回收站）。',
-            showCancel: false
-          });
-        } else {
-          this.confirmPurge();
-        }
-      }
+    wx.showModal({
+      title: '隐私说明',
+      content: '慧礼记仅保存你登记的礼簿、礼金、送礼记录和收款码图片，用于记账、回执与导出；数据存于微信云开发，仅你和你授权的记账人、家人可见。宾客的姓名、礼金仅对主家和宾客本人可见。导出文件下载后即从云端删除；删除的礼簿在回收站保留 15 天后永久删除。你可随时在「我的」页底部清除全部数据（含回收站）。',
+      showCancel: false
     });
   },
 
   confirmPurge() {
     wx.showModal({
       title: '清除全部数据',
-      content: '将永久删除你的所有礼簿、礼金记录、送礼记录、模板、存档文件和主家信息，无法恢复。建议先在「导出礼簿」里做一次备份。如确认，请输入"清除"',
+      content: '将永久删除你的所有礼簿、礼金记录、送礼记录、模板、存档文件和主家信息，无法恢复。建议先在「导出与备份」里做一次备份。如确认，请输入"清除"',
       editable: true,
       placeholderText: '输入：清除',
       confirmColor: '#FA5151',

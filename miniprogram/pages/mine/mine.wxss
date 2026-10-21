@@ -31,3 +31,5 @@
 .user-card .info { flex: 1; min-width: 0; }
 .user-card .info .name, .user-card .info .muted { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .user-card .switch-id { flex-shrink: 0; }
+
+.menu-item.purge .mi-text { color: var(--danger); }

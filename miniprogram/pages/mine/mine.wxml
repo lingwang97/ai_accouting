@@ -28,7 +28,7 @@
     </view>
 
     <block wx:if="{{role !== 'viewer'}}">
-    <view class="group-title">收礼设置</view>
+    <view class="group-title">账号与收款</view>
     <view class="card menu">
       <view class="menu-item" bindtap="goAccount" wx:if="{{role !== 'clerk' || pm.info || pm.paycode}}">
         <image class="mi-icon" src="/assets/icons/user-m.svg" /><text class="mi-text">{{role === 'clerk' && !pm.info ? '收款码（申请更换）' : '主家信息与收款码'}}</text><text class="arrow">›</text>
@@ -47,16 +47,8 @@
     </view>
 
     </block>
-    <!-- 外观设置：仅主家本人 -->
-    <block wx:if="{{account && role === 'owner'}}">
-      <view class="group-title">外观设置</view>
-      <view class="card menu">
-        <view class="menu-item" bindtap="goAppearance">
-          <image class="mi-icon" src="/assets/icons/layers-m.svg" /><text class="mi-text">主题色</text><text class="arrow">›</text>
-        </view>
-      </view>
-    </block>
-    <view class="group-title">打印与回执</view>
+
+    <view class="group-title">样式与设备</view>
     <view class="card menu">
       <view class="menu-item" bindtap="goPrinter">
         <image class="mi-icon" src="/assets/icons/printer-m.svg" /><text class="mi-text">蓝牙打印机</text><text class="arrow"><text class="muted">{{printerName || '未连接'}}</text> ›</text>
@@ -64,25 +56,34 @@
       <view class="menu-item" bindtap="goStyle" wx:if="{{account && !readonly && pm.style}}">
         <image class="mi-icon" src="/assets/icons/receipt-m.svg" /><text class="mi-text">回执样式</text><text class="arrow"><text class="muted">电子回执 / 打印小票</text> ›</text>
       </view>
-    </view>
-
-    <view class="group-title">数据</view>
-    <view class="card menu">
-      <view class="menu-item" bindtap="goExport" wx:if="{{account && role !== 'viewer' && pm.export}}">
-        <image class="mi-icon" src="/assets/icons/export-m.svg" /><text class="mi-text">导出与备份</text><text class="arrow">›</text>
-      </view>
-      <view class="menu-item" bindtap="goTrash" wx:if="{{account && role === 'owner'}}">
-        <image class="mi-icon" src="/assets/icons/layers-m.svg" /><text class="mi-text">回收站</text><text class="arrow"><text class="muted">删除的礼簿保留 15 天</text> ›</text>
-      </view>
-      <view class="menu-item" bindtap="onPrivacy">
-        <image class="mi-icon" src="/assets/icons/lock-m.svg" /><text class="mi-text">隐私与数据</text><text class="arrow">›</text>
+      <!-- 主题色：仅主家本人 -->
+      <view class="menu-item" bindtap="goAppearance" wx:if="{{account && role === 'owner'}}">
+        <image class="mi-icon" src="/assets/icons/palette-m.svg" /><text class="mi-text">主题色</text><text class="arrow">›</text>
       </view>
     </view>
 
-    <view class="group-title">帮助</view>
+    <block wx:if="{{account && ((role !== 'viewer' && pm.export) || role === 'owner')}}">
+      <view class="group-title">数据管理</view>
+      <view class="card menu">
+        <view class="menu-item" bindtap="goExport" wx:if="{{role !== 'viewer' && pm.export}}">
+          <image class="mi-icon" src="/assets/icons/export-m.svg" /><text class="mi-text">导出与备份</text><text class="arrow">›</text>
+        </view>
+        <view class="menu-item" bindtap="goTrash" wx:if="{{role === 'owner'}}">
+          <image class="mi-icon" src="/assets/icons/trash-m.svg" /><text class="mi-text">回收站</text><text class="arrow"><text class="muted">删除的礼簿保留 15 天</text> ›</text>
+        </view>
+      </view>
+    </block>
+
+    <view class="group-title">帮助与隐私</view>
     <view class="card menu">
       <view class="menu-item" bindtap="goGuide">
         <image class="mi-icon" src="/assets/icons/book-m.svg" /><text class="mi-text">使用教程</text><text class="arrow">›</text>
+      </view>
+      <view class="menu-item" bindtap="onPrivacy">
+        <image class="mi-icon" src="/assets/icons/lock-m.svg" /><text class="mi-text">隐私说明</text><text class="arrow">›</text>
+      </view>
+      <view class="menu-item purge" bindtap="confirmPurge">
+        <image class="mi-icon" src="/assets/icons/trash-m.svg" /><text class="mi-text">清除我的全部数据</text><text class="arrow">›</text>
       </view>
     </view>
 
@@ -90,7 +91,7 @@
       <view class="group-title">管理员</view>
       <view class="card menu">
         <view class="menu-item" bindtap="goAdmin">
-          <image class="mi-icon" src="/assets/icons/layers-m.svg" /><text class="mi-text">系统设置</text><text class="arrow"><text class="muted">预热 / 套餐</text> ›</text>
+          <image class="mi-icon" src="/assets/icons/settings-m.svg" /><text class="mi-text">系统设置</text><text class="arrow"><text class="muted">预热 / 套餐</text> ›</text>
         </view>
       </view>
     </block>
