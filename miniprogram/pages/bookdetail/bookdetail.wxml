@@ -1,6 +1,6 @@
 <!-- 加载中 / 加载失败（点击重试） -->
 <view class="state-box" wx:if="{{!book}}" style="{{themeStyle}}">
-  <view class="muted" wx:if="{{!loadError}}">加载中…</view>
+  <block wx:if="{{!loadError}}"><loading show="{{true}}" type="spinner" /></block>
   <view wx:else bindtap="onRetry">
     <view class="muted">礼簿加载失败</view>
     <view class="btn btn-outline retry">点击重试</view>

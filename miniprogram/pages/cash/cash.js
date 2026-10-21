@@ -30,6 +30,7 @@ Page({
     bookIdx: 0,
     relations: scenes.RELATIONS,
     saving: false,
+    pageLoading: true, // 首次读取礼簿期间：转圈 + 不可操作
     done: [],          // 本次已登记（只显示最近 DONE_MAX 份）
     doneCount: 0,      // 本次已登记份数、合计：单独累加，不受显示条数限制
     doneSum: '0.00'
@@ -40,6 +41,10 @@ Page({
   },
 
   async onLoad() {
+    try { await this.init(); } finally { this.setData({ pageLoading: false }); }
+  },
+
+  async init() {
     // 记账人需有「礼台记账」权限
     const role = await getApp().ensureRole();
     if ((role === 'clerk' || role === 'viewer') && !perm.can('desk')) {

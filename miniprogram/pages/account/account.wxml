@@ -46,4 +46,5 @@
 
   <button class="btn-primary" loading="{{saving || uploading}}" bindtap="onSave">{{codeOnly ? '提交主家确认' : '保存'}}</button>
   <view class="clear-form" wx:if="{{!codeOnly}}" bindtap="onClearForm">清空重填</view>
+  <loading show="{{pageLoading}}" type="overlay" />
 </view>

@@ -1,4 +1,7 @@
 {
   "navigationBarTitleText": "回执样式",
-  "usingComponents": { "receipt-view": "/components/receipt-view/index" }
+  "usingComponents": {
+    "receipt-view": "/components/receipt-view/index",
+    "loading": "/components/loading/loading"
+  }
 }

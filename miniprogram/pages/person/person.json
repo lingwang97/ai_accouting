@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "往来明细"
+  "navigationBarTitleText": "往来明细",
+  "usingComponents": {
+    "loading": "/components/loading/loading"
+  }
 }

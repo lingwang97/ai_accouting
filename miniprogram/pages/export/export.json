@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "导出礼簿"
+  "navigationBarTitleText": "导出礼簿",
+  "usingComponents": {
+    "loading": "/components/loading/loading"
+  }
 }

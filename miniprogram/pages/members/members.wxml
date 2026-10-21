@@ -40,6 +40,7 @@
       <view class="link" wx:if="{{canManage && !item.me}}" data-idx="{{index}}" bindtap="onEditMember">设置</view>
       <view class="link danger" wx:if="{{!item.me && canManage}}" data-idx="{{index}}" bindtap="onRemove">移除</view>
     </view>
+    <loading show="{{loading && !list.length}}" rows="2" />
     <view class="muted" wx:if="{{!loading && list.length === 0}}">还没有{{orgMode ? '礼台人员' : '记账人'}}</view>
   </view>
 

@@ -15,6 +15,8 @@
     <view class="seg-item {{tab === 'staff' ? 'on' : ''}}" data-t="staff" bindtap="onTab">按礼台人员</view>
   </view>
 
+  <loading show="{{loading && !list.length && !staff.length}}" rows="3" />
+
   <block wx:if="{{tab === 'books'}}">
     <view class="card row-card" wx:for="{{list}}" wx:key="_id" data-id="{{item._id}}" bindtap="onOpen">
       <view class="r-top">

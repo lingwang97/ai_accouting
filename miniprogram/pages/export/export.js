@@ -25,7 +25,8 @@ Page({
     today: '',
     books: [{ _id: '', name: '按日期范围导出' }],
     bookIdx: 0,
-    exporting: ''   // '' | 'pdf' | 'xlsx' | 'book'
+    exporting: '',  // '' | 'pdf' | 'xlsx' | 'book'
+    pageLoading: true // 读取礼簿列表期间：转圈 + 不可操作
   },
 
   onShow() {
@@ -47,7 +48,9 @@ Page({
       const want = bookId || activeBookId;
       const idx = Math.max(0, books.findIndex(b => b._id === want));
       this.setData({ books, bookIdx: idx });
-    } catch (e) { /* 礼簿可选，失败时按日期导出 */ }
+    } catch (e) { /* 礼簿可选，失败时按日期导出 */ } finally {
+      this.setData({ pageLoading: false });
+    }
   },
 
   onPreset(e) {

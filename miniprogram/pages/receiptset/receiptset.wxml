@@ -68,4 +68,5 @@
 
   <button class="btn-primary" loading="{{saving}}" bindtap="onSave">保存模板</button>
   <button class="btn-text btn-link" bindtap="onReset">恢复默认</button>
+  <loading show="{{pageLoading}}" type="overlay" />
 </view>

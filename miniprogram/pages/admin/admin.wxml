@@ -192,4 +192,5 @@
       </block>
     </view>
   </block>
+  <loading show="{{!loaded}}" type="overlay" />
 </view>

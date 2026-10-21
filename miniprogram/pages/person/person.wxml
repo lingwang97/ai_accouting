@@ -24,6 +24,8 @@
     <text wx:else>往来已持平</text>
   </view>
 
+  <loading show="{{loading && !received.length && !given.length}}" rows="3" />
+
   <view class="section-title">TA 随给我的（{{received.length}}）</view>
   <view class="card item" wx:for="{{received}}" wx:key="_id">
     <view class="i-top"><text class="i-name">{{item.event || item.typeLabel}}</text><text class="money i-amt">￥{{item.amountStr}}</text></view>

@@ -16,6 +16,7 @@ Page({
     quickText: DEFAULT_QUICK.join(','),
     colors: PRESET_COLORS,
     saving: false,
+    pageLoading: true,   // 首次读取主家信息期间：转圈 + 不可操作
     uploading: false,
     codeOnly: false,     // 没有「修改主家信息」权限：只能申请更换收款码
     reviews: [],         // 主家：记账人提交、待确认的收款码
@@ -56,7 +57,9 @@ Page({
       // 记账人读不到主家上传的图片，优先用云函数生成的链接
       const url = account.payCodeUrl || await this.getTempUrl(account.payCodeFileID);
       this.setData({ payCodeUrl: url });
-    } catch (e) { /* toast 已提示 */ }
+    } catch (e) { /* toast 已提示 */ } finally {
+      this.setData({ pageLoading: false });
+    }
   },
 
   /** 主家：记账人提交的收款码（主家信息 / 本场收款码），核对后采用或驳回 */

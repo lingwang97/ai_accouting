@@ -33,7 +33,7 @@
   </view>
 
   <!-- 首次加载完成前显示加载中，避免空状态闪现 -->
-  <view class="muted center pad" wx:if="{{!loaded}}">加载中…</view>
+  <block wx:if="{{!loaded}}"><loading show="{{true}}" rows="3" /></block>
   <view class="empty" wx:elif="{{total === 0}}">
     <view class="empty-icon">✓</view>
     <view>全部处理完了</view>

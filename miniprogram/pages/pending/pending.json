@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "待确认礼金"
+  "navigationBarTitleText": "待确认礼金",
+  "usingComponents": {
+    "loading": "/components/loading/loading"
+  }
 }

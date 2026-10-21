@@ -60,4 +60,5 @@
   </view>
 
   <button class="btn-primary" loading="{{saving}}" bindtap="onSave">保存模板</button>
+  <loading show="{{pageLoading}}" type="overlay" />
 </view>

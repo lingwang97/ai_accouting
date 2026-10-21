@@ -45,9 +45,7 @@
 .cash-entry { margin-top: 20rpx; text-align: center; padding: 18rpx 0; border-radius: var(--r-s); border: 2rpx dashed #FF9F1C; color: #FF9F1C; font-size: 28rpx; }
 .book-manage { font-size: 24rpx; color: var(--link); }
 
-/* 骨架屏 */
-.sk { background: linear-gradient(90deg, #ECECEC 25%, #F5F5F5 50%, #ECECEC 75%); background-size: 400% 100%; animation: sk 1.4s ease infinite; border-radius: 10rpx; }
-@keyframes sk { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+/* 骨架屏（.sk 基类在 app.wxss） */
 .sk-l1 { height: 34rpx; width: 55%; margin-bottom: 18rpx; }
 .sk-l2 { height: 24rpx; width: 80%; }
 /* 「未收到」「确认收到」两个按钮大小一致 */

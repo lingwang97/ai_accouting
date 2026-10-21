@@ -1,0 +1,20 @@
+<block wx:if="{{type === 'overlay'}}">
+  <view class="ov" wx:if="{{blocking}}" catchtouchmove="noop">
+    <view class="ov-box" wx:if="{{visible}}">
+      <view class="spin"></view>
+      <view class="tip-t">{{text}}</view>
+    </view>
+  </view>
+</block>
+<block wx:elif="{{visible}}">
+  <view class="tip" wx:if="{{type === 'spinner'}}">
+    <view class="spin"></view>
+    <view class="tip-t">{{text}}</view>
+  </view>
+  <view wx:else>
+    <view class="row" wx:for="{{list}}" wx:key="*this">
+      <view class="sk l1"></view>
+      <view class="sk l2"></view>
+    </view>
+  </view>
+</block>

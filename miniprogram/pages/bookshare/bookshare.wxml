@@ -12,6 +12,7 @@
         <view class="muted small">{{item.count}} 份 · ￥{{item.sumStr}}</view>
       </view>
     </view>
+    <loading show="{{loading && !books.length}}" rows="2" />
     <view class="muted center" wx:if="{{!loading && books.length === 0}}">还没有礼簿</view>
   </view>
 

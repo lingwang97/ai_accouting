@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "回执样式"
+  "navigationBarTitleText": "回执样式",
+  "usingComponents": {
+    "loading": "/components/loading/loading"
+  }
 }

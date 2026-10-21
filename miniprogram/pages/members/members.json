@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "记账人管理"
+  "navigationBarTitleText": "记账人管理",
+  "usingComponents": {
+    "loading": "/components/loading/loading"
+  }
 }

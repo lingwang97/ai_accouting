@@ -69,6 +69,7 @@
     </view>
   </block>
 
+  <loading show="{{loading && !r}}" rows="4" />
   <view class="muted center pad" wx:if="{{!loading && !r}}">暂无可对账的礼簿</view>
   <canvas type="2d" id="reconCanvas" class="offscreen"></canvas>
 </view>

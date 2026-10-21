@@ -24,7 +24,7 @@ Page({
     outList: [],
     outSum: '0.00',
     outTotal: 0,
-    loading: false,
+    loading: true,   // 首次进入先视为加载中：空文案不闪现，骨架显示
     loggedIn: true
   },
 
@@ -32,7 +32,7 @@ Page({
     // 已退出登录：立即清空上一个账户的往来（不等登录状态恢复，也不再查询身份）
     if (getApp().isLoggedOut()) {
       getApp().refreshTabBar();
-      return this.setData({ loggedIn: false, people: [], shownPeople: [], outList: [], inList: [], receipts: [], shownReceipts: [], reminds: [] });
+      return this.setData({ loading: false, loggedIn: false, people: [], shownPeople: [], outList: [], inList: [], receipts: [], shownReceipts: [], reminds: [] });
     }
     // 记账人身份不显示「往来」（切换身份后可能停留在本页）：回到工作台
     if ((await getApp().ensureRole()) === 'clerk') return wx.switchTab({ url: '/pages/index/index' });
@@ -47,7 +47,7 @@ Page({
   async load() {
     await getApp().loginReady;
     if (!getApp().globalData.user) {
-      return this.setData({ loggedIn: false, people: [], shownPeople: [], outList: [], inList: [], receipts: [], shownReceipts: [], reminds: [] });
+      return this.setData({ loading: false, loggedIn: false, people: [], shownPeople: [], outList: [], inList: [], receipts: [], shownReceipts: [], reminds: [] });
     }
     this.setData({ loading: true, loggedIn: true });
     try {
@@ -117,7 +117,7 @@ Page({
     if (t === 'recv') t = this._recvView || 'people';
     if (t === 'people' || t === 'in') this._recvView = t;
     if (t === this.data.tab) return;
-    this.setData({ tab: t });
+    this.setData({ tab: t, loading: true }); // 先置加载中，避免切换瞬间空文案闪现
     this.load();
   },
 

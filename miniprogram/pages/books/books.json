@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "礼簿管理"
+  "navigationBarTitleText": "礼簿管理",
+  "usingComponents": {
+    "loading": "/components/loading/loading"
+  }
 }

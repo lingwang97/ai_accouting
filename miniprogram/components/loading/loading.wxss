@@ -1,0 +1,12 @@
+.tip { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80rpx 0; }
+.tip-t { margin-top: 20rpx; font-size: 26rpx; color: var(--text-3, #999); }
+.spin { width: 52rpx; height: 52rpx; box-sizing: border-box; border-radius: 50%; border: 6rpx solid var(--primary-soft, rgba(200, 22, 29, .12)); border-top-color: var(--primary, #C8161D); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.ov { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 900; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, .6); }
+.ov-box { display: flex; flex-direction: column; align-items: center; padding: 36rpx 56rpx; border-radius: 20rpx; background: #fff; box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, .08); }
+.ov-box .tip-t { margin-top: 16rpx; }
+.row { background: #fff; border-radius: 20rpx; padding: 28rpx 24rpx; margin-bottom: 20rpx; }
+.sk { background: linear-gradient(90deg, #ECECEC 25%, #F5F5F5 50%, #ECECEC 75%); background-size: 400% 100%; animation: sk 1.4s ease infinite; border-radius: 10rpx; }
+@keyframes sk { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+.l1 { height: 34rpx; width: 55%; margin-bottom: 18rpx; }
+.l2 { height: 24rpx; width: 80%; }

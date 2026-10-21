@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "人情往来"
+  "navigationBarTitleText": "人情往来",
+  "usingComponents": {
+    "loading": "/components/loading/loading"
+  }
 }

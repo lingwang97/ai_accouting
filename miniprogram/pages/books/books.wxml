@@ -1,6 +1,8 @@
 <view class="page" style="{{themeStyle}}">
   <view class="book-tip muted">宾客扫礼簿码随礼时记入「当前礼簿」；办新的事（满月、乔迁…）新建一本，各自统计、导出。</view>
 
+  <loading show="{{loading && !current && !list.length}}" rows="4" />
+
   <!-- 当前礼簿 -->
   <view class="cur-card" wx:if="{{current}}">
     <view class="cc-top">

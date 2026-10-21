@@ -14,5 +14,6 @@
     </view>
   </view>
 
+  <loading show="{{loading && !list.length}}" rows="3" />
   <view class="empty" wx:if="{{!loading && list.length === 0}}">回收站是空的</view>
 </view>

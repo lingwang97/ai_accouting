@@ -38,4 +38,5 @@
     <button class="btn-outline" style="margin-top:20rpx" loading="{{exporting === 'backup'}}" disabled="{{!!exporting}}" bindtap="onBackup">备份全部数据</button>
   </view>
   <ad-slot slot="exportDone" book-type="{{books[bookIdx].type || ''}}" />
+  <loading show="{{pageLoading}}" type="overlay" />
 </view>

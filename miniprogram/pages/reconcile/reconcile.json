@@ -1,4 +1,7 @@
 {
   "navigationBarTitleText": "一键对账",
-  "enablePullDownRefresh": true
+  "enablePullDownRefresh": true,
+  "usingComponents": {
+    "loading": "/components/loading/loading"
+  }
 }

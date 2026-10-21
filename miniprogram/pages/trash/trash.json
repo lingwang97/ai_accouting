@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "回收站"
+  "navigationBarTitleText": "回收站",
+  "usingComponents": {
+    "loading": "/components/loading/loading"
+  }
 }

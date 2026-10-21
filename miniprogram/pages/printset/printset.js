@@ -22,6 +22,7 @@ Page({
     fieldItems: [],        // [{f,label}] 渲染用
     disabledItems: [],
     saving: false,
+    pageLoading: true,   // 首次读取模板期间：转圈 + 不可操作
     books: [],
     bookIdx: 0,
     previewLines: []
@@ -38,7 +39,7 @@ Page({
       const want = options.bookId || activeBookId; // 从「电子回执」切换过来时沿用所选礼簿
       this.setData({ books, bookIdx: Math.max(0, books.findIndex(b => b._id === want)) });
     } catch (e) { /* 未完善主家信息 */ }
-    this.load();
+    try { await this.load(); } finally { this.setData({ pageLoading: false }); }
   },
 
   /** 切到「电子回执」 */

@@ -31,6 +31,8 @@
       <view class="btn btn-primary add-btn" hover-class="btn-hover" wx:if="{{tab !== 'receipts'}}" bindtap="onAddGift">＋ 记送礼</view>
     </view>
 
+    <loading show="{{loading && (tab === 'people' ? !shownPeople.length : (tab === 'in' ? !inList.length : (tab === 'receipts' ? !shownReceipts.length : !outList.length)))}}" rows="4" />
+
     <!-- 收礼往来：按人（收送对比）/ 按笔（收到的每一笔） -->
     <view class="sub-row" wx:if="{{tab === 'people' || tab === 'in'}}">
       <view class="seg seg-sm">

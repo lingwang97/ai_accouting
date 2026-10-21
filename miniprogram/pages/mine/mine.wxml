@@ -1,4 +1,5 @@
 <view class="container tab-page" style="{{themeStyle}}">
+  <loading show="{{loading && !user}}" rows="3" />
   <!-- 未登录：宾客无需登录，主家登录后开始收礼 -->
   <view class="card center login-card" wx:if="{{!loading && !user}}">
     <image class="avatar big" src="/assets/avatar-default.png" />

@@ -21,7 +21,8 @@ Page({
     accountName: '',
     books: [],
     bookIdx: 0,
-    saving: false
+    saving: false,
+    pageLoading: true   // 首次读取模板期间：转圈 + 不可操作
   },
 
   onShow() {
@@ -41,6 +42,8 @@ Page({
       await this.loadTpl();
     } catch (e) {
       this.update(receipt.normalizeTpl(null));
+    } finally {
+      this.setData({ pageLoading: false });
     }
   },
 
