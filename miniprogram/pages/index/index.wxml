@@ -40,9 +40,11 @@
         <view class="bc-switch-btn" wx:if="{{canSwitch}}" hover-class="bc-switch-hover" catchtap="onSwitchBook">⇅ 切换{{account.orgMode ? '场次' : '礼簿'}}</view>
       </view>
       <view class="bc-label">礼金合计</view>
-      <view class="bc-sum {{book ? book.sumCls : ''}}">￥{{book ? book.sumStr : '0.00'}}</view>
+      <view class="bc-sumrow">
+        <text class="bc-sum {{book ? book.sumCls : ''}}">￥{{book ? book.sumStr : '0.00'}}</text>
+        <text class="bc-cnt">{{book ? book.count : 0}} 份</text>
+      </view>
       <view class="bc-foot">
-        <text>{{book ? book.count : 0}} 份</text>
         <text wx:if="{{todayCount !== (book ? book.count : 0) || todayBook !== (book ? book.count : 0)}}">今日新增{{restricted ? '' : '（全部礼簿）'}} ￥{{todaySum}} · {{todayCount}} 份</text>
         <text>明细 ›</text>
       </view>
@@ -116,7 +118,7 @@
       <view class="g-item" hover-class="g-hover" bindtap="goBooks">
         <view class="g-icon"><image src="/assets/icons/book-w.svg" /></view>
         <view class="g-title">{{account.orgMode ? '场次管理' : '礼簿管理'}}</view>
-        <view class="g-sub">切换、统计、导出</view>
+        <view class="g-sub">{{pm.books ? '新建、' : ''}}切换{{pm.export ? '、导出' : ''}}、统计{{pm.books ? '、归档' : ''}}</view>
       </view>
       <view class="g-item" hover-class="g-hover" wx:if="{{account.orgMode}}" bindtap="goOrgSummary">
         <view class="g-icon"><image src="/assets/icons/layers-w.svg" /></view>

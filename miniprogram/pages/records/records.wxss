@@ -38,6 +38,7 @@
 .rel-btn { padding: 0 20rpx; line-height: 64rpx; border-radius: var(--r-s); background: var(--fill); color: var(--text-2); font-size: 26rpx; white-space: nowrap; }
 .rel-btn.on { background: var(--primary-soft); color: var(--primary); }
 .declared { color: #FF9F1C; }
+.xfer-tag { font-size: 22rpx; color: #1677FF; background: #E6F4FF; border-radius: 6rpx; padding: 2rpx 10rpx; margin-right: 12rpx; }
 .cash-tag { font-size: 22rpx; color: #FF9F1C; background: #FFF7E6; border-radius: 6rpx; padding: 2rpx 10rpx; margin-right: 12rpx; }
 .cash-entry { margin-top: 20rpx; text-align: center; padding: 18rpx 0; border-radius: var(--r-s); border: 2rpx dashed #FF9F1C; color: #FF9F1C; font-size: 28rpx; }
 .book-manage { font-size: 24rpx; color: var(--link); }

@@ -24,11 +24,14 @@
 }
 .bc-switch-hover { background: rgba(255, 255, 255, .35); }
 .bc-label { font-size: 24rpx; opacity: .8; margin-top: 28rpx; }
-.bc-sum { font-size: 72rpx; font-weight: 700; margin: 4rpx 0 16rpx; letter-spacing: 1rpx; white-space: nowrap; }
+.bc-sumrow { display: flex; align-items: baseline; flex-wrap: wrap; margin: 4rpx 0 16rpx; }
+.bc-sum { font-size: 72rpx; font-weight: 700; letter-spacing: 1rpx; white-space: nowrap; margin-right: 16rpx; }
+.bc-cnt { font-size: 26rpx; opacity: .75; white-space: nowrap; }
 /* 金额位数多时缩小字号，避免撑破卡片 */
 .bc-sum.long { font-size: 60rpx; }
 .bc-sum.xlong { font-size: 48rpx; letter-spacing: 0; }
-.bc-foot { display: flex; justify-content: space-between; font-size: 24rpx; opacity: .9; }
+.bc-foot text:last-child { margin-left: auto; }
+.bc-foot { display: flex; justify-content: space-between; align-items: center; font-size: 24rpx; opacity: .9; }
 
 .tip-bar {
   display: flex; align-items: center; background: #fff; border-radius: 16rpx;
@@ -66,7 +69,7 @@
   box-sizing: border-box; border: 3rpx solid #fff;
 }
 .g-title { font-size: 32rpx; font-weight: 600; color: #333; }
-.g-sub { font-size: 24rpx; color: var(--text-3); margin-top: 6rpx; }
+.g-sub { font-size: 24rpx; color: var(--text-3); margin-top: 6rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .g-sub.hot { color: var(--danger); font-weight: 600; }
 .g-sub.ok { color: var(--success); }
 

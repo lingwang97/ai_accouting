@@ -12,6 +12,7 @@ const CARD_H = 1240;
 
 Page({
   data: {
+    showTry: false, // 模拟宾客随礼：仅开发版 / 体验版显示，正式版隐藏
     account: null,
     qrUrl: '',       // 登记码（小程序码）
     qrFileID: '',
@@ -21,6 +22,10 @@ Page({
   },
 
   async onLoad(options) {
+    try {
+      const env = wx.getAccountInfoSync().miniProgram.envVersion;
+      this.setData({ showTry: env === 'develop' || env === 'trial' });
+    } catch (e) { /* 取不到按正式版：隐藏 */ }
     this._bookId = options.bookId || ''; // 机构版：本场礼簿码
     // 记账人需有「礼簿码与打印」权限
     const role = await getApp().ensureRole();

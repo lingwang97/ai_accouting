@@ -20,7 +20,7 @@
     <button class="s-op s-share" hover-class="none" open-type="share">分享给宾客</button>
   </view>
   <view class="s-hint">屏幕已调至最亮并保持常亮，离开本页自动恢复</view>
-  <view class="try s-try" bindtap="onTry">自己试一下（模拟宾客随礼）›</view>
+  <view class="try s-try" wx:if="{{showTry}}" bindtap="onTry">自己试一下（模拟宾客随礼）›</view>
 </view>
 
 <!-- 加载失败：点击重试 -->

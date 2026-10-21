@@ -38,7 +38,7 @@
   <view class="card record {{item.status}}" wx:for="{{list}}" wx:key="_id">
     <view class="r-top">
       <text class="payer">{{item.nameStr}}</text>
-      <text class="r-right"><text class="cash-tag" wx:if="{{item.payMethod === 'cash'}}">现金</text><text class="money r-amount">￥{{item.amountStr}}</text></text>
+      <text class="r-right"><text class="cash-tag" wx:if="{{item.payMethod === 'cash'}}">现金</text><text class="xfer-tag" wx:elif="{{item.status === 'transferred' || item.status === 'paid'}}">转账</text><text class="money r-amount">￥{{item.amountStr}}</text></text>
     </view>
     <view class="muted">{{item.timeStr}}<text wx:if="{{item.relation}}"> · {{item.relation}}</text><text wx:if="{{item.batchId}}"> · 批次录入</text><text wx:if="{{item.remark}}"> · {{item.remark}}</text><text wx:if="{{item.declaredStr}}" class="declared"> · 宾客登记 ￥{{item.declaredStr}}，按实收入簿</text></view>
 
