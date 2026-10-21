@@ -109,7 +109,7 @@
           <view class="sr-item"><text class="sr-num">③</text>回来点完成</view>
         </view>
         <view class="link-fold" wx:if="{{codeSaved}}" bindtap="onSavePayCode">没找到？重新保存</view>
-        <view class="muted">微信限制：小程序内长按收款码无法直接付款</view>
+        <view class="muted">使用微信扫一扫相册保存的收款码进行付款</view>
         <view class="link-fold" wx:if="{{!onsite}}" bindtap="onSwitchOnsite">在现场？直接扫主家屏幕或台卡上的收款码</view>
       </view>
       <button class="btn-primary" loading="{{submitting}}" bindtap="onTransferred">我已完成转账</button>
