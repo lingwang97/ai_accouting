@@ -118,7 +118,7 @@
       <view class="g-item" hover-class="g-hover" bindtap="goBooks">
         <view class="g-icon"><image src="/assets/icons/book-w.svg" /></view>
         <view class="g-title">{{account.orgMode ? '场次管理' : '礼簿管理'}}</view>
-        <view class="g-sub">{{pm.books ? '新建、' : ''}}切换{{pm.export ? '、导出' : ''}}、统计{{pm.books ? '、归档' : ''}}</view>
+        <view class="g-sub">{{pm.books ? '新建、' : ''}}切换{{pm.books ? '、归档' : ''}}{{pm.export ? '、导出' : ''}}</view>
       </view>
       <view class="g-item" hover-class="g-hover" wx:if="{{account.orgMode}}" bindtap="goOrgSummary">
         <view class="g-icon"><image src="/assets/icons/layers-w.svg" /></view>
