@@ -1,0 +1,1 @@
+- [加载提示 v3.25.0](project_loading_indicator_eval.md) — components/loading 组件（骨架/转圈/遮罩，300ms 延迟）已实现，接入页面与踩坑
