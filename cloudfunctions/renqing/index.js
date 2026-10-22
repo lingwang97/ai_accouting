@@ -333,13 +333,22 @@ async function buildPersons(openid) {
   }
 
   // 自动送礼：对方（主家）若也随过礼给我，按微信身份并入同一人
+  // 按「主家 openid」预建索引（key 形如 o:<openid>:<姓名>），避免每条自动记录都遍历全部往来人；保留「第一个匹配」语义
+  const byOwner = new Map();
+  const indexPerson = p => {
+    const m = /^o:([^:]+):/.exec(p.key);
+    if (m && !byOwner.has(m[1])) byOwner.set(m[1], p);
+  };
+  persons.forEach(indexPerson);
   for (const g of auto) {
     const entry = {
       _id: g._id, rid: g.rid, auto: true, date: g.date, event: g.event, eventType: g.eventType,
       relation: g.relation, remark: g.remark, amount: g.amount, counted: true
     };
-    const same = [...persons.values()].find(p => p.key.startsWith(`o:${g.ownerOpenid}:`));
-    (same || get(g.toKey, g.toName)).given.push(entry);
+    const same = byOwner.get(String(g.ownerOpenid));
+    const target = same || get(g.toKey, g.toName);
+    if (!same) indexPerson(target);
+    target.given.push(entry);
   }
 
   // 只有姓名的条目：归到"姓名"这个人（主家可在往来明细里合并 / 移动）

@@ -161,15 +161,16 @@ async function migrateOrphans(openid, account) {
 }
 
 /**
- * 旧礼簿一次性补算份数与合计（并发安全）：
- *  先原子地标记 statReady 并记下分界时间 statSince，之后确认收到（paidAt ≥ statSince）由 payment 累加；
- *  再把分界之前入簿的礼金统计后累加上去，两部分互不重叠
+ * 旧礼簿一次性补算份数与合计（并发安全、中途失败可重试）：
+ *  先记下分界时间 since 并统计 since 之前入簿的礼金，再用「statReady 还不是 true」作条件、一次写入
+ *  statReady + statSince + 统计结果；之后确认收到（paidAt ≥ statSince）由 payment 累加，两部分互不重叠。
+ *  统计失败或写入前中断：statReady 仍为 false，下次打开礼簿列表会重新补算（不会出现「已标记就绪但合计为 0」）。
+ *  并发的两个补算：只有先写入的一个生效（返回 true），另一个条件不满足（返回 false），不会重复累加。
+ *  说明：统计开始到写入完成之间（通常不到 1 秒）确认入簿的礼金，因 statReady 尚为 false 不会被累加，
+ *  这是一次性补算（旧数据 / 累加失败后）的极小窗口；如需绝对准确可在礼簿页再次触发补算。
  */
 async function backfillStats(openid, bookId) {
   const since = new Date();
-  const mark = await books.where({ _id: bookId, ownerOpenid: openid, statReady: _.neq(true) })
-    .update({ data: { statReady: true, statSince: since, statCount: 0, statFen: 0 } });
-  if (mark.stats.updated !== 1) return false; // 已被其他请求补算
   const sums = await records.aggregate()
     .match(_.and([
       { ownerOpenid: openid, status: 'paid', bookId },
@@ -178,10 +179,9 @@ async function backfillStats(openid, bookId) {
     .group({ _id: null, count: _.aggregate.sum(1), fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) })
     .end();
   const t = (sums.list && sums.list[0]) || { count: 0, fen: 0 };
-  if (t.count) {
-    await books.doc(bookId).update({ data: { statCount: _.inc(t.count), statFen: _.inc(Math.round(t.fen)) } });
-  }
-  return true;
+  const mark = await books.where({ _id: bookId, ownerOpenid: openid, statReady: _.neq(true) })
+    .update({ data: { statReady: true, statSince: since, statCount: t.count || 0, statFen: Math.round(t.fen || 0) } });
+  return mark.stats.updated === 1;
 }
 
 async function create(openid, b, id) {

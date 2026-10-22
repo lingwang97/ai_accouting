@@ -86,7 +86,7 @@ async function pushReminders(deadline) {
       .limit(50).get();
     res.data.forEach(r => tried.push(r._id));
     if (!res.data.length) break;
-    await Promise.all(res.data.map(async r => {
+    const pushOne = async r => {
       let result;
       try {
         await cloud.openapi.subscribeMessage.send({
@@ -99,7 +99,11 @@ async function pushReminders(deadline) {
       // 成功、或确定性失败（43101 未订阅 / 次数用完、47003 参数不符、40003 openid 无效）才标记已推送；其余（网络等）下一轮重试，最多 5 次
       const final = result.ok || [43101, 47003, 40003].includes(result.code) || (r.pushTries || 0) >= 4;
       await col.doc(r._id).update({ data: { pushed: final, pushTries: (r.pushTries || 0) + 1, pushResult: { ...result, at: new Date() } } });
-    }));
+    };
+    for (let k = 0; k < res.data.length; k += 10) { // 每组 10 条并发推送
+      if (deadline && deadline - Date.now() < 5 * 1000) break;
+      await Promise.all(res.data.slice(k, k + 10).map(pushOne));
+    }
     if (res.data.length < 50) break;
   }
 }

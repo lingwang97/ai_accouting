@@ -16,7 +16,9 @@ async function moveDocs(db, from, to, cond, deadline) {
   for (;;) {
     const rows = (await src.where(cond).limit(100).get()).data;
     if (!rows.length) return true;
-    await Promise.all(rows.map(({ _id, ...doc }) => dst.doc(_id).set({ data: doc })));
+    for (let i = 0; i < rows.length; i += 20) { // 每组 20 个并发写，避免一次 100 个并发
+      await Promise.all(rows.slice(i, i + 20).map(({ _id, ...doc }) => dst.doc(_id).set({ data: doc })));
+    }
     await src.where({ _id: db.command.in(rows.map(r => r._id)) }).remove();
     if (rows.length < 100) return true;
     if (Date.now() > deadline) return false;

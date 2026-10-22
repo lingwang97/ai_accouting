@@ -39,6 +39,7 @@ const fontOf = key => FONT_MODULE[key]
   ? (_fontExtra[key] = _fontExtra[key] || Buffer.from(require(FONT_MODULE[key]), 'base64'))
   : fontBuf();
 const MAX_ROWS = 10000; // 单次导出上限，超出时提示按日期分段导出（不静默截断）
+const BOOK_MAX = 3000; // 传统礼簿（book 格式）单次笔数上限：内存占用大
 const QUERY_MAX = 1000; // 云函数端单次查询上限
 const BATCH = 50; // cloud.deleteFile 单次最多 50 个文件
 const EXPIRE_MS = 24 * 3600 * 1000; // 未保留文件的有效期
@@ -115,6 +116,10 @@ exports.main = async (event) => {
     const rows = await fetchRows(OWNER, { bookId, startDay, endDay, themeName });
     if (rows.tooMany) return err(`礼金超过 ${MAX_ROWS} 笔，请按日期范围分段导出`);
     if (rows.length === 0) return err('该范围内没有已入簿的礼金');
+    // 传统礼簿 PDF 逐页绘制 + bufferPages 占内存，单独限制笔数；表格 PDF / Excel 不受此限
+    if (format === 'book' && rows.length > BOOK_MAX) {
+      return err(`传统礼簿最多 ${BOOK_MAX} 笔（共 ${rows.length}），请按日期分段或用表格导出`);
+    }
 
     // 传统礼簿主题：传入则采用并（有礼簿管理权限时）记到礼簿；未传用礼簿已存的；白事在 resolve 中强制素灰
     let pdfThemeKey = book && book.pdfTheme && typeof book.pdfTheme === 'object' ? String(book.pdfTheme.key || '') : '';
