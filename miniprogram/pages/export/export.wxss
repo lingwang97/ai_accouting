@@ -11,3 +11,15 @@
 .hint { text-align: center; margin: 8rpx 0 0; }
 .backup { margin-top: 40rpx; }
 .opt { display: flex; justify-content: space-between; align-items: center; }
+
+.themes { display: flex; flex-wrap: wrap; margin: 0 -12rpx; }
+.th { width: 33.33%; box-sizing: border-box; padding: 12rpx; text-align: center; }
+.th-sw {
+  height: 96rpx; border-radius: 12rpx; border: 4rpx solid; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center; margin-bottom: 8rpx;
+}
+.th-in { width: 40rpx; height: 4rpx; }
+.th.on .th-sw { box-shadow: 0 0 0 4rpx var(--primary); }
+.th-name { font-size: 26rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.th.on .th-name { color: var(--primary); font-weight: 600; }
+.th-scene { font-size: 22rpx; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

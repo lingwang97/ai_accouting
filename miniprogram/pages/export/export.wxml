@@ -23,6 +23,18 @@
     </view>
   </view>
 
+  <view class="card" wx:if="{{bookIdx > 0}}">
+    <view class="section-title">传统礼簿主题</view>
+    <view wx:if="{{isFuneral}}" class="muted">白事礼簿固定使用素灰色，不可更换</view>
+    <view wx:else class="themes">
+      <view wx:for="{{pdfThemes}}" wx:key="key" class="th {{themeKey === item.key ? 'on' : ''}}" data-k="{{item.key}}" bindtap="onPickTheme">
+        <view class="th-sw" style="background:{{item.main}};border-color:{{item.accent}}"><view class="th-in" style="background:{{item.accent}}"></view></view>
+        <view class="th-name">{{item.name}}</view>
+        <view class="th-scene">{{item.scene}}</view>
+      </view>
+    </view>
+  </view>
+
   <view class="card muted desc">
     仅包含主家已确认入簿的礼金。生成后可在预览页右上角「···」转发给好友或「文件传输助手」存档；云端文件下载后即删除。
   </view>

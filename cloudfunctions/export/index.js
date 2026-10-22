@@ -1,5 +1,6 @@
 // 云函数 export — 慧礼记 礼簿导出 PDF / Excel / 传统礼簿 / 归档 / 备份 / 文件清理（文档 §6.7）
-// 一、导出：{ format: 'pdf'|'xlsx'|'book', startDay?: 'YYYY-MM-DD', endDay?: 'YYYY-MM-DD', bookId?: string, themeName?: string, keep?: boolean }
+// 一、导出：{ format: 'pdf'|'xlsx'|'book', startDay?: 'YYYY-MM-DD', endDay?: 'YYYY-MM-DD', bookId?: string, themeName?: string, keep?: boolean, pdfTheme?: string }
+//    传统礼簿主题：pdfTheme 为预设 key（见 themes.js），传了则按礼簿保存到 books.pdfTheme；白事礼簿强制素灰
 //   - 传 bookId：校验礼簿归属，按礼簿导出；日期可选（同时传入则再按日期过滤，不传导出整本）
 //   - 不传 bookId：日期必填，可选 themeName（礼簿名）过滤；format='book'（传统礼簿）必须传 bookId
 //   - 普通导出上传到 exports/{OPENID}/，登记 exports 集合 kind='export' keep=false（前端下载后调 cleanup 删除）
@@ -38,6 +39,7 @@ const EXPIRE_MS = 24 * 3600 * 1000; // 未保留文件的有效期
 const TYPE_LABEL = { wedding: '喜事', birthday: '寿宴', baby: '满月/周岁', house: '乔迁', funeral: '白事', other: '其他' };
 const NO_BOOK = '未归入礼簿';
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const themes = require('./themes.js');
 
 // 配色：喜事用中国红，白事一律用灰色系（不出现任何红色元素）
 const THEME = {
@@ -108,7 +110,17 @@ exports.main = async (event) => {
     if (rows.tooMany) return err(`礼金超过 ${MAX_ROWS} 笔，请按日期范围分段导出`);
     if (rows.length === 0) return err('该范围内没有已入簿的礼金');
 
-    const meta = buildMeta(rows, { account, book, startDay, endDay, themeName });
+    // 传统礼簿主题：传入则采用并（有礼簿管理权限时）记到礼簿；未传用礼簿已存的；白事在 resolve 中强制素灰
+    let pdfThemeKey = book && book.pdfTheme && typeof book.pdfTheme === 'object' ? String(book.pdfTheme.key || '') : '';
+    if (format === 'book' && book && event.pdfTheme !== undefined) {
+      const k = String(event.pdfTheme || '');
+      if (k && !themes.isPresetKey(k)) return err('主题不存在');
+      pdfThemeKey = k;
+      if (can(ctx, 'books') && book.type !== 'funeral') {
+        await db.collection('books').doc(book._id).update({ data: { pdfTheme: _.set({ key: k }) } });
+      }
+    }
+    const meta = buildMeta(rows, { account, book, startDay, endDay, themeName, pdfThemeKey });
 
     let buffer;
     stage = '生成文件';
@@ -259,7 +271,7 @@ async function fetchRows(openid, { bookId, startDay, endDay, themeName }) {
 }
 
 /** 汇总导出所需的元信息 */
-function buildMeta(rows, { account, book, startDay, endDay, themeName }) {
+function buildMeta(rows, { account, book, startDay, endDay, themeName, pdfThemeKey }) {
   // 礼簿类型：按礼簿取；未指定礼簿时，仅当全部记录都是白事才按白事处理
   let bookType = book ? book.type : '';
   if (!bookType) bookType = rows.length && rows.every(r => r.bookType === 'funeral') ? 'funeral' : 'other';
@@ -272,6 +284,7 @@ function buildMeta(rows, { account, book, startDay, endDay, themeName }) {
     title: book ? book.name || '礼簿' : (account.accountName || '礼簿'),
     bookType, funeral,
     theme: funeral ? THEME.grey : THEME.red,
+    bt: themes.resolve(funeral, pdfThemeKey), // 传统礼簿主题
     startDay, endDay, themeName,
     count: rows.length,
     sum: rows.reduce((s, r) => s + Math.round(Number(r.amount) * 100), 0) / 100,
@@ -497,9 +510,8 @@ function buildBook(rows, meta) {
     doc.registerFont('cn', fontBuf());
     doc.font('cn');
 
-    const pal = meta.funeral
-      ? { line: '#555555', text: '#333333', sub: '#777777', accent: '#333333' }
-      : { line: '#B71C1C', text: '#222222', sub: '#777777', accent: '#B71C1C' };
+    const bt = meta.bt;
+    const pal = { line: bt.main, text: meta.funeral ? '#333333' : '#222222', sub: '#777777', accent: bt.main, mark: bt.mark };
 
     drawCover(doc, meta);
 
@@ -508,6 +520,7 @@ function buildBook(rows, meta) {
     const pageGrids = []; // 记录内容页，最后统一画格线与页码
     const newPage = () => {
       doc.addPage({ size: 'A4', layout: 'landscape', margin: 0 });
+      drawMark(doc, pal.mark, pal.accent, 0.05);
       drawBookHeader(doc, meta, pal);
       pageGrids.push({ page: doc.bufferedPageRange().count - 1, merge: null });
       slot = 0;
@@ -534,16 +547,20 @@ function buildBook(rows, meta) {
   });
 }
 
-/** 封面：喜事红底金色双框；白事浅灰底深灰框 */
+/** 封面：按主题配色（预设默认红底金色双框；白事浅灰底深灰框） */
 function drawCover(doc, meta) {
   const W = BK.width, H = BK.height;
-  const c = meta.funeral
+  const bt = meta.bt;
+  const c = bt.funeral
     ? { bg: '#F5F5F5', border: '#333333', title: '#333333', text: '#333333' }
-    : { bg: '#B71C1C', border: '#D4AF37', title: '#D4AF37', text: '#F8E7B0' };
+    : { bg: bt.main, border: bt.accent, title: bt.accent, text: bt.cover };
   doc.addPage({ size: 'A4', layout: 'landscape', margin: 0 });
   doc.rect(0, 0, W, H).fill(c.bg);
+  drawMark(doc, bt.mark, c.border, 0.06);
   doc.lineWidth(3).rect(24, 24, W - 48, H - 48).stroke(c.border);
   doc.lineWidth(1).rect(34, 34, W - 68, H - 68).stroke(c.border);
+  [[1, 1], [-1, 1], [1, -1], [-1, -1]].forEach(([sx, sy]) =>
+    drawCorner(doc, sx > 0 ? 44 : W - 44, sy > 0 ? 44 : H - 44, sx, sy, bt.pattern, c.border));
 
   // 主标题：礼簿名，过长自动缩小字号
   const main = meta.bookName || (meta.funeral ? '奠仪簿' : '礼簿');
@@ -572,7 +589,43 @@ function drawCover(doc, meta) {
   doc.fontSize(16).fillColor(c.text);
   info.forEach(t => { doc.text(t, 0, y, { width: W, align: 'center', lineBreak: false }); y += 26; });
 
+  if (bt.footer) doc.fontSize(20).fillColor(c.title).text(bt.footer.split('').join(' '), 0, H - 110, { width: W, align: 'center', lineBreak: false });
   doc.fontSize(10).fillColor(c.text).text('慧礼记', 0, H - 70, { width: W, align: 'center', lineBreak: false });
+}
+
+/** 水印字：居中的极淡大字（mark 为空不画） */
+function drawMark(doc, mark, color, opacity) {
+  if (!mark) return;
+  doc.save();
+  doc.fillOpacity(opacity).fillColor(color).fontSize(300);
+  doc.text(mark, 0, (BK.height - 300) / 2 - 20, { width: BK.width, align: 'center', lineBreak: false });
+  doc.restore();
+}
+
+/** 封面角饰：在 (x,y) 处按 sx/sy 方向翻转，纯矢量绘制，约 40pt 见方 */
+function drawCorner(doc, x, y, sx, sy, pattern, color) {
+  if (!pattern || pattern === 'none' || pattern === 'double') return;
+  doc.save();
+  doc.translate(x, y).scale(sx, sy);
+  doc.strokeColor(color).lineWidth(1.2);
+  if (pattern === 'huiwen') { // 回纹
+    doc.moveTo(0, 0).lineTo(38, 0).lineTo(38, 26).lineTo(10, 26).lineTo(10, 10).lineTo(26, 10).lineTo(26, 16).stroke();
+    doc.moveTo(0, 0).lineTo(0, 38).lineTo(26, 38).lineTo(26, 36).stroke();
+  } else if (pattern === 'flower') { // 花朵
+    [[14, 14], [24, 8], [8, 24], [24, 20], [20, 24]].forEach(([cx, cy]) => doc.circle(cx, cy, 6).stroke());
+    doc.circle(14, 14, 2).fill(color);
+  } else if (pattern === 'cloud') { // 云纹
+    doc.circle(12, 12, 9).stroke();
+    doc.circle(26, 10, 6).stroke();
+    doc.circle(10, 28, 6).stroke();
+  } else if (pattern === 'diamond') { // 菱形
+    doc.polygon([0, 14], [14, 0], [28, 14], [14, 28]).stroke();
+    doc.polygon([0, 14], [14, 0], [28, 14], [14, 28]).fill(color);
+    doc.polygon([8, 14], [14, 8], [20, 14], [14, 20]).stroke('#FFFFFF');
+  } else if (pattern === 'line') { // 直角粗线
+    doc.lineWidth(3).moveTo(0, 30).lineTo(0, 0).lineTo(30, 0).stroke();
+  }
+  doc.restore();
 }
 
 /** 内容页页眉 */
