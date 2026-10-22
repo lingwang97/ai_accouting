@@ -52,7 +52,9 @@ Page({
     } catch (e) { /* toast 已提示 */ }
   },
 
-  onShareAppMessage() {
+  onShareAppMessage(res) {
+    // 右上角菜单转发不带邀请卡：只有点页面上的分享按钮才发邀请 / 移交 / 共享
+    if (!res || res.from !== 'button') return { title: '慧礼记｜扫码随礼、自动记账、人情往来一本清', path: '/pages/index/index' };
     const acc = getApp().globalData.account;
     const names = this._names || [];
     return {

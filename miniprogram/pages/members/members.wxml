@@ -28,7 +28,7 @@
     </view>
   </view>
 
-  <view class="card">
+  <view class="card" wx:if="{{role !== 'viewer'}}">
     <view class="section-title">{{orgMode ? '礼台人员' : '记账人'}}（{{list.length}}）</view>
     <view class="row" wx:for="{{list}}" wx:key="_id">
       <image class="avatar" src="{{item.avatar || '/assets/avatar-default.png'}}" mode="aspectFill" />

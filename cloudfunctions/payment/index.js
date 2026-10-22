@@ -230,7 +230,7 @@ async function sameNameOthers(ownerOpenid, openid, people) {
 }
 
 // 控制字符会被打印机当作指令（ESC/GS 等），宾客输入入库前一律剔除
-const CTRL_RE = /[ -]/g;
+const CTRL_RE = /[\x00-\x1f\x7f]/g;
 function cleanText(v, n) { return String(v || '').replace(CTRL_RE, '').trim().slice(0, n); }
 
 /**

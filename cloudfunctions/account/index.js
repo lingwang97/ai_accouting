@@ -790,7 +790,8 @@ async function mergeInto(from, to, openid) {
 async function listMembers(openid) {
   const ctx = await resolveCtx(db, openid);
   if (!ctx.account) return ok({ list: [], role: ctx.role });
-  const ms = (await members.where({ aid: ctx.account._id }).limit(100).get()).data.filter(m => m.role !== 'viewer' && m.status !== 'pending');
+  // 只读家人不返回记账人名单（不暴露其他人的昵称头像与权限）
+  const ms = ctx.role === 'viewer' ? [] : (await members.where({ aid: ctx.account._id }).limit(100).get()).data.filter(m => m.role !== 'viewer' && m.status !== 'pending');
   const ids = [ctx.account.ownerOpenid, ...ms.map(m => m.memberOpenid)];
   // 主家 + 最多 100 位成员：分两批取（单次查询最多 100 条）
   const users = [];
@@ -847,6 +848,7 @@ async function removeMember(openid, memberId) {
   if (ctx.role !== 'owner') {
     // 记账人不能移除权限或礼簿比自己大的人
     const m = (await members.where({ _id: String(memberId || ''), aid: ctx.account._id }).limit(1).get()).data[0];
+    if (m && m.status === 'pending') return err('对方的申请待主家处理');
     if (m && wider(ctx, m)) return err('对方的权限或负责礼簿超出你的范围，请让主家处理');
   }
   const res = await members.where({ _id: String(memberId || ''), aid: ctx.account._id }).remove();
@@ -883,6 +885,7 @@ async function setHandlerName(openid, memberId, name) {
   const m = (await members.where({ _id: String(memberId), aid: ctx.account._id }).limit(1).get()).data[0];
   if (!m) return err('人员不存在');
   if (m.memberOpenid !== openid && !can(ctx, 'members')) return err('你没有管理记账人的权限');
+  if (m.memberOpenid !== openid && ctx.role !== 'owner' && wider(ctx, m)) return err('对方的权限或负责礼簿超出你的范围，请让主家处理');
   if (m.role !== 'viewer' && !realName(n)) return err('请填写记账人的真实姓名（2～12 个字）');
   await members.doc(m._id).update({ data: { displayName: n } });
   return ok({ name: n });

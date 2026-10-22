@@ -299,7 +299,7 @@ async function fetchRows(openid, { bookId, startDay, endDay, themeName }) {
   if ((await col.where(cond).count()).total > MAX_ROWS) return Object.assign([], { tooMany: true });
   const out = [];
   while (out.length < MAX_ROWS) {
-    const res = await col.where(cond).orderBy('createdAt', 'asc').skip(out.length).limit(QUERY_MAX).get();
+    const res = await col.where(cond).orderBy('createdAt', 'asc').orderBy('_id', 'asc').skip(out.length).limit(QUERY_MAX).get();
     out.push(...res.data);
     if (res.data.length < QUERY_MAX) break;
   }
@@ -972,7 +972,7 @@ async function fetchAll(name, cond) {
   const col = db.collection(name);
   const out = [];
   while (out.length < MAX_ROWS) {
-    const res = await col.where(cond).skip(out.length).limit(QUERY_MAX).get();
+    const res = await col.where(cond).orderBy('_id', 'asc').skip(out.length).limit(QUERY_MAX).get(); // 固定顺序，翻页不重不漏
     out.push(...res.data);
     if (res.data.length < QUERY_MAX) break;
   }
