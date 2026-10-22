@@ -486,7 +486,8 @@ async function remindDue(openid) {
       or.push({ date: _.gte(today), remindAt: _.exists(false), notifyDay: today });
       or.push({ date: today, remindAt: _.exists(false), notifyDay: _.exists(false) });
     }
-    const r = await db.collection('reminders').where({ ownerOpenid: openid, done: false }).where(_.or(or)).count();
+    // 条件必须放在同一个 where 里：连续调用 where 时后一个会覆盖前一个（曾因此丢掉 ownerOpenid / done，算到了别人的提醒）
+    const r = await db.collection('reminders').where(_.and([{ ownerOpenid: openid, done: false }, _.or(or)])).count();
     return r.total > 0;
   } catch (e) { return false; }
 }
