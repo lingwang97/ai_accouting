@@ -10,7 +10,6 @@
         <picker range="{{books}}" range-key="name" value="{{bookIdx}}" bindchange="onBook">
           <view class="book-pick">{{books[bookIdx].name}} ▾</view>
         </picker>
-        <text class="book-manage" bindtap="goBooks">管理礼簿 ›</text>
         <view class="muted">礼金合计</view>
         <view class="sum money {{sum.length >= 12 ? 'long' : ''}}">￥{{sum}}</view>
         <view class="muted">{{total}} 份<text wx:if="{{pendingCount > 0}}" class="pending-hint"> · {{pendingCount}} 份待确认</text></view>
@@ -21,9 +20,7 @@
       <picker range="{{relations}}" value="{{relIdx}}" bindchange="onRelation">
         <view class="rel-btn {{relIdx > 0 ? 'on' : ''}}">{{relIdx > 0 ? relations[relIdx] : '关系'}} ▾</view>
       </picker>
-      <view class="btn btn-sm btn-outline export-btn" wx:if="{{pm.export || readonly}}" bindtap="goExport">导出</view>
-    </view>
-    <view class="cash-entry" wx:if="{{!readonly && pm.desk}}" bindtap="goCash">＋ 礼台记账（现金 / 微信）
+      <view class="btn btn-sm btn-primary search-btn" bindtap="onSearch">搜索</view>
     </view>
   </view>
 

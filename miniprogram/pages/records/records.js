@@ -274,6 +274,7 @@ Page({
 
   /** 输入框被清空（含点 ×）：不用再点搜索，直接恢复完整列表 */
   onSearchInput(e) {
+    this._kw = e.detail.value;
     if (!e.detail.value && this.data.keyword) {
       this.setData({ keyword: '' });
       this.reload();
@@ -281,7 +282,11 @@ Page({
   },
 
   onSearch(e) {
-    this.setData({ keyword: e.detail.value });
+    // 键盘确认带 detail.value；点「搜索」按钮没有，取输入框最近输入的内容
+    const v = e && e.detail && typeof e.detail.value === 'string' ? e.detail.value : (this._kw || '');
+    this._kw = v;
+    wx.hideKeyboard({ fail() {} });
+    this.setData({ keyword: v });
     this.reload();
   },
 
@@ -332,12 +337,7 @@ Page({
   /** 查看付款方留存收据 */
   onReceipt(e) { wx.navigateTo({ url: `/pages/receipt/receipt?rid=${e.currentTarget.dataset.id}` }); },
 
-  goCash() { wx.navigateTo({ url: '/pages/cash/cash' }); },
-  goBooks() { wx.navigateTo({ url: '/pages/books/books' }); },
-
   goLogin() { wx.switchTab({ url: '/pages/mine/mine' }); },
-
-  goExport() { wx.navigateTo({ url: '/pages/export/export' }); },
 
   /** 手动打印 / 补打（UC8） */
   async onPrint(e) {
