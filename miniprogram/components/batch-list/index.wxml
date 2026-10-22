@@ -1,5 +1,5 @@
 <view class="bl">
-  <view class="row" wx:for="{{rows}}" wx:for-index="ri" wx:key="ri">
+  <view class="row" wx:for="{{rows}}" wx:for-index="ri" wx:key="uid">
     <view class="row-head">
       <text class="no">第 {{ri + 1}} 位<text class="tag" wx:if="{{ri === 0 && firstLabel}}">{{firstLabel}}</text></text>
       <view class="head-r">

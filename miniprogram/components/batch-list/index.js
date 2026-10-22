@@ -4,7 +4,9 @@
 const scenes = require('../../utils/scenes.js');
 
 const { MAX } = require('../../utils/batch.js');
-const emptyRow = () => ({ name: '', amount: '', relation: '', remark: '', method: 'wechat' });
+// uid：每行稳定的 wx:key，删除中间一行时其余行的输入框不错位（内容都由 data 驱动，输入不丢）
+let _uid = 0;
+const emptyRow = () => ({ uid: 'r' + (++_uid), name: '', amount: '', relation: '', remark: '', method: 'wechat' });
 
 Component({
   properties: {

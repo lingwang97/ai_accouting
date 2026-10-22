@@ -43,6 +43,12 @@ function activeBookChanged() {
   } catch (e) { /* 忽略 */ }
 }
 
+// 入簿 / 确认 / 作废等写操作成功后：工作台缓存里的今日合计、待确认数已过期，清掉避免下次进入先显示旧数
+function dropDash(r) {
+  try { require('./cache.js').set('dashboard', null); } catch (e) { /* 忽略 */ }
+  return r;
+}
+
 module.exports = {
   login: userInfo => call('login', { action: 'login', userInfo }),
   loginCheck: () => call('login', { action: 'check' }),
@@ -123,12 +129,12 @@ module.exports = {
   payTransferred: rid => call('payment', { action: 'transferred', rid, envVersion: envVersion() }),
   payCancel: rid => call('payment', { action: 'cancel', rid }),
   payStatus: rid => call('payment', { action: 'status', rid }),
-  payConfirm: (rid, amount, amounts) => call('payment', { action: 'confirm', rid, amount, amounts }),
-  payConfirmBatch: rids => call('payment', { action: 'confirmBatch', rids }),
-  cashEntry: d => call('payment', { action: 'cashEntry', ...d }),
-  payReject: rid => call('payment', { action: 'reject', rid }),
-  payDismissStall: rid => call('payment', { action: 'dismissStall', rid }),
-  payVoid: rid => call('payment', { action: 'void', rid }),
+  payConfirm: (rid, amount, amounts) => call('payment', { action: 'confirm', rid, amount, amounts }).then(dropDash),
+  payConfirmBatch: rids => call('payment', { action: 'confirmBatch', rids }).then(dropDash),
+  cashEntry: d => call('payment', { action: 'cashEntry', ...d }).then(dropDash),
+  payReject: rid => call('payment', { action: 'reject', rid }).then(dropDash),
+  payDismissStall: rid => call('payment', { action: 'dismissStall', rid }).then(dropDash),
+  payVoid: rid => call('payment', { action: 'void', rid }).then(dropDash),
   recordList: d => call('records', { action: 'list', ...d }),
   markPrinted: rids => call('records', { action: 'markPrinted', rids }),
   recordPending: () => call('records', { action: 'pending' }),

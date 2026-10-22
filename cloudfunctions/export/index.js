@@ -76,9 +76,10 @@ exports.main = async (event) => {
     if (event.action === 'purge') return ok({ deleted: await purgeUser(OPENID) });
     const ctx = await resolveCtx(db, OPENID);
     const OWNER = ctx.ownerOpenid;
-    if (event.action === 'cleanup') return await cleanupFile(OWNER, String(event.fileID || ''));
     // 记账人需有「对账与导出」权限（家人共享可导出共享的礼簿）
     if (ctx.role === 'clerk' && !can(ctx, 'export')) return err('你没有导出权限');
+    // 清理临时导出文件：放在权限判断之后，无导出权限的记账人也不能触发清理
+    if (event.action === 'cleanup') return await cleanupFile(OWNER, String(event.fileID || ''));
     // 送礼记录属于本人的人情往来：记账人备份主家数据时不含；只负责部分场次的人员不能全量备份
     if (event.format === 'backup' && ctx.bookIds) return err('你只负责部分场次，请按场次导出');
     if (event.format === 'backup') return await exportBackup(OWNER, ctx.role === 'owner');
