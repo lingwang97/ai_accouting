@@ -48,7 +48,7 @@ exports.main = async (event) => {
       case 'pending':
         return await pending(OWNER, ctx);
       case 'pendingStat':
-        return await pendingStat(OWNER, ctx);
+        return await pendingStat(OWNER, ctx, OPENID);
       case 'themes':
         return await themes(OWNER, ctx);
       // 同名区分：礼台记账前查礼簿里同名的人；给某位宾客设区分备注
@@ -452,18 +452,43 @@ function otherPendCond(ctx, cur) {
 }
 
 /** 待确认份数与合计（工作台轮询用，只做计数 + 聚合） */
-async function pendingStat(openid, ctx) {
-  if (!ctx.account) return ok({ count: 0, sum: 0 });
+async function pendingStat(openid, ctx, selfOpenid) {
+  if (!ctx.account) return ok({ count: 0, sum: 0, remindDue: await remindDue(selfOpenid) });
   const cur = workBook(ctx);
   const cond = { ownerOpenid: openid, status: 'transferred', bookId: cur || '__none__' };
-  const [cnt, agg, other] = await Promise.all([
+  const [cnt, agg, other, due] = await Promise.all([
     records.where(cond).count(),
     records.aggregate().match(cond)
       .group({ _id: null, fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) })
       .end(),
-    records.where(otherPendCond(ctx, cur)).count()
+    records.where(otherPendCond(ctx, cur)).count(),
+    remindDue(selfOpenid)
   ]);
-  return ok({ count: cnt.total, sum: Math.round(((agg.list && agg.list[0]) || { fen: 0 }).fen) / 100, other: other.total });
+  return ok({ count: cnt.total, sum: Math.round(((agg.list && agg.list[0]) || { fen: 0 }).fen) / 100, other: other.total, remindDue: due });
+}
+
+/**
+ * 往来页「待回礼」红点：本人（登录微信，不随记账人身份变）是否有到期未处理的办事提醒。
+ * 口径与 pages/renqing 的 hot / past 一致：未处理，且（办事日已过，或办事日未过且已到提醒时间）。
+ * 旧提醒无 remindAt：按提醒日（notifyDay，缺省办事日）9:00。日期按北京时间。失败返回 false，不影响待确认计数。
+ */
+async function remindDue(openid) {
+  try {
+    if (!openid) return false;
+    const bj = new Date(Date.now() + 8 * 3600 * 1000).toISOString(); // 北京时间的 ISO 串（只取日期 / 小时）
+    const today = bj.slice(0, 10), hour = Number(bj.slice(11, 13));
+    const or = [
+      { date: _.lt(today) },
+      { date: _.gte(today), remindAt: _.lte(new Date()) },
+      { date: _.gte(today), remindAt: _.exists(false), notifyDay: _.lt(today) }
+    ];
+    if (hour >= 9) {
+      or.push({ date: _.gte(today), remindAt: _.exists(false), notifyDay: today });
+      or.push({ date: today, remindAt: _.exists(false), notifyDay: _.exists(false) });
+    }
+    const r = await db.collection('reminders').where({ ownerOpenid: openid, done: false }).where(_.or(or)).count();
+    return r.total > 0;
+  } catch (e) { return false; }
 }
 
 /**

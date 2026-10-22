@@ -3,6 +3,7 @@
     <view class="icon-wrap">
       <image class="icon" src="/assets/icons/{{item.icon}}-{{selected === item.path ? iconOn : 'g'}}.svg" />
       <text class="badge" wx:if="{{item.badge && badge}}">{{badge}}</text>
+      <view class="dot" wx:if="{{item.dot && dot}}"></view>
     </view>
     <text class="text" style="{{selected === item.path ? 'color:' + color : ''}}">{{item.label}}</text>
   </view>

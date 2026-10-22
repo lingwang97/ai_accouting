@@ -76,7 +76,7 @@ Page({
       });
       if (this._remindId) {
         // 从办事提醒「记回礼」进入：保存成功后才标记提醒已处理（失败不影响送礼记录）
-        try { await req.remindDone(this._remindId, true); this._remindId = ''; } catch (e) { /* 提醒仍在，可手动标记 */ }
+        try { await req.remindDone(this._remindId, true); this._remindId = ''; getApp().refreshBadge(); } catch (e) { /* 提醒仍在，可手动标记 */ }
       }
       wx.showToast({ title: '已保存', icon: 'success' });
       setTimeout(() => wx.navigateBack(), 400);

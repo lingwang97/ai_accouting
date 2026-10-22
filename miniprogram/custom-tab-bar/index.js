@@ -8,7 +8,7 @@ const theme = require('../utils/theme.js');
 const TABS = [
   { path: 'pages/index/index', text: '首页', hostText: '工作台', icon: 'home', badge: true },
   { path: 'pages/records/records', text: '礼簿', icon: 'book' },
-  { path: 'pages/renqing/renqing', text: '往来', icon: 'people', hideClerk: true, hideOrg: true },
+  { path: 'pages/renqing/renqing', text: '往来', icon: 'people', dot: true, hideClerk: true, hideOrg: true },
   { path: 'pages/mine/mine', text: '我的', icon: 'user' }
 ];
 
@@ -17,6 +17,7 @@ Component({
     list: [],
     selected: '',
     badge: '',
+    dot: false,
     color: '#C8161D',
     iconOn: 'r'
   },
@@ -39,6 +40,7 @@ Component({
         list: TABS.filter(x => !(x.hideClerk && app && app.globalData.role === 'clerk') && !(x.hideOrg && org))
           .map(x => ({ ...x, label: isHost && x.hostText ? x.hostText : x.text })),
         selected: cur,
+        dot: !!(app && app.globalData.remindDot && app.globalData.user),
         badge: n > 0 ? (n > 99 ? '99+' : String(n)) : '',
         color: t.primary,
         iconOn: t.icon

@@ -7,6 +7,7 @@ App({
     account: null,   // 当前用户的主家信息
     tpl: null,       // 打印模板
     recordsBookId: '', // 礼簿页要筛选的礼簿（从礼簿统计页跳转时设置）
+    remindDot: false,  // 「往来」红点：有到期未处理的办事提醒
     badge: 0,          // 待确认礼金数（自定义底部菜单「工作台」角标）
     bookType: '',      // 当前礼簿事由，决定主题色（utils/theme.js）
     role: null,        // 当前身份：owner | clerk | viewer；冷启动为空，用 ensureRole() 读取
@@ -51,14 +52,16 @@ App({
 
   /** 刷新"我的"角标：待确认礼金笔数；未完善主家信息的用户（宾客）不显示 */
   refreshBadge() {
-    if (!this.globalData.account) return Promise.resolve(0);
+    if (!this.globalData.user) return Promise.resolve(0); // 宾客也有往来提醒（红点），故只要求已登录
     return new Promise(resolve => {
       wx.cloud.callFunction({
         name: 'records',
         data: { action: 'pendingStat' }, // 轻接口：只统计待确认笔数
         success: res => {
-          const n = (res.result && res.result.code === 0 && res.result.data.count) || 0;
-          this.setBadge(n);
+          const d = res.result && res.result.code === 0 ? res.result.data : {};
+          const n = d.count || 0;
+          this.globalData.remindDot = d.remindDue === true; // 往来页红点（只算到期未处理）
+          this.setBadge(this.globalData.account ? n : 0);
           resolve(n);
         },
         fail: () => resolve(0)
@@ -80,6 +83,7 @@ App({
     require('./utils/plan.js').reset();
     this._accountChecked = false;
     try { require('./utils/printer.js').clearTemplateCache(); } catch (e) { /* 忽略 */ }
+    this.globalData.remindDot = false;
     this.setBadge(0);
   },
 

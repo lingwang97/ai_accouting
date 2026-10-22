@@ -194,6 +194,10 @@ Page({
       const sum = fmt.money(pending.sum);
       const other = pending.other || 0;
       const d = this.data;
+      if (typeof pending.remindDue === 'boolean' && pending.remindDue !== !!getApp().globalData.remindDot) { // 往来红点随轮询更新
+        getApp().globalData.remindDot = pending.remindDue;
+        getApp().refreshTabBar();
+      }
       if (pending.count === d.pendingCount && sum === d.pendingSum && other === d.otherPending) return false; // 没变化：不 setData
       this.setData({ pendingCount: pending.count, pendingSum: sum, otherPending: other });
       getApp().setBadge(pending.count);

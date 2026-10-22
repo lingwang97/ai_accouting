@@ -187,6 +187,9 @@ Page({
         reminds, hotCount,
         remindTip: hotCount ? `${hotCount} 条待回礼` : (f ? `${f.name} · ${f.event || f.typeLabel} · ${f.leftStr}` : '')
       });
+      // 红点与提示条同口径：直接按本次结果更新，不必再请求
+      getApp().globalData.remindDot = hotCount > 0;
+      getApp().refreshTabBar();
     } catch (e) { /* 静默 */ }
   },
   noop() {},
