@@ -55,7 +55,7 @@ App({
     return new Promise(resolve => {
       wx.cloud.callFunction({
         name: 'records',
-        data: { action: 'pending' },
+        data: { action: 'pendingStat' }, // 轻接口：只统计待确认笔数
         success: res => {
           const n = (res.result && res.result.code === 0 && res.result.data.count) || 0;
           this.setBadge(n);

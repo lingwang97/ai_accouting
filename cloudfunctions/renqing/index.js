@@ -281,9 +281,10 @@ let truncated = false; // 本次统计是否因超过 MAX_ROWS 被截断（每�
 async function fetchAll(col, cond, fields) {
   const out = [];
   while (out.length < MAX_ROWS) {
-    const res = await col.where(cond).field(fields).orderBy('_id', 'asc').skip(out.length).limit(100).get(); // 固定顺序，翻页不重不漏
+    const want = Math.min(1000, MAX_ROWS - out.length); // 云函数单次最多 1000 条
+    const res = await col.where(cond).field(fields).orderBy('_id', 'asc').skip(out.length).limit(want).get(); // 固定顺序，翻页不重不漏
     out.push(...res.data);
-    if (res.data.length < 100) break;
+    if (res.data.length < want) break;
   }
   if (out.length >= MAX_ROWS) truncated = true;
   return out;

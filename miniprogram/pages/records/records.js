@@ -11,7 +11,7 @@ const perm = require('../../utils/perm.js');
 const samename = require('../../utils/samename.js');
 
 const PAGE_SIZE = 20;
-const POLL_MS = 5000; // 页面停留时自动刷新待确认转账
+const POLL_MS = 10000; // 页面停留时自动刷新待确认转账
 
 const STATUS_TEXT = {
   pending: '未转账', transferred: '待确认', paid: '已入簿', void: '已作废'

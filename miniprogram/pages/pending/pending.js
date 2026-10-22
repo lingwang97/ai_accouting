@@ -7,7 +7,7 @@ const theme = require('../../utils/theme.js');
 const perm = require('../../utils/perm.js');
 const { countOf, groupRecords } = require('../../utils/group.js');
 
-const POLL_MS = 5000;
+const POLL_MS = 10000; // 轮询只查计数（pendingStat），数量变化才拉完整列表；每 3 次也拉一次（刷新宾客未点完成的列表）
 const MODE_KEY = 'pending_mode'; // 记住上次使用的处理方式
 
 Page({
@@ -52,7 +52,7 @@ Page({
     });
     this.checkNotify();
     this.load(false);
-    this._timer = setInterval(() => this.load(true), POLL_MS);
+    this._timer = setInterval(() => this.poll(), POLL_MS);
   },
   /** 其他礼簿有待确认：回工作台切换当前礼簿 */
   goSwitch() { wx.switchTab({ url: '/pages/index/index' }); },
@@ -61,6 +61,17 @@ Page({
   onUnload() { this.clearTimer(); },
   clearTimer() {
     if (this._timer) { clearInterval(this._timer); this._timer = null; }
+  },
+
+  /** 轮询：先用轻接口查计数，变化了才拉完整列表 */
+  async poll() {
+    if (this.data.busy) return;
+    this._tick = (this._tick || 0) + 1;
+    if (this._tick % 3 === 0) return this.load(true);
+    try {
+      const s = await req.pendingStat();
+      if (Math.min(s.count, 100) !== countOf(this._list) || (s.other || 0) !== this.data.otherCount) this.load(true);
+    } catch (e) { /* 静默 */ }
   },
 
   /** 拉取待确认；silent=true 为轮询，有新礼金时震动 */
@@ -340,7 +351,7 @@ Page({
   },
   resumeTimer() {
     this.clearTimer();
-    this._timer = setInterval(() => this.load(true), POLL_MS);
+    this._timer = setInterval(() => this.poll(), POLL_MS);
   },
 
   async onCardNo() {
