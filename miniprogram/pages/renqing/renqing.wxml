@@ -84,8 +84,8 @@
   </block>
 
   <!-- 亲友办事提醒弹层 -->
-  <view class="mask" wx:if="{{remindShow}}" catchtouchmove="noop" bindtap="onCloseRemind">
-    <view class="sheet" catchtap="noop">
+  <view class="mask tab-mask" wx:if="{{remindShow}}" catchtouchmove="noop" bindtap="onCloseRemind">
+    <view class="sheet tab-sheet" catchtap="noop">
       <view class="rm-head">
         <text class="sheet-title">亲友办事提醒<text class="muted" wx:if="{{reminds.length}}">（{{reminds.length}}）</text></text>
         <text class="link" bindtap="onAddRemind">＋ 加提醒</text>

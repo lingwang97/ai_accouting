@@ -21,7 +21,10 @@
 .fold-more { text-align: center; color: var(--link); font-size: 26rpx; padding: 16rpx 0 24rpx; }
 /* 亲友办事提醒（弹层） */
 .rm-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8rpx; }
-.rm-scroll { max-height: 60vh; }
+/* 本页是 tab 页：自定义底部菜单盖在弹层之上，遮罩止于菜单上沿，弹层底部不再被挡住 */
+.mask.tab-mask { bottom: calc(50px + env(safe-area-inset-bottom)); }
+.sheet.tab-sheet { max-height: 80vh; padding-bottom: 32rpx; }
+.rm-scroll { max-height: 55vh; }
 .rm-row { display: flex; justify-content: space-between; padding: 20rpx 0; border-top: 2rpx solid #f7f7f7; font-size: 26rpx; }
 .rm-name { flex: 1; min-width: 6em; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin-right: 16rpx; }
 .rm-date { color: #888; white-space: nowrap; flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
