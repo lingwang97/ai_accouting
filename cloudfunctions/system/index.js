@@ -500,7 +500,10 @@ const INDEXES = [
   ['records', 'payer_status_paid', [['payerOpenid', 1], ['status', 1], ['paidAt', -1]]],
   ['records', 'payer_time', [['payerOpenid', 1], ['createdAt', -1]]],
   ['records', 'batch', [['batchId', 1]]],
+  ['records', 'owner_payer', [['ownerOpenid', 1], ['payerName', 1]]], // 往来按姓名查询 / nameCheck
   ['trash_records', 'owner_book', [['ownerOpenid', 1], ['bookId', 1]]],
+  ['trash_books', 'status_purge', [['trashStatus', 1], ['purgeAt', 1]]], // warmer 到期清除 / 续跑未完成
+  ['person_alias', 'owner', [['ownerOpenid', 1]]],
   ['members', 'member', [['memberOpenid', 1]]],
   ['members', 'aid', [['aid', 1]]],
   ['accounts', 'owner', [['ownerOpenid', 1]]],
