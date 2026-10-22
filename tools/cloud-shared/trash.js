@@ -97,7 +97,14 @@ function filesOf(book, account, ownPayCode) {
   if (book.archivePdf && book.archivePdf.fileID) files.push(book.archivePdf.fileID);
   if (ownPayCode(book.payCodeFileID, book.ownerOpenid)) files.push(book.payCodeFileID);
   const prefix = account && account.payCodeFileID ? account.payCodeFileID.split('/paycodes/')[0] : '';
-  if (prefix) ENVS.forEach(env => files.push(`${prefix}/qrcodes/${book._id}-${env}.png`));
+  if (prefix) {
+    ENVS.forEach(env => files.push(`${prefix}/qrcodes/${book._id}-${env}.png`));
+    // 默认礼簿（id 超过 32 字符）的礼簿码文件用短码命名（见 ctx.shortCodeOf）
+    if (book._id.length > 32) {
+      const code = 'k' + require('crypto').createHash('md5').update(book._id).digest('hex').slice(0, 24);
+      ENVS.forEach(env => files.push(`${prefix}/qrcodes/${code}-${env}.png`));
+    }
+  }
   return files;
 }
 

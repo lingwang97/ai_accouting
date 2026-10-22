@@ -354,7 +354,11 @@ async function trashOp(openid, bookId, op, confirmName) {
   }
   if (t.trashStatus === 'restoring') return err('这本礼簿正在恢复，请稍后再试');
   if (String(confirmName || '').trim() !== t.name) return err('输入的礼簿名称不一致');
-  if (t.trashStatus === 'moving') await trash.moveToTrash(db, openid, bookId, null); // 先移完再删
+  if (t.trashStatus === 'moving') {
+    // 先移完再删：本次没移完（记录很多）就不能删，否则剩余礼金记录会成孤儿
+    const moved = await trash.moveToTrash(db, openid, bookId, null);
+    if (!moved) return err('这本礼簿仍在删除中，请稍后再试');
+  }
   await trash.purge(db, cloud, { ...t, _id: bookId });
   return ok({ purged: true });
 }
