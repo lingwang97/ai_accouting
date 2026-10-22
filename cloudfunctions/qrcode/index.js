@@ -80,7 +80,8 @@ exports.main = async (event) => {
     // 测试号无 openapi 权限时走此分支
     const msg = e.errCode === -1 || /openapi|40029|41004/i.test(String(e.errMsg || e.message))
       ? '测试号无法调用小程序码接口，请使用正式 AppID，或扫码收款码图片联调'
-      : '生成失败：' + (e.errMsg || e.message);
+      : '生成失败，请稍后重试';
+    console.error('qrcode gen failed', e && (e.errMsg || e.message)); // 原始错误只写日志，不返回前端
     return err(msg);
   }
 };

@@ -17,23 +17,24 @@ const DEFAULT_FIELDS = ['title', 'divider', 'theme', 'payDay', 'time', 'payerNam
 
 exports.main = async (event) => {
   const { OPENID } = cloud.getWXContext();
+  if (!OPENID) return err('未获取到用户身份');
   try {
     await ensureCol('print_templates');
     if (event.action === 'get') return await get(OPENID);
     if (event.action === 'save') return await save(OPENID, event.tpl);
     return err('未知 action');
   } catch (e) {
-    return err('模板操作失败：' + e.message);
+    console.error('printtpl', event.action, e);
+    return err('模板操作失败，请稍后重试');
   }
 };
 
 async function get(openid) {
   const found = await tpls.where({ ownerOpenid: openid }).limit(1).get();
-  if (found.data.length > 0) return ok({ tpl: found.data[0] });
+  if (found.data.length > 0) return ok({ tpl: pub(found.data[0]) });
   // 返回默认模板
   return ok({
     tpl: {
-      ownerOpenid: openid,
       paperWidth: 32,
       fields: DEFAULT_FIELDS,
       title: '礼金回执',
@@ -62,11 +63,13 @@ async function save(openid, tpl) {
   const found = await tpls.where({ ownerOpenid: openid }).limit(1).get();
   if (found.data.length === 0) {
     const added = await tpls.add({ data: { ownerOpenid: openid, ...data } });
-    return ok({ tpl: { _id: added._id, ownerOpenid: openid, ...data } });
+    return ok({ tpl: { _id: added._id, ...data } });
   }
   await tpls.doc(found.data[0]._id).update({ data });
-  return ok({ tpl: { ...found.data[0], ...data } });
+  return ok({ tpl: pub({ ...found.data[0], ...data }) });
 }
 
+/** 返回前端的模板：不带主家 openid */
+const pub = ({ ownerOpenid, _openid, ...t }) => t;
 const ok = data => ({ code: 0, msg: 'ok', data });
 const err = msg => ({ code: 1, msg, data: null });
