@@ -135,8 +135,12 @@ Page({
     if (this._lit) return;
     this._lit = true;
     wx.getScreenBrightness({
-      success: res => { this._brightness = res.value; },
-      complete: () => wx.setScreenBrightness({ value: 1, fail() {} })
+      success: res => {
+        this._brightness = res.value;
+        // 回调回来时页面已经离开：立即恢复，不再调到最亮
+        if (!this._lit) wx.setScreenBrightness({ value: res.value, fail() {} });
+      },
+      complete: () => { if (this._lit) wx.setScreenBrightness({ value: 1, fail() {} }); }
     });
     wx.setKeepScreenOn({ keepScreenOn: true, fail() {} });
   },
@@ -233,7 +237,13 @@ Page({
           ctx.fillRect(0, 0, CARD_W, 150);
           ctx.fillStyle = '#FFFFFF';
           ctx.textAlign = 'center';
-          ctx.font = 'bold 48px sans-serif';
+          // 称呼较长时按宽度缩小字号，保证不超出顶栏
+          let nameSize = 48;
+          ctx.font = `bold ${nameSize}px sans-serif`;
+          while (nameSize > 24 && ctx.measureText(account.accountName).width > CARD_W - 80) {
+            nameSize -= 2;
+            ctx.font = `bold ${nameSize}px sans-serif`;
+          }
           ctx.fillText(account.accountName, CARD_W / 2, 92);
 
           const step = (y, no, text, img) => {

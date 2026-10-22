@@ -29,7 +29,8 @@ Page({
     sheet: null,      // 列表模式批次明细弹层（当前打开的一组）
     notifyTip: '',    // 新礼金提醒未开启时提示
     busy: false,
-    canConfirm: true, // 没有「确认收礼」权限：只能查看列表
+    canConfirm: false, // 默认不显示确认操作，权限确定后才显示（有缓存身份时 onShow 同步设置，不闪烁）
+    roleReady: false,  // 权限是否已确定：未确定时不显示「没有权限」提示
     loaded: false,
     bookName: '',     // 当前礼簿名：待确认只处理当前礼簿
     hiddenCount: 0,   // 待确认超过单次显示上限（100 笔）时，未显示的笔数
@@ -45,16 +46,22 @@ Page({
   },
 
   onShow() {
+    this.clearTimer(); // 先清旧轮询，避免重复进入页面叠加
     theme.apply(this); // 主题色跟当前礼簿事由走
     const acc = getApp().globalData.account;
-    this.setData({ unit: acc && acc.orgMode ? '场次' : '礼簿' });
-    getApp().ensureRole().then(() => {
-      const canConfirm = perm.can('confirm');
-      this.setData(canConfirm ? { canConfirm } : { canConfirm, mode: 'list', selectMode: false });
-    });
+    const patch = { unit: acc && acc.orgMode ? '场次' : '礼簿' };
+    // 已有缓存身份：首次渲染前同步确定权限，避免先隐藏再闪出
+    if (getApp().globalData.role) Object.assign(patch, this.rolePatch());
+    this.setData(patch);
+    getApp().ensureRole().then(role => { if (role) this.setData(this.rolePatch()); }); // 查询失败（空串）时不下结论
     this.checkNotify();
     this.load(false);
     this.resumeTimer();
+  },
+  /** 按当前身份算权限相关显示：没有确认权限时只能看列表 */
+  rolePatch() {
+    const canConfirm = perm.can('confirm');
+    return canConfirm ? { canConfirm, roleReady: true } : { canConfirm, roleReady: true, mode: 'list', selectMode: false };
   },
   /** 其他礼簿有待确认：回工作台切换当前礼簿 */
   goSwitch() { wx.switchTab({ url: '/pages/index/index' }); },
@@ -67,7 +74,8 @@ Page({
 
   /** 轮询：先用轻接口查计数，变化了才拉完整列表 */
   async poll() {
-    if (this.data.busy) return false;
+    // 正在逐人改金额或查看批次明细：不刷新，避免列表在手下变动
+    if (this.data.busy || this.data.editor || this.data.sheet) return false;
     this._tick = (this._tick || 0) + 1;
     if (this._tick % 3 === 0) return this.load(true);
     const s = await req.pendingStat();

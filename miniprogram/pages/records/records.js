@@ -272,6 +272,14 @@ Page({
     this.reload();
   },
 
+  /** 输入框被清空（含点 ×）：不用再点搜索，直接恢复完整列表 */
+  onSearchInput(e) {
+    if (!e.detail.value && this.data.keyword) {
+      this.setData({ keyword: '' });
+      this.reload();
+    }
+  },
+
   onSearch(e) {
     this.setData({ keyword: e.detail.value });
     this.reload();

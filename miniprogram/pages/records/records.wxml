@@ -17,7 +17,7 @@
       </view>
     </view>
     <view class="search-row">
-      <input class="search" placeholder="搜索宾客姓名" value="{{keyword}}" bindconfirm="onSearch" confirm-type="search" />
+      <input class="search" placeholder="搜索宾客姓名" value="{{keyword}}" bindinput="onSearchInput" bindconfirm="onSearch" confirm-type="search" />
       <picker range="{{relations}}" value="{{relIdx}}" bindchange="onRelation">
         <view class="rel-btn {{relIdx > 0 ? 'on' : ''}}">{{relIdx > 0 ? relations[relIdx] : '关系'}} ▾</view>
       </picker>

@@ -22,7 +22,7 @@
   <view class="card">
     <block wx:if="{{!codeOnly}}">
       <view class="section-title">主家称呼</view>
-      <input class="input" placeholder="建议真实姓名,如：张三" value="{{accountName}}" bindinput="onNameInput" />
+      <input class="input" placeholder="建议真实姓名,如：张三" maxlength="20" value="{{accountName}}" bindinput="onNameInput" />
     </block>
     <view class="muted" wx:else>你只负责部分礼簿：可以为「{{accountName}}」上传新的收款码，主家确认采用后才生效，确认前宾客仍转到原收款码。</view>
 

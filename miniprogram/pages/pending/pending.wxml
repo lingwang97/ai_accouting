@@ -18,7 +18,7 @@
     </view>
   </view>
 
-  <view class="notify-tip" wx:if="{{!canConfirm}}">你没有「确认收礼」权限，只能查看待确认礼金，由主家或其他记账人确认</view>
+  <view class="notify-tip" wx:if="{{roleReady && !canConfirm}}">你没有「确认收礼」权限，只能查看待确认礼金，由主家或其他记账人确认</view>
   <view class="notify-tip" wx:elif="{{notifyTip}}" bindtap="onSubscribe">🔔 {{notifyTip}} <text class="nt-go">开启 ›</text></view>
 
   <!-- 宾客登记后没点「我已完成转账」：常见于转完账直接回聊天，主家核对微信到账后可直接入簿 -->

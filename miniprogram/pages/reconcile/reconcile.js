@@ -34,10 +34,12 @@ Page({
 
   async load() {
     const b = this.data.books[this.data.bookIdx];
+    const seq = this._seq = (this._seq || 0) + 1; // 连续切换礼簿 / 范围时，只采用最后一次的结果
     this.setData({ loading: true });
     try {
       const day = this.data.range === 'today' ? fmt.day(new Date()) : '';
       const r = await req.reconcile(b ? b._id : '', day);
+      if (seq !== this._seq) return;
       const m = x => ({ count: x.count, sumStr: fmt.money(x.sum) });
       this.setData({
         r: {
@@ -53,9 +55,9 @@ Page({
         }
       });
     } catch (e) {
-      this.setData({ r: null });
+      if (seq === this._seq) this.setData({ r: null });
     } finally {
-      this.setData({ loading: false });
+      if (seq === this._seq) this.setData({ loading: false });
     }
   },
 
