@@ -109,9 +109,18 @@ Page({
       if (this.data.books.length && !b) return wx.showToast({ title: '请先选择记入哪本礼簿', icon: 'none' });
       if (this.data.books.length && b) payload.bookId = b._id;
       payload.payMethod = this.data.payMethod;
+      // 幂等键：弱网下超时重试、重复点击都带同一个 reqId，服务端不会重复入簿；成功后才换新的
+      // 内容变了（重试前改过表单）就换新的，避免把修改后的内容当成重复提交
+      const sig = JSON.stringify(payload);
+      if (!this._reqId || this._reqSig !== sig) {
+        this._reqId = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+        this._reqSig = sig;
+      }
+      payload.reqId = this._reqId;
       // 转账+现金只填了一位：按这一位的方式提交，不算混合
       if (payload.payMethod === 'mixed' && payload.items && payload.items.length === 1) payload.payMethod = payload.items[0].method;
       const { record, list } = await req.cashEntry(payload);
+      this._reqId = ''; // 已入簿，下一位换新 reqId
       const added = (list && list.length ? list : [record]).map(r => ({ ...r, amountStr: fmt.money(r.amount), nameStr: samename.nameStr(r.payerName, r.nameTag) }));
       const done = added.slice().reverse().concat(this.data.done).slice(0, DONE_MAX);
       this._doneFen = (this._doneFen || 0) + added.reduce((s, r) => s + Math.round(r.amount * 100), 0);

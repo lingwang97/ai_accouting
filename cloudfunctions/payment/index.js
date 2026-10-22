@@ -262,12 +262,32 @@ function splitFen(items) {
 }
 
 /** 按名单逐人建记录；多于 1 人时用 batchId 关联成一个批次 */
-async function addItems(base, items) {
-  const batchId = items.length > 1 ? 'B' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10) : '';
-  const ids = await Promise.all(items.map((x, i) => records.add({
-    data: { ...base, ...x, ...(batchId ? { batchId, batchIdx: i, batchSize: items.length } : {}) }
-  }).then(r => r._id)));
-  return { ids, batchId };
+async function addItems(base, items, reqKey) {
+  // reqKey：幂等键（礼台记账的 reqId）。记录 _id 由它确定，重试时同一条已存在则不重复写入（existed[i] 为 true）
+  const batchId = items.length > 1 ? (reqKey ? 'B' + reqKey : 'B' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10)) : '';
+  const existed = items.map(() => false);
+  const ids = await Promise.all(items.map(async (x, i) => {
+    const data = { ...base, ...x, ...(batchId ? { batchId, batchIdx: i, batchSize: items.length } : {}) };
+    if (!reqKey) return (await records.add({ data }))._id;
+    const _id = 'q' + reqKey + String(i).padStart(2, '0');
+    try {
+      await records.add({ data: { _id, ...data } });
+    } catch (e) {
+      // 重复提交（重试 / 并发）：这条已写入则视为成功；否则是真的失败，原样抛出
+      let d = null;
+      try { d = (await records.doc(_id).get()).data; } catch (e2) { /* 不存在 */ }
+      if (!d) throw e;
+      existed[i] = true;
+    }
+    return _id;
+  }));
+  return { ids, batchId, existed };
+}
+
+/** 礼台记账幂等键：reqId 与主家绑定（不同主家的相同 reqId 互不影响），24 位十六进制 */
+function reqKeyOf(ownerOpenid, reqId) {
+  if (!/^[A-Za-z0-9_-]{8,40}$/.test(String(reqId || ''))) return '';
+  return require('crypto').createHash('md5').update(ownerOpenid + ':' + reqId).digest('hex').slice(0, 24);
 }
 
 /** 批次显示名：张三 等 3 人 */
@@ -364,7 +384,14 @@ async function cashEntry(openid, ctx, event) {
     transferredAt: now,
     paidAt: now
   };
-  const { ids, batchId } = await addItems(base, items);
+  const { ids, batchId, existed } = await addItems(base, items, reqKeyOf(ctx.ownerOpenid, event.reqId));
+  if (existed.every(Boolean)) {
+    // 重复提交：上一次已全部入簿，返回原记录，不再累加合计
+    const docs = [];
+    for (const id of ids) docs.push((await records.doc(id).get()).data);
+    const olds = docs.map(shown);
+    return ok({ record: olds[0], list: olds, duplicate: true });
+  }
   const fen = items.reduce((t, x) => t + Math.round(x.amount * 100), 0);
   if (book) await incBookStat(book._id, items.length, fen, now);
   const list = items.map((x, i) => shown({

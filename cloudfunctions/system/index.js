@@ -451,6 +451,7 @@ const INDEXES = [
   ['records', 'payer_status_paid', [['payerOpenid', 1], ['status', 1], ['paidAt', -1]]],
   ['records', 'payer_time', [['payerOpenid', 1], ['createdAt', -1]]],
   ['records', 'batch', [['batchId', 1]]],
+  ['trash_records', 'owner_book', [['ownerOpenid', 1], ['bookId', 1]]],
   ['members', 'member', [['memberOpenid', 1]]],
   ['members', 'aid', [['aid', 1]]],
   ['accounts', 'owner', [['ownerOpenid', 1]]],
