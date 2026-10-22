@@ -9,6 +9,7 @@ const theme = require('../../utils/theme.js');
 const cache = require('../../utils/cache.js');
 const perm = require('../../utils/perm.js');
 const samename = require('../../utils/samename.js');
+const poller = require('../../utils/poller.js');
 
 const PAGE_SIZE = 20;
 const POLL_MS = 10000; // 页面停留时自动刷新待确认转账
@@ -100,7 +101,8 @@ Page({
     if (booksP) booksP.then(() => { if (this.selectedBookId() !== before) this.reload(); });
     this.clearTimer();
     if (this._hidden) return; // 加载期间已离开本页：不再启动轮询
-    this._timer = setInterval(() => this.silentRefresh(), POLL_MS);
+    if (!this._poller) this._poller = poller.create(() => this.silentRefresh(), { base: POLL_MS });
+    this._poller.start();
   },
 
   selectedBookId() {
@@ -112,7 +114,7 @@ Page({
   onUnload() { this._hidden = true; this.clearTimer(); },
 
   clearTimer() {
-    if (this._timer) { clearInterval(this._timer); this._timer = null; }
+    if (this._poller) this._poller.stop();
   },
 
   /** 筛选条件变化：清空后重新加载（有该条件的缓存时先显示缓存） */
@@ -127,6 +129,7 @@ Page({
    * 只缓存无关键字的查询
    */
   async refreshFirst() {
+    if (this._poller) this._poller.kick(); // 用户操作 / 刷新后恢复轮询频率
     const params = this.buildParams(1);
     const key = params.keyword ? '' : 'rec_' + JSON.stringify(params);
     if (key && !this.data.list.length) {
@@ -159,26 +162,32 @@ Page({
 
   /** 后台静默刷新首页数据（有新待确认转账时提醒） */
   async silentRefresh() {
-    if (this.data.loading || this.data.busy || !this.data.loggedIn) return;
+    if (this.data.loading || this.data.busy || !this.data.loggedIn) return false;
     const before = this.data.pendingCount;
-    try {
-      const res = await req.recordList(this.buildParams(1));
-      if (res.pendingCount > before) wx.vibrateShort({ type: 'heavy', fail() {} });
-      // 角标统一按当前礼簿的待确认（工作台 / 待确认页设置），这里按筛选礼簿计数，不改角标
-      // 合计与份数总是刷新
-      this.setData({ sum: fmt.money(res.sum), total: res.total, pendingCount: res.pendingCount, curBook: res.workBookId === undefined ? null : res.workBookId });
-      const changed = res.listTotal !== this._listTotal || res.pendingCount !== before;
-      if (!changed) return;
-      if (this.data.page <= 2) {
-        // 只看第一页时直接替换列表
-        this._listTotal = res.listTotal;
-        this.setData({ list: res.list.map(decorate), page: 2, hasMore: res.list.length < res.listTotal });
-      } else if (!this._notified) {
-        // 已翻到后面几页时不打断浏览，只提示
-        this._notified = true;
-        wx.showToast({ title: '有新的礼金，下拉刷新查看', icon: 'none' });
-      }
-    } catch (e) { /* 静默 */ }
+    // 先只查合计与计数（不取列表行）；列表条数 / 待确认数变化才拉第一页
+    const res = await req.recordList({ ...this.buildParams(1), statOnly: true });
+    if (res.pendingCount > before) wx.vibrateShort({ type: 'heavy', fail() {} });
+    // 角标统一按当前礼簿的待确认（工作台 / 待确认页设置），这里按筛选礼簿计数，不改角标
+    // 合计与份数及时更新；值没变就不 setData
+    const curBook = res.workBookId === undefined ? null : res.workBookId;
+    const sum = fmt.money(res.sum);
+    const d = this.data;
+    const statChanged = sum !== d.sum || res.total !== d.total || res.pendingCount !== before || curBook !== d.curBook;
+    if (statChanged) this.setData({ sum, total: res.total, pendingCount: res.pendingCount, curBook });
+    const changed = res.listTotal !== this._listTotal || res.pendingCount !== before;
+    if (!changed) return statChanged;
+    if (this.data.page <= 2) {
+      // 只看第一页时直接替换列表
+      const full = await req.recordList(this.buildParams(1));
+      if (this._hidden) return true;
+      this._listTotal = full.listTotal;
+      this.setData({ list: full.list.map(decorate), page: 2, hasMore: full.list.length < full.listTotal });
+    } else if (!this._notified) {
+      // 已翻到后面几页时不打断浏览，只提示
+      this._notified = true;
+      wx.showToast({ title: '有新的礼金，下拉刷新查看', icon: 'none' });
+    }
+    return true;
   },
 
   /** 礼簿下拉：默认当前礼簿；从礼簿统计页跳来时选中指定礼簿 */

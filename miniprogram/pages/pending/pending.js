@@ -6,6 +6,7 @@ const notify = require('../../utils/notify.js');
 const theme = require('../../utils/theme.js');
 const perm = require('../../utils/perm.js');
 const { countOf, groupRecords } = require('../../utils/group.js');
+const poller = require('../../utils/poller.js');
 
 const POLL_MS = 10000; // 轮询只查计数（pendingStat），数量变化才拉完整列表；每 3 次也拉一次（刷新宾客未点完成的列表）
 const MODE_KEY = 'pending_mode'; // 记住上次使用的处理方式
@@ -52,7 +53,7 @@ Page({
     });
     this.checkNotify();
     this.load(false);
-    this._timer = setInterval(() => this.poll(), POLL_MS);
+    this.resumeTimer();
   },
   /** 其他礼簿有待确认：回工作台切换当前礼簿 */
   goSwitch() { wx.switchTab({ url: '/pages/index/index' }); },
@@ -60,25 +61,29 @@ Page({
   onHide() { this.clearTimer(); },
   onUnload() { this.clearTimer(); },
   clearTimer() {
-    if (this._timer) { clearInterval(this._timer); this._timer = null; }
+    if (this._poller) this._poller.stop();
   },
 
   /** 轮询：先用轻接口查计数，变化了才拉完整列表 */
   async poll() {
-    if (this.data.busy) return;
+    if (this.data.busy) return false;
     this._tick = (this._tick || 0) + 1;
     if (this._tick % 3 === 0) return this.load(true);
-    try {
-      const s = await req.pendingStat();
-      if (Math.min(s.count, 100) !== countOf(this._list) || (s.other || 0) !== this.data.otherCount) this.load(true);
-    } catch (e) { /* 静默 */ }
+    const s = await req.pendingStat();
+    if (Math.min(s.count, 100) !== countOf(this._list) || (s.other || 0) !== this.data.otherCount) return this.load(true);
+    return false;
   },
 
   /** 拉取待确认；silent=true 为轮询，有新礼金时震动 */
   async load(silent) {
-    if (this.data.busy) return;
+    if (this.data.busy) return false;
+    if (!silent && this._poller) this._poller.kick(); // 用户操作后恢复轮询频率
     try {
       const { list, stalled, bookName, otherCount } = await req.recordPending();
+      // 轮询取回的内容与上次相同：不动界面（返回 false 让轮询放慢）
+      const sig = JSON.stringify([list.map(r => [r._id, r.status, r.amount, r.transferredAt]), (stalled || []).map(r => [r._id, r.status]), bookName, otherCount]);
+      if (silent && sig === this._sig) return false;
+      this._sig = sig;
       // 宾客没点「我已完成转账」的（含 24 小时内被自动取消的）：主家核对微信到账后可直接入簿
       this.setData({
         stalled: groupRecords(stalled || []).map(g => ({ ...g, auto: g.status === 'cancelled', timeStr: fmt.time(g.createdAt) }))
@@ -94,8 +99,10 @@ Page({
       const patch = { ...this.derive(), loaded: true, bookName: bookName || '', otherCount: otherCount || 0 };
       if (!items.length) patch.selectMode = false;
       this.setData(patch);
+      return true;
     } catch (e) {
       this.setData({ loaded: true });
+      return false;
     }
   },
 
@@ -351,7 +358,8 @@ Page({
   },
   resumeTimer() {
     this.clearTimer();
-    this._timer = setInterval(() => this.poll(), POLL_MS);
+    if (!this._poller) this._poller = poller.create(() => this.poll(), { base: POLL_MS });
+    this._poller.start();
   },
 
   async onCardNo() {
@@ -378,6 +386,8 @@ Page({
   /** 本地立即移除已处理的一笔（或一批），逐笔模式自动切到下一笔 */
   removeLocal(id) {
     this._list = this._list.filter(r => r._id !== id);
+    this._sig = ''; // 本地已变：下次轮询无论如何刷新一次
+    if (this._poller) this._poller.kick();
     this.setData(this.derive());
   }
 });

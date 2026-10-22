@@ -10,8 +10,9 @@ const cache = require('../../utils/cache.js');
 const perm = require('../../utils/perm.js');
 const device = require('../../utils/device.js');
 const setup = require('../../utils/setup.js');
+const poller = require('../../utils/poller.js');
 
-const POLL_MS = 5000;
+const POLL_MS = 10000; // 连续无变化会自动放慢（见 utils/poller.js），刷新 / 操作后恢复
 const DISMISS_KEY = 'idx_dismissed';
 const NOTIFY_COOL_MS = 30 * 60 * 1000; // 关闭提醒提示后，至少 30 分钟内不再出现
 /**
@@ -86,15 +87,17 @@ Page({
   startTimer() {
     this.clearTimer();
     this._pollMs = this.data.readonly ? POLL_MS_READONLY : POLL_MS;
-    this._timer = setInterval(() => this.refreshPending(true), this._pollMs);
+    this._poller = poller.create(() => this.refreshPending(true), { base: this._pollMs, slow: !this.data.readonly });
+    this._poller.start();
   },
   onHide() { this.clearTimer(); },
   onUnload() { this.clearTimer(); },
   clearTimer() {
-    if (this._timer) { clearInterval(this._timer); this._timer = null; }
+    if (this._poller) { this._poller.stop(); this._poller = null; }
   },
 
   async refresh() {
+    if (this._poller) this._poller.kick(); // 刷新 / 用户操作后恢复轮询频率
     const app = getApp();
     const saved = wx.getStorageSync('printerDevice');
     this.setData({ printerName: (saved && saved.name) || '' });
@@ -147,7 +150,7 @@ Page({
       };
       this.setData({ mode: 'host', ...view });
       // 身份变化（是否只读）后按对应间隔重新轮询；页面已隐藏时不重启
-      if (this._timer && this._pollMs !== (view.readonly ? POLL_MS_READONLY : POLL_MS)) this.startTimer();
+      if (this._poller && this._pollMs !== (view.readonly ? POLL_MS_READONLY : POLL_MS)) this.startTimer();
       cache.set('dashboard', view);
       // 刚通过创建向导建好：提示下一步
       if (app.globalData.justSetup) {
@@ -179,14 +182,19 @@ Page({
 
   /** 待确认份数与合计（服务端只做计数 + 聚合，不拉整张列表）；silent=true 为轮询，有新礼金时震动 */
   async refreshPending(silent) {
-    if (this.data.mode !== 'host') return;
+    if (this.data.mode !== 'host') return false;
     try {
       const pending = await req.pendingStat();
-      if (!pending) return;
+      if (!pending) return false;
       if (silent && pending.count > this.data.pendingCount) wx.vibrateShort({ type: 'heavy', fail() {} });
-      this.setData({ pendingCount: pending.count, pendingSum: fmt.money(pending.sum), otherPending: pending.other || 0 });
+      const sum = fmt.money(pending.sum);
+      const other = pending.other || 0;
+      const d = this.data;
+      if (pending.count === d.pendingCount && sum === d.pendingSum && other === d.otherPending) return false; // 没变化：不 setData
+      this.setData({ pendingCount: pending.count, pendingSum: sum, otherPending: other });
       getApp().setBadge(pending.count);
-    } catch (e) { /* 静默 */ }
+      return true;
+    } catch (e) { return false; /* 静默 */ }
   },
 
   // —— 工作台操作 ——

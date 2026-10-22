@@ -370,7 +370,8 @@ async function list(openid, event, ctx) {
     records.aggregate().match(paidCond)
       .group({ _id: null, totalFen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) })
       .end(),
-    records.where(listCond)
+    // statOnly：轮询只要合计与计数，不取列表行
+    event.statOnly ? { data: [] } : records.where(listCond)
       .orderBy('createdAt', 'desc')
       .orderBy('_id', 'desc') // 同一时刻的批次记录 createdAt 相同，加第二排序键保证翻页不重不漏
       .skip((page - 1) * pageSize)
