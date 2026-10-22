@@ -46,7 +46,7 @@ function askActual(record) {
       confirmText: '按此入簿',
       success: res => {
         if (!res.confirm) return resolve(false);
-        const actual = Number(String(res.content || '').trim());
+        const actual = Number(String(res.content || '').replace(/[,，\s]/g, '')); // 去掉千分位逗号与空格
         if (!(actual > 0)) {
           wx.showToast({ title: '金额不正确', icon: 'none' });
           return resolve(false);
@@ -62,7 +62,9 @@ async function doConfirm(record, actual) {
   try {
     const r = await req.payConfirm(record._id, actual);
     wx.showToast({ title: '已记入礼簿', icon: 'success' }); // 成功图标最多显示 7 个字
-    await autoPrint(r.list || [r.record || { ...record, amount: actual || record.amount }]);
+    const note = await autoPrint(r.list || [r.record || { ...record, amount: actual || record.amount }]);
+    // 打印异常时合并成一条提示，避免后一条 toast 把「已记入礼簿」顶掉
+    if (note) wx.showToast({ title: `已记入礼簿（${note}）`, icon: 'none', duration: 2500 });
     getApp().refreshBadge();
     return true;
   } catch (e) {
@@ -75,7 +77,8 @@ async function confirmGroupAmounts(group, amounts) {
   try {
     const r = await req.payConfirm(group._id, undefined, amounts);
     wx.showToast({ title: '已按实收入簿', icon: 'success' });
-    await autoPrint(r.list || [r.record]);
+    const note = await autoPrint(r.list || [r.record]);
+    if (note) wx.showToast({ title: `已按实收入簿（${note}）`, icon: 'none', duration: 2500 });
     getApp().refreshBadge();
     return true;
   } catch (e) {
@@ -113,8 +116,22 @@ function confirmBatch(records) {
         // 逐张打印；打印机未连接时不打印，结果统一在最后弹窗说明
         let printNote = '';
         if (done.length && (await printer.ensureConnected())) {
-          for (const r of done) {
-            try { await printer.printRecord({ ...r, status: 'paid' }); } catch (e) { /* 失败的可在礼簿页补打 */ }
+          let printed = 0;
+          let partial = false;
+          for (let i = 0; i < done.length; i++) {
+            wx.showLoading({ title: `打印 ${i + 1}/${done.length}`, mask: true });
+            try {
+              await printer.printRecord({ ...done[i], status: 'paid' });
+              printed++;
+            } catch (e) {
+              partial = !!(e && e.partial);
+              break; // 打印机多半已断开，不再逐张重连；其余的到礼簿页补打
+            }
+          }
+          wx.hideLoading();
+          const failedPrint = done.length - printed;
+          if (failedPrint) {
+            printNote = `\n${failedPrint} 张未打印成功，可在礼簿页补打。` + (partial ? '其中一张可能只打了一半，请检查小票。' : '');
           }
         } else if (done.length) {
           printNote = '\n打印机未连接，可在礼簿页补打。';
@@ -124,7 +141,7 @@ function confirmBatch(records) {
         if (notDone || printNote) {
           wx.showModal({
             title: `已入簿 ${done.length} 份`,
-            content: (notDone ? `${notDone} 份未入簿（状态已变化或网络中断），请刷新后查看。` : '') + printNote,
+            content: ((notDone ? `${notDone} 份未入簿（状态已变化或网络中断），请刷新后查看。` : '') + printNote).replace(/^\n/, ''),
             showCancel: false
           });
         } else {
@@ -161,18 +178,14 @@ function rejectTransfer(record) {
   });
 }
 
-/** 确认后自动打印（批次每人一张）；打印机未连接时仅提示，不阻断确认流程 */
+/** 确认后自动打印（批次每人一张）；返回给调用方合并提示用的说明，打印正常返回空串。打印异常不阻断确认流程 */
 async function autoPrint(list) {
-  if (!(await printer.ensureConnected())) {
-    wx.showToast({ title: '打印机未连接，可在礼簿页补打', icon: 'none' });
-    return false;
-  }
+  if (!(await printer.ensureConnected())) return '打印机未连接，未打印';
   try {
     for (const record of list) await printer.printRecord({ ...record, status: 'paid' });
-    return true;
+    return '';
   } catch (e) {
-    wx.showToast({ title: '自动打印失败，可在礼簿页补打', icon: 'none' });
-    return false;
+    return e && e.partial ? '打印中断，请检查小票后补打' : '打印失败，可补打';
   }
 }
 

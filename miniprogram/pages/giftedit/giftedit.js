@@ -40,6 +40,7 @@ Page({
       });
       return;
     }
+    this._remindId = options.remindId ? decodeURIComponent(options.remindId) : '';
     this.setData({
       date: fmt.day(new Date()),
       toName: decodeURIComponent(options.toName || ''),
@@ -73,6 +74,10 @@ Page({
         _id: d._id || undefined, toName: d.toName.trim(), toKey: who.toKey || d.toKey, toTag: who.toTag || undefined, relation: d.relation, event: d.event,
         eventType: d.eventType, amount: Number(d.amount), date: d.date, remark: d.remark
       });
+      if (this._remindId) {
+        // 从办事提醒「记回礼」进入：保存成功后才标记提醒已处理（失败不影响送礼记录）
+        try { await req.remindDone(this._remindId, true); this._remindId = ''; } catch (e) { /* 提醒仍在，可手动标记 */ }
+      }
       wx.showToast({ title: '已保存', icon: 'success' });
       setTimeout(() => wx.navigateBack(), 400);
     } catch (e) { /* toast 已提示 */ } finally {

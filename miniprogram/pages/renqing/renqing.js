@@ -192,10 +192,11 @@ Page({
       success: async res => {
         try {
           if (res.tapIndex === 0) {
+            // 带上提醒 id：送礼记录保存成功后才标记已处理，中途取消不会丢提醒
             wx.navigateTo({
-              url: `/pages/giftedit/giftedit?toName=${encodeURIComponent(r.name)}&toKey=${encodeURIComponent(r.personKey || '')}&eventType=${r.eventType}&event=${encodeURIComponent(r.event || '')}`
+              url: `/pages/giftedit/giftedit?remindId=${encodeURIComponent(r._id)}&toName=${encodeURIComponent(r.name)}&toKey=${encodeURIComponent(r.personKey || '')}&eventType=${r.eventType}&event=${encodeURIComponent(r.event || '')}`
             });
-            await req.remindDone(r._id, true);
+            return;
           } else if (res.tapIndex === 1) {
             await req.remindDone(r._id, true);
             wx.showToast({ title: '已处理', icon: 'success' });
