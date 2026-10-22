@@ -4,6 +4,17 @@ const envVersion = () => {
   try { return wx.getAccountInfoSync().miniProgram.envVersion; } catch (e) { return 'release'; }
 };
 
+// 只读 action：其余一律视为写操作，成功后记下时间（页面切回时据此判断是否必须刷新，见 utils/fresh.js）
+const READ_ACTIONS = ['get', 'list', 'query', 'people', 'outList', 'remindList', 'pending', 'pendingStat', 'dashboard',
+  'status', 'receipt', 'myReceipts', 'themes', 'check', 'getByAid', 'gen', 'app', 'plan', 'adminGet', 'detail',
+  'nameCheck', 'reconcile', 'orgSummary', 'removePreview', 'members', 'pendingMembers', 'getTpl', 'stats', 'trashList',
+  'viewers', 'payCodeReviews', 'inviteInfo'];
+function markWrite(data) {
+  try {
+    if (data && READ_ACTIONS.indexOf(data.action) < 0) getApp().globalData.dataDirtyAt = Date.now();
+  } catch (e) { /* 忽略 */ }
+}
+
 // opts.silent：失败不弹提示（非关键的附加内容，如回执上的小程序码）
 const call = (name, data = {}, opts = {}) =>
   new Promise((resolve, reject) => {
@@ -12,7 +23,7 @@ const call = (name, data = {}, opts = {}) =>
       data,
       success: res => {
         const r = res.result || {};
-        if (r.code === 0) resolve(r.data);
+        if (r.code === 0) { markWrite(data); resolve(r.data); }
         else {
           if (!opts.silent) wx.showToast({ title: r.msg || '请求失败', icon: 'none' });
           reject(new Error(r.msg || 'biz error'));

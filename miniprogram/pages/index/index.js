@@ -11,6 +11,7 @@ const perm = require('../../utils/perm.js');
 const device = require('../../utils/device.js');
 const setup = require('../../utils/setup.js');
 const poller = require('../../utils/poller.js');
+const fresh = require('../../utils/fresh.js');
 
 const POLL_MS = 10000; // 连续无变化会自动放慢（见 utils/poller.js），刷新 / 操作后恢复
 const DISMISS_KEY = 'idx_dismissed';
@@ -81,7 +82,8 @@ Page({
         theme.apply(this, c.book ? c.book.type : 'other');
       }
     }
-    this.refresh();
+    // 切回页面：45 秒内且期间没有写操作时不重复拉整页（轮询仍会更新待确认数）；首次 / 下拉等强制刷新走 refresh()
+    if (fresh.needs(this) || this.data.mode === 'loading') this.refresh();
     this.startTimer();
   },
   startTimer() {
@@ -98,6 +100,7 @@ Page({
 
   async refresh() {
     if (this._poller) this._poller.kick(); // 刷新 / 用户操作后恢复轮询频率
+    fresh.mark(this);
     const app = getApp();
     const saved = wx.getStorageSync('printerDevice');
     this.setData({ printerName: (saved && saved.name) || '' });
@@ -166,6 +169,7 @@ Page({
       app.setBadge(d.pending.count); // 同时刷新底部菜单：首个菜单显示为「工作台」
       theme.apply(this, b ? b.type : 'other');
     } catch (e) {
+      fresh.reset(this);
       if (this.data.mode === 'loading') this.toGuest();
     }
   },

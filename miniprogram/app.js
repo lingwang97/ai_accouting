@@ -68,6 +68,7 @@ App({
 
   /** 切换身份 / 接受邀请后：清掉与主家相关的缓存，各页面重新加载 */
   resetIdentity() {
+    this.globalData.dataDirtyAt = Date.now(); // 各页面切回时必须刷新
     this.globalData.account = null;
     this.globalData.recordsBookId = '';
     this.globalData.bookType = '';

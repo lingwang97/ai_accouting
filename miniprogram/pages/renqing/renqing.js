@@ -3,6 +3,7 @@ const req = require('../../utils/request.js');
 const fmt = require('../../utils/format.js');
 const scenes = require('../../utils/scenes.js');
 const theme = require('../../utils/theme.js');
+const fresh = require('../../utils/fresh.js');
 
 Page({
   data: {
@@ -37,6 +38,9 @@ Page({
     theme.apply(this); // 主题色跟当前礼簿事由走
     getApp().refreshTabBar();
     getApp().refreshBadge();
+    // 45 秒内且期间没有写操作：不重复拉往来 / 提醒（切页签、搜索仍会加载）
+    if (!fresh.needs(this)) return;
+    fresh.mark(this);
     this.load();
     // 办事提醒只在进入页面时刷新，切换标签不重复请求
     getApp().loginReady.then(() => { if (getApp().globalData.user) this.loadReminds(); });
