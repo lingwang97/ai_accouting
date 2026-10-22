@@ -13,6 +13,16 @@ const setup = require('../../utils/setup.js');
 
 const POLL_MS = 5000;
 const DISMISS_KEY = 'idx_dismissed';
+const NOTIFY_COOL_MS = 30 * 60 * 1000; // 关闭提醒提示后，至少 30 分钟内不再出现
+/**
+ * 「新礼金提醒」提示是否已被关闭：dismissed.notify = { t: 文案, at: 关闭时的上次发送时间, d: 关闭时刻 }
+ * 文案变化 → 立即重新出现；同一文案下有新的发送失败（发送时间变了）且距关闭超过 30 分钟 → 重新出现
+ */
+function notifyOff(dm, text, lastNotify) {
+  if (!text || !dm || typeof dm !== 'object' || dm.t !== text) return false; // 旧版存的是字符串：按未关闭处理
+  const at = lastNotify && lastNotify.at ? new Date(lastNotify.at).getTime() : 0;
+  return at === dm.at || Date.now() - (dm.d || 0) < NOTIFY_COOL_MS;
+}
 function loadDismissed() {
   try { const d = wx.getStorageSync(DISMISS_KEY); return d && typeof d === 'object' ? d : {}; } catch (e) { return {}; }
 }
@@ -37,6 +47,7 @@ Page({
     printerName: '',
     pm: {},            // 当前身份的权限（记账人按各自权限显示操作）
     notifyTip: '',     // 新礼金提醒未开启 / 发送失败时的提示
+    notifyOff: false,  // 提示已被关闭（见 notifyOff()）
     guideTip: false,   // 「第一次使用？看看使用教程」小卡片（关闭后不再显示）
     joins: [],         // 申请加入的进度 [{ aid, name, role, pending, dk }]
     dismissed: {},     // 本地已读签名：notify=提示文案；j_<aid>=已同意的身份。签名变化（文案 / 身份不同）再提醒
@@ -111,6 +122,7 @@ Page({
         const { list, activeBookId } = await req.bookList();
         b = list.find(x => x._id === activeBookId) || null;
       }
+      this._lastNotify = d.lastNotify || null;
       const view = {
         account: d.account,
         role: d.role,
@@ -122,6 +134,8 @@ Page({
         noBook: d.noBook || '', // ended 记账人负责的礼簿已结束；none 主家还没有当前礼簿
         canSwitch: !!d.mySwitch || (d.role !== 'clerk' || !(d.account && d.account.orgMode)) && perm.map(d.perms, d.role).books && !d.restricted,
         notifyTip: notify.tipText(d.lastNotify),
+        // 提示是否已被关闭：文案未变、且没有新的发送失败或距关闭不到 30 分钟
+        notifyOff: notifyOff(this.data.dismissed.notify, notify.tipText(d.lastNotify), d.lastNotify),
         book: b ? { ...b, typeLabel: scenes.label(b.type), sumStr: fmt.money(b.sum), sumCls: sumCls(fmt.money(b.sum)) } : null,
         todaySum: fmt.money(d.today.sum),
         todayCount: d.today.count,
@@ -256,8 +270,12 @@ Page({
   goGuide() {
     wx.navigateTo({ url: '/pages/guide/guide?tab=' + (this.data.role === 'clerk' ? 'clerk' : 'host') });
   },
-  /** 关闭「新礼金提醒未开启」：记下当前提示文案，文案变化（如发送失败码不同）再提醒 */
-  onCloseNotify() { this.markDismissed('notify', this.data.notifyTip); },
+  /** 关闭「新礼金提醒」提示：记下文案与上次发送时间；文案变化，或有新的发送失败且已过 30 分钟再提醒 */
+  onCloseNotify() {
+    const ln = this._lastNotify;
+    this.markDismissed('notify', { t: this.data.notifyTip, at: ln && ln.at ? new Date(ln.at).getTime() : 0, d: Date.now() });
+    this.setData({ notifyOff: true });
+  },
   /** 关闭「已同意」的加入提示：记下身份，之后不再提示（再次被同意为别的身份会再提醒） */
   onCloseJoin(e) {
     const j = this.data.joins[e.currentTarget.dataset.i];

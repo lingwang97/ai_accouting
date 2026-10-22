@@ -57,7 +57,7 @@
     </view>
 
     <!-- 提醒未开启（家人共享不提醒） -->
-    <view class="tip-bar" wx:if="{{notifyTip && !readonly && dismissed.notify !== notifyTip}}" bindtap="onSubscribe">
+    <view class="tip-bar" wx:if="{{notifyTip && !readonly && !notifyOff}}" bindtap="onSubscribe">
       <image class="tip-icon" src="/assets/icons/bell-r.svg" />
       <text class="tip-text">{{notifyTip}}</text>
       <text class="tip-go">开启 ›</text>

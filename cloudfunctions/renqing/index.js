@@ -461,15 +461,31 @@ async function moveEntry(openid, e) {
   return ok({ key: data.personKey });
 }
 
-/** 往来人名单（按往来次数排序，最多 300 人） */
+/**
+ * 往来人名单（按往来次数排序，最多 PEOPLE_MAX 人）
+ * 收礼合计（inTotal / inSum）由数据库统计，与名单并行，不受 300 人 / 3000 条截断影响，始终是全部
+ */
+const PEOPLE_MAX = 300;
 async function people(openid) {
   truncated = false;
-  const persons = await buildPersons(openid);
+  const cond = { ownerOpenid: openid, status: 'paid' }; // 与 buildPersons 收礼口径一致：本人礼簿已入簿
+  const [persons, cnt, agg] = await Promise.all([
+    buildPersons(openid),
+    records.where(cond).count(),
+    records.aggregate().match(cond)
+      .group({ _id: null, fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) }).end()
+  ]);
   const list = [...persons.values()]
     .map(({ received, given, ...p }) => p)
     .sort((a, b) => (b.inCount + b.outCount) - (a.inCount + a.outCount))
-    .slice(0, 300);
-  return ok({ list, truncated }); // truncated：记录超过 3000 条，统计不全
+    .slice(0, PEOPLE_MAX);
+  return ok({
+    list,
+    truncated, // 记录超过 3000 条：名单里的往来统计不全
+    more: persons.size > PEOPLE_MAX ? persons.size - PEOPLE_MAX : 0, // 名单只显示前 300 人，其余人数
+    inTotal: cnt.total,
+    inSum: Math.round(((agg.list && agg.list[0]) || { fen: 0 }).fen) / 100
+  });
 }
 
 /** 某人的往来明细：key 来自名单；只输入姓名时传 n:姓名 */

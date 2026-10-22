@@ -11,6 +11,7 @@ Page({
     pFilters: [{ v: 'all', t: '全部' }, { v: 'owe', t: '待回礼' }, { v: 'given', t: '多送' }],
     inSum: '0.00',     // 收礼合计（按人列表汇总：总笔数 / 总金额）
     inTotal: 0,
+    morePeople: 0,     // 名单只显示前 300 人时，其余人数
     reminds: [],       // 亲友办事提醒（未处理，最近的在前）
     remindAll: false,  // 展开全部提醒
     receipts: [],      // 随礼回执
@@ -49,8 +50,8 @@ Page({
     this.setData({ loading: true, loggedIn: true });
     try {
       if (this.data.tab === 'people') {
-        const { list, truncated } = await req.rqPeople();
-        this.setData({ truncated: !!truncated });
+        const { list, truncated, more, inTotal, inSum } = await req.rqPeople();
+        this.setData({ truncated: !!truncated, morePeople: more || 0 });
         const people = list.map(p => ({
           ...p,
           nameOnly: p.key.indexOf('n:') === 0,
@@ -61,8 +62,9 @@ Page({
         }));
         this.setData({
           people,
-          inTotal: people.reduce((t, p) => t + (p.inCount || 0), 0),
-          inSum: fmt.money(people.reduce((t, p) => t + Math.round((p.inSum || 0) * 100), 0) / 100)
+          // 合计以服务端数据库统计为准（全部记录）；旧版云函数未返回时按名单累加
+          inTotal: inTotal !== undefined ? inTotal : people.reduce((t, p) => t + (p.inCount || 0), 0),
+          inSum: fmt.money(inSum !== undefined ? inSum : people.reduce((t, p) => t + Math.round((p.inSum || 0) * 100), 0) / 100)
         });
         this.filterPeople();
       } else if (this.data.tab === 'receipts') {

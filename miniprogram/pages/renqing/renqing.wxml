@@ -34,7 +34,7 @@
     <loading show="{{loading && (tab === 'people' ? !shownPeople.length : (tab === 'receipts' ? !shownReceipts.length : !outList.length))}}" rows="4" />
 
     <!-- 收礼往来：按人（收送对比；逐笔在人详情里看） -->
-    <view class="card out-sum" wx:if="{{tab === 'people' && people.length}}">共收到 {{inTotal}} 笔 · <text class="money">￥{{inSum}}</text></view>
+    <view class="card out-sum" wx:if="{{tab === 'people' && (people.length || inTotal)}}">共收到 {{inTotal}} 笔 · <text class="money">￥{{inSum}}</text></view>
     <view class="sub-row" wx:if="{{tab === 'people'}}">
       <view class="pf-chips">
         <view class="chip {{pFilter === item.v ? 'on' : ''}}" wx:for="{{pFilters}}" wx:key="v" data-v="{{item.v}}" bindtap="onPFilter">{{item.t}}</view>
@@ -43,7 +43,8 @@
 
     <!-- 按人：收送对比 -->
     <block wx:if="{{tab === 'people'}}">
-      <view class="muted small pad-s" wx:if="{{truncated}}">记录较多（超过 3000 条），往来统计只含最近的部分</view>
+      <view class="muted small pad-s" wx:if="{{truncated}}">记录较多（超过 3000 条），下方名单的往来统计只含其中 3000 条；上方合计为全部</view>
+      <view class="muted small pad-s" wx:elif="{{morePeople > 0 && !keyword}}">名单只显示往来最多的 300 人（另有 {{morePeople}} 人可输入姓名查询）；上方合计为全部</view>
       <view class="card person" wx:for="{{shownPeople}}" wx:key="key" data-key="{{item.key}}" bindtap="onPerson">
         <view class="p-top">
           <text class="p-name">{{item.label}}<text class="muted" wx:if="{{item.dup && item.relation}}"> · {{item.relation}}</text></text>
