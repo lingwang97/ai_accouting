@@ -359,8 +359,18 @@ async function list(openid, event, ctx) {
   }
   const withKw = c => (kw ? _.and([c, kw]) : c);
   const paidCond = withKw({ ...base, status: 'paid' });
-  const listCond = withKw({ ...base, status: _.in(['paid', 'transferred', 'pending']) });
+  // 状态筛选只影响列表行与 listTotal；顶部合计 / 笔数 / 待确认数仍是整本口径
+  // confirm = 待确认页同口径（status 'transferred'，行内有确认按钮）；paid = 已入簿；其余 = 全部
+  const stFilter = event.status === 'confirm' ? ['transferred'] : event.status === 'paid' ? ['paid'] : ['paid', 'transferred', 'pending'];
+  const listCond = withKw({ ...base, status: _.in(stFilter) });
   const pendingCond = withKw({ ...base, status: 'transferred' });
+
+  // 排序白名单，非法值回落到时间倒序；都带 _id 作第二键，同时间 / 同金额翻页不重不漏
+  const sortKey = ['time_desc', 'time_asc', 'amount_desc'].includes(event.sort) ? event.sort : 'time_desc';
+  let listQ = records.where(listCond);
+  if (sortKey === 'amount_desc') listQ = listQ.orderBy('amount', 'desc').orderBy('_id', 'desc');
+  else if (sortKey === 'time_asc') listQ = listQ.orderBy('createdAt', 'asc').orderBy('_id', 'asc');
+  else listQ = listQ.orderBy('createdAt', 'desc').orderBy('_id', 'desc');
 
   const [totalRes, pendingRes, listTotalRes, sumRes, listRes] = await Promise.all([
     records.where(paidCond).count(),
@@ -371,9 +381,7 @@ async function list(openid, event, ctx) {
       .group({ _id: null, totalFen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) })
       .end(),
     // statOnly：轮询只要合计与计数，不取列表行
-    event.statOnly ? { data: [] } : records.where(listCond)
-      .orderBy('createdAt', 'desc')
-      .orderBy('_id', 'desc') // 同一时刻的批次记录 createdAt 相同，加第二排序键保证翻页不重不漏
+    event.statOnly ? { data: [] } : listQ
       .skip((page - 1) * pageSize)
       .limit(pageSize)
       .get()

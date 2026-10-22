@@ -22,6 +22,14 @@
       </picker>
       <view class="btn btn-sm btn-primary search-btn" bindtap="onSearch">搜索</view>
     </view>
+    <view class="filter-row">
+      <view class="seg st-seg">
+        <view class="seg-item {{stIdx === index ? 'on' : ''}}" wx:for="{{statuses}}" wx:key="*this" data-i="{{index}}" bindtap="onStatus">{{item}}</view>
+      </view>
+      <picker range="{{sorts}}" value="{{sortIdx}}" bindchange="onSort">
+        <view class="rel-btn {{sortIdx > 0 ? 'on' : ''}}">{{sorts[sortIdx]}} ▾</view>
+      </picker>
+    </view>
   </view>
 
   <!-- 首次加载骨架 -->
@@ -71,7 +79,7 @@
     </view>
   </view>
 
-  <view class="muted center pad" wx:if="{{!loading && list.length === 0}}">暂无礼金记录</view>
+  <view class="muted center pad" wx:if="{{!loading && list.length === 0}}">{{keyword || relIdx > 0 || stIdx > 0 ? '没有符合条件的记录' : '暂无礼金记录'}}</view>
   <view class="muted center pad" wx:if="{{loading}}">加载中…</view>
   </block>
 </view>

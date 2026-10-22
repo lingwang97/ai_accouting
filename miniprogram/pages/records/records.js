@@ -12,6 +12,8 @@ const samename = require('../../utils/samename.js');
 const poller = require('../../utils/poller.js');
 
 const PAGE_SIZE = 20;
+const SORT_KEYS = ['time_desc', 'time_asc', 'amount_desc'];
+const ST_KEYS = ['all', 'confirm', 'paid'];
 const POLL_MS = 10000; // 页面停留时自动刷新待确认转账
 
 const STATUS_TEXT = {
@@ -32,6 +34,10 @@ Page({
     bookIdx: 0,
     relations: ['全部关系', ...scenes.RELATIONS],
     relIdx: 0,
+    sorts: ['最新', '最早', '金额高到低'],
+    sortIdx: 0,
+    statuses: ['全部', '待确认', '已入簿'],
+    stIdx: 0,
     loggedIn: true,
     readonly: false,  // 家人共享：只读
     pm: {},           // 当前身份的权限：确认 / 作废 / 打印 / 礼台记账按权限显示
@@ -234,6 +240,8 @@ Page({
     const book = this.data.books[this.data.bookIdx];
     if (book && book._id) params.bookId = book._id;
     if (this.data.relIdx > 0) params.relation = this.data.relations[this.data.relIdx];
+    if (this.data.sortIdx > 0) params.sort = SORT_KEYS[this.data.sortIdx];
+    if (this.data.stIdx > 0) params.status = ST_KEYS[this.data.stIdx];
     return params;
   },
 
@@ -265,6 +273,20 @@ Page({
   onPullDownRefresh() {
     this.reload();
     setTimeout(() => wx.stopPullDownRefresh(), 600);
+  },
+
+  onSort(e) {
+    this.setData({ sortIdx: Number(e.detail.value) });
+    this.reload();
+    wx.pageScrollTo({ scrollTop: 0, duration: 0 });
+  },
+
+  onStatus(e) {
+    const i = Number(e.currentTarget.dataset.i);
+    if (i === this.data.stIdx) return;
+    this.setData({ stIdx: i });
+    this.reload();
+    wx.pageScrollTo({ scrollTop: 0, duration: 0 });
   },
 
   onRelation(e) {

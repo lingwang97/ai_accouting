@@ -9,6 +9,10 @@
   border-radius: 999rpx; padding: 16rpx 28rpx;
 }
 .search-btn { border-radius: 999rpx; }
+.filter-row { display: flex; align-items: center; margin-top: 16rpx; }
+.filter-row .st-seg { flex: 1; min-width: 0; background: var(--fill); }
+.filter-row .st-seg .seg-item { padding: 8rpx 0; }
+.filter-row .rel-btn { margin-left: 16rpx; }
 .record.transferred { border-left: 8rpx solid #FF9F1C; }
 .record.pending { opacity: .7; }
 .r-top { display: flex; justify-content: space-between; margin-bottom: 8rpx; }
