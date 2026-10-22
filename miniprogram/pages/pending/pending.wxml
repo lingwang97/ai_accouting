@@ -9,6 +9,9 @@
       <text class="other-text">其他{{unit}}还有 {{otherCount}} 份待确认礼金</text>
       <text class="other-go">去切换 ›</text>
     </view>
+    <view class="other-tip" wx:if="{{hiddenCount > 0}}">
+      <text class="other-text">一次最多显示 100 笔，还有 {{hiddenCount}} 笔待确认，处理后会自动补上</text>
+    </view>
     <view class="seg" wx:if="{{canConfirm}}">
       <view class="seg-item {{mode === 'list' ? 'on' : ''}}" data-m="list" bindtap="onMode">列表批量</view>
       <view class="seg-item {{mode === 'card' ? 'on' : ''}}" data-m="card" bindtap="onMode">逐笔确认</view>

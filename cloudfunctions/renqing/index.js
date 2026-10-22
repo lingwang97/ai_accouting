@@ -85,7 +85,7 @@ const reminders = db.collection('reminders');
 async function remindList(openid) {
   await ensureCol('reminders');
   const [todo, done] = await Promise.all([
-    reminders.where({ ownerOpenid: openid, done: false }).orderBy('date', 'asc').limit(100).get(),
+    reminders.where({ ownerOpenid: openid, done: false }).orderBy('date', 'asc').limit(200).get(), // 与新建上限（200）一致
     reminders.where({ ownerOpenid: openid, done: true }).orderBy('date', 'desc').limit(20).get()
   ]);
   return ok({ list: todo.data, done: done.data });

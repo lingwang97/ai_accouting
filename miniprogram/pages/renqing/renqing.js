@@ -84,9 +84,27 @@ Page({
           outSum: fmt.money(res.sum),
           outTotal: res.total
         });
+        this._outPage = 2; // 下一页（上拉加载更多）
       }
     } catch (e) { /* toast 已提示 */ } finally {
       this.setData({ loading: false });
+    }
+  },
+
+  /** 送出的礼：上拉加载更多（每页 50 条） */
+  async onReachBottom() {
+    const d = this.data;
+    if (d.tab !== 'out' || d.loading || this._moreBusy || d.outList.length >= d.outTotal) return;
+    this._moreBusy = true;
+    try {
+      const res = await req.outList({ page: this._outPage || 2, pageSize: 50, keyword: d.keyword || undefined });
+      const start = this.data.outList.length;
+      const patch = { outTotal: res.total, outSum: fmt.money(res.sum) };
+      res.list.forEach((g, i) => { patch[`outList[${start + i}]`] = { ...g, amountStr: fmt.money(g.amount), typeLabel: scenes.label(g.eventType) }; });
+      this.setData(patch);
+      this._outPage = (this._outPage || 2) + 1;
+    } catch (e) { /* toast 已提示 */ } finally {
+      this._moreBusy = false;
     }
   },
 

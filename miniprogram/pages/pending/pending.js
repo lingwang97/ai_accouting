@@ -32,6 +32,7 @@ Page({
     canConfirm: true, // 没有「确认收礼」权限：只能查看列表
     loaded: false,
     bookName: '',     // 当前礼簿名：待确认只处理当前礼簿
+    hiddenCount: 0,   // 待确认超过单次显示上限（100 笔）时，未显示的笔数
     otherCount: 0,    // 其他礼簿的待确认份数（提示回工作台切换）
     unit: '礼簿'       // 机构模式称「场次」
   },
@@ -79,9 +80,10 @@ Page({
     if (this.data.busy) return false;
     if (!silent && this._poller) this._poller.kick(); // 用户操作后恢复轮询频率
     try {
-      const { list, stalled, bookName, otherCount } = await req.recordPending();
+      const { list, stalled, bookName, otherCount, count } = await req.recordPending();
+      const hiddenCount = Math.max(0, (count || 0) - list.length); // 超过单次上限 100 笔的部分
       // 轮询取回的内容与上次相同：不动界面（返回 false 让轮询放慢）
-      const sig = JSON.stringify([list.map(r => [r._id, r.status, r.amount, r.transferredAt]), (stalled || []).map(r => [r._id, r.status]), bookName, otherCount]);
+      const sig = JSON.stringify([list.map(r => [r._id, r.status, r.amount, r.transferredAt]), (stalled || []).map(r => [r._id, r.status]), bookName, otherCount, hiddenCount]);
       if (silent && sig === this._sig) return false;
       this._sig = sig;
       // 宾客没点「我已完成转账」的（含 24 小时内被自动取消的）：主家核对微信到账后可直接入簿
@@ -96,7 +98,7 @@ Page({
         .sort((a, b) => new Date(a.transferredAt || a.createdAt) - new Date(b.transferredAt || b.createdAt));
       this._list = items;
       // 轮询只做一次 setData
-      const patch = { ...this.derive(), loaded: true, bookName: bookName || '', otherCount: otherCount || 0 };
+      const patch = { ...this.derive(), loaded: true, bookName: bookName || '', otherCount: otherCount || 0, hiddenCount };
       if (!items.length) patch.selectMode = false;
       this.setData(patch);
       return true;

@@ -82,6 +82,7 @@
         <view class="muted">{{item.date}} · {{item.typeLabel}}<text wx:if="{{item.event}}"> · {{item.event}}</text></view>
       </view>
       <view class="muted center pad" wx:if="{{!loading && outList.length === 0}}">还没有送礼记录，点「记送礼」登记</view>
+      <view class="muted center pad" wx:if="{{outList.length > 0 && outList.length < outTotal}}">上拉加载更多</view>
     </block>
   </block>
 </view>
