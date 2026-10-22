@@ -1,5 +1,5 @@
 // 云函数 export — 慧礼记 礼簿导出 PDF / Excel / 传统礼簿 / 归档 / 备份 / 文件清理（文档 §6.7）
-// 一、导出：{ format: 'pdf'|'xlsx'|'book', startDay?: 'YYYY-MM-DD', endDay?: 'YYYY-MM-DD', bookId?: string, themeName?: string, keep?: boolean, pdfTheme?: string }
+// 一、导出：{ format: 'pdf'|'xlsx'|'book', startDay?: 'YYYY-MM-DD', endDay?: 'YYYY-MM-DD', bookId?: string, themeName?: string, keep?: boolean, pdfTheme?: string, pdfCustom?: {main,accent,font,pattern,mark,footer,title} }
 //    传统礼簿主题：pdfTheme 为预设 key（见 themes.js），传了则按礼簿保存到 books.pdfTheme；白事礼簿强制素灰
 //   - 传 bookId：校验礼簿归属，按礼簿导出；日期可选（同时传入则再按日期过滤，不传导出整本）
 //   - 不传 bookId：日期必填，可选 themeName（礼簿名）过滤；format='book'（传统礼簿）必须传 bookId
@@ -32,6 +32,12 @@ const _ = db.command;
 // 作为代码 require 一定存在。字体以 Buffer 传给 pdfkit（默认字体也用它，不读 pdfkit 内置 Helvetica.afm）
 let _fontBuf = null;
 const fontBuf = () => (_fontBuf = _fontBuf || Buffer.from(require('./font-data.js'), 'base64'));
+// 传统礼簿可选字体：宋体（思源宋体）、毛笔（马善政楷书），均 SIL OFL；体积大，只在用到时加载
+const _fontExtra = {};
+const FONT_MODULE = { serif: './font-serif.js', brush: './font-brush.js' };
+const fontOf = key => FONT_MODULE[key]
+  ? (_fontExtra[key] = _fontExtra[key] || Buffer.from(require(FONT_MODULE[key]), 'base64'))
+  : fontBuf();
 const MAX_ROWS = 10000; // 单次导出上限，超出时提示按日期分段导出（不静默截断）
 const QUERY_MAX = 1000; // 云函数端单次查询上限
 const BATCH = 50; // cloud.deleteFile 单次最多 50 个文件
@@ -112,15 +118,23 @@ exports.main = async (event) => {
 
     // 传统礼簿主题：传入则采用并（有礼簿管理权限时）记到礼簿；未传用礼簿已存的；白事在 resolve 中强制素灰
     let pdfThemeKey = book && book.pdfTheme && typeof book.pdfTheme === 'object' ? String(book.pdfTheme.key || '') : '';
+    let pdfCustom = book && book.pdfTheme && typeof book.pdfTheme === 'object' ? book.pdfTheme.custom : null;
     if (format === 'book' && book && event.pdfTheme !== undefined) {
       const k = String(event.pdfTheme || '');
-      if (k && !themes.isPresetKey(k)) return err('主题不存在');
+      let save = { key: k };
+      if (k === 'custom') {
+        const r = themes.sanitizeCustom(event.pdfCustom);
+        if (r.error) return err(r.error);
+        pdfCustom = r.value;
+        save = { key: k, custom: r.value };
+      } else if (k && !themes.isPresetKey(k)) return err('主题不存在');
       pdfThemeKey = k;
+      // 白事不保存（强制素灰）；保存自定义时同时带上，换回预设后自定义项也丢弃
       if (can(ctx, 'books') && book.type !== 'funeral') {
-        await db.collection('books').doc(book._id).update({ data: { pdfTheme: _.set({ key: k }) } });
+        await db.collection('books').doc(book._id).update({ data: { pdfTheme: _.set(save) } });
       }
     }
-    const meta = buildMeta(rows, { account, book, startDay, endDay, themeName, pdfThemeKey });
+    const meta = buildMeta(rows, { account, book, startDay, endDay, themeName, pdfThemeKey, pdfCustom });
 
     let buffer;
     stage = '生成文件';
@@ -271,7 +285,7 @@ async function fetchRows(openid, { bookId, startDay, endDay, themeName }) {
 }
 
 /** 汇总导出所需的元信息 */
-function buildMeta(rows, { account, book, startDay, endDay, themeName, pdfThemeKey }) {
+function buildMeta(rows, { account, book, startDay, endDay, themeName, pdfThemeKey, pdfCustom }) {
   // 礼簿类型：按礼簿取；未指定礼簿时，仅当全部记录都是白事才按白事处理
   let bookType = book ? book.type : '';
   if (!bookType) bookType = rows.length && rows.every(r => r.bookType === 'funeral') ? 'funeral' : 'other';
@@ -284,7 +298,7 @@ function buildMeta(rows, { account, book, startDay, endDay, themeName, pdfThemeK
     title: book ? book.name || '礼簿' : (account.accountName || '礼簿'),
     bookType, funeral,
     theme: funeral ? THEME.grey : THEME.red,
-    bt: themes.resolve(funeral, pdfThemeKey), // 传统礼簿主题
+    bt: themes.resolve(funeral, pdfThemeKey, pdfCustom), // 传统礼簿主题
     startDay, endDay, themeName,
     count: rows.length,
     sum: rows.reduce((s, r) => s + Math.round(Number(r.amount) * 100), 0) / 100,
@@ -502,15 +516,18 @@ BK.colW = (BK.right - BK.labelW - BK.left) / BK.perPage;
 function buildBook(rows, meta) {
   return new Promise((resolve, reject) => {
     // 边距全部置 0，所有文字用绝对坐标绘制，避免 pdfkit 自动换页
-    const doc = new (PDF())({ size: 'A4', layout: 'landscape', margin: 0, bufferPages: true, autoFirstPage: false, font: fontBuf() });
+    const bt = meta.bt;
+    const main = fontOf(bt.font);
+    const doc = new (PDF())({ size: 'A4', layout: 'landscape', margin: 0, bufferPages: true, autoFirstPage: false, font: main });
     const chunks = [];
     doc.on('data', c => chunks.push(c));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
-    doc.registerFont('cn', fontBuf());
+    doc.registerFont('cn', main);
+    // 毛笔字小字号不易辨认：序号、小写金额、备注、栏目名、页码等小字用黑体
+    doc.registerFont('sub', bt.font === 'brush' ? fontBuf() : main);
     doc.font('cn');
 
-    const bt = meta.bt;
     const pal = { line: bt.main, text: meta.funeral ? '#333333' : '#222222', sub: '#777777', accent: bt.main, mark: bt.mark };
 
     drawCover(doc, meta);
@@ -540,7 +557,7 @@ function buildBook(rows, meta) {
     pageGrids.forEach((g, i) => {
       doc.switchToPage(g.page);
       drawGrid(doc, pal, g.merge);
-      doc.fontSize(8).fillColor('#999').text(`— ${i + 1} / ${pageGrids.length} —`, 0, BK.gridBottom + 14,
+      doc.font('sub').fontSize(8).fillColor('#999').text(`— ${i + 1} / ${pageGrids.length} —`, 0, BK.gridBottom + 14,
         { width: BK.width, align: 'center', lineBreak: false });
     });
     doc.end();
@@ -563,9 +580,9 @@ function drawCover(doc, meta) {
     drawCorner(doc, sx > 0 ? 44 : W - 44, sy > 0 ? 44 : H - 44, sx, sy, bt.pattern, c.border));
 
   // 主标题：礼簿名，过长自动缩小字号
-  const main = meta.bookName || (meta.funeral ? '奠仪簿' : '礼簿');
+  const main = bt.title || meta.bookName || (meta.funeral ? '奠仪簿' : '礼簿'); // 自定义封面标题优先
   const suffix = meta.funeral ? '奠仪簿' : '礼簿';
-  const showSuffix = !!meta.bookName && !main.endsWith(suffix);
+  const showSuffix = !bt.title && !!meta.bookName && !main.endsWith(suffix);
   const maxW = W - 160;
   let size = 60;
   doc.font('cn').fontSize(size);
@@ -586,18 +603,18 @@ function drawCover(doc, meta) {
   if (meta.bookDate) info.push(`日期：${meta.bookDate}`);
   else if (meta.startDay && meta.endDay) info.push(`日期：${meta.startDay} 至 ${meta.endDay}`);
   if (meta.location) info.push(`地点：${meta.location}`);
-  doc.fontSize(16).fillColor(c.text);
+  doc.font('sub').fontSize(16).fillColor(c.text);
   info.forEach(t => { doc.text(t, 0, y, { width: W, align: 'center', lineBreak: false }); y += 26; });
 
-  if (bt.footer) doc.fontSize(20).fillColor(c.title).text(bt.footer.split('').join(' '), 0, H - 110, { width: W, align: 'center', lineBreak: false });
-  doc.fontSize(10).fillColor(c.text).text('慧礼记', 0, H - 70, { width: W, align: 'center', lineBreak: false });
+  if (bt.footer) doc.font('cn').fontSize(20).fillColor(c.title).text(bt.footer.split('').join(' '), 0, H - 110, { width: W, align: 'center', lineBreak: false });
+  doc.font('sub').fontSize(10).fillColor(c.text).text('慧礼记', 0, H - 70, { width: W, align: 'center', lineBreak: false });
 }
 
 /** 水印字：居中的极淡大字（mark 为空不画） */
 function drawMark(doc, mark, color, opacity) {
   if (!mark) return;
   doc.save();
-  doc.fillOpacity(opacity).fillColor(color).fontSize(300);
+  doc.font('cn').fillOpacity(opacity).fillColor(color).fontSize(300);
   doc.text(mark, 0, (BK.height - 300) / 2 - 20, { width: BK.width, align: 'center', lineBreak: false });
   doc.restore();
 }
@@ -630,9 +647,10 @@ function drawCorner(doc, x, y, sx, sy, pattern, color) {
 
 /** 内容页页眉 */
 function drawBookHeader(doc, meta, pal) {
-  const title = `${meta.title} · ${meta.funeral ? '奠仪簿' : '礼簿'}`;
-  doc.fontSize(14).fillColor(pal.accent).text(title, 0, 30, { width: BK.width, align: 'center', lineBreak: false });
-  doc.fontSize(9).fillColor(pal.sub);
+  const sep = meta.bt.font === 'brush' ? '　' : ' · '; // 毛笔字体没有间隔号字形
+  const title = `${meta.title}${sep}${meta.funeral ? '奠仪簿' : '礼簿'}`;
+  doc.font('cn').fontSize(14).fillColor(pal.accent).text(title, 0, 30, { width: BK.width, align: 'center', lineBreak: false });
+  doc.font('sub').fontSize(9).fillColor(pal.sub);
   if (meta.accountName) doc.text(`主家：${meta.accountName}`, BK.left, 38, { width: 200, lineBreak: false });
   const d = meta.bookDate || (meta.startDay ? `${meta.startDay} 至 ${meta.endDay}` : '');
   if (d) doc.text(d, BK.right - 200, 38, { width: 200, align: 'right', lineBreak: false });
@@ -656,7 +674,7 @@ function drawGrid(doc, pal, merge) {
   doc.lineWidth(0.6).moveTo(lx, top).lineTo(lx, bottom).stroke();
   doc.moveTo(lx, divider).lineTo(right, divider).stroke();
   doc.moveTo(lx, divider2).lineTo(right, divider2).stroke();
-  doc.fillColor(pal.accent);
+  doc.font('sub').fillColor(pal.accent);
   [['姓名', top, divider], ['金额', divider, divider2], ['礼品/备注', divider2, bottom]].forEach(([label, y1, y2]) => {
     const tokens = tokenize(label);
     const lh = 15;
@@ -710,13 +728,13 @@ function drawEntry(doc, r, i, slot, pal) {
   const pSize = 10, pLH = 11.5;
 
   // 序号
-  doc.fontSize(7).fillColor(pal.sub).text(String(i + 1), x, top + 4, { width: w, align: 'center', lineBreak: false });
+  doc.font('sub').fontSize(7).fillColor(pal.sub).text(String(i + 1), x, top + 4, { width: w, align: 'center', lineBreak: false });
 
   // 姓名栏：20 号字逐字竖排
   const nameSize = 20, nameLH = 23;
   const nameTop = top + 18, nameEnd = divider - 6;
   const maxNameChars = Math.floor((nameEnd - nameTop) / nameLH);
-  doc.fillColor(pal.text);
+  doc.font('cn').fillColor(pal.text);
   drawVertical(doc, clip(tokenize(r.payerName), maxNameChars), x, nameTop, w, nameSize, nameLH);
 
   // 金额栏：大写金额（字号随字数自适应）+ 底部小写金额
@@ -726,7 +744,7 @@ function drawEntry(doc, r, i, slot, pal) {
   const size = Math.max(6, Math.min(16, lh / 1.15));
   doc.fillColor(pal.text);
   drawVertical(doc, upper, x, divider + 8, w, size, lh);
-  doc.fontSize(8).fillColor(pal.sub).text(`￥${fmtAmount(r.amount)}`, x, divider2 - 13, { width: w, align: 'center', lineBreak: false });
+  doc.font('sub').fontSize(8).fillColor(pal.sub).text(`￥${fmtAmount(r.amount)}`, x, divider2 - 13, { width: w, align: 'center', lineBreak: false });
 
   // 礼品/备注栏：小字竖排，放不下时分两小列
   const remark = remarkOf(r);
@@ -737,7 +755,7 @@ function drawEntry(doc, r, i, slot, pal) {
 function drawSmall(doc, tokens, x, y, yEnd, w, pal, size, lh) {
   const perCol = Math.max(0, Math.floor((yEnd - y) / lh));
   const half = w / 2;
-  doc.fillColor(pal.sub);
+  doc.font('sub').fillColor(pal.sub);
   if (tokens.length <= perCol) {
     drawVertical(doc, tokens, x, y, w, size, lh);
   } else {
@@ -751,7 +769,7 @@ function drawSmall(doc, tokens, x, y, yEnd, w, pal, size, lh) {
 function drawSummary(doc, meta, slot, pal) {
   const w = BK.colW, top = BK.gridTop + 24, bottom = BK.gridBottom - 12;
   // 第一列：共 X 份
-  doc.fillColor(pal.accent);
+  doc.font('cn').fillColor(pal.accent);
   drawVertical(doc, tokenize(`共${meta.count}份`), slotX(slot), top, w, 20, 26);
   // 第二列：礼金合计 + 小写金额
   let y = drawVertical(doc, tokenize('礼金合计'), slotX(slot + 1), top, w, 20, 26);

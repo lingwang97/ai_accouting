@@ -32,6 +32,40 @@
         <view class="th-name">{{item.name}}</view>
         <view class="th-scene">{{item.scene}}</view>
       </view>
+      <view class="th {{themeKey === 'custom' ? 'on' : ''}}" data-k="custom" bindtap="onPickTheme">
+        <view class="th-sw th-custom">＋</view>
+        <view class="th-name">自定义</view>
+        <view class="th-scene">自选配色字体</view>
+      </view>
+    </view>
+
+    <view wx:if="{{!isFuneral && themeKey === 'custom'}}" class="cust">
+      <view class="cv" wx:if="{{cv}}" style="background:{{cv.bg}};border-color:{{cv.border}};color:{{cv.text}}">
+        <view class="cv-in" style="border-color:{{cv.border}}"></view>
+        <view class="cv-title" style="color:{{cv.border}}">{{cust.title || books[bookIdx].name}}</view>
+        <view class="cv-foot" style="color:{{cv.border}}" wx:if="{{cust.footer}}">{{cust.footer}}</view>
+      </view>
+      <view class="cust-lb">主色（封面底色、格线）</view>
+      <view class="swatches">
+        <view wx:for="{{mainColors}}" wx:key="*this" class="sw {{cust.main === item ? 'on' : ''}}" style="background:{{item}}" data-f="main" data-v="{{item}}" bindtap="onCust"></view>
+      </view>
+      <input class="input" value="{{cust.main}}" maxlength="7" placeholder="#RRGGBB" data-f="main" bindinput="onCustInput" />
+      <view class="cust-lb">辅色（边框、标题）</view>
+      <view class="swatches">
+        <view wx:for="{{accentColors}}" wx:key="*this" class="sw {{cust.accent === item ? 'on' : ''}}" style="background:{{item}}" data-f="accent" data-v="{{item}}" bindtap="onCust"></view>
+      </view>
+      <input class="input" value="{{cust.accent}}" maxlength="7" placeholder="#RRGGBB" data-f="accent" bindinput="onCustInput" />
+      <view wx:if="{{custErr}}" class="cust-err">{{custErr}}</view>
+      <view class="cust-lb">字体</view>
+      <view class="chips"><view wx:for="{{fonts}}" wx:key="k" class="chip {{cust.font === item.k ? 'on' : ''}}" data-f="font" data-v="{{item.k}}" bindtap="onCust">{{item.n}}</view></view>
+      <view class="cust-lb">角饰</view>
+      <view class="chips"><view wx:for="{{patterns}}" wx:key="k" class="chip {{cust.pattern === item.k ? 'on' : ''}}" data-f="pattern" data-v="{{item.k}}" bindtap="onCust">{{item.n}}</view></view>
+      <view class="cust-lb">水印字</view>
+      <view class="chips"><view wx:for="{{marks}}" wx:key="k" class="chip {{cust.mark === item.k ? 'on' : ''}}" data-f="mark" data-v="{{item.k}}" bindtap="onCust">{{item.n}}</view></view>
+      <view class="cust-lb">封面标题（不填用礼簿名）</view>
+      <input class="input" value="{{cust.title}}" maxlength="20" placeholder="如：李王联姻志喜" data-f="title" bindinput="onCustInput" />
+      <view class="cust-lb">封面落款（不填则没有）</view>
+      <input class="input" value="{{cust.footer}}" maxlength="8" placeholder="如：百年好合" data-f="footer" bindinput="onCustInput" />
     </view>
   </view>
 

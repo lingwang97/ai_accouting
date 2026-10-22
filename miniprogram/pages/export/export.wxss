@@ -23,3 +23,15 @@
 .th-name { font-size: 26rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .th.on .th-name { color: var(--primary); font-weight: 600; }
 .th-scene { font-size: 22rpx; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.th-custom { border-color: var(--border); color: var(--text-2); font-size: 40rpx; background: var(--fill); }
+.cust { margin-top: 20rpx; border-top: 2rpx solid var(--border); padding-top: 20rpx; }
+.cust-lb { font-size: 26rpx; color: var(--text-2); margin: 20rpx 0 10rpx; }
+.cust-err { color: #d93025; font-size: 24rpx; margin-top: 10rpx; }
+.swatches { display: flex; flex-wrap: wrap; margin: 0 -8rpx 12rpx; }
+.sw { width: 56rpx; height: 56rpx; border-radius: 50%; margin: 8rpx; border: 2rpx solid #ddd; box-sizing: border-box; }
+.sw.on { box-shadow: 0 0 0 4rpx var(--primary); }
+.cv { position: relative; height: 240rpx; border: 4rpx solid; border-radius: 8rpx; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
+.cv-in { position: absolute; left: 10rpx; right: 10rpx; top: 10rpx; bottom: 10rpx; border: 2rpx solid; }
+.cv-title { font-size: 40rpx; max-width: 80%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-foot { position: absolute; bottom: 24rpx; left: 0; right: 0; text-align: center; font-size: 24rpx; }
