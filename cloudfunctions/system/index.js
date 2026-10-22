@@ -5,6 +5,7 @@
 //   adminSetPlan 管理员：给某位主家开通 / 延期 / 取消套餐（以后接支付回调时由支付流程调用同一逻辑）
 //   ads          任何人：广告位配置（前端据此决定是否展示，宾客也会调用）
 //   adminSetAds  管理员：保存广告位配置
+//   adminPreflight / adminPreflightFix 管理员：上线前检查（密钥来源、集合、WX_APPSECRET）与建缺失集合
 //   adminIndexes 管理员：一键创建数据库索引（调用云开发 HTTP API updateIndex，需在本函数环境变量配置 WX_APPSECRET）
 const cloud = require('wx-server-sdk');
 const https = require('https');
@@ -28,6 +29,8 @@ exports.main = async (event) => {
       case 'adminSetPlan': return await guard(OPENID, () => setPlan(event.ownerOpenid, event.plan, event.days, 'admin'));
       case 'adminFindHosts': return await guard(OPENID, () => findHosts(event.keyword));
       case 'adminIndexes': return await guard(OPENID, () => ensureIndexes());
+      case 'adminPreflight': return await guard(OPENID, () => preflight(false));
+      case 'adminPreflightFix': return await guard(OPENID, () => preflight(true));
       // 数据清除：按账户（预览 / 备份 / 执行）、按礼簿、无主数据；操作日志
       case 'adminPurgePreview': return await guard(OPENID, () => purgePreview(OPENID, String(event.ownerOpenid || ''), event.guestRecords === true));
       case 'adminBackup': return await guard(OPENID, () => adminBackup(OPENID, String(event.ownerOpenid || '')));
@@ -440,6 +443,46 @@ async function adminLogs() {
   } catch (e) {
     return ok({ list: [] });
   }
+}
+
+// —— 上线前检查 ——
+// 必需集合（与 init 云函数的 COLLECTIONS 一致，另加 sys_config：往来人标识密钥，不属于任何用户，注销 / 清除测试数据都不会动它）
+const REQUIRED_COLS = ['users', 'accounts', 'records', 'print_templates', 'books', 'gifts_out', 'exports', 'members', 'invites', 'settings', 'subscriptions', 'reminders', 'person_alias', 'admin_logs', 'book_codes', 'trash_books', 'trash_records', 'rate_limits', 'sys_config'];
+
+/**
+ * 上线前检查：只返回状态，不返回任何密钥内容
+ * fix=true 时顺带创建缺失集合（索引请用「一键创建索引」）；集合权限云函数查不到，由前端列为手动确认项
+ */
+async function preflight(fix) {
+  const cols = await Promise.all(REQUIRED_COLS.map(async name => {
+    const has = async () => { try { await db.collection(name).count(); return true; } catch (e) { return false; } };
+    let exists = await has();
+    let created = false;
+    if (!exists && fix) {
+      try { await db.createCollection(name); } catch (e) { /* 并发 / 已存在 */ }
+      exists = await has();
+      created = exists;
+    }
+    return { name, exists, created };
+  }));
+  // 密钥：只读来源状态与创建时间（renqing 首次使用时写入），不读 secret 字段
+  let key = { generated: false, createdAt: null, source: '', at: null };
+  try {
+    const d = (await db.collection('sys_config').doc('person_key').field({ createdAt: true }).get()).data;
+    if (d) { key.generated = true; key.createdAt = d.createdAt || null; }
+  } catch (e) { /* 未生成 */ }
+  try {
+    const s = (await db.collection('sys_config').doc('person_key_state').get()).data;
+    if (s) { key.source = String(s.source || ''); key.at = s.at || null; }
+  } catch (e) { /* 无 */ }
+  const missing = cols.filter(c => !c.exists).map(c => c.name);
+  if (fix) await log('admin', 'preflightFix', { name: '上线前检查修复', created: cols.filter(c => c.created).map(c => c.name), missing });
+  return ok({
+    key, // source: env 环境变量 / db 自动生成 / default 旧默认值（数据库读不到时兜底）/ 空 尚未被使用
+    cols, missing,
+    hasAppSecret: !!process.env.WX_APPSECRET, // 只返回是否已配置
+    permCols: REQUIRED_COLS
+  });
 }
 
 // —— 数据库索引 ——

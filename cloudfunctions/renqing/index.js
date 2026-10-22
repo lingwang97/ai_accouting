@@ -14,26 +14,9 @@ const { MAX_AMOUNT } = require('./limits.js'); // 单笔金额上限（tools/clo
  * 往来人标识 o:<微信身份>:<姓名> 里含宾客（或主家）的 openid，不直接交给前端：
  * 出参里的 o: 标识确定性加密为 h:<密文>:<姓名>，入参再解密还原，云函数内部和数据库仍用 o: 标识
  */
-// 密钥可由云函数环境变量 PERSON_KEY_SECRET 覆盖；未配置沿用内置默认值（已有数据的往来人标识依赖它，设置后旧标识将无法解密，勿随意设置）
-const KEY_SECRET = crypto.createHash('sha256').update(process.env.PERSON_KEY_SECRET || 'huilj.person-key.v1').digest();
-const KEY_IV = Buffer.alloc(16, 0); // 固定 IV：同一个人每次得到同一个标识，前端可用来比较
-function hideKey(k) {
-  const m = /^o:([\w-]{1,64}):(.*)$/.exec(k);
-  if (!m) return k;
-  const c = crypto.createCipheriv('aes-256-cbc', KEY_SECRET, KEY_IV);
-  const enc = Buffer.concat([c.update(m[1], 'utf8'), c.final()]).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  return `h:${enc}:${m[2]}`;
-}
-function showKey(k) {
-  const m = /^h:([\w-]{1,128}):(.*)$/.exec(k);
-  if (!m) return k;
-  try {
-    const d = crypto.createDecipheriv('aes-256-cbc', KEY_SECRET, KEY_IV);
-    const b64 = m[1].replace(/-/g, '+').replace(/_/g, '/');
-    const oid = Buffer.concat([d.update(Buffer.from(b64, 'base64')), d.final()]).toString('utf8');
-    return /^[\w-]{1,64}$/.test(oid) ? `o:${oid}:${m[2]}` : '';
-  } catch (e) { return ''; }
-}
+// 密钥：环境变量 PERSON_KEY_SECRET > 集合 sys_config/person_key（首次使用自动生成）> 旧默认值（仅数据库读不到时兜底），见 personkey.js
+const PK = require('./personkey.js').create(db);
+
 /** 递归替换对象里的标识：出参 hideKey，入参 showKey */
 function mapKeys(v, fn) {
   if (typeof v === 'string') return fn(v);
@@ -64,8 +47,9 @@ exports.main = async (event) => {
   if (!OPENID) return err('未获取到用户身份');
   try {
     await ensureCol('gifts_out');
-    event = mapKeys(event, showKey); // 前端传回的 h: 标识还原为 o:
-    return mapKeys(await route(OPENID, event), hideKey); // 返回前把 o: 标识加密
+    const key = await PK.getKey();
+    event = mapKeys(event, k => PK.showKeyWith(key, k)); // 前端传回的 h: 标识还原为 o:
+    return mapKeys(await route(OPENID, event), k => PK.hideKeyWith(key, k)); // 返回前把 o: 标识加密
   } catch (e) {
     console.error('renqing', event.action, e);
     return err('人情往来操作失败，请稍后重试');

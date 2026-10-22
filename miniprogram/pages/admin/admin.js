@@ -3,6 +3,7 @@ const req = require('../../utils/request.js');
 const openfile = require('../../utils/openfile.js');
 const fmt = require('../../utils/format.js');
 const theme = require('../../utils/theme.js');
+const config = require('../../config.js');
 
 const INTERVALS = [5, 10, 15, 30];
 const FUNC_LABEL = {
@@ -34,6 +35,7 @@ Page({
     adSlots: [],        // [{ key, label, on }]
     indexResults: [],   // [{ col, name, ok, existed, msg }]
     indexSummary: '',
+    pf: null, pfLoading: false, // 上线前检查结果
     themeStyle: ''
   },
 
@@ -102,6 +104,28 @@ Page({
       require('../../utils/ads.js').reset();
       wx.showToast({ title: '已保存（各端 10 分钟内生效）', icon: 'none' });
     } catch (e) { /* toast 已提示 */ }
+  },
+
+  // —— 上线前检查：密钥来源、必需集合、WX_APPSECRET、版本号；fix=true 时建缺失集合 ——
+  async onPreflight(e) {
+    if (this.data.pfLoading) return;
+    const fix = !!(e && e.currentTarget && e.currentTarget.dataset.fix);
+    this.setData({ pfLoading: true });
+    try {
+      const r = await req.adminPreflight(fix);
+      const SRC = { env: '环境变量 PERSON_KEY_SECRET', db: '已自动生成并保存在数据库', default: '内置默认值（数据库读取失败时的兜底，请排查）', '': '尚未使用（人情往来页首次打开时自动生成）' };
+      const keyText = (SRC[r.key.source] !== undefined ? SRC[r.key.source] : r.key.source) + (r.key.createdAt ? '，创建于 ' + fmt.day(r.key.createdAt) : '');
+      this.setData({
+        pf: {
+          keyText, keyOk: r.key.source === 'env' || r.key.source === 'db' || (!r.key.source && !r.key.generated),
+          missing: r.missing, colsOk: !r.missing.length, total: r.cols.length,
+          appSecret: r.hasAppSecret, version: config.VERSION, permCols: r.permCols.join('、')
+        }
+      });
+      if (fix) wx.showToast({ title: r.missing.length ? '仍有集合缺失' : '集合已齐全', icon: 'none' });
+    } catch (err) { /* toast 已提示 */ } finally {
+      this.setData({ pfLoading: false });
+    }
   },
 
   // —— 数据库索引：一键创建（已存在的跳过） ——

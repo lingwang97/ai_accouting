@@ -60,6 +60,20 @@
       <button class="btn-primary save" bindtap="onSaveAds">保存广告设置</button>
     </view>
 
+    <view class="section-title">上线前检查</view>
+    <view class="card">
+      <view class="muted small tip">检查往来人标识密钥、必需集合和 AppSecret 配置。缺失的集合可一键创建；索引请用下方「数据库索引」。</view>
+      <button class="btn-primary save" loading="{{pfLoading}}" bindtap="onPreflight">检查</button>
+      <block wx:if="{{pf}}">
+        <view class="idx-row"><text>往来人标识密钥</text><text class="{{pf.keyOk ? 'ok' : 'bad'}}">{{pf.keyText}}</text></view>
+        <view class="idx-row"><text>必需集合（{{pf.total}} 个）</text><text class="{{pf.colsOk ? 'ok' : 'bad'}}">{{pf.colsOk ? '已齐全' : '缺 ' + pf.missing.length + ' 个：' + pf.missing.join('、')}}</text></view>
+        <view class="idx-row"><text>WX_APPSECRET（system）</text><text class="{{pf.appSecret ? 'ok' : 'bad'}}">{{pf.appSecret ? '已配置' : '未配置，无法建索引'}}</text></view>
+        <view class="idx-row"><text>小程序版本</text><text>{{pf.version}}</text></view>
+        <button wx:if="{{!pf.colsOk}}" class="btn-primary save" loading="{{pfLoading}}" data-fix="1" bindtap="onPreflight">一键创建缺失集合</button>
+        <view class="muted small tip">手动确认（云函数查不到集合权限）：在云开发控制台把下列集合都设为「所有用户不可读写」，其中 sys_config 存放密钥，尤其不能放开：{{pf.permCols}}。</view>
+      </block>
+    </view>
+
     <view class="section-title">数据库索引</view>
     <view class="card">
       <view class="muted small tip">一键创建查询索引（已存在的会跳过）。首次使用需在云函数 system 的环境变量添加 WX_APPSECRET。</view>
