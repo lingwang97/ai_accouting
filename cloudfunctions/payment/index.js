@@ -151,7 +151,8 @@ async function create(openid, event) {
     payDay,
     createdAt: now
   };
-  const { ids, batchId } = await addItems(base, items);
+  // 幂等：宾客端带 reqId 时，重复提交（弱网重试、连点）只记一条；键含主家与付款人。旧前端不传 reqId 时保持原行为
+  const { ids, batchId } = await addItems(base, items, reqKeyOf(account.ownerOpenid + ':' + openid, event.reqId));
   const record = {
     _id: ids[0], aid: accountId, batchId, payMethod, status: base.status, payDay, createdAt: now,
     payerName: batchName(items), amount: totalFen / 100,
@@ -228,6 +229,10 @@ async function sameNameOthers(ownerOpenid, openid, people) {
   return [...new Set(out)];
 }
 
+// 控制字符会被打印机当作指令（ESC/GS 等），宾客输入入库前一律剔除
+const CTRL_RE = /[ -]/g;
+function cleanText(v, n) { return String(v || '').replace(CTRL_RE, '').trim().slice(0, n); }
+
 /**
  * 校验随礼人名单：1～BATCH_PEOPLE 人，姓名必填且不重复，每人金额 > 0
  * mixed=true（批次「转账+现金」）：每人各自的支付方式 p.method（wechat / cash）
@@ -236,13 +241,13 @@ async function sameNameOthers(ownerOpenid, openid, people) {
 function parseItems(raw, mixed, desk) {
   if (raw.length > BATCH_PEOPLE) return { error: `批次录入最多 ${BATCH_PEOPLE} 人` };
   const items = raw.map(p => ({
-    payerName: String((p && p.name) || '').trim().slice(0, 20),
+    payerName: cleanText(p && p.name, 20),
     amount: Math.round(Number(p && p.amount) * 100) / 100,
     relation: RELATIONS.includes(p && p.relation) ? p.relation : '',
-    remark: String((p && p.remark) || '').trim().slice(0, 50),
+    remark: cleanText(p && p.remark, 50),
     ...(mixed ? { payMethod: p && p.method === 'cash' ? 'cash' : 'wechat' } : {}),
     // 同名区分：区分备注（宾客扫码登记时同名会被要求填写；礼台记账时选择），指定为已有的某一位只限礼台记账
-    ...(p && p.tag ? { nameTag: String(p.tag).trim().replace(/[#:\s]/g, '').slice(0, 12) } : {}),
+    ...(p && p.tag ? { nameTag: String(p.tag).replace(CTRL_RE, '').trim().replace(/[#:\s]/g, '').slice(0, 12) } : {}),
 
   }));
   for (const it of items) {

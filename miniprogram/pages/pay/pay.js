@@ -171,7 +171,14 @@ Page({
     try {
       // 转账+现金只填了一位：按这一位的方式提交，不算混合
       const pm = this.data.payMethod === 'mixed' && payload.items && payload.items.length === 1 ? payload.items[0].method : this.data.payMethod;
-      let res = await req.payCreate({ aid: this.data.aid, ...payload, payMethod: pm });
+      // 幂等键：弱网重试、连点都带同一个 reqId，服务端只记一条；表单内容变了换新的，提交成功后换新的
+      const sig = JSON.stringify([payload, pm]);
+      if (!this._reqId || this._reqSig !== sig) {
+        this._reqId = 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+        this._reqSig = sig;
+      }
+      const reqId = this._reqId;
+      let res = await req.payCreate({ aid: this.data.aid, ...payload, payMethod: pm, reqId });
       // 同名提醒：主家礼簿里已有别的宾客叫这个名字，请填区分信息后重新提交（取消则不提交）
       if (res.needTag) {
         for (const name of res.needTag) {
@@ -180,10 +187,11 @@ Page({
           if (payload.items) payload.items.forEach(x => { if (x.name === name) x.tag = tag; });
           else payload.tag = tag;
         }
-        res = await req.payCreate({ aid: this.data.aid, ...payload, payMethod: pm });
+        res = await req.payCreate({ aid: this.data.aid, ...payload, payMethod: pm, reqId });
         if (res.needTag) return wx.showToast({ title: '仍有同名，请修改姓名或区分信息', icon: 'none' });
       }
       const { record } = res;
+      this._reqId = ''; // 已创建，下一次提交换新 reqId
       // 现金：不经收款码与转账，直接等待主家确认收到
       if (record.payMethod === 'cash') {
         this.setData({ record: viewRecord(record), step: 'waiting' });

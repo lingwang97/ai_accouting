@@ -499,7 +499,7 @@ async function nameCheck(ctx, names) {
 /** 给宾客设区分备注：扫码宾客按微信身份改主家全部同名记录，礼台登记的只改这一条 */
 async function setNameTag(ctx, rid, tag) {
   if (!/^[a-zA-Z0-9_-]{1,64}$/.test(String(rid || ''))) return err('参数错误');
-  const t = String(tag || '').trim().replace(/[#:\s]/g, '').slice(0, 12);
+  const t = String(tag || '').replace(/[ -]/g, '').trim().replace(/[#:\s]/g, '').slice(0, 12);
   const rec = (await records.where({ _id: rid, ownerOpenid: ctx.ownerOpenid }).limit(1).get()).data[0];
   if (!rec || !canBook(ctx, rec.bookId)) return err('记录不存在');
   // 主家 / 记账人设的区分备注（nameTagBy=host）：只在主家这边显示，不印在给宾客的小票、回执上

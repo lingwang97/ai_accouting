@@ -21,7 +21,8 @@ Page({
     payCodePreview: '', // 本次新选的图片
     payCodeFileID: '',
     payCodeChanged: false,
-    uploading: false
+    uploading: false,
+    loadFailed: false // 编辑时加载失败：禁止保存，避免被当成新建
   },
 
   onShow() {
@@ -29,6 +30,7 @@ Page({
   },
 
   async onLoad(options) {
+    this._editId = options.id || '';
     const acc = getApp().globalData.account;
     this.setData({ orgMode: !!(acc && acc.orgMode) });
     if (!options.id) {
@@ -38,9 +40,13 @@ Page({
     try {
       const { list } = await req.bookList();
       const b = list.find(x => x._id === options.id);
-      if (b) this.setData({ id: b._id, name: b.name, type: b.type, date: b.date, location: b.location || '', origType: b.type, hostName: b.hostName || '', hasPayCode: !!b.hasPayCode });
-    } catch (e) { /* toast 已提示 */ }
+      if (!b) throw new Error('礼簿不存在');
+      this.setData({ loadFailed: false, id: b._id, name: b.name, type: b.type, date: b.date, location: b.location || '', origType: b.type, hostName: b.hostName || '', hasPayCode: !!b.hasPayCode });
+    } catch (e) {
+      this.setData({ loadFailed: true });
+    }
   },
+  onRetryLoad() { this.onLoad({ id: this._editId }); },
 
   onName(e) { this.setData({ name: e.detail.value }); },
   onLocation(e) { this.setData({ location: e.detail.value }); },
@@ -95,7 +101,7 @@ Page({
   },
 
   async onSave() {
-    if (this.data.saving) return;
+    if (this.data.saving || this.data.loadFailed) return;
     const name = (this.data.name || '').trim();
     if (!name) return wx.showToast({ title: '请填写礼簿名称', icon: 'none' });
     if (this.data.uploading) return wx.showToast({ title: '收款码上传中，请稍候', icon: 'none' });

@@ -229,6 +229,7 @@ async function save(openid, account, input, ctx, caller) {
   } else if (b.payCodeFileID !== undefined && ctx.role === 'owner' && old && old.pendingPayCode) {
     b.pendingPayCode = _.remove(); // 主家自己清除 / 保留原码：之前待确认的作废
   }
+  if (b.payCodeFileID === '' && ctx.role !== 'owner') delete b.payCodeFileID; // 记账人不能清空本场收款码，保持原值
   if (pendingCode) {
     await accounts.doc(account._id).update({ data: { payCodeCheck: true, payCodeBy: b.pendingPayCode.by } });
   }
