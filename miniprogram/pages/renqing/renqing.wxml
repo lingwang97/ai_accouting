@@ -5,18 +5,11 @@
   </view>
 
   <block wx:else>
-    <!-- 亲友办事提醒 -->
-    <view class="card remind">
-      <view class="rm-head">
-        <text class="rm-title">亲友办事提醒<text class="muted" wx:if="{{reminds.length}}">（{{reminds.length}}）</text></text>
-        <text class="link" bindtap="onAddRemind">＋ 加提醒</text>
-      </view>
-      <view class="rm-row {{item.hot ? 'hot' : ''}} {{item.past ? 'past' : ''}}" wx:for="{{reminds}}" wx:key="_id" wx:if="{{remindAll || index < 3}}" data-idx="{{index}}" bindtap="onRemind">
-        <text class="rm-name">{{item.name}} · {{item.event || item.typeLabel}}</text>
-        <text class="rm-date">{{item.dateStr}} · {{item.leftStr}}<text wx:if="{{item.remindStr && !item.past}}"> · {{item.remindStr}} 提醒</text></text>
-      </view>
-      <view class="rm-more" wx:if="{{reminds.length > 3}}" bindtap="onRemindAll">{{remindAll ? '收起' : '查看全部 ' + reminds.length + ' 条'}}</view>
-      <view class="muted small" wx:if="{{!reminds.length}}">记下亲友办事的日期，到时提醒你回礼</view>
+    <!-- 亲友办事提醒：一行提示条（无提醒时不显示），点开底部弹层；只在「收礼往来」显示 -->
+    <view class="tip-bar" wx:if="{{tab === 'people' && reminds.length}}" bindtap="onOpenRemind">
+      <image class="tip-icon" src="/assets/icons/bell-r.svg" />
+      <text class="tip-text ell {{hotCount ? 'hot' : ''}}">{{remindTip}}</text>
+      <text class="tip-go">查看 ›</text>
     </view>
 
     <view class="seg">
@@ -28,6 +21,10 @@
     <view class="search-row">
       <input class="search" placeholder="{{tab === 'people' ? '输入姓名查往来' : (tab === 'receipts' ? '搜索主家 / 礼簿' : '搜索对方姓名')}}" value="{{keyword}}"
              bindinput="onKeyword" bindconfirm="onSearch" confirm-type="search" />
+      <view class="bell-btn" hover-class="btn-hover" wx:if="{{tab === 'people'}}" bindtap="onOpenRemind">
+        <image class="bell-img" src="/assets/icons/bell-r.svg" />
+        <view class="bell-dot" wx:if="{{hotCount}}"></view>
+      </view>
       <view class="btn btn-primary add-btn" hover-class="btn-hover" wx:if="{{tab !== 'receipts'}}" bindtap="onAddGift">＋ 记送礼</view>
     </view>
 
@@ -85,4 +82,24 @@
       <view class="muted center pad" wx:if="{{outList.length > 0 && outList.length < outTotal}}">上拉加载更多</view>
     </block>
   </block>
+
+  <!-- 亲友办事提醒弹层 -->
+  <view class="mask" wx:if="{{remindShow}}" catchtouchmove="noop" bindtap="onCloseRemind">
+    <view class="sheet" catchtap="noop">
+      <view class="rm-head">
+        <text class="sheet-title">亲友办事提醒<text class="muted" wx:if="{{reminds.length}}">（{{reminds.length}}）</text></text>
+        <text class="link" bindtap="onAddRemind">＋ 加提醒</text>
+      </view>
+      <scroll-view scroll-y class="rm-scroll" wx:if="{{reminds.length}}">
+        <view class="rm-row {{item.hot ? 'hot' : ''}} {{item.past ? 'past' : ''}}" wx:for="{{reminds}}" wx:key="_id" data-idx="{{index}}" bindtap="onRemind">
+          <text class="rm-name">{{item.name}} · {{item.event || item.typeLabel}}</text>
+          <text class="rm-date">{{item.dateStr}} · {{item.leftStr}}<text wx:if="{{item.remindStr && !item.past}}"> · {{item.remindStr}} 提醒</text></text>
+        </view>
+      </scroll-view>
+      <view class="rm-empty" wx:else>
+        <view class="muted">记下亲友办事的日期，到时提醒你回礼</view>
+        <view class="btn btn-primary rm-add" hover-class="btn-hover" bindtap="onAddRemind">＋ 加提醒</view>
+      </view>
+    </view>
+  </view>
 </view>

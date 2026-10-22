@@ -14,7 +14,9 @@ Page({
     inTotal: 0,
     morePeople: 0,     // 名单只显示前 300 人时，其余人数
     reminds: [],       // 亲友办事提醒（未处理，最近的在前）
-    remindAll: false,  // 展开全部提醒
+    remindShow: false, // 提醒弹层
+    hotCount: 0,       // 已到提醒时间 / 已过期未处理的条数
+    remindTip: '',     // 提示条文案
     receipts: [],      // 随礼回执
     shownReceipts: [],
     keyword: '',
@@ -31,7 +33,7 @@ Page({
     // 已退出登录：立即清空上一个账户的往来（不等登录状态恢复，也不再查询身份）
     if (getApp().isLoggedOut()) {
       getApp().refreshTabBar();
-      return this.setData({ loading: false, loggedIn: false, people: [], shownPeople: [], outList: [], receipts: [], shownReceipts: [], reminds: [] });
+      return this.setData({ loading: false, loggedIn: false, people: [], shownPeople: [], outList: [], receipts: [], shownReceipts: [], reminds: [], hotCount: 0, remindTip: '', remindShow: false });
     }
     // 记账人身份不显示「往来」（切换身份后可能停留在本页）：回到工作台
     if ((await getApp().ensureRole()) === 'clerk') return wx.switchTab({ url: '/pages/index/index' });
@@ -49,7 +51,7 @@ Page({
   async load() {
     await getApp().loginReady;
     if (!getApp().globalData.user) {
-      return this.setData({ loading: false, loggedIn: false, people: [], shownPeople: [], outList: [], receipts: [], shownReceipts: [], reminds: [] });
+      return this.setData({ loading: false, loggedIn: false, people: [], shownPeople: [], outList: [], receipts: [], shownReceipts: [], reminds: [], hotCount: 0, remindTip: '', remindShow: false });
     }
     this.setData({ loading: true, loggedIn: true });
     try {
@@ -165,8 +167,7 @@ Page({
       const { list } = await req.remindList();
       const today = fmt.day(new Date());
       const dayDiff = d => Math.round((new Date(d + 'T00:00:00') - new Date(today + 'T00:00:00')) / 86400000);
-      this.setData({
-        reminds: list.map(r => {
+      const reminds = list.map(r => {
           const n = dayDiff(r.date);
           return {
             ...r,
@@ -178,12 +179,21 @@ Page({
             hot: n >= 0 && Date.now() >= (r.remindAt ? new Date(r.remindAt).getTime() : new Date(`${r.notifyDay || r.date}T09:00:00`).getTime()), // 已到提醒时间
             past: n < 0
           };
-        })
+        });
+      // 已到提醒时间或已过期未处理的都算「待回礼」；否则显示最近一条
+      const hotCount = reminds.filter(r => r.hot || r.past).length;
+      const f = reminds[0];
+      this.setData({
+        reminds, hotCount,
+        remindTip: hotCount ? `${hotCount} 条待回礼` : (f ? `${f.name} · ${f.event || f.typeLabel} · ${f.leftStr}` : '')
       });
     } catch (e) { /* 静默 */ }
   },
-  onRemindAll() { this.setData({ remindAll: !this.data.remindAll }); },
-  onAddRemind() { wx.navigateTo({ url: '/pages/remind/remind' }); },
+  noop() {},
+  onOpenRemind() { this.setData({ remindShow: true }); },
+  onCloseRemind() { this.setData({ remindShow: false }); },
+  // 跳走前先关弹层；回来时 onShow 因写操作（dataDirtyAt）会重新拉提醒
+  onAddRemind() { this.setData({ remindShow: false }); wx.navigateTo({ url: '/pages/remind/remind' }); },
   onRemind(e) {
     const r = this.data.reminds[e.currentTarget.dataset.idx];
     if (!r) return;
@@ -193,6 +203,7 @@ Page({
         try {
           if (res.tapIndex === 0) {
             // 带上提醒 id：送礼记录保存成功后才标记已处理，中途取消不会丢提醒
+            this.setData({ remindShow: false });
             wx.navigateTo({
               url: `/pages/giftedit/giftedit?remindId=${encodeURIComponent(r._id)}&toName=${encodeURIComponent(r.name)}&toKey=${encodeURIComponent(r.personKey || '')}&eventType=${r.eventType}&event=${encodeURIComponent(r.event || '')}`
             });
@@ -202,6 +213,7 @@ Page({
             wx.showToast({ title: '已处理', icon: 'success' });
           } else if (res.tapIndex === 2) {
             getApp().globalData.editRemind = r;
+            this.setData({ remindShow: false });
             return wx.navigateTo({ url: '/pages/remind/remind?edit=1' });
           } else {
             await req.remindDelete(r._id);
