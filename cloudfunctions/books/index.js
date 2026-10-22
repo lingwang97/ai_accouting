@@ -105,6 +105,8 @@ async function list(openid, account, ctx) {
       pdfTheme: (b.pdfTheme && b.pdfTheme.key) || '', // 传统礼簿 PDF 主题（空为默认红金）
       pdfCustom: (b.pdfTheme && b.pdfTheme.key === 'custom' && b.pdfTheme.custom) || null,
       pdfBase: (b.pdfTheme && b.pdfTheme.base) || '', // 自定义基于哪个预设修改（仅记录）
+      pdfBack: (b.pdfTheme && b.pdfTheme.back) || null, // 传统礼簿尾页设置
+      pdfBind: (b.pdfTheme && b.pdfTheme.bind) || '',  // 装订：none | single | double（空为默认不留边）
       hostName: b.hostName || '',             // 机构版：本场主家称呼
       hasPayCode: !!b.payCodeFileID,          // 机构版：本场单独设置了收款码
       pendingPayCode: !!b.pendingPayCode,     // 记账人提交的本场收款码待主家确认

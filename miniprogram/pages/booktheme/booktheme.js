@@ -19,6 +19,10 @@ Page({
     fun: Object.assign({}, pt.DEFAULT_FUNERAL),
     pv: null,                // 封面预览 { bg, border, text, title, footer, mark }
     custErr: '',
+    back: Object.assign({}, pt.DEFAULT_BACK), // 尾页设置
+    bind: 'none',                              // 装订：none | single | double
+    binds: pt.BINDS,
+    bindTip: pt.BIND_TIPS.none,
     exporting: false,
     presets: pt.LIST,
     fonts: pt.FONTS, patterns: pt.PATTERNS, marks: pt.MARKS,
@@ -49,6 +53,9 @@ Page({
         canSave: perm.can('books'),
         themeKey: isFuneral ? 'custom' : (book.pdfTheme || pt.DEFAULT_KEY),
         base: book.pdfBase || '',
+        back: Object.assign({}, pt.DEFAULT_BACK, book.pdfBack || {}),
+        bind: book.pdfBind || 'none',
+        bindTip: pt.BIND_TIPS[book.pdfBind || 'none'],
         cust: Object.assign({}, pt.DEFAULT_CUSTOM, isFuneral ? {} : (saved || {})),
         fun: Object.assign({}, pt.DEFAULT_FUNERAL, isFuneral && saved ? saved : {})
       });
@@ -119,11 +126,26 @@ Page({
     this.refresh();
   },
 
+  onBackSwitch(e) {
+    this.setData({ ['back.' + e.currentTarget.dataset.f]: !!e.detail.value });
+  },
+
+  onBackFooter(e) { this.setData({ 'back.footer': e.currentTarget.dataset.v }); },
+
+  onBackInput(e) {
+    this.setData({ 'back.footer': String(e.detail.value || '').replace(/[\u0000-\u001f\u007f]/g, '') });
+  },
+
+  onBind(e) {
+    const k = e.currentTarget.dataset.k;
+    this.setData({ bind: k, bindTip: pt.BIND_TIPS[k] });
+  },
+
   /** 确认导出：校验 → 云端保存主题（有权限时）并生成 → 下载打开 */
   async onConfirm() {
     const d = this.data;
     if (d.exporting || !d.book) return;
-    const params = { format: 'book', bookId: d.id };
+    const params = { format: 'book', bookId: d.id, pdfBack: d.back, pdfBind: d.bind };
     if (d.isFuneral) {
       params.pdfTheme = 'custom';
       params.pdfCustom = d.fun;

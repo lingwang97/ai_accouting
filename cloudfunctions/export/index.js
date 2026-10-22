@@ -1,5 +1,5 @@
 // 云函数 export — 慧礼记 礼簿导出 PDF / Excel / 传统礼簿 / 归档 / 备份 / 文件清理（文档 §6.7）
-// 一、导出：{ format: 'pdf'|'xlsx'|'book', startDay?: 'YYYY-MM-DD', endDay?: 'YYYY-MM-DD', bookId?: string, themeName?: string, keep?: boolean, pdfTheme?: string, pdfCustom?: {main,accent,font,pattern,mark,footer,title,cover}, pdfBase?: string }
+// 一、导出：{ format: 'pdf'|'xlsx'|'book', startDay?: 'YYYY-MM-DD', endDay?: 'YYYY-MM-DD', bookId?: string, themeName?: string, keep?: boolean, pdfTheme?: string, pdfCustom?: {main,accent,font,pattern,mark,footer,title,cover}, pdfBase?: string, pdfBack?: {on,footer,host,date,sum,sign,brand}, pdfBind?: 'none'|'single'|'double' }
 //    传统礼簿主题：pdfTheme 为预设 key（见 themes.js），传了则按礼簿保存到 books.pdfTheme；白事礼簿强制素灰
 //   - 传 bookId：校验礼簿归属，按礼簿导出；日期可选（同时传入则再按日期过滤，不传导出整本）
 //   - 不传 bookId：日期必填，可选 themeName（礼簿名）过滤；format='book'（传统礼簿）必须传 bookId
@@ -119,6 +119,11 @@ exports.main = async (event) => {
     // 传统礼簿主题：传入则采用并（有礼簿管理权限时）记到礼簿；未传用礼簿已存的；白事在 resolve 中强制素灰
     let pdfThemeKey = book && book.pdfTheme && typeof book.pdfTheme === 'object' ? String(book.pdfTheme.key || '') : '';
     let pdfCustom = book && book.pdfTheme && typeof book.pdfTheme === 'object' ? book.pdfTheme.custom : null;
+    // 尾页 / 装订：礼簿已存的（没有存过取默认：有封底、不留装订边）；本次传入的优先
+    const storedBack = book && book.pdfTheme && typeof book.pdfTheme === 'object' ? book.pdfTheme.back : null;
+    const storedBind = book && book.pdfTheme && typeof book.pdfTheme === 'object' ? book.pdfTheme.bind : null;
+    let pdfBack = themes.sanitizeBack(event.pdfBack !== undefined ? event.pdfBack : storedBack);
+    let pdfBind = themes.sanitizeBind(event.pdfBind !== undefined ? event.pdfBind : storedBind);
     if (format === 'book' && book && event.pdfTheme !== undefined) {
       const k = String(event.pdfTheme || '');
       let save = { key: k };
@@ -137,12 +142,19 @@ exports.main = async (event) => {
         } else if (k && !themes.isPresetKey(k)) return err('主题不存在');
         pdfThemeKey = k;
       }
+      // 尾页 / 装订：传了就采用，没传沿用礼簿已存的（切换预设 / 自定义时不丢）
+      if (event.pdfBack !== undefined) pdfBack = themes.sanitizeBack(event.pdfBack);
+      if (event.pdfBind !== undefined) pdfBind = themes.sanitizeBind(event.pdfBind);
+      if (storedBack) save.back = pdfBack;
+      if (storedBind) save.bind = pdfBind;
+      if (event.pdfBack !== undefined) save.back = pdfBack;
+      if (event.pdfBind !== undefined) save.bind = pdfBind;
       // 保存到礼簿需要「管理礼簿」权限；没有权限的只用于本次导出
       if (can(ctx, 'books')) {
         await db.collection('books').doc(book._id).update({ data: { pdfTheme: _.set(save) } });
       }
     }
-    const meta = buildMeta(rows, { account, book, startDay, endDay, themeName, pdfThemeKey, pdfCustom });
+    const meta = buildMeta(rows, { account, book, startDay, endDay, themeName, pdfThemeKey, pdfCustom, pdfBack, pdfBind });
 
     let buffer;
     stage = '生成文件';
@@ -293,7 +305,7 @@ async function fetchRows(openid, { bookId, startDay, endDay, themeName }) {
 }
 
 /** 汇总导出所需的元信息 */
-function buildMeta(rows, { account, book, startDay, endDay, themeName, pdfThemeKey, pdfCustom }) {
+function buildMeta(rows, { account, book, startDay, endDay, themeName, pdfThemeKey, pdfCustom, pdfBack, pdfBind }) {
   // 礼簿类型：按礼簿取；未指定礼簿时，仅当全部记录都是白事才按白事处理
   let bookType = book ? book.type : '';
   if (!bookType) bookType = rows.length && rows.every(r => r.bookType === 'funeral') ? 'funeral' : 'other';
@@ -307,6 +319,8 @@ function buildMeta(rows, { account, book, startDay, endDay, themeName, pdfThemeK
     bookType, funeral,
     theme: funeral ? THEME.grey : THEME.red,
     bt: themes.resolve(funeral, pdfThemeKey, pdfCustom), // 传统礼簿主题
+    back: themes.sanitizeBack(pdfBack), // 尾页设置
+    bind: themes.sanitizeBind(pdfBind), // 装订：none | single | double
     startDay, endDay, themeName,
     count: rows.length,
     sum: rows.reduce((s, r) => s + Math.round(Number(r.amount) * 100), 0) / 100,
@@ -521,6 +535,20 @@ const BK = {
 };
 BK.colW = (BK.right - BK.labelW - BK.left) / BK.perPage;
 
+const GUTTER = 20; // 装订侧加宽（装订侧边距 56pt，另一侧 36pt）
+/**
+ * 设置第 k 个内页（1 起）的左右边距：线装在右侧装订。
+ * single：每页右侧加宽；double：奇数页（正面）右侧加宽，偶数页（背面）左侧加宽（镜像）；none：左右各 36
+ */
+function setGeom(bind, k) {
+  let l = 36, r = 36;
+  if (bind === 'single') r += GUTTER;
+  else if (bind === 'double') { if (k % 2 === 1) r += GUTTER; else l += GUTTER; }
+  BK.left = l;
+  BK.right = BK.width - r;
+  BK.colW = (BK.right - BK.labelW - BK.left) / BK.perPage;
+}
+
 /** 相对亮度（0~1） */
 function lumOf(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -558,13 +586,17 @@ function buildBook(rows, meta) {
     // 小字（序号 / 小写金额 / 备注 / 页眉小字）用近黑色，打印和屏幕都清晰；栏目名与页眉标题用「加深后的主色」
     const pal = { line: bt.main, text: meta.funeral ? '#333333' : '#222222', sub: meta.funeral ? '#222222' : '#333333', accent: deepen(bt.main), mark: bt.mark };
 
+    const blank = () => doc.addPage({ size: 'A4', layout: 'landscape', margin: 0 });
+    const duplex = meta.bind === 'double';
     drawCover(doc, meta);
+    if (duplex) blank(); // 封面背面留空白，内页从第 3 页（奇数页）开始
 
     // 内容页：每位宾客占一列，从右往左排
     let slot = BK.perPage; // 触发首个内容页
     const pageGrids = []; // 记录内容页，最后统一画格线与页码
     const newPage = () => {
       doc.addPage({ size: 'A4', layout: 'landscape', margin: 0 });
+      setGeom(meta.bind, pageGrids.length + 1);
       drawMark(doc, pal.mark, pal.accent, 0.05);
       drawBookHeader(doc, meta, pal);
       pageGrids.push({ page: doc.bufferedPageRange().count - 1, merge: null });
@@ -581,24 +613,37 @@ function buildBook(rows, meta) {
     pageGrids[pageGrids.length - 1].merge = slot;
     drawSummary(doc, meta, slot, pal);
 
-    // 格线与页码
+    // 尾页：双面装订时先补空白页，保证封底在奇数页（正面）、总页数为偶数；封底背面留空白
+    const n = pageGrids.length;
+    if (duplex && n % 2 === 1) blank();
+    if (meta.back.on) {
+      drawBack(doc, meta);
+      if (duplex) blank();
+    }
+
+    // 格线与页码（封面、封底、空白页不编页码）
     pageGrids.forEach((g, i) => {
       doc.switchToPage(g.page);
+      setGeom(meta.bind, i + 1);
       drawGrid(doc, pal, g.merge);
-      doc.font('sub').fontSize(8).fillColor('#555').text(`— ${i + 1} / ${pageGrids.length} —`, 0, BK.gridBottom + 14,
-        { width: BK.width, align: 'center', lineBreak: false });
+      doc.font('sub').fontSize(8).fillColor('#555').text(`— ${i + 1} / ${n} —`, BK.left, BK.gridBottom + 14,
+        { width: BK.right - BK.left, align: 'center', lineBreak: false });
     });
+    setGeom('none', 1);
     doc.end();
   });
 }
 
-/** 封面：按主题配色（预设默认红底金色双框；白事浅灰底深灰框） */
-function drawCover(doc, meta) {
-  const W = BK.width, H = BK.height;
-  const bt = meta.bt;
-  const c = bt.funeral
+/** 封面 / 封底配色 */
+function coverColors(bt) {
+  return bt.funeral
     ? { bg: '#F5F5F5', border: '#333333', title: '#333333', text: '#333333' }
     : { bg: bt.main, border: bt.accent, title: bt.accent, text: bt.cover };
+}
+
+/** 封面 / 封底共用的底色、水印、双线边框和四角角饰（新建一页） */
+function drawFrame(doc, bt, c) {
+  const W = BK.width, H = BK.height;
   doc.addPage({ size: 'A4', layout: 'landscape', margin: 0 });
   doc.rect(0, 0, W, H).fill(c.bg);
   drawMark(doc, bt.mark, c.border, 0.06);
@@ -606,6 +651,55 @@ function drawCover(doc, meta) {
   doc.lineWidth(1).rect(34, 34, W - 68, H - 68).stroke(c.border);
   [[1, 1], [-1, 1], [1, -1], [-1, -1]].forEach(([sx, sy]) =>
     drawCorner(doc, sx > 0 ? 44 : W - 44, sy > 0 ? 44 : H - 44, sx, sy, bt.pattern, c.border));
+}
+
+// 封底落款默认吉语（按事由；白事不使用任何吉语）
+const BACK_FOOTER = { wedding: '百年好合', birthday: '福寿安康', baby: '福泽绵长', house: '乔迁大吉' };
+
+/**
+ * 封底：与封面同底色 / 边框 / 角饰 / 水印；落款、主家、日期、合计摘要（一行）、记账人签名栏、「慧礼记」按设置显示
+ * 落款：自定义 > 封面落款 > 事由默认吉语（白事无默认）；'-' 表示不要
+ */
+function drawBack(doc, meta) {
+  const W = BK.width, H = BK.height;
+  const bt = meta.bt, back = meta.back;
+  const c = coverColors(bt);
+  drawFrame(doc, bt, c);
+  let foot = back.footer === '-' ? '' : (back.footer || bt.footer || (meta.funeral ? '' : BACK_FOOTER[meta.bookType] || ''));
+  let y = 190;
+  if (foot) {
+    doc.font('cn').fontSize(36).fillColor(c.title).text(foot.split('').join(' '), 0, y, { width: W, align: 'center', lineBreak: false });
+    y += 70;
+    doc.lineWidth(1).moveTo(W / 2 - 80, y).lineTo(W / 2 + 80, y).stroke(c.border);
+    y += 28;
+  }
+  const lines = [];
+  if (back.host && meta.accountName) lines.push(`主家：${meta.accountName}`);
+  if (back.date) {
+    const d = meta.bookDate || (meta.startDay && meta.endDay ? `${meta.startDay} 至 ${meta.endDay}` : '');
+    if (d) lines.push(`日期：${d}`);
+  }
+  if (back.sum) lines.push(`共 ${meta.count} 份　礼金合计 ￥${fmtAmount(meta.sum)}`);
+  doc.font('sub').fontSize(16).fillColor(c.text);
+  lines.forEach(t => { doc.text(t, 0, y, { width: W, align: 'center', lineBreak: false }); y += 28; });
+  if (back.sign) {
+    const x0 = (W - 540) / 2, sy = H - 150;
+    doc.font('sub').fontSize(14).fillColor(c.text);
+    doc.text('记账人（签字）', x0, sy, { lineBreak: false });
+    doc.text('日期', x0 + 340, sy, { lineBreak: false });
+    doc.lineWidth(0.8).strokeColor(c.border);
+    doc.moveTo(x0 + 110, sy + 16).lineTo(x0 + 300, sy + 16).stroke();
+    doc.moveTo(x0 + 380, sy + 16).lineTo(x0 + 540, sy + 16).stroke();
+  }
+  if (back.brand) doc.font('sub').fontSize(10).fillColor(c.text).text('慧礼记', 0, H - 70, { width: W, align: 'center', lineBreak: false });
+}
+
+/** 封面：按主题配色（预设默认红底金色双框；白事浅灰底深灰框） */
+function drawCover(doc, meta) {
+  const W = BK.width, H = BK.height;
+  const bt = meta.bt;
+  const c = coverColors(bt);
+  drawFrame(doc, bt, c);
 
   // 主标题：礼簿名，过长自动缩小字号
   const main = bt.title || meta.bookName || (meta.funeral ? '奠仪簿' : '礼簿'); // 自定义封面标题优先

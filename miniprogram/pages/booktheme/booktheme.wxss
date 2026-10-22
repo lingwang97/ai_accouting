@@ -25,3 +25,6 @@
 .cv-title { position: relative; font-size: 44rpx; max-width: 80%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cv-foot { position: absolute; bottom: 24rpx; left: 0; right: 0; text-align: center; font-size: 24rpx; }
 .btn-primary:not([size=mini]) { width: 100%; }
+
+.opt { display: flex; justify-content: space-between; align-items: center; padding: 14rpx 0; font-size: 28rpx; }
+.opt text { flex: 1; margin-right: 20rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

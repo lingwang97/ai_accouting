@@ -27,6 +27,19 @@ const FUNERAL_FOOTERS = ['沉痛哀悼', '深切缅怀', '音容宛在', '永远
 const DEFAULT_FUNERAL = { font: 'sans', pattern: 'none', mark: '', footer: '', title: '' };
 const GREY = { main: '#555555', accent: '#333333' };
 
+// 尾页（封底）与装订（与云函数 export/themes.js 一致）：默认有封底、不留装订边
+const DEFAULT_BACK = { on: true, footer: '', host: true, date: true, sum: true, sign: false, brand: true };
+const BINDS = [
+  { k: 'none', n: '不留边' },
+  { k: 'single', n: '单面装订' },
+  { k: 'double', n: '双面装订' }
+];
+const BIND_TIPS = {
+  none: '不加宽装订边，页面与以前一致',
+  single: '右侧加宽 20pt 作装订边（传统线装在右侧）',
+  double: '奇偶页装订边左右镜像；封面背面、封底背面留空白，总页数自动补成偶数'
+};
+
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
 function lum(hex) {
@@ -65,6 +78,6 @@ function funeralPreview() {
 
 module.exports = {
   LIST, DEFAULT_KEY, FONTS, PATTERNS, MARKS, MAIN_COLORS, ACCENT_COLORS, DEFAULT_CUSTOM,
-  FUNERAL_PATTERNS, FUNERAL_MARKS, FUNERAL_FOOTERS, DEFAULT_FUNERAL, GREY,
+  FUNERAL_PATTERNS, FUNERAL_MARKS, FUNERAL_FOOTERS, DEFAULT_FUNERAL, GREY, DEFAULT_BACK, BINDS, BIND_TIPS,
   checkCustom, previewOf, expand, funeralPreview
 };

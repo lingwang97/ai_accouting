@@ -98,6 +98,29 @@ function resolve(funeral, key, custom) {
   return PRESETS.find(p => p.key === key && !p.funeral) || PRESETS.find(p => p.key === DEFAULT_KEY);
 }
 
+// 尾页（封底）与装订：默认有封底、不留装订边（旧礼簿、旧版前端不传时同此）
+const BINDS = ['none', 'single', 'double'];
+const DEFAULT_BACK = { on: true, footer: '', host: true, date: true, sum: true, sign: false, brand: true };
+
+/**
+ * 校验尾页设置 { on, footer, host, date, sum, sign, brand }；永远返回合法值，缺省项取默认
+ * footer：空 = 自动（封面落款，没有则按事由默认吉语；白事无吉语）；'-' = 不要落款；其他为自定义文字（≤8 字）
+ */
+function sanitizeBack(b) {
+  b = b && typeof b === 'object' ? b : {};
+  const raw = String(b.footer === undefined || b.footer === null ? '' : b.footer).replace(/[\u0000-\u001f\u007f]/g, '').trim();
+  return {
+    on: b.on !== false,
+    footer: raw === '-' ? '-' : raw.slice(0, 8),
+    host: b.host !== false,
+    date: b.date !== false,
+    sum: b.sum !== false,
+    sign: b.sign === true,
+    brand: b.brand !== false
+  };
+}
+const sanitizeBind = v => (BINDS.includes(v) ? v : 'none');
+
 const isPresetKey = k => PRESETS.some(p => p.key === k && !p.funeral);
 
-module.exports = { PRESETS, DEFAULT_KEY, resolve, isPresetKey, sanitizeCustom, sanitizeFuneral };
+module.exports = { PRESETS, DEFAULT_KEY, resolve, isPresetKey, sanitizeCustom, sanitizeFuneral, sanitizeBack, sanitizeBind, DEFAULT_BACK };

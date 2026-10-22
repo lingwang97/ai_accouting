@@ -73,6 +73,32 @@
       <input class="input" value="{{fun.footer}}" maxlength="8" placeholder="也可以自己写（8 字以内）" data-f="footer" bindinput="onFunInput" />
     </view>
 
+    <!-- 尾页与装订 -->
+    <view class="card cust">
+      <view class="section-title">尾页与装订</view>
+      <view class="opt"><text>封底尾页</text><switch checked="{{back.on}}" color="#07C160" data-f="on" bindchange="onBackSwitch" /></view>
+      <block wx:if="{{back.on}}">
+        <view class="cust-lb">尾页落款</view>
+        <view class="chips">
+          <view class="chip {{back.footer === '' ? 'on' : ''}}" data-v="" bindtap="onBackFooter">自动</view>
+          <view class="chip {{back.footer === '-' ? 'on' : ''}}" data-v="-" bindtap="onBackFooter">无</view>
+          <block wx:if="{{isFuneral}}">
+            <view wx:for="{{fFooters}}" wx:key="*this" class="chip {{back.footer === item ? 'on' : ''}}" data-v="{{item}}" bindtap="onBackFooter">{{item}}</view>
+          </block>
+        </view>
+        <input class="input" value="{{back.footer === '-' ? '' : back.footer}}" maxlength="8" placeholder="自动：用封面落款，没有则按事由默认（白事无吉语）" data-f="footer" bindinput="onBackInput" />
+        <view class="opt"><text>显示主家</text><switch checked="{{back.host}}" color="#07C160" data-f="host" bindchange="onBackSwitch" /></view>
+        <view class="opt"><text>显示日期</text><switch checked="{{back.date}}" color="#07C160" data-f="date" bindchange="onBackSwitch" /></view>
+        <view class="opt"><text>显示合计摘要（份数、礼金合计）</text><switch checked="{{back.sum}}" color="#07C160" data-f="sum" bindchange="onBackSwitch" /></view>
+        <view class="opt"><text>记账人签名栏</text><switch checked="{{back.sign}}" color="#07C160" data-f="sign" bindchange="onBackSwitch" /></view>
+        <view class="opt"><text>显示「慧礼记」小字</text><switch checked="{{back.brand}}" color="#07C160" data-f="brand" bindchange="onBackSwitch" /></view>
+      </block>
+      <view class="cust-lb">装订</view>
+      <view class="chips"><view wx:for="{{binds}}" wx:key="k" class="chip {{bind === item.k ? 'on' : ''}}" data-k="{{item.k}}" bindtap="onBind">{{item.n}}</view></view>
+      <view class="muted tip">{{bindTip}}</view>
+      <view class="muted tip">已生成的存档 PDF 不会自动更新；之后新归档或重新生成的存档会按这里的设置</view>
+    </view>
+
     <view class="muted tip" wx:if="{{!canSave}}">你没有管理礼簿权限，本次选择的主题只用于这次导出，不会保存</view>
     <view class="muted tip" wx:else>确认导出后，主题会记在这本礼簿上，下次进入自动带出；礼簿归档存档也使用该主题</view>
   </block>
