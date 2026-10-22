@@ -521,6 +521,22 @@ const BK = {
 };
 BK.colW = (BK.right - BK.labelW - BK.left) / BK.perPage;
 
+/** 相对亮度（0~1） */
+function lumOf(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+  return 0.2126 * ch((n >> 16) & 255) + 0.7152 * ch((n >> 8) & 255) + 0.0722 * ch(n & 255);
+}
+/** 主色偏亮时按比例加深（保持色相），用于栏目名 / 页眉标题等细笔画文字；已够深的原样返回 */
+function deepen(hex) {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex || '')) return '#333333';
+  const n = parseInt(hex.slice(1), 16);
+  let k = 1;
+  const at = f => '#' + [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(v => Math.round(v * f).toString(16).padStart(2, '0')).join('');
+  while (k > 0.3 && lumOf(at(k)) > 0.13) k -= 0.05;
+  return at(k);
+}
+
 function buildBook(rows, meta) {
   return new Promise((resolve, reject) => {
     // 边距全部置 0，所有文字用绝对坐标绘制，避免 pdfkit 自动换页
@@ -539,7 +555,8 @@ function buildBook(rows, meta) {
     doc.registerFont('sub', bt.font === 'brush' ? fontBuf() : main);
     doc.font('cn');
 
-    const pal = { line: bt.main, text: meta.funeral ? '#333333' : '#222222', sub: '#777777', accent: bt.main, mark: bt.mark };
+    // 小字（序号 / 小写金额 / 备注 / 页眉小字）用近黑色，打印和屏幕都清晰；栏目名与页眉标题用「加深后的主色」
+    const pal = { line: bt.main, text: meta.funeral ? '#333333' : '#222222', sub: meta.funeral ? '#222222' : '#333333', accent: deepen(bt.main), mark: bt.mark };
 
     drawCover(doc, meta);
 
@@ -568,7 +585,7 @@ function buildBook(rows, meta) {
     pageGrids.forEach((g, i) => {
       doc.switchToPage(g.page);
       drawGrid(doc, pal, g.merge);
-      doc.font('sub').fontSize(8).fillColor('#999').text(`— ${i + 1} / ${pageGrids.length} —`, 0, BK.gridBottom + 14,
+      doc.font('sub').fontSize(8).fillColor('#555').text(`— ${i + 1} / ${pageGrids.length} —`, 0, BK.gridBottom + 14,
         { width: BK.width, align: 'center', lineBreak: false });
     });
     doc.end();
@@ -661,7 +678,7 @@ function drawBookHeader(doc, meta, pal) {
   const sep = meta.bt.font === 'brush' ? '　' : ' · '; // 毛笔字体没有间隔号字形
   const title = `${meta.title}${sep}${meta.funeral ? '奠仪簿' : '礼簿'}`;
   doc.font('cn').fontSize(14).fillColor(pal.accent).text(title, 0, 30, { width: BK.width, align: 'center', lineBreak: false });
-  doc.font('sub').fontSize(9).fillColor(pal.sub);
+  doc.font('sub').fontSize(10).fillColor(pal.sub);
   if (meta.accountName) doc.text(`主家：${meta.accountName}`, BK.left, 38, { width: 200, lineBreak: false });
   const d = meta.bookDate || (meta.startDay ? `${meta.startDay} 至 ${meta.endDay}` : '');
   if (d) doc.text(d, BK.right - 200, 38, { width: 200, align: 'right', lineBreak: false });
@@ -736,10 +753,10 @@ function clip(tokens, n) {
 function drawEntry(doc, r, i, slot, pal) {
   const x = slotX(slot), w = BK.colW, half = w / 2;
   const { gridTop: top, divider, divider2, gridBottom: bottom } = BK;
-  const pSize = 10, pLH = 11.5;
+  const pSize = 11, pLH = 13;
 
   // 序号
-  doc.font('sub').fontSize(7).fillColor(pal.sub).text(String(i + 1), x, top + 4, { width: w, align: 'center', lineBreak: false });
+  doc.font('sub').fontSize(8).fillColor(pal.sub).text(String(i + 1), x, top + 4, { width: w, align: 'center', lineBreak: false });
 
   // 姓名栏：20 号字逐字竖排
   const nameSize = 20, nameLH = 23;
@@ -750,12 +767,16 @@ function drawEntry(doc, r, i, slot, pal) {
 
   // 金额栏：大写金额（字号随字数自适应）+ 底部小写金额
   const upper = tokenize(amountUpper(r.amount));
-  const avail = divider2 - 18 - (divider + 8);
+  const avail = divider2 - 20 - (divider + 8);
   const lh = Math.min(19, avail / upper.length);
   const size = Math.max(6, Math.min(16, lh / 1.15));
   doc.fillColor(pal.text);
   drawVertical(doc, upper, x, divider + 8, w, size, lh);
-  doc.font('sub').fontSize(8).fillColor(pal.sub).text(`￥${fmtAmount(r.amount)}`, x, divider2 - 13, { width: w, align: 'center', lineBreak: false });
+  const amt = `￥${fmtAmount(r.amount)}`;
+  let aSize = 10;
+  doc.font('sub');
+  while (aSize > 5 && doc.fontSize(aSize).widthOfString(amt) > w - 4) aSize -= 0.5; // 长金额自动缩小，不溢出到相邻列
+  doc.fontSize(aSize).fillColor(pal.sub).text(amt, x, divider2 - 15 + (10 - aSize) / 2, { width: w, align: 'center', lineBreak: false });
 
   // 礼品/备注栏：小字竖排，放不下时分两小列
   const remark = remarkOf(r);
