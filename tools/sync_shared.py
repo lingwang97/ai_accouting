@@ -11,6 +11,7 @@ TARGETS = {
     'plans.js': ['system', 'warmer', 'account'],
     'purge.js': ['account', 'system'],
     'trash.js': ['books', 'warmer'],
+    'limits.js': ['payment', 'renqing', 'account'],
 }
 
 for name, funcs in TARGETS.items():

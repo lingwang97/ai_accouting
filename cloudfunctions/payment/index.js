@@ -6,10 +6,7 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
 const notify = require('./notify.js');
-
-// 单笔礼金上限（元）：1000 万；换算成分为 1e9，仍在安全整数内
-const MAX_AMOUNT = 10000000;
-const MAX_MSG = '单笔金额不能超过1000万元';
+const { MAX_AMOUNT, MAX_MSG } = require('./limits.js'); // 单笔礼金上限（tools/cloud-shared/limits.js）
 const { resolveCtx, handlerName, canBook, readonly, can, workBook, soloBook, trusted } = require('./ctx.js');
 const accounts = db.collection('accounts');
 const records = db.collection('records');

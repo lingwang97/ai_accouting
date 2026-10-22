@@ -10,6 +10,7 @@ const invites = db.collection('invites');
 const { resolveCtx, restricted, readonly, trusted, can, soloBook, PERMS, ALL_PERMS, DEFAULT_PERMS, cleanPerms } = require('./ctx.js');
 const P = require('./plans.js');
 const Purge = require('./purge.js');
+const { MAX_AMOUNT } = require('./limits.js'); // 单笔金额上限（tools/cloud-shared/limits.js）
 const TITLES = ['', '礼台', '收银', '主管']; // 机构版礼台人员岗位
 const INVITE_TTL = 7 * 24 * 3600 * 1000; // 邀请 7 天内有效
 const INVITE_USES = 5;  // 记账人 / 家人共享邀请卡：每张最多几人使用（默认）
@@ -192,7 +193,7 @@ async function save(openid, event) {
   // 礼金快捷金额（宾客随礼页一键选择），未传则保持原值
   if (Array.isArray(event.quickAmounts)) {
     data.quickAmounts = event.quickAmounts.map(Number)
-      .filter(n => Number.isFinite(n) && n > 0 && n <= 100000)
+      .filter(n => Number.isFinite(n) && n > 0 && n <= MAX_AMOUNT) // 与单笔上限一致
       .map(n => Math.round(n * 100) / 100)
       .slice(0, 12); // 最多 12 个
   }

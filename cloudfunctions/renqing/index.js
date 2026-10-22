@@ -8,6 +8,7 @@ const giftsOut = db.collection('gifts_out');
 const records = db.collection('records');
 
 const crypto = require('crypto');
+const { MAX_AMOUNT } = require('./limits.js'); // 单笔金额上限（tools/cloud-shared/limits.js）
 
 /*
  * 往来人标识 o:<微信身份>:<姓名> 里含宾客（或主家）的 openid，不直接交给前端：
@@ -250,7 +251,7 @@ async function outSave(openid, g) {
     updatedAt: new Date()
   };
   if (!data.toName) return err('请填写对方姓名');
-  if (!Number.isFinite(amount) || amount <= 0 || amount > 10000000) return err('请填写正确金额');
+  if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_AMOUNT) return err('请填写正确金额');
   if (!data.date) return err('请选择送礼日期');
 
   if (g._id) {
