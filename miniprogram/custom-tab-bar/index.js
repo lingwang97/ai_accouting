@@ -26,6 +26,11 @@ Component({
     attached() { this.refresh(); }
   },
 
+  // 每个 tab 页各有一个菜单实例：页面切回时按全局状态重画，避免别的页面改过红点 / 角标后这里仍显示旧状态
+  pageLifetimes: {
+    show() { this.refresh(); }
+  },
+
   methods: {
     /** 按登录状态、身份与角标数刷新（各 tab 页 onShow、登录/退出、角标变化时调用） */
     refresh() {
