@@ -12,6 +12,12 @@
 const ENVS = ['develop', 'trial', 'release'];
 const BATCH = 50; // cloud.deleteFile 单次最多 50 个文件
 
+/** 集合 / 文件不存在（-502005 等）：这类错误可以忽略，其余（超时、限流、网络）必须抛出，让调用方提示重试，不能当成「已删完」 */
+function isMissing(e) {
+  const code = String((e && (e.errCode !== undefined ? e.errCode : e.code)) || '');
+  return code === '-502005' || /DATABASE_COLLECTION_NOT_EXIST|STORAGE_FILE_NONEXIST|collection not exist|Db or Table not exist/i.test(String((e && (e.errMsg || e.message)) || ''));
+}
+
 /** 要清除的各类数据：[名称, 集合, 条件] */
 function targets(openid, opts) {
   const list = [
@@ -83,7 +89,9 @@ async function deleteFiles(cloud, ids) {
     try {
       const res = await cloud.deleteFile({ fileList: ids.slice(i, i + BATCH) });
       n += (res.fileList || []).filter(f => f.status === 0).length;
-    } catch (e) { /* 文件已不存在等，忽略 */ }
+    } catch (e) {
+      if (!isMissing(e)) throw e; // 文件已不存在可忽略；其他错误抛出，避免文件残留却提示已清除
+    }
   }
   return n;
 }
@@ -97,7 +105,7 @@ async function run(db, cloud, openid, opts = {}) {
     let total = 0;
     for (let i = 0; i < 200; i++) {
       let res;
-      try { res = await db.collection(col).where(cond).remove(); } catch (e) { break; } // 集合不存在
+      try { res = await db.collection(col).where(cond).remove(); } catch (e) { if (isMissing(e)) break; throw e; } // 只忽略集合不存在
       total += res.stats.removed;
       if (!res.stats.removed) break;
     }
@@ -108,7 +116,7 @@ async function run(db, cloud, openid, opts = {}) {
   // 导出 / 存档文件及登记
   for (let i = 0; i < 100; i++) {
     let rows = [];
-    try { rows = (await db.collection('exports').where({ ownerOpenid: openid }).limit(BATCH).get()).data; } catch (e) { break; }
+    try { rows = (await db.collection('exports').where({ ownerOpenid: openid }).limit(BATCH).get()).data; } catch (e) { if (isMissing(e)) break; throw e; }
     if (!rows.length) break;
     files += await deleteFiles(cloud, rows.filter(r => !r._openid).map(r => r.fileID));
     await db.collection('exports').where({ _id: db.command.in(rows.map(r => r._id)) }).remove();
@@ -126,4 +134,4 @@ async function run(db, cloud, openid, opts = {}) {
   return { removed, files };
 }
 
-module.exports = { preview, run };
+module.exports = { preview, run, isMissing };

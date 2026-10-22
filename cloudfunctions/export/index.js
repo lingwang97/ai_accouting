@@ -916,7 +916,11 @@ function drawSummary(doc, meta, slot, pal) {
  * 主家信息、记账人与家人关系、邀请卡、提醒、同名合并、套餐订阅；每条一行 JSON
  */
 async function adminExtra(openid) {
-  const safe = p => p.catch(() => []);
+  // 只忽略「集合不存在」；超时 / 限流等错误抛出，避免备份里悄悄缺数据而清除时却被一起删掉
+  const safe = p => p.catch(e => {
+    if (String(e && e.errCode) === '-502005' || /not exist|NOT_EXIST/i.test(String((e && (e.errMsg || e.message)) || ''))) return [];
+    throw e;
+  });
   const [recs, accs, ms1, ms2, invs, rems, alias, subs] = await Promise.all([
     safe(fetchAll('records', { ownerOpenid: openid, status: _.neq('paid') })),
     safe(fetchAll('accounts', { ownerOpenid: _.in([openid, 'merged:' + openid]) })),
@@ -975,6 +979,10 @@ async function fetchAll(name, cond) {
     const res = await col.where(cond).orderBy('_id', 'asc').skip(out.length).limit(QUERY_MAX).get(); // 固定顺序，翻页不重不漏
     out.push(...res.data);
     if (res.data.length < QUERY_MAX) break;
+  }
+  // 到上限后还有数据：报错而不是静默截断（备份少数据会误导）
+  if (out.length >= MAX_ROWS && (await col.where(cond).orderBy('_id', 'asc').skip(MAX_ROWS).limit(1).get()).data.length) {
+    throw new Error(`${name} 超过 ${MAX_ROWS} 条，无法完整备份`);
   }
   return out;
 }

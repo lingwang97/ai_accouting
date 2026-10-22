@@ -98,6 +98,7 @@
           <switch checked="{{stayClerk}}" bindchange="onStayClerk" color="{{primary}}" />
         </view>
 
+        <view class="transfer-warn">移交卡只发给接收人本人！拿到卡片的人点开即可接收你选中的全部礼簿，请勿转发到群里。</view>
         <button wx:if="{{!transferToken}}" class="btn-primary" style="margin-top:20rpx" bindtap="onMakeTransfer">生成移交卡片</button>
         <block wx:else>
           <view class="transfer-desc">{{transferDesc}}</view>

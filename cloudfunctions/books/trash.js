@@ -58,7 +58,7 @@ async function restore(db, owner, bookId) {
   if (t.trashStatus !== 'restoring') {
     const { _id, trashStatus, deletedAt, purgeAt, files, count, sum, aid, ...doc } = t;
     await db.collection('books').doc(bookId).set({ data: { ...doc, archived: true } });
-    await tb.doc(bookId).update({ data: { trashStatus: 'restoring' } });
+    await tb.doc(bookId).update({ data: { trashStatus: 'restoring', restoringAt: new Date() } });
   }
   const done = await moveDocs(db, 'trash_records', 'records', { ownerOpenid: owner, bookId }, deadline);
   if (done) await tb.doc(bookId).remove();
@@ -91,6 +91,31 @@ async function purgeExpired(db, cloud, limit) {
   return res.data.length;
 }
 
+/**
+ * 续跑卡住的移动：用户中途关闭页面 / 网络中断后，moving（删除）或 restoring（恢复）可能停在半途。
+ * warmer 定时调用：只处理停留超过 STUCK_MS 的（避免与用户正在进行的操作抢），每次最多 limit 本；剩余时间不足时由调用方不调用
+ */
+const STUCK_MS = 10 * 60 * 1000;
+async function resumeStuck(db, limit) {
+  let res;
+  try {
+    res = await db.collection('trash_books').where({ trashStatus: db.command.in(['moving', 'restoring']), _openid: db.command.exists(false) }).limit(20).get();
+  } catch (e) { return 0; } // 集合还不存在
+  const old = Date.now() - STUCK_MS;
+  let n = 0;
+  for (const t of res.data) {
+    if (n >= (limit || 3)) break;
+    const since = new Date(t.trashStatus === 'restoring' ? (t.restoringAt || t.deletedAt) : t.deletedAt).getTime() || 0;
+    if (since > old) continue;
+    try {
+      if (t.trashStatus === 'moving') await moveToTrash(db, t.ownerOpenid, t._id, null);
+      else await restore(db, t.ownerOpenid, t._id);
+      n++;
+    } catch (e) { console.warn('续跑回收站移动失败', t._id, e.message); }
+  }
+  return n;
+}
+
 /** 删除时登记的文件：存档 PDF、本人上传的本场收款码、各版本礼簿码 */
 function filesOf(book, account, ownPayCode) {
   const files = [];
@@ -108,4 +133,4 @@ function filesOf(book, account, ownPayCode) {
   return files;
 }
 
-module.exports = { TRASH_DAYS, moveToTrash, restore, purge, purgeExpired, filesOf };
+module.exports = { TRASH_DAYS, moveToTrash, restore, purge, purgeExpired, resumeStuck, filesOf };

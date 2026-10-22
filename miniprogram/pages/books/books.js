@@ -145,8 +145,12 @@ Page({
         if (r.done) break;
       }
       wx.hideLoading();
-      wx.showToast({ title: '已移入回收站', icon: 'none' });
       this.load();
+      if (!(r && r.done)) {
+        // 数据特别多、循环次数用完仍未移完：不提示成功（再点一次删除会接着移，系统也会在后台自动续上）
+        return wx.showModal({ title: '删除未完成', content: '礼金记录较多，还没有全部移完，请稍后再点一次删除继续。', showCancel: false });
+      }
+      wx.showToast({ title: '已移入回收站', icon: 'none' });
       const names = (r && r.affected) || [];
       if (names.length) {
         setTimeout(() => wx.showModal({

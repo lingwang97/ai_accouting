@@ -206,7 +206,13 @@ async function adminPurge(admin, e) {
       return err('请先备份，或确认不需要备份');
     }
   }
-  const res = await Purge.run(db, cloud, ownerOpenid, { guestRecords: e.guestRecords === true, subscription: true, ownPayCode });
+  let res;
+  try {
+    res = await Purge.run(db, cloud, ownerOpenid, { guestRecords: e.guestRecords === true, subscription: true, ownPayCode });
+  } catch (x) {
+    console.error('adminPurge 失败', x.errCode, x.message);
+    return err('清除未完成（可能超时），已删除的部分不会恢复，请再点一次继续清除');
+  }
   await log(admin, 'purgeAccount', { ownerOpenid, name: t.name, guestRecords: e.guestRecords === true, skipBackup: e.skipBackup === true, removed: res.removed, files: res.files });
   return ok(res);
 }

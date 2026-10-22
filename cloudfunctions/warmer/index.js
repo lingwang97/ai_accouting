@@ -6,18 +6,30 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const { DEFAULT_WARMUP, readSetting, writeSetting, normalizeWarmup } = require('./plans.js');
 
+// 超时 60 秒：各阶段按时间预算执行，剩余时间不足就跳过，留到下一轮（5 分钟后）
+const TOTAL_MS = 50 * 1000;
+
 exports.main = async (event) => {
+  const deadline = Date.now() + TOTAL_MS;
+  const left = () => deadline - Date.now();
   // 只认定时触发（没有用户身份）；用户调用直接拒绝，避免被刷
   if (cloud.getWXContext().OPENID || !(event && (event.Type === 'Timer' || event.TriggerName === 'warm'))) {
     return { code: 1, msg: '仅限定时触发', data: null };
   }
   // 每一轮都推送已到提醒时间、尚未推送的提醒（pushed 保证只推一次；某轮失败下一轮补推）
   {
-    try { await pushReminders(); } catch (e) { console.warn('提醒推送失败', e.message); }
+    try { await pushReminders(deadline); } catch (e) { console.warn('提醒推送失败', e.message); }
   }
   // 每小时第一轮：永久删除回收站里超过保留期的礼簿（每次最多 5 本，没删完的下个小时继续）
   if (new Date().getMinutes() < 5) {
-    try { await require('./trash.js').purgeExpired(db, cloud, 5); } catch (e) { console.warn('回收站清理失败', e.message); }
+    const trash = require('./trash.js');
+    // 先续跑卡住的删除 / 恢复（moveToTrash 单次最多 12 秒），再清理过期的；时间不够就留到下个小时
+    if (left() > 25 * 1000) {
+      try { await trash.resumeStuck(db, 2); } catch (e) { console.warn('回收站续跑失败', e.message); }
+    }
+    if (left() > 15 * 1000) {
+      try { await trash.purgeExpired(db, cloud, 5); } catch (e) { console.warn('回收站清理失败', e.message); }
+    }
   }
   const cfg = normalizeWarmup(await readSetting(db, 'warmup', DEFAULT_WARMUP));
   // 关闭时不做任何读写（不再每 5 分钟写一次状态）
@@ -33,6 +45,8 @@ exports.main = async (event) => {
       // 跳过时每小时只记一次状态，减少写库
       if (new Date().getMinutes() >= 5) return { code: 0, msg: 'skip no paid', data: null };
       status.skipped = '暂无有效付费订阅';
+    } else if (left() < 8 * 1000) {
+      status.skipped = '本轮时间不足，留到下一轮';
     } else {
       const res = await Promise.all(cfg.functions.map(name =>
         cloud.callFunction({ name, data: { action: '__warm' } })
@@ -51,7 +65,7 @@ exports.main = async (event) => {
  * 推送到期的提醒：提醒日已到、办事日未过、未推送、用户订阅过的；每条只推送一次
  * 未配置模板（remind.TMPL_ID 为空）时不推送，提醒仍在小程序里显示
  */
-async function pushReminders() {
+async function pushReminders(deadline) {
   const remind = require('./remind.js');
   if (!remind.TMPL_ID) return;
   const _ = db.command;
@@ -65,7 +79,8 @@ async function pushReminders() {
     { remindAt: _.exists(false), notifyDay: bj.getUTCHours() >= 9 ? _.lte(t) : _.lt(t) }
   ]);
   const tried = []; // 本次触发已尝试过的：失败的留到下一次触发（5 分钟后）再试
-  for (let round = 0; round < 4; round++) { // 每轮最多 200 条，避免超出 20 秒超时；没推完的下一轮继续
+  for (let round = 0; round < 4; round++) { // 每轮最多 200 条；没推完（或时间预算用完）的下一轮继续
+    if (deadline && deadline - Date.now() < 10 * 1000) break;
     const res = await col.where(_.and([{ done: false, pushed: false, subscribed: true, date: _.gte(t), _openid: _.exists(false) }, due,
       ...(tried.length ? [{ _id: _.nin(tried) }] : [])]))
       .limit(50).get();

@@ -606,10 +606,16 @@ async function resumeTransfer(acc, openid) {
   const tp = acc.transferPending;
   if (!tp) return;
   const oldOwner = tp.from;
-  const moveAll = async (name, extra) => {
+  const moveAll = async (name, extra, set) => {
     for (let i = 0; i < 100; i++) {
-      const res = await db.collection(name).where({ ownerOpenid: oldOwner, ...(extra || {}) })
-        .update({ data: { ownerOpenid: openid } });
+      let res;
+      try {
+        res = await db.collection(name).where({ ownerOpenid: oldOwner, ...(extra || {}) })
+          .update({ data: { ownerOpenid: openid, ...(set || {}) } });
+      } catch (e) {
+        if (String(e.errCode) === '-502005' || /not exist|不存在/.test(String(e.errMsg || e.message))) break; // 回收站集合还没建过
+        throw e;
+      }
       if (!res.stats.updated) break;
     }
   };
@@ -617,6 +623,9 @@ async function resumeTransfer(acc, openid) {
   await moveAll('records'); // 送礼记录（gifts_out）属于个人人情往来，不移交
   await moveAll('print_templates');
   await moveAll('exports');
+  // 回收站里的礼簿与礼金记录也跟着主家走（否则新主家看不到、也无法恢复，到期还会被定时清理）
+  await moveAll('trash_books', undefined, { aid: acc._id });
+  await moveAll('trash_records');
   await moveAll('members', { aid: acc._id });
   // 原主家转为记账人（发起时可选择不再记账）；接收人若原本是记账人则去掉记账身份
   await members.where({ aid: acc._id, memberOpenid: openid }).remove();
@@ -627,6 +636,7 @@ async function resumeTransfer(acc, openid) {
   }
   // 移交过程中宾客新随的礼仍可能记在原主家名下：再补一轮
   await moveAll('records');
+  await moveAll('trash_records');
   if (tp.mergeFrom) {
     let from = null;
     try { from = (await accounts.doc(tp.mergeFrom).get()).data; } catch (e) { /* 已不存在 */ }
@@ -1046,7 +1056,13 @@ const publicBook = b => ({ _id: b._id, name: b.name, type: b.type, date: b.date 
 async function purge(openid, confirm) {
   if (confirm !== 'DELETE') return err('参数错误');
   // 与管理员「数据清除」共用（tools/cloud-shared/purge.js）；用户自己注销时保留套餐开通记录
-  const res = await Purge.run(db, cloud, openid, { ownPayCode });
+  let res;
+  try {
+    res = await Purge.run(db, cloud, openid, { ownPayCode });
+  } catch (e) {
+    console.error('purge 失败', e.errCode, e.message);
+    return err('清除未完成，请稍后重试（已清除的部分不会恢复）');
+  }
   const removed = {};
   res.removed.forEach(r => { removed[r.label] = r.count; });
   return ok({ removed, files: res.files });
