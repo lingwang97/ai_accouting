@@ -1,4 +1,4 @@
-// utils/pdftheme.js — 传统礼簿 PDF 主题清单（与云函数 export/themes.js 保持一致）
+// pages/booktheme/pdftheme.js — 传统礼簿 PDF 主题清单（与云函数 export/themes.js 保持一致）
 // 喜事：9 种预设 + 自定义（可基于预设修改）；白事：颜色固定素灰，只能改字体 / 角饰 / 水印 / 标题 / 落款
 const LIST = [
   { key: 'red_gold', name: '中国红金', scene: '婚礼·通用', main: '#B71C1C', accent: '#D4AF37', cover: '#F8E7B0', pattern: 'double', mark: '', font: 'sans', footer: '' },

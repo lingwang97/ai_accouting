@@ -4,7 +4,7 @@ const req = require('../../utils/request.js');
 const openfile = require('../../utils/openfile.js');
 const theme = require('../../utils/theme.js');
 const perm = require('../../utils/perm.js');
-const pt = require('../../utils/pdftheme.js');
+const pt = require('./pdftheme.js');
 
 Page({
   data: {
