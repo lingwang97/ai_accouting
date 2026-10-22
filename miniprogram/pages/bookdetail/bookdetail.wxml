@@ -30,7 +30,7 @@
         <text>{{item.relation}}</text>
         <text><text class="muted">{{item.count}} 份 · </text>￥{{item.sumStr}}</text>
       </view>
-      <view class="bar-bg"><view class="bar" style="width:{{item.pct}}%"></view></view>
+      <view class="bar-bg"><view class="bar" style="width:{{item.pct + '%'}}"></view></view>
     </view>
     <view class="muted" wx:if="{{byRelation.length === 0}}">暂无已入簿的礼金</view>
   </view>
