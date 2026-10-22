@@ -2,7 +2,7 @@
 const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const ENVS = ['develop', 'trial', 'release'];
-const { resolveCtx, canBook, readonly, trusted, can, workBook } = require('./ctx.js');
+const { shortCodeOf, resolveCtx, canBook, readonly, trusted, can, workBook } = require('./ctx.js');
 
 exports.main = async (event) => {
   const { OPENID } = cloud.getWXContext();
@@ -38,7 +38,13 @@ exports.main = async (event) => {
       scene = book._id;
     }
     // scene 最长 32 字符，云数据库 _id 本身就是 32 位，因此直接用 id 作 scene（不加 "aid=" 前缀）
-    if (scene.length > 32) return err('账户 ID 过长，无法生成小程序码');
+    // 默认礼簿 id（default_+aid）超长：改用短码，映射登记到 book_codes
+    if (scene.length > 32) {
+      const code = shortCodeOf(scene);
+      try { await db.createCollection('book_codes'); } catch (e) { /* 已存在 */ }
+      await db.collection('book_codes').doc(code).set({ data: { bookId: scene, ownerOpenid: ctx.ownerOpenid, createdAt: new Date() } });
+      scene = code;
+    }
 
     const wxacode = await cloud.openapi.wxacode.getUnlimited({
       scene,

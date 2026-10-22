@@ -169,4 +169,19 @@ function handlerName(ctx) {
   return (ctx.user && ctx.user.nickname) || '';
 }
 
-module.exports = { resolveCtx, handlerName, canBook, restricted, readonly, trusted, can, soloBook, workBook, PERMS, ALL_PERMS, DEFAULT_PERMS, cleanPerms };
+/**
+ * 礼簿短码：默认礼簿 _id（default_+32 位 aid=40 字符）超过小程序码 scene 32 字符上限，
+ * 用确定性短码（k + md5 前 24 位 = 25 字符）作 scene，映射存 book_codes 集合；旧的 32 位 id 码照旧可用
+ */
+const crypto = require('crypto');
+const shortCodeOf = bookId => 'k' + crypto.createHash('md5').update(String(bookId)).digest('hex').slice(0, 24);
+async function resolveCode(db, id) {
+  if (!/^k[0-9a-f]{24}$/.test(String(id || ''))) return id;
+  try {
+    const d = (await db.collection('book_codes').doc(id).get()).data;
+    if (trusted(d) && d.bookId) return d.bookId;
+  } catch (e) { /* 未登记 */ }
+  return id;
+}
+
+module.exports = { shortCodeOf, resolveCode, resolveCtx, handlerName, canBook, restricted, readonly, trusted, can, soloBook, workBook, PERMS, ALL_PERMS, DEFAULT_PERMS, cleanPerms };

@@ -7,7 +7,7 @@ const db = cloud.database();
 const _ = db.command;
 const notify = require('./notify.js');
 const { MAX_AMOUNT, MAX_MSG } = require('./limits.js'); // 单笔礼金上限（tools/cloud-shared/limits.js）
-const { resolveCtx, handlerName, canBook, readonly, can, workBook, soloBook, trusted } = require('./ctx.js');
+const { resolveCode, resolveCtx, handlerName, canBook, readonly, can, workBook, soloBook, trusted } = require('./ctx.js');
 const accounts = db.collection('accounts');
 const records = db.collection('records');
 
@@ -66,8 +66,8 @@ exports.main = async (event) => {
  * 按合计金额转一笔账，状态整批推进；第一位（batchIdx=0）为扫码人本人
  */
 async function create(openid, event) {
-  const aid = String(event.aid || '');
-  if (!validId(aid)) return err('参数错误');
+  if (!validId(String(event.aid || ''))) return err('参数错误');
+  const aid = await resolveCode(db, String(event.aid)); // 礼簿短码还原为礼簿 id
   const multi = Array.isArray(event.items) && event.items.length > 1;
   const parsed = parseItems(Array.isArray(event.items) && event.items.length ? event.items
     : [{ name: event.payerName, amount: event.amount, relation: event.relation, remark: event.remark, tag: event.tag }], multi && event.payMethod === 'mixed');

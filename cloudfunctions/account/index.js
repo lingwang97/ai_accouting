@@ -7,7 +7,7 @@ const _ = db.command;
 const accounts = db.collection('accounts');
 const members = db.collection('members');
 const invites = db.collection('invites');
-const { resolveCtx, restricted, readonly, trusted, can, soloBook, PERMS, ALL_PERMS, DEFAULT_PERMS, cleanPerms } = require('./ctx.js');
+const { resolveCode, resolveCtx, restricted, readonly, trusted, can, soloBook, PERMS, ALL_PERMS, DEFAULT_PERMS, cleanPerms } = require('./ctx.js');
 const P = require('./plans.js');
 const Purge = require('./purge.js');
 const { MAX_AMOUNT } = require('./limits.js'); // 单笔金额上限（tools/cloud-shared/limits.js）
@@ -1044,8 +1044,9 @@ async function purge(openid, confirm) {
 }
 
 /** 付款方用：只返回公开字段 */
-async function getByAid(aid) {
-  if (!/^[a-zA-Z0-9_-]{1,64}$/.test(String(aid || ''))) return err('参数错误');
+async function getByAid(aid0) {
+  if (!/^[a-zA-Z0-9_-]{1,64}$/.test(String(aid0 || ''))) return err('参数错误');
+  const aid = await resolveCode(db, String(aid0)); // 礼簿短码还原为礼簿 id
   let a = null;
   let fixed = null; // 「本场礼簿码」指定的礼簿
   try {

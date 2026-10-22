@@ -22,6 +22,7 @@ function targets(openid, opts) {
     ['送礼记录', 'gifts_out', { ownerOpenid: openid }],
     ['办事提醒', 'reminders', { ownerOpenid: openid }],
     ['打印样式', 'print_templates', { ownerOpenid: openid }],
+    ['礼簿短码', 'book_codes', { ownerOpenid: openid }],
     ['同名合并', 'person_alias', { ownerOpenid: openid }],
     ['记账人 / 家人', 'members', { ownerOpenid: openid }],
     ['加入的主家', 'members', { memberOpenid: openid }],
