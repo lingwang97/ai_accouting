@@ -14,7 +14,8 @@ const { MAX_AMOUNT } = require('./limits.js'); // 单笔金额上限（tools/clo
  * 往来人标识 o:<微信身份>:<姓名> 里含宾客（或主家）的 openid，不直接交给前端：
  * 出参里的 o: 标识确定性加密为 h:<密文>:<姓名>，入参再解密还原，云函数内部和数据库仍用 o: 标识
  */
-const KEY_SECRET = crypto.createHash('sha256').update('huilj.person-key.v1').digest();
+// 密钥可由云函数环境变量 PERSON_KEY_SECRET 覆盖；未配置沿用内置默认值（已有数据的往来人标识依赖它，设置后旧标识将无法解密，勿随意设置）
+const KEY_SECRET = crypto.createHash('sha256').update(process.env.PERSON_KEY_SECRET || 'huilj.person-key.v1').digest();
 const KEY_IV = Buffer.alloc(16, 0); // 固定 IV：同一个人每次得到同一个标识，前端可用来比较
 function hideKey(k) {
   const m = /^o:([\w-]{1,64}):(.*)$/.exec(k);

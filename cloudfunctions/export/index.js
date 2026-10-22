@@ -3,8 +3,8 @@
 //    传统礼簿主题：pdfTheme 为预设 key（见 themes.js），传了则按礼簿保存到 books.pdfTheme；白事礼簿强制素灰
 //   - 传 bookId：校验礼簿归属，按礼簿导出；日期可选（同时传入则再按日期过滤，不传导出整本）
 //   - 不传 bookId：日期必填，可选 themeName（礼簿名）过滤；format='book'（传统礼簿）必须传 bookId
-//   - 普通导出上传到 exports/{OPENID}/，登记 exports 集合 kind='export' keep=false（前端下载后调 cleanup 删除）
-//   - 归档：{ format:'book', bookId, keep:true } 上传到 archives/{OPENID}/，登记 kind='archive' keep=true，
+//   - 普通导出上传到 exports/{md5(OPENID)前16位}/，登记 exports 集合 kind='export' keep=false（前端下载后调 cleanup 删除）
+//   - 归档：{ format:'book', bookId, keep:true } 上传到 archives/{md5(OPENID)前16位}/，登记 kind='archive' keep=true，
 //     并写入礼簿 archivePdf: { fileID, fileName, createdAt }；原有归档文件及其登记一并删除
 //   出参：{ code:0, msg:'ok', data:{ fileID, fileName, count, sum } }
 // 二、备份：{ format:'backup' } 全量导出一个 xlsx（礼簿汇总 / 礼金明细 / 送礼记录），登记 kind='backup' keep=false
@@ -167,8 +167,8 @@ exports.main = async (event) => {
     const fileName = `礼簿_${sanitizeName(base)}.${ext}`;
     // 文件名加随机串：路径不可推算（下载走云存储，路径可猜时别人可能直接下载）
     const cloudPath = archive
-      ? `archives/${OWNER}/${bookId}-${Date.now()}-${rnd()}.pdf`
-      : `exports/${OWNER}/${Date.now()}-${rnd()}.${ext}`;
+      ? `archives/${dirOf(OWNER)}/${bookId}-${Date.now()}-${rnd()}.pdf`
+      : `exports/${dirOf(OWNER)}/${Date.now()}-${rnd()}.${ext}`;
     stage = '上传';
     const up = await cloud.uploadFile({ cloudPath, fileContent: buffer });
     stage = '记录';
@@ -215,6 +215,8 @@ async function deleteFiles(fileIDs) {
  * 删除一批登记行对应的文件及登记行，返回处理条数
  * 只删导出 / 存档目录下的文件；客户端直接写库伪造的登记行（带 _openid）不删文件，只清掉登记行
  */
+/** 云存储目录名：用 openid 的 md5 前 16 位，路径里不出现 openid（旧文件仍在 exports/{openid}/，按 fileID 登记，照常可用） */
+const dirOf = openid => require('crypto').createHash('md5').update(String(openid)).digest('hex').slice(0, 16);
 const OWN_DIR = /^cloud:\/\/[^/]+\/(exports|archives)\//;
 const rnd = () => require('crypto').randomBytes(8).toString('hex');
 async function removeTracked(rows) {
@@ -953,7 +955,7 @@ async function exportBackup(openid, withGifts = true, opts = {}) {
   const buffer = await buildBackup({ records, books, gifts, extra });
   // 管理员备份存在 exports/admin/ 下、登记在 admin 名下（清除该账户时不会被一起删掉），7 天后自动清理
   const up = await cloud.uploadFile({
-    cloudPath: opts.admin ? `exports/admin/${openid}-${Date.now()}-${rnd()}.xlsx` : `exports/${openid}/backup-${Date.now()}-${rnd()}.xlsx`,
+    cloudPath: opts.admin ? `exports/admin/${dirOf(openid)}-${Date.now()}-${rnd()}.xlsx` : `exports/${dirOf(openid)}/backup-${Date.now()}-${rnd()}.xlsx`,
     fileContent: buffer
   });
   if (opts.admin) {
