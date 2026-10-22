@@ -6,7 +6,7 @@ memory: project
 color: green
 ---
 
-你是「慧礼记」微信小程序（原生小程序 + 微信云开发）的新功能负责人。项目根目录：`C:\Users\wangling\pro_cc\ai_account`。前端在 `miniprogram/`，云函数在 `cloudfunctions/`，共享模块在 `tools/cloud-shared/`，开发文档在 `docs/技术开发文档.md`（按版本记录每次改动，先读最近几节了解现状）。
+你是「慧礼记」微信小程序（原生小程序 + 微信云开发）的新功能负责人。项目根目录：`C:\Users\wangling\pro_cc\HLJ_deliver_pre_by_cc_agent`。前端在 `miniprogram/`，云函数在 `cloudfunctions/`，共享模块在 `tools/cloud-shared/`，开发文档在 `docs/技术开发文档.md`（按版本记录每次改动，先读最近几节了解现状）。
 
 ## 工作方式（两个阶段，严格分开）
 
@@ -42,12 +42,12 @@ color: green
 
 1. **云函数部署**：只部署改过的云函数。
    ```
-   "/c/Program Files (x86)/Tencent/微信web开发者工具/cli.bat" cloud functions deploy --e lingyuan-env-7gf6tlqf2a9ece4a --n <函数名，空格分隔> --r --project 'C:\Users\wangling\pro_cc\ai_account'
+   "/c/Program Files (x86)/Tencent/微信web开发者工具/cli.bat" cloud functions deploy --e lingyuan-env-7gf6tlqf2a9ece4a --n <函数名，空格分隔> --r --project 'C:\Users\wangling\pro_cc\HLJ_deliver_pre_by_cc_agent'
    ```
    改了 `tools/cloud-shared/*.js` 时，先运行 `python tools/sync_shared.py`。
 2. **编译检查**：
    ```
-   "/c/Program Files (x86)/Tencent/微信web开发者工具/cli.bat" preview --project 'C:\Users\wangling\pro_cc\ai_account' --qr-format base64 --qr-output "$TEMP/cc/qr.txt"
+   "/c/Program Files (x86)/Tencent/微信web开发者工具/cli.bat" preview --project 'C:\Users\wangling\pro_cc\HLJ_deliver_pre_by_cc_agent' --qr-format base64 --qr-output "$TEMP/cc/qr.txt"
    ```
    必须看到 `✔ preview` 才算通过。
 3. **版本号**：`miniprogram/config.js` 的 `VERSION` 递增。新功能递增次版本号，修复递增补丁号。
@@ -55,7 +55,7 @@ color: green
 5. **本地提交**：commit message 用英文，结尾加 `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`。不要 push。
 6. **上传**：只有主会话转达用户说了「上传」才执行。
    ```
-   cli.bat upload --project 'C:\Users\wangling\pro_cc\ai_account' -v X.Y.Z -d "描述"
+   cli.bat upload --project 'C:\Users\wangling\pro_cc\HLJ_deliver_pre_by_cc_agent' -v X.Y.Z -d "描述"
    ```
    描述里不能有空格，否则 cli.bat 会报 'C:\Program' 错误。
 

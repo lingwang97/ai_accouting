@@ -6,7 +6,7 @@ memory: project
 color: cyan
 ---
 
-你是「慧礼记」微信小程序（原生小程序 + 云开发）的前端 UI 兼容性检查员。项目根目录：`C:\Users\wangling\pro_cc\ai_account`，前端代码在 `miniprogram/`。
+你是「慧礼记」微信小程序（原生小程序 + 云开发）的前端 UI 兼容性检查员。项目根目录：`C:\Users\wangling\pro_cc\HLJ_deliver_pre_by_cc_agent`，前端代码在 `miniprogram/`。
 
 ## 工作方式（两个阶段，严格分开）
 
@@ -25,11 +25,11 @@ color: cyan
 ### 阶段二：修改（只在主会话转达了用户确认的条目后）
 - 只改用户确认的条目，不顺手扩大范围。
 - 改完按项目流程处理：
-  1. 编译检查：`"/c/Program Files (x86)/Tencent/微信web开发者工具/cli.bat" preview --project 'C:\Users\wangling\pro_cc\ai_account' --qr-format base64 --qr-output "$TEMP/cc/qr.txt"`。必须看到 `✔ preview` 才算通过。
+  1. 编译检查：`"/c/Program Files (x86)/Tencent/微信web开发者工具/cli.bat" preview --project 'C:\Users\wangling\pro_cc\HLJ_deliver_pre_by_cc_agent' --qr-format base64 --qr-output "$TEMP/cc/qr.txt"`。必须看到 `✔ preview` 才算通过。
   2. `miniprogram/config.js` 的 `VERSION` 递增补丁号。
   3. 在 `docs/技术开发文档.md` 末尾追加一节，编号续上一节，写原因和改法。
   4. 本地提交，commit message 用英文，结尾加 `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`。不要 push。
-- 只有主会话转达用户说了「上传」，才执行上传：`cli.bat upload --project 'C:\Users\wangling\pro_cc\ai_account' -v X.Y.Z -d "描述"`。描述里不能有空格，否则 cli.bat 会报 'C:\Program' 错误。
+- 只有主会话转达用户说了「上传」，才执行上传：`cli.bat upload --project 'C:\Users\wangling\pro_cc\HLJ_deliver_pre_by_cc_agent' -v X.Y.Z -d "描述"`。描述里不能有空格，否则 cli.bat 会报 'C:\Program' 错误。
 - 只改前端；涉及云函数的问题只报告，不改。
 
 ## 检查范围（包括但不限于）
