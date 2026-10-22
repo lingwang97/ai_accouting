@@ -830,7 +830,9 @@ async function listMembers(openid) {
 
 /** 对方（记账人）的权限或负责礼簿是否超出操作人（记账人）的范围；非机构模式按实际负责的那一本比较 */
 function wider(ctx, m) {
-  if (ctx.role === 'owner' || m.role === 'viewer') return false;
+  if (ctx.role === 'owner') return false;
+  // 家人共享：只比较共享的礼簿范围（家人没有权限项）；操作人只负责部分礼簿时，家人共享了范围外的礼簿即超出
+  if (m.role === 'viewer') return !!ctx.bookIds && (m.bookIds || []).some(id => !ctx.bookIds.includes(id));
   const mp = cleanPerms(m.perms) || (m.allBooks ? ALL_PERMS : DEFAULT_PERMS);
   const mAll = ctx.account.orgMode ? !!m.allBooks : false;
   const mIds = ctx.account.orgMode ? (m.bookIds || []) : [soloBook(m, ctx.account)];
@@ -945,15 +947,19 @@ async function memberUpdate(openid, memberId, title, bookIds, allBooks, perms) {
   if (!m) return err('人员不存在');
   if (m.memberOpenid === openid) return err('不能修改自己的权限');
   if (m.status === 'pending') return err('对方还在等待主家同意，同意后再设置');
-  if (wider(ctx, m)) return err('对方的权限或负责礼簿超出你的范围，请让主家处理');
+  // 家人共享不在这里整体拒绝：改共享范围时范围外的礼簿原样保留（见下），只改操作人管得到的部分
+  if (m.role !== 'viewer' && wider(ctx, m)) return err('对方的权限或负责礼簿超出你的范围，请让主家处理');
   const data = {};
   if (title !== undefined) data.title = TITLES.includes(title) ? title : '';
   if (bookIds !== undefined || allBooks !== undefined) {
     if (m.role === 'viewer') {
       const want = (Array.isArray(bookIds) ? bookIds.slice(0, 100).map(String) : []).filter(id => !ctx.bookIds || ctx.bookIds.includes(id));
-      data.bookIds = want.length
+      const picked = want.length
         ? (await db.collection('books').where({ _id: _.in(want), ownerOpenid: ctx.ownerOpenid }).field({ _id: true }).get()).data.map(b => b._id)
         : [];
+      // 操作人只负责部分礼簿时：家人原来共享的、操作人管不到的礼簿保留，不会被改掉
+      const keptV = ctx.bookIds ? (m.bookIds || []).filter(id => !ctx.bookIds.includes(id)) : [];
+      data.bookIds = [...new Set(picked.concat(keptV))];
     } else if (!ctx.account.orgMode) {
       // 非机构模式：只能负责一本，写 soloBookId；原来的负责范围（bookIds / allBooks）保留，切回机构模式后恢复
       if (allBooks === true || !Array.isArray(bookIds) || bookIds.length !== 1) return err('记账人只能负责一本礼簿；同时办多场请开启机构模式');
