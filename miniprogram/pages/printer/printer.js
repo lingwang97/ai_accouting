@@ -19,14 +19,19 @@ Page({
   },
 
   onHide() {
-    ble.stopDiscovery();
-    ble.offFound();
-    this.setData({ discovering: false });
+    this._stopScan();
   },
 
   onUnload() {
+    this._stopScan();
+  },
+
+  /** 停止扫描并清定时器 */
+  _stopScan() {
+    clearTimeout(this._scanTimer);
     ble.stopDiscovery();
     ble.offFound();
+    if (this.data.discovering) this.setData({ discovering: false });
   },
 
   toggleShowAll() {
@@ -39,6 +44,12 @@ Page({
       await ble.openAdapter();
       this.setData({ devices: [], discovering: true });
       await ble.startDiscovery();
+      // 搜索 30 秒后自动停止，避免长时间扫描耗电
+      clearTimeout(this._scanTimer);
+      this._scanTimer = setTimeout(() => {
+        ble.stopDiscovery();
+        this.setData({ discovering: false });
+      }, 30000);
 
       ble.onFound(devs => {
         const list = this.data.devices.slice();
@@ -60,12 +71,14 @@ Page({
         });
       this.setData({ devices: this.data.devices });
     } catch (e) {
+      clearTimeout(this._scanTimer);
       wx.showToast({ title: e.message || '蓝牙不可用', icon: 'none' });
       this.setData({ discovering: false });
     }
   },
 
   onStopScan() {
+    clearTimeout(this._scanTimer);
     ble.stopDiscovery();
     this.setData({ discovering: false });
   },
@@ -75,7 +88,9 @@ Page({
     if (!dev) return;
     wx.showLoading({ title: '连接中' });
     try {
+      clearTimeout(this._scanTimer);
       ble.stopDiscovery();
+      this.setData({ discovering: false });
       await ble.connect(dev.deviceId);
       ble.saveDevice({ deviceId: dev.deviceId, name: dev.name });
       wx.hideLoading();

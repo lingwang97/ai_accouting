@@ -13,12 +13,28 @@ const state = {
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+/** 蓝牙错误码 → 提示（码以微信官方文档 wx.openBluetoothAdapter 等为准；不确定的统一兜底） */
+function errMsg(err, fallback) {
+  const code = err && err.errCode;
+  switch (code) {
+    case 10001: return device.notPhone() ? '当前设备不支持蓝牙打印，请在手机上操作' : '请打开手机蓝牙后重试';
+    case 10002: return '没有找到打印机，请确认已开机并靠近手机';
+    case 10003: return '连接打印机失败，请重试';
+    case 10006: return '打印机连接已断开';
+    case 10009: return '手机系统版本或权限不支持蓝牙，请检查系统蓝牙与定位权限';
+    case 10012: return '连接打印机超时，请靠近打印机后重试';
+    default:
+      if (code) return `蓝牙异常（错误码 ${code}）`;
+      return fallback || '蓝牙异常';
+  }
+}
+
 function openAdapter() {
   return new Promise((resolve, reject) => {
     wx.openBluetoothAdapter({
       success: resolve,
       // 电脑 / iPad 上不支持蓝牙打印，提示换手机操作
-      fail: () => reject(new Error(device.notPhone() ? '当前设备不支持蓝牙打印，请在手机上操作' : '请打开手机蓝牙后重试'))
+      fail: err => reject(new Error(errMsg(err, device.notPhone() ? '当前设备不支持蓝牙打印，请在手机上操作' : '请打开手机蓝牙后重试')))
     });
   });
 }
@@ -28,7 +44,7 @@ function startDiscovery() {
     wx.startBluetoothDevicesDiscovery({
       allowDuplicatesKey: false,
       success: resolve,
-      fail: () => reject(new Error('搜索蓝牙设备失败'))
+      fail: err => reject(new Error(errMsg(err, '搜索蓝牙设备失败')))
     });
   });
 }
@@ -66,7 +82,8 @@ function isPrinterLike(name) {
 }
 
 /** 连接设备并定位可写特征值；找不到 FF02 时遍历所有服务兜底 */
-function connect(deviceId) {
+async function connect(deviceId) {
+  await _closeOld();
   return new Promise((resolve, reject) => {
     wx.createBLEConnection({
       deviceId,
@@ -79,8 +96,20 @@ function connect(deviceId) {
           reject(e);
         });
       },
-      fail: () => reject(new Error('连接打印机失败，请重试'))
+      fail: err => reject(new Error(errMsg(err, '连接打印机失败，请重试')))
     });
+  });
+}
+
+/** 连接新设备前先断开旧连接（等待回调，失败也不阻塞） */
+function _closeOld() {
+  if (!state.deviceId) return Promise.resolve();
+  const id = state.deviceId;
+  state.deviceId = '';
+  return new Promise(resolve => {
+    try {
+      wx.closeBLEConnection({ deviceId: id, complete: () => resolve() });
+    } catch (e) { resolve(); }
   });
 }
 
@@ -126,7 +155,7 @@ function _resolveWritable(deviceId) {
         };
         tryService(0);
       },
-      fail: () => reject(new Error('获取服务失败'))
+      fail: err => reject(new Error(errMsg(err, '获取服务失败')))
     });
   });
 }
@@ -138,10 +167,14 @@ function disconnect() {
   }
 }
 
-/** 分包写入（BLE 单包 ≤20 字节），返回 Promise */
+/**
+ * 分包写入（BLE 单包 ≤20 字节），返回 Promise
+ * 失败时 reject 的 Error 带 written（已成功写入的字节数）与 errCode，供上层判断是否可整单重试
+ */
 function writeBuffer(buffer) {
   const data = new Uint8Array(buffer);
   const CHUNK = 20;
+  let written = 0;
   let p = Promise.resolve();
   for (let i = 0; i < data.length; i += CHUNK) {
     const slice = data.slice(i, i + CHUNK);
@@ -151,8 +184,13 @@ function writeBuffer(buffer) {
         serviceId: state.serviceId,
         characteristicId: state.charId,
         value: slice.buffer,
-        success: () => setTimeout(resolve, 20), // 打印机写缓冲需要间隔
-        fail: err => reject(err)
+        success: () => { written += slice.length; setTimeout(resolve, 20); }, // 打印机写缓冲需要间隔
+        fail: err => {
+          const e = new Error(errMsg(err, '写入打印机失败'));
+          e.errCode = err && err.errCode;
+          e.written = written;
+          reject(e);
+        }
       });
     }));
   }
@@ -178,6 +216,6 @@ async function reconnectSaved() {
 module.exports = {
   PRINTER_PREFIX, state,
   openAdapter, startDiscovery, stopDiscovery, onFound, offFound, getDevices, isPrinterLike,
-  connect, disconnect, writeBuffer,
+  connect, disconnect, writeBuffer, errMsg,
   saveDevice, loadDevice, reconnectSaved, sleep
 };

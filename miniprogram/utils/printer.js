@@ -25,7 +25,8 @@ async function getTemplate(force, bookId) {
     const r = await request.bookGetTpl(bookId);
     tplCache[key] = r.printTpl || defaultTemplate(r.book.type, r.paperWidth);
   } catch (e) {
-    tplCache[key] = defaultTemplate('other', 32);
+    // 拉取失败只本次用默认模板，不写缓存，下次打印再重试，避免一次网络抖动后一直用错样式
+    return defaultTemplate('other', 32);
   }
   return tplCache[key];
 }
@@ -39,22 +40,45 @@ function isConnected() {
   return !!ble.state.deviceId;
 }
 
+/** 打印任务串行队列：并发的打印 / 连接请求排队执行，避免多个任务交错写同一台打印机 */
+let _queue = Promise.resolve();
+function enqueue(fn) {
+  const run = _queue.then(fn);
+  _queue = run.catch(() => {});
+  return run;
+}
+
+let _connecting = null; // 进行中的连接请求，重复调用共用同一个
 /** 确保已连接：优先当前连接，其次记忆设备重连（冷启动后需先打开蓝牙适配器） */
-async function ensureConnected() {
-  if (isConnected()) return true;
-  if (!ble.loadDevice()) return false;
-  try {
-    await ble.openAdapter();
-  } catch (e) {
-    return false;
-  }
-  const info = await ble.reconnectSaved();
-  return !!info;
+function _ensure() {
+  if (isConnected()) return Promise.resolve(true);
+  if (_connecting) return _connecting;
+  _connecting = (async () => {
+    if (!ble.loadDevice()) return false;
+    try {
+      await ble.openAdapter();
+    } catch (e) {
+      return false;
+    }
+    const info = await ble.reconnectSaved();
+    return !!info;
+  })();
+  const clear = () => { _connecting = null; };
+  _connecting.then(clear, clear); // 不用 finally，兼容低版本基础库
+  return _connecting;
+}
+
+function ensureConnected() {
+  return enqueue(_ensure);
 }
 
 /** 打印一笔账目；成功后回写 printed 标记 */
-async function printRecord(record) {
-  if (!(await ensureConnected())) {
+function printRecord(record) {
+  return enqueue(() => _printRecord(record));
+}
+
+async function _printRecord(record) {
+  if (!(await _ensure())) {
     throw new Error('打印机未连接，请先到"我的 → 蓝牙打印机"连接');
   }
   const tpl = await getTemplate(false, record.bookId);
@@ -77,22 +101,41 @@ async function printRecord(record) {
   return true;
 }
 
-async function printTest() {
-  if (!(await ensureConnected())) {
-    throw new Error('打印机未连接');
-  }
-  await _writeRetry(escpos.buildTestLine());
-  return true;
+function printTest() {
+  return enqueue(async () => {
+    if (!(await _ensure())) {
+      throw new Error('打印机未连接');
+    }
+    await _writeRetry(escpos.buildTestLine());
+    return true;
+  });
 }
 
-/** 失败自动重试 1 次（文档 §8） */
+const PARTIAL_MSG = '打印中途中断，请检查小票后补打';
+
+/** 中途中断的错误：已有部分内容出纸，不自动重打整张，避免出两张 */
+function _partialError(e) {
+  const err = new Error(PARTIAL_MSG);
+  err.partial = true;
+  err.errCode = e && e.errCode;
+  return err;
+}
+
+/** 仅第一包就失败（尚未出纸）才断开重连并整单重试 1 次（文档 §8）；中途失败不重打 */
 async function _writeRetry(buffer) {
   try {
     await ble.writeBuffer(buffer);
   } catch (e) {
     ble.disconnect();
-    if (!(await ensureConnected())) throw new Error('打印机连接已断开');
-    await ble.writeBuffer(buffer);
+    if (e && e.written > 0) throw _partialError(e);
+    if (!(await _ensure())) throw new Error('打印机连接已断开');
+    try {
+      await ble.writeBuffer(buffer);
+    } catch (e2) {
+      ble.disconnect();
+      if (e2 && e2.written > 0) throw _partialError(e2);
+      throw e2;
+    }
   }
 }
 

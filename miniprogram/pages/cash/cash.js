@@ -104,9 +104,10 @@ Page({
     this.setData({ saving: true });
     try {
       // 同名区分：礼簿里已有同名宾客时，逐个确认是哪一位（取消即中止，不提示）
-      if (!(await this.pickSameName(payload))) return;
+      // 先检查礼簿再选同名，避免选完同名才提示没选礼簿
       const b = this.data.books[this.data.bookIdx];
       if (this.data.books.length && !b) return wx.showToast({ title: '请先选择记入哪本礼簿', icon: 'none' });
+      if (!(await this.pickSameName(payload))) return;
       if (this.data.books.length && b) payload.bookId = b._id;
       payload.payMethod = this.data.payMethod;
       // 幂等键：弱网下超时重试、重复点击都带同一个 reqId，服务端不会重复入簿；成功后才换新的
@@ -172,7 +173,7 @@ Page({
     try {
       for (const r of list) await printer.printRecord(r);
     } catch (e) {
-      wx.showToast({ title: '打印失败，可在礼簿页补打', icon: 'none' });
+      wx.showToast({ title: e.partial ? e.message : '打印失败，可在礼簿页补打', icon: 'none' });
     }
   },
 
