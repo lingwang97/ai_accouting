@@ -173,13 +173,18 @@ Page({
           const r = await req.bookArchive(id, toArchive);
           if (toArchive) {
             // 归档时自动生成传统礼簿 PDF 存档（长期保留，可在礼簿统计页查看）
-            wx.showLoading({ title: '生成存档 PDF…', mask: true });
-            try {
-              await req.exportFile({ format: 'book', bookId: id, keep: true });
-              wx.hideLoading();
-              wx.showToast({ title: '已归档并存档', icon: 'success' });
-            } catch (e) {
-              wx.hideLoading(); // 无礼金等，request.js 已提示
+            // 没有「对账与导出」权限的记账人不生成存档（由主家或有权限的人在礼簿详情里补生成）
+            if (!(this.data.pm && this.data.pm.export)) {
+              wx.showToast({ title: '已归档', icon: 'success' });
+            } else {
+              wx.showLoading({ title: '生成存档 PDF…', mask: true });
+              try {
+                await req.exportFile({ format: 'book', bookId: id, keep: true });
+                wx.hideLoading();
+                wx.showToast({ title: '已归档并存档', icon: 'success' });
+              } catch (e) {
+                wx.hideLoading(); // 无礼金等，request.js 已提示
+              }
             }
             // 只负责这一本的记账人：之后没有礼簿可记，提醒主家重新安排
             const names = (r && r.affected) || [];

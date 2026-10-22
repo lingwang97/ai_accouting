@@ -93,7 +93,7 @@ exports.main = async (event) => {
     if (format === 'book' && !bookId) return err('传统礼簿请选择一本礼簿整本导出');
     // 仅传统礼簿支持归档保留；家人共享只读，不能生成存档
     const archive = format === 'book' && event.keep === true;
-    if (archive && !can(ctx, 'books')) return err('生成存档需要「管理礼簿」权限');
+    if (archive && !(can(ctx, 'books') && can(ctx, 'export'))) return err('生成存档需要「管理礼簿」和「对账与导出」权限');
 
     if (bookId) {
       // 按礼簿导出：先校验礼簿归属

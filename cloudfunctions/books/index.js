@@ -9,7 +9,7 @@ const _ = db.command;
 const books = db.collection('books');
 const accounts = db.collection('accounts');
 const records = db.collection('records');
-const { resolveCtx, canBook, restricted, can, workBook, soloBook } = require('./ctx.js');
+const { resolveCtx, canBook, restricted, readonly, can, workBook, soloBook } = require('./ctx.js');
 const trash = require('./trash.js');
 
 const TYPES = ['wedding', 'birthday', 'baby', 'house', 'funeral', 'other'];
@@ -61,7 +61,7 @@ exports.main = async (event) => {
       case 'trashList': return ctx.role === 'owner' ? await trashList(OWNER) : err('只有主家本人可以查看回收站');
       case 'trashRestore': return ctx.role === 'owner' ? await trashOp(OWNER, String(event.bookId || ''), 'restore') : err('只有主家本人可以恢复');
       case 'trashPurge': return ctx.role === 'owner' ? await trashOp(OWNER, String(event.bookId || ''), 'purge', event.confirmName) : err('只有主家本人可以删除');
-      case 'stats': return await stats(OWNER, event.bookId);
+      case 'stats': return await stats(OWNER, event.bookId, ctx);
       case 'getTpl': return await getTpl(OWNER, account, event.bookId);
       case 'saveTpl': return await saveTpl(OWNER, event.bookId, event.receiptTpl, event.printTpl);
       default: return err('未知 action');
@@ -95,13 +95,14 @@ async function list(openid, account, ctx) {
   if (stale) res = await books.where({ ownerOpenid: openid }).orderBy('createdAt', 'desc').limit(1000).get();
 
   const visible = res.data.filter(b => canBook(ctx, b._id)); // 礼台人员只看负责的场次
+  const showPdf = can(ctx, 'export') || readonly(ctx); // 家人共享与导出权限一致可看；没有「对账与导出」的记账人不返回存档文件
   return ok({
     activeBookId: canBook(ctx, workBook(ctx)) ? workBook(ctx) : '', // 机构模式记账人：自己选的一场
     restricted: restricted(ctx),
     perms: ctx.perms || [],
     list: visible.map(b => ({
       _id: b._id, name: b.name, type: b.type, date: b.date, location: b.location,
-      archived: b.archived, archivePdf: b.archivePdf || null,
+      archived: b.archived, archivePdf: showPdf ? (b.archivePdf || null) : null, // 存档 PDF 视同导出文件，需「对账与导出」
       pdfTheme: (b.pdfTheme && b.pdfTheme.key) || '', // 传统礼簿 PDF 主题（空为默认红金）
       pdfCustom: (b.pdfTheme && b.pdfTheme.key === 'custom' && b.pdfTheme.custom) || null,
       pdfBase: (b.pdfTheme && b.pdfTheme.base) || '', // 自定义基于哪个预设修改（仅记录）
@@ -364,7 +365,7 @@ async function trashOp(openid, bookId, op, confirmName) {
 }
 
 /** 单本礼簿统计：合计、份数、按关系分组 */
-async function stats(openid, bookId) {
+async function stats(openid, bookId, ctx) {
   const book = await getBook(openid, bookId);
   if (!book) return err('礼簿不存在');
   const match = { ownerOpenid: openid, status: 'paid', bookId: book._id };
@@ -390,7 +391,7 @@ async function stats(openid, bookId) {
   });
   const t = (total.list && total.list[0]) || { count: 0, fen: 0, maxAmount: 0 };
   return ok({
-    book: safeBook(book),
+    book: { ...safeBook(book), archivePdf: ctx && (can(ctx, 'export') || readonly(ctx)) ? (book.archivePdf || null) : null },
     count: t.count,
     sum: Math.round(t.fen) / 100,
     maxAmount: t.maxAmount || 0,
@@ -405,7 +406,7 @@ async function stats(openid, bookId) {
 function safeBook(b) {
   return {
     _id: b._id, name: b.name, type: b.type, date: b.date || '', location: b.location || '',
-    archived: !!b.archived, archivePdf: b.archivePdf || null, hostName: b.hostName || '',
+    archived: !!b.archived, archivePdf: null, hostName: b.hostName || '',
     hasPayCode: !!b.payCodeFileID, pendingPayCode: !!b.pendingPayCode,
     count: b.statCount || 0, sum: (b.statFen || 0) / 100
   };
