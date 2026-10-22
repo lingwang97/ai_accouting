@@ -18,7 +18,10 @@ const DEFAULT_KEY = 'red_gold';
 
 const PATTERNS = ['double', 'huiwen', 'flower', 'cloud', 'diamond', 'line', 'none'];
 const FONTS = ['sans', 'serif', 'brush'];
-const MARKS = ['', '喜', '寿', '福']; // 水印字只能在这几个里选（均在 GB2312 内）
+const MARKS = ['', '喜', '囍', '寿', '福']; // 喜事水印字（囍不在 GB2312，宋体子集已补；毛笔体没有，绘制时改用宋体）
+// 白事可编辑项的限制（礼俗）：角饰只能无 / 双线 / 直角，水印只能无 / 奠；颜色一律素灰
+const FUNERAL_PATTERNS = ['none', 'double', 'line'];
+const FUNERAL_MARKS = ['', '奠'];
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
 function lum(hex) {
@@ -47,8 +50,25 @@ function sanitizeCustom(c) {
       pattern: PATTERNS.includes(c.pattern) ? c.pattern : 'double',
       mark: MARKS.includes(c.mark) ? c.mark : '',
       footer: clean(c.footer).slice(0, 8),
-      title: clean(c.title).slice(0, 20)
+      title: clean(c.title).slice(0, 20),
+      cover: HEX.test(String(c.cover || '')) ? String(c.cover).toUpperCase() : '' // 可选：封面文字色（由预设展开而来）
     }
+  };
+}
+
+/**
+ * 白事可编辑项：{ font, pattern, mark, footer, title }；颜色一律素灰，传入的颜色、喜事角饰 / 水印全部忽略
+ * 永远返回合法值（非法项回落默认）
+ */
+function sanitizeFuneral(c) {
+  c = c && typeof c === 'object' ? c : {};
+  const clean = t => String(t || '').replace(/[\u0000-\u001f\u007f]/g, '').trim();
+  return {
+    font: FONTS.includes(c.font) ? c.font : 'sans',
+    pattern: FUNERAL_PATTERNS.includes(c.pattern) ? c.pattern : 'none',
+    mark: FUNERAL_MARKS.includes(c.mark) ? c.mark : '',
+    footer: clean(c.footer).slice(0, 8),
+    title: clean(c.title).slice(0, 20)
   };
 }
 
@@ -60,14 +80,19 @@ function sanitizeCustom(c) {
  * @param {object} [custom] 自定义项（已存的也再校验一遍，坏数据回落红金）
  */
 function resolve(funeral, key, custom) {
-  if (funeral) return PRESETS.find(p => p.funeral);
+  if (funeral) {
+    // 白事：素灰底 + 可编辑的字体 / 角饰 / 水印 / 标题 / 落款（已存的也再校验一遍）
+    const grey = PRESETS.find(p => p.funeral);
+    return key === 'custom' && custom ? Object.assign({}, grey, sanitizeFuneral(custom)) : grey;
+  }
   if (key === 'custom') {
     const r = sanitizeCustom(custom);
     if (r.value) {
       const v = r.value;
       const dark = lum(v.main) < 0.18;
       const accent = contrast(v.main, v.accent) >= 3 ? v.accent : (dark ? '#FFFFFF' : '#222222');
-      return { key: 'custom', name: '自定义', main: v.main, accent, cover: dark ? '#FFFFFF' : '#222222', pattern: v.pattern, mark: v.mark, font: v.font, footer: v.footer, title: v.title };
+      const cover = v.cover && contrast(v.main, v.cover) >= 3 ? v.cover : (dark ? '#FFFFFF' : '#222222');
+      return { key: 'custom', name: '自定义', main: v.main, accent, cover, pattern: v.pattern, mark: v.mark, font: v.font, footer: v.footer, title: v.title };
     }
   }
   return PRESETS.find(p => p.key === key && !p.funeral) || PRESETS.find(p => p.key === DEFAULT_KEY);
@@ -75,4 +100,4 @@ function resolve(funeral, key, custom) {
 
 const isPresetKey = k => PRESETS.some(p => p.key === k && !p.funeral);
 
-module.exports = { PRESETS, DEFAULT_KEY, resolve, isPresetKey, sanitizeCustom };
+module.exports = { PRESETS, DEFAULT_KEY, resolve, isPresetKey, sanitizeCustom, sanitizeFuneral };

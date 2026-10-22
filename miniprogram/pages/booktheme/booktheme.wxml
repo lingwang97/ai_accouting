@@ -1,0 +1,84 @@
+<view class="container wrap" style="{{themeStyle}}">
+  <block wx:if="{{book}}">
+    <view class="book-name">{{book.name}}</view>
+
+    <view class="cv" wx:if="{{pv}}" style="background:{{pv.bg}};border-color:{{pv.border}};color:{{pv.text}}">
+      <view class="cv-in" style="border-color:{{pv.border}}"></view>
+      <view class="cv-mark" wx:if="{{pv.mark}}" style="color:{{pv.border}}">{{pv.mark}}</view>
+      <view class="cv-title" style="color:{{pv.border}}">{{pv.title}}</view>
+      <view class="cv-foot" style="color:{{pv.border}}" wx:if="{{pv.footer}}">{{pv.footer}}</view>
+    </view>
+    <view class="muted tip">预览只示意配色与文字，实际版式以导出的 PDF 为准</view>
+
+    <!-- 喜事：预设 + 自定义 -->
+    <view class="card" wx:if="{{!isFuneral}}">
+      <view class="section-title">主题</view>
+      <view class="themes">
+        <view wx:for="{{presets}}" wx:key="key" class="th {{themeKey === item.key ? 'on' : ''}}" data-k="{{item.key}}" bindtap="onPickTheme">
+          <view class="th-sw" style="background:{{item.main}};border-color:{{item.accent}}"><view class="th-in" style="background:{{item.accent}}"></view></view>
+          <view class="th-name">{{item.name}}</view>
+          <view class="th-scene">{{item.scene}}</view>
+        </view>
+        <view class="th {{themeKey === 'custom' ? 'on' : ''}}" data-k="custom" bindtap="onPickTheme">
+          <view class="th-sw th-custom">＋</view>
+          <view class="th-name">自定义</view>
+          <view class="th-scene">{{base ? '基于预设修改' : '自选配色字体'}}</view>
+        </view>
+      </view>
+      <view wx:if="{{themeKey !== 'custom'}}" class="edit-link" bindtap="onEditPreset">在此主题基础上修改 ›</view>
+    </view>
+
+    <view class="card cust" wx:if="{{!isFuneral && themeKey === 'custom'}}">
+      <view class="section-title">自定义</view>
+      <view class="cust-lb">主色（封面底色、格线）</view>
+      <view class="swatches">
+        <view wx:for="{{mainColors}}" wx:key="*this" class="sw {{cust.main === item ? 'on' : ''}}" style="background:{{item}}" data-f="main" data-v="{{item}}" bindtap="onCust"></view>
+      </view>
+      <input class="input" value="{{cust.main}}" maxlength="7" placeholder="#RRGGBB" data-f="main" bindinput="onCustInput" />
+      <view class="cust-lb">辅色（边框、标题）</view>
+      <view class="swatches">
+        <view wx:for="{{accentColors}}" wx:key="*this" class="sw {{cust.accent === item ? 'on' : ''}}" style="background:{{item}}" data-f="accent" data-v="{{item}}" bindtap="onCust"></view>
+      </view>
+      <input class="input" value="{{cust.accent}}" maxlength="7" placeholder="#RRGGBB" data-f="accent" bindinput="onCustInput" />
+      <view wx:if="{{custErr}}" class="cust-err">{{custErr}}</view>
+      <view class="cust-lb">字体</view>
+      <view class="chips"><view wx:for="{{fonts}}" wx:key="k" class="chip {{cust.font === item.k ? 'on' : ''}}" data-f="font" data-v="{{item.k}}" bindtap="onCust">{{item.n}}</view></view>
+      <view class="cust-lb">角饰</view>
+      <view class="chips"><view wx:for="{{patterns}}" wx:key="k" class="chip {{cust.pattern === item.k ? 'on' : ''}}" data-f="pattern" data-v="{{item.k}}" bindtap="onCust">{{item.n}}</view></view>
+      <view class="cust-lb">水印字</view>
+      <view class="chips"><view wx:for="{{marks}}" wx:key="k" class="chip {{cust.mark === item.k ? 'on' : ''}}" data-f="mark" data-v="{{item.k}}" bindtap="onCust">{{item.n}}</view></view>
+      <view class="cust-lb">封面标题（不填用礼簿名）</view>
+      <input class="input" value="{{cust.title}}" maxlength="20" placeholder="如：李王联姻志喜" data-f="title" bindinput="onCustInput" />
+      <view class="cust-lb">封面落款（不填则没有）</view>
+      <input class="input" value="{{cust.footer}}" maxlength="8" placeholder="如：百年好合" data-f="footer" bindinput="onCustInput" />
+    </view>
+
+    <!-- 白事：颜色固定素灰，只能改字体、角饰、水印、标题、落款 -->
+    <view class="card cust" wx:if="{{isFuneral}}">
+      <view class="section-title">白事礼簿样式</view>
+      <view class="muted">颜色固定为素灰，不可更换；其余可按需设置</view>
+      <view class="cust-lb">字体</view>
+      <view class="chips"><view wx:for="{{fonts}}" wx:key="k" class="chip {{fun.font === item.k ? 'on' : ''}}" data-f="font" data-v="{{item.k}}" bindtap="onFun">{{item.n}}</view></view>
+      <view class="cust-lb">角饰</view>
+      <view class="chips"><view wx:for="{{fPatterns}}" wx:key="k" class="chip {{fun.pattern === item.k ? 'on' : ''}}" data-f="pattern" data-v="{{item.k}}" bindtap="onFun">{{item.n}}</view></view>
+      <view class="cust-lb">水印字</view>
+      <view class="chips"><view wx:for="{{fMarks}}" wx:key="k" class="chip {{fun.mark === item.k ? 'on' : ''}}" data-f="mark" data-v="{{item.k}}" bindtap="onFun">{{item.n}}</view></view>
+      <view class="cust-lb">封面标题（不填用礼簿名）</view>
+      <input class="input" value="{{fun.title}}" maxlength="20" placeholder="如：某某先生奠仪簿" data-f="title" bindinput="onFunInput" />
+      <view class="cust-lb">封面落款</view>
+      <view class="chips">
+        <view class="chip {{fun.footer === '' ? 'on' : ''}}" data-f="footer" data-v="" bindtap="onFun">无</view>
+        <view wx:for="{{fFooters}}" wx:key="*this" class="chip {{fun.footer === item ? 'on' : ''}}" data-f="footer" data-v="{{item}}" bindtap="onFun">{{item}}</view>
+      </view>
+      <input class="input" value="{{fun.footer}}" maxlength="8" placeholder="也可以自己写（8 字以内）" data-f="footer" bindinput="onFunInput" />
+    </view>
+
+    <view class="muted tip" wx:if="{{!canSave}}">你没有管理礼簿权限，本次选择的主题只用于这次导出，不会保存</view>
+    <view class="muted tip" wx:else>确认导出后，主题会记在这本礼簿上，下次进入自动带出；礼簿归档存档也使用该主题</view>
+  </block>
+
+  <view class="bottom-bar" wx:if="{{book}}">
+    <button class="btn-primary" loading="{{exporting}}" disabled="{{exporting}}" bindtap="onConfirm">确认并导出</button>
+  </view>
+  <loading show="{{loading}}" type="overlay" />
+</view>

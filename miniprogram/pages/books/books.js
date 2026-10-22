@@ -92,7 +92,12 @@ Page({
     const bookId = e.currentTarget.dataset.id;
     wx.showActionSheet({
       itemList: EXPORTS.map(x => x.label),
-      success: res => this.doExport(EXPORTS[res.tapIndex].format, bookId)
+      success: res => {
+        const format = EXPORTS[res.tapIndex].format;
+        // 传统礼簿 PDF 先去选主题，确认后再导出；表格 PDF / Excel 直接导出
+        if (format === 'book') wx.navigateTo({ url: `/pages/booktheme/booktheme?bookId=${bookId}` });
+        else this.doExport(format, bookId);
+      }
     });
   },
 

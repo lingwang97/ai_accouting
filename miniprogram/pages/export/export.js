@@ -3,7 +3,6 @@ const req = require('../../utils/request.js');
 const fmt = require('../../utils/format.js');
 const openfile = require('../../utils/openfile.js');
 const theme = require('../../utils/theme.js');
-const pdftheme = require('../../utils/pdftheme.js');
 
 function presets() {
   const now = new Date();
@@ -26,14 +25,6 @@ Page({
     today: '',
     books: [{ _id: '', name: '按日期范围导出' }],
     bookIdx: 0,
-    pdfThemes: pdftheme.LIST,
-    themeKey: pdftheme.DEFAULT_KEY, // 传统礼簿主题
-    isFuneral: false,
-    fonts: pdftheme.FONTS, patterns: pdftheme.PATTERNS, marks: pdftheme.MARKS,
-    mainColors: pdftheme.MAIN_COLORS, accentColors: pdftheme.ACCENT_COLORS,
-    cust: Object.assign({}, pdftheme.DEFAULT_CUSTOM), // 自定义主题
-    cv: null, // 自定义封面预览色
-    custErr: '',
     exporting: '',  // '' | 'pdf' | 'xlsx' | 'book'
     pageLoading: true // 读取礼簿列表期间：转圈 + 不可操作
   },
@@ -57,7 +48,6 @@ Page({
       const want = bookId || activeBookId;
       const idx = Math.max(0, books.findIndex(b => b._id === want));
       this.setData({ books, bookIdx: idx });
-      this.syncTheme();
     } catch (e) { /* 礼簿可选，失败时按日期导出 */ } finally {
       this.setData({ pageLoading: false });
     }
@@ -70,40 +60,16 @@ Page({
 
   onStart(e) { this.setData({ startDay: e.detail.value, preset: '' }); },
   onEnd(e) { this.setData({ endDay: e.detail.value, preset: '' }); },
-  onBook(e) { this.setData({ bookIdx: Number(e.detail.value) }); this.syncTheme(); },
-
-  /** 选中礼簿后带出已保存的主题；白事固定素灰 */
-  syncTheme() {
-    const b = this.data.books[this.data.bookIdx] || {};
-    const cust = Object.assign({}, pdftheme.DEFAULT_CUSTOM, b.pdfCustom || {});
-    this.setData({ isFuneral: b.type === 'funeral', themeKey: b.pdfTheme || pdftheme.DEFAULT_KEY, cust });
-    this.refreshCust();
-  },
-
-  refreshCust() {
-    const c = this.data.cust;
-    this.setData({ cv: pdftheme.previewOf(c), custErr: pdftheme.checkCustom(c) });
-  },
-
-  onCust(e) {
-    const { f, v } = e.currentTarget.dataset;
-    this.setData({ ['cust.' + f]: v });
-    this.refreshCust();
-  },
-
-  onCustInput(e) {
-    const f = e.currentTarget.dataset.f;
-    let v = String(e.detail.value || '');
-    if (f === 'main' || f === 'accent') v = v.toUpperCase();
-    this.setData({ ['cust.' + f]: v });
-    this.refreshCust();
-  },
-
-  onPickTheme(e) { this.setData({ themeKey: e.currentTarget.dataset.k }); },
+  onBook(e) { this.setData({ bookIdx: Number(e.detail.value) }); },
 
   onExportPdf() { this.doExport('pdf'); },
   onExportXlsx() { this.doExport('xlsx'); },
-  onExportBook() { this.doExport('book'); },
+  /** 传统礼簿 PDF：先到主题页选主题，确认后在那里导出 */
+  onExportBook() {
+    const b = this.data.books[this.data.bookIdx];
+    if (!b || !b._id) return wx.showToast({ title: '传统礼簿请选择一本礼簿整本导出', icon: 'none' });
+    wx.navigateTo({ url: `/pages/booktheme/booktheme?bookId=${b._id}` });
+  },
   onBackup() { this.doExport('backup'); },
 
   /** 云端生成文件 → 下载 → 打开预览（右上角可转发/保存） */
@@ -111,20 +77,12 @@ Page({
     if (this.data.exporting) return;
     const { startDay, endDay, books, bookIdx } = this.data;
     const bookId = books[bookIdx] ? books[bookIdx]._id : '';
-    if (format === 'book' && !bookId) return wx.showToast({ title: '传统礼簿请选择一本礼簿整本导出', icon: 'none' });
     if (format !== 'backup' && !bookId && startDay > endDay) return wx.showToast({ title: '开始日期不能晚于结束日期', icon: 'none' });
 
     this.setData({ exporting: format });
     wx.showLoading({ title: '正在生成…', mask: true });
     try {
       const params = format === 'backup' ? { format } : (bookId ? { format, bookId } : { format, startDay, endDay });
-      if (format === 'book' && !this.data.isFuneral) {
-        params.pdfTheme = this.data.themeKey;
-        if (this.data.themeKey === 'custom') {
-          if (this.data.custErr) { wx.hideLoading(); this.setData({ exporting: '' }); return wx.showToast({ title: this.data.custErr, icon: 'none' }); }
-          params.pdfCustom = this.data.cust;
-        }
-      }
       const res = await req.exportFile(params);
       const filePath = await openfile.download(res.fileID, res.fileName);
       // 已下载到本机，立即删除云端文件，避免礼金明细通过链接外泄

@@ -10,6 +10,7 @@
     "pages/pay/pay",
     "pages/printset/printset",
     "pages/export/export",
+    "pages/booktheme/booktheme",
     "pages/receipt/receipt",
     "pages/receiptset/receiptset",
     "pages/myreceipts/myreceipts",

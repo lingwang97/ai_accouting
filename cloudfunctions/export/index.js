@@ -1,5 +1,5 @@
 // 云函数 export — 慧礼记 礼簿导出 PDF / Excel / 传统礼簿 / 归档 / 备份 / 文件清理（文档 §6.7）
-// 一、导出：{ format: 'pdf'|'xlsx'|'book', startDay?: 'YYYY-MM-DD', endDay?: 'YYYY-MM-DD', bookId?: string, themeName?: string, keep?: boolean, pdfTheme?: string, pdfCustom?: {main,accent,font,pattern,mark,footer,title} }
+// 一、导出：{ format: 'pdf'|'xlsx'|'book', startDay?: 'YYYY-MM-DD', endDay?: 'YYYY-MM-DD', bookId?: string, themeName?: string, keep?: boolean, pdfTheme?: string, pdfCustom?: {main,accent,font,pattern,mark,footer,title,cover}, pdfBase?: string }
 //    传统礼簿主题：pdfTheme 为预设 key（见 themes.js），传了则按礼簿保存到 books.pdfTheme；白事礼簿强制素灰
 //   - 传 bookId：校验礼簿归属，按礼簿导出；日期可选（同时传入则再按日期过滤，不传导出整本）
 //   - 不传 bookId：日期必填，可选 themeName（礼簿名）过滤；format='book'（传统礼簿）必须传 bookId
@@ -122,15 +122,23 @@ exports.main = async (event) => {
     if (format === 'book' && book && event.pdfTheme !== undefined) {
       const k = String(event.pdfTheme || '');
       let save = { key: k };
-      if (k === 'custom') {
-        const r = themes.sanitizeCustom(event.pdfCustom);
-        if (r.error) return err(r.error);
-        pdfCustom = r.value;
-        save = { key: k, custom: r.value };
-      } else if (k && !themes.isPresetKey(k)) return err('主题不存在');
-      pdfThemeKey = k;
-      // 白事不保存（强制素灰）；保存自定义时同时带上，换回预设后自定义项也丢弃
-      if (can(ctx, 'books') && book.type !== 'funeral') {
+      if (book.type === 'funeral') {
+        // 白事：忽略传入的预设 / 颜色，只认字体、角饰、水印、标题、落款，且按白事规则校验；颜色强制素灰
+        pdfCustom = themes.sanitizeFuneral(event.pdfCustom);
+        pdfThemeKey = 'custom';
+        save = { key: 'custom', custom: pdfCustom };
+      } else {
+        if (k === 'custom') {
+          const r = themes.sanitizeCustom(event.pdfCustom);
+          if (r.error) return err(r.error);
+          pdfCustom = r.value;
+          // base：基于哪个预设修改而来，仅作记录，不参与绘制
+          save = { key: k, custom: r.value, base: themes.isPresetKey(String(event.pdfBase || '')) ? String(event.pdfBase) : '' };
+        } else if (k && !themes.isPresetKey(k)) return err('主题不存在');
+        pdfThemeKey = k;
+      }
+      // 保存到礼簿需要「管理礼簿」权限；没有权限的只用于本次导出
+      if (can(ctx, 'books')) {
         await db.collection('books').doc(book._id).update({ data: { pdfTheme: _.set(save) } });
       }
     }
@@ -518,12 +526,15 @@ function buildBook(rows, meta) {
     // 边距全部置 0，所有文字用绝对坐标绘制，避免 pdfkit 自动换页
     const bt = meta.bt;
     const main = fontOf(bt.font);
+    // 水印字：囍、以及毛笔体（字形不全）一律用宋体绘制；没有水印不加载
+    const markFont = !bt.mark ? main : (bt.mark === '囍' || bt.font === 'brush') ? fontOf('serif') : main;
     const doc = new (PDF())({ size: 'A4', layout: 'landscape', margin: 0, bufferPages: true, autoFirstPage: false, font: main });
     const chunks = [];
     doc.on('data', c => chunks.push(c));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
     doc.registerFont('cn', main);
+    doc.registerFont('mark', markFont);
     // 毛笔字小字号不易辨认：序号、小写金额、备注、栏目名、页码等小字用黑体
     doc.registerFont('sub', bt.font === 'brush' ? fontBuf() : main);
     doc.font('cn');
@@ -614,7 +625,7 @@ function drawCover(doc, meta) {
 function drawMark(doc, mark, color, opacity) {
   if (!mark) return;
   doc.save();
-  doc.font('cn').fillOpacity(opacity).fillColor(color).fontSize(300);
+  doc.font('mark').fillOpacity(opacity).fillColor(color).fontSize(300);
   doc.text(mark, 0, (BK.height - 300) / 2 - 20, { width: BK.width, align: 'center', lineBreak: false });
   doc.restore();
 }

@@ -23,57 +23,11 @@
     </view>
   </view>
 
-  <view class="card" wx:if="{{bookIdx > 0}}">
-    <view class="section-title">传统礼簿主题</view>
-    <view wx:if="{{isFuneral}}" class="muted">白事礼簿固定使用素灰色，不可更换</view>
-    <view wx:else class="themes">
-      <view wx:for="{{pdfThemes}}" wx:key="key" class="th {{themeKey === item.key ? 'on' : ''}}" data-k="{{item.key}}" bindtap="onPickTheme">
-        <view class="th-sw" style="background:{{item.main}};border-color:{{item.accent}}"><view class="th-in" style="background:{{item.accent}}"></view></view>
-        <view class="th-name">{{item.name}}</view>
-        <view class="th-scene">{{item.scene}}</view>
-      </view>
-      <view class="th {{themeKey === 'custom' ? 'on' : ''}}" data-k="custom" bindtap="onPickTheme">
-        <view class="th-sw th-custom">＋</view>
-        <view class="th-name">自定义</view>
-        <view class="th-scene">自选配色字体</view>
-      </view>
-    </view>
-
-    <view wx:if="{{!isFuneral && themeKey === 'custom'}}" class="cust">
-      <view class="cv" wx:if="{{cv}}" style="background:{{cv.bg}};border-color:{{cv.border}};color:{{cv.text}}">
-        <view class="cv-in" style="border-color:{{cv.border}}"></view>
-        <view class="cv-title" style="color:{{cv.border}}">{{cust.title || books[bookIdx].name}}</view>
-        <view class="cv-foot" style="color:{{cv.border}}" wx:if="{{cust.footer}}">{{cust.footer}}</view>
-      </view>
-      <view class="cust-lb">主色（封面底色、格线）</view>
-      <view class="swatches">
-        <view wx:for="{{mainColors}}" wx:key="*this" class="sw {{cust.main === item ? 'on' : ''}}" style="background:{{item}}" data-f="main" data-v="{{item}}" bindtap="onCust"></view>
-      </view>
-      <input class="input" value="{{cust.main}}" maxlength="7" placeholder="#RRGGBB" data-f="main" bindinput="onCustInput" />
-      <view class="cust-lb">辅色（边框、标题）</view>
-      <view class="swatches">
-        <view wx:for="{{accentColors}}" wx:key="*this" class="sw {{cust.accent === item ? 'on' : ''}}" style="background:{{item}}" data-f="accent" data-v="{{item}}" bindtap="onCust"></view>
-      </view>
-      <input class="input" value="{{cust.accent}}" maxlength="7" placeholder="#RRGGBB" data-f="accent" bindinput="onCustInput" />
-      <view wx:if="{{custErr}}" class="cust-err">{{custErr}}</view>
-      <view class="cust-lb">字体</view>
-      <view class="chips"><view wx:for="{{fonts}}" wx:key="k" class="chip {{cust.font === item.k ? 'on' : ''}}" data-f="font" data-v="{{item.k}}" bindtap="onCust">{{item.n}}</view></view>
-      <view class="cust-lb">角饰</view>
-      <view class="chips"><view wx:for="{{patterns}}" wx:key="k" class="chip {{cust.pattern === item.k ? 'on' : ''}}" data-f="pattern" data-v="{{item.k}}" bindtap="onCust">{{item.n}}</view></view>
-      <view class="cust-lb">水印字</view>
-      <view class="chips"><view wx:for="{{marks}}" wx:key="k" class="chip {{cust.mark === item.k ? 'on' : ''}}" data-f="mark" data-v="{{item.k}}" bindtap="onCust">{{item.n}}</view></view>
-      <view class="cust-lb">封面标题（不填用礼簿名）</view>
-      <input class="input" value="{{cust.title}}" maxlength="20" placeholder="如：李王联姻志喜" data-f="title" bindinput="onCustInput" />
-      <view class="cust-lb">封面落款（不填则没有）</view>
-      <input class="input" value="{{cust.footer}}" maxlength="8" placeholder="如：百年好合" data-f="footer" bindinput="onCustInput" />
-    </view>
-  </view>
-
   <view class="card muted desc">
     仅包含主家已确认入簿的礼金。生成后可在预览页右上角「···」转发给好友或「文件传输助手」存档；云端文件下载后即删除。
   </view>
 
-  <button wx:if="{{bookIdx > 0}}" class="btn-primary" loading="{{exporting === 'book'}}" disabled="{{!!exporting}}" bindtap="onExportBook">传统礼簿 PDF（竖排，适合打印留存）</button>
+  <button wx:if="{{bookIdx > 0}}" class="btn-primary" disabled="{{!!exporting}}" bindtap="onExportBook">传统礼簿 PDF（先选主题，竖排适合打印）</button>
   <view wx:else class="muted hint">传统礼簿 PDF 需选择一本礼簿整本导出</view>
   <button class="btn-outline" style="margin-top:24rpx" loading="{{exporting === 'pdf'}}" disabled="{{!!exporting}}" bindtap="onExportPdf">表格 PDF（明细 + 合计）</button>
   <button class="btn-outline" style="margin-top:24rpx" loading="{{exporting === 'xlsx'}}" disabled="{{!!exporting}}" bindtap="onExportXlsx">Excel（适合再统计）</button>
