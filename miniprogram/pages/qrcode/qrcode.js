@@ -113,6 +113,7 @@ Page({
       });
       wx.setNavigationBarTitle({ title: '本场礼簿码' });
       this._shareId = r.book._id;
+      this._shareWord = r.book.type === 'funeral' ? '奠仪' : '随礼'; // 白事不用「随礼」
     } catch (e) {
       this.setData({ qrUrl: '', errMsg: '本场礼簿码生成失败：' + ((e && e.message) || '请稍后重试') });
     }
@@ -279,7 +280,7 @@ Page({
   onShareAppMessage() {
     const a = this.data.account;
     return {
-      title: `向「${a ? a.accountName : ''}」随礼`,
+      title: `向「${a ? a.accountName : ''}」${this._shareWord || '随礼'}`,
       path: a ? `/pages/pay/pay?aid=${this._shareId || a._id}` : '/pages/index/index'
     };
   }

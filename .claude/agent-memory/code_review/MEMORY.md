@@ -1,4 +1,4 @@
 # MEMORY.md
 
-- [审查记录](review_log.md) — 已审到 176eb57，5 条全修到 fe8e2ce(v3.31.2)；下次从 fe8e2ce 增量；CLI 不能查库
+- [审查记录](review_log.md) — 2026-10-23 第1组审查到 c5a7d4b(v3.43.0)，条目待用户选修；下次从 c5a7d4b 增量；CLI 不能查库
 - [用户偏好](feedback_style.md) — 微信阅读 800 字内；有取舍的先给方案对比再修

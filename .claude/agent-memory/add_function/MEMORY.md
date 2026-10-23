@@ -1,1 +1,2 @@
 - [加载提示 v3.25.0](project_loading_indicator_eval.md) — components/loading 组件（骨架/转圈/遮罩，300ms 延迟）已实现，接入页面与踩坑
+- [传统礼簿PDF主题 v3.32/3.33](project_pdf_theme.md) — 10预设+自定义+宋体/毛笔(OFL)，books.pdfTheme，本地pdfkit测试法
