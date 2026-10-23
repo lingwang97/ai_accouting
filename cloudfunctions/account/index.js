@@ -121,10 +121,13 @@ async function getMine(openid, withPayCode) {
 /**
  * 返回给前端的主家信息：去掉内部字段；没有「修改主家信息」权限的记账人与家人看不到收款码文件
  */
+// 记账人（有「修改主家信息」权限）读到的收款码占位值：保存时原样带回表示「不更换收款码」，服务端换回真实路径
+const KEEP_CODE = '@current';
 function safeAccount(a, ctx) {
   const { ownerOpenid, transferredFrom, transferPending, _openid, pendingPayCode, ...rest } = a;
   if (!can(ctx, 'info')) { delete rest.payCodeFileID; delete rest.payCodeBy; }
-  return { ...rest, hasPendingPayCode: !!pendingPayCode };
+  else if (ctx.role === 'clerk' && rest.payCodeFileID) rest.payCodeFileID = KEEP_CODE; // 文件路径含主家 openid，记账人只拿占位值
+  return { ...rest, hasPayCode: !!a.payCodeFileID, hasPendingPayCode: !!pendingPayCode };
 }
 
 /** 我能使用的身份：自己的主家信息 + 作为记账人加入的主家（待主家同意的不算） */
@@ -146,9 +149,9 @@ async function identities(openid) {
 
 async function save(openid, event) {
   const accountName = String(event.accountName || '').trim().slice(0, 30);
-  const payCodeFileID = String(event.payCodeFileID || '').slice(0, 200);
+  let payCodeFileID = String(event.payCodeFileID || '').slice(0, 200);
   if (!accountName) return err('请填写账户名称');
-  if (!payCodeFileID.startsWith('cloud://')) return err('收款码图片无效');
+  if (!payCodeFileID.startsWith('cloud://') && payCodeFileID !== KEEP_CODE) return err('收款码图片无效');
 
   // own=true：操作本人自己的主家信息（记账人新建自己的礼簿）；否则按当前身份
   let ctx = await resolveCtx(db, openid);
@@ -161,6 +164,11 @@ async function save(openid, event) {
     ctx = { role: mine ? 'owner' : 'none', ownerOpenid: openid, account: mine, user: ctx.user };
   }
 
+  // 占位值：沿用现有收款码（只给有「修改主家信息」权限的记账人；无现有收款码时无效）
+  if (payCodeFileID === KEEP_CODE) {
+    if (!ctx.account || !ctx.account.payCodeFileID) return err('收款码图片无效');
+    payCodeFileID = ctx.account.payCodeFileID;
+  }
   // 收款码关系到钱进谁的账户：新上传的必须是本人刚上传的图片（不能填别人的文件）
   const codeChanged = !ctx.account || payCodeFileID !== ctx.account.payCodeFileID;
   if (codeOnly && !codeChanged) return err('请上传新的收款码');

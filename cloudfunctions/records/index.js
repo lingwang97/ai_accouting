@@ -129,8 +129,9 @@ async function dashboard(ctx) {
   // 返回给前端的主家信息去掉内部字段；只负责部分场次的人员与家人看不到收款码文件
   const { ownerOpenid, transferredFrom, transferPending, pendingPayCode, _openid, ...shown } = account;
   if (!can(ctx, 'info')) { delete shown.payCodeFileID; delete shown.payCodeBy; }
+  else if (ctx.role === 'clerk' && shown.payCodeFileID) shown.payCodeFileID = '@current'; // 路径含主家 openid，占位值见 account.KEEP_CODE
   return ok({
-    account: { ...shown, hasPendingPayCode: !!pendingPayCode },
+    account: { ...shown, hasPayCode: !!account.payCodeFileID, hasPendingPayCode: !!pendingPayCode },
     role: ctx.role,
     restricted: !!ctx.bookIds,
     readonly: readonly(ctx),
