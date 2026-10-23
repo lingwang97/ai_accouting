@@ -17,6 +17,7 @@ Page({
   },
 
   async onLoad(options) {
+    if (!(await perm.guard('export', '你没有对账与导出的权限', { viewer: true }))) return; // 文案同 records.reconcile
     try {
       const { list, activeBookId } = await req.bookList();
       const books = list.map(b => ({ _id: b._id, name: b.hostName ? `${b.hostName} · ${b.name}` : b.name }));

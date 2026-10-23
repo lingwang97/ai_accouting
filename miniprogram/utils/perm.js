@@ -42,4 +42,21 @@ function current() {
   return map(g.perms, g.role);
 }
 
-module.exports = { can, map, current, NAMES, ALL, DEFAULT, TEMPLATES };
+/**
+ * 页面权限守卫（onLoad 里 `if (!(await perm.guard(...))) return;`）：没有权限提示 msg 并返回上一页
+ * msg 与服务端拒绝时的文案保持一致；opts.viewer=true 表示家人共享（只读）也可进入（服务端允许的只读功能）
+ * 身份读取失败 / 尚无主家信息时不拦（交给服务端校验）
+ */
+async function guard(p, msg, opts) {
+  const role = await getApp().ensureRole();
+  if (!role || role === 'none') return true;
+  if (role === 'viewer' ? !!(opts && opts.viewer) : can(p)) return true;
+  wx.showToast({ title: msg, icon: 'none', duration: 1500 });
+  setTimeout(() => {
+    if (getCurrentPages().length > 1) wx.navigateBack();
+    else wx.switchTab({ url: '/pages/index/index' });
+  }, 1500);
+  return false;
+}
+
+module.exports = { can, map, current, guard, NAMES, ALL, DEFAULT, TEMPLATES };

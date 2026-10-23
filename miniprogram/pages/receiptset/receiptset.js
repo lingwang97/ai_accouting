@@ -4,6 +4,7 @@ const receipt = require('../../utils/receipt.js');
 const scenes = require('../../utils/scenes.js');
 const printer = require('../../utils/printer.js');
 const theme = require('../../utils/theme.js');
+const perm = require('../../utils/perm.js');
 
 const COLORS = ['#C8161D', '#B8860B', '#C9A227', '#FF7A45', '#07C160', '#333333'];
 const ALL_FIELDS = Object.keys(receipt.FIELD_LABELS);
@@ -30,6 +31,7 @@ Page({
   },
 
   async onLoad(options) {
+    if (!(await perm.guard('style', '你没有修改回执与打印样式的权限'))) { this.setData({ pageLoading: false }); return; } // 文案同 books.saveTpl
     try {
       const [{ account }, { list, activeBookId }] = await Promise.all([req.accountGet(), req.bookList()]);
       const books = list.filter(b => !b.archived || b._id === activeBookId);

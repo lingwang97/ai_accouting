@@ -3,6 +3,7 @@ const req = require('../../utils/request.js');
 const fmt = require('../../utils/format.js');
 const openfile = require('../../utils/openfile.js');
 const theme = require('../../utils/theme.js');
+const perm = require('../../utils/perm.js');
 
 function presets() {
   const now = new Date();
@@ -26,6 +27,7 @@ Page({
     books: [{ _id: '', name: '按日期范围导出' }],
     bookIdx: 0,
     exporting: '',  // '' | 'pdf' | 'xlsx' | 'book'
+    viewer: false,    // 家人共享（只读）：只能按礼簿导出，不能备份
     pageLoading: true // 读取礼簿列表期间：转圈 + 不可操作
   },
 
@@ -33,18 +35,22 @@ Page({
     theme.apply(this); // 主题色跟当前礼簿事由走
   },
 
-  onLoad(options) {
+  async onLoad(options) {
+    if (!(await perm.guard('export', '你没有导出权限', { viewer: true }))) return; // 文案同 export 云函数
+    const viewer = getApp().globalData.role === 'viewer';
+    this.setData({ viewer });
     const list = presets();
     const month = list.find(p => p.key === 'month');
     this.setData({ presets: list, startDay: month.start, endDay: month.end, today: fmt.day(new Date()) });
-    this.loadBooks(options.bookId || '');
+    this.loadBooks(options.bookId || '', viewer);
   },
 
   /** 礼簿列表：选中某本礼簿时导出整本，不限日期 */
-  async loadBooks(bookId) {
+  async loadBooks(bookId, viewer) {
     try {
       const { list, activeBookId } = await req.bookList();
-      const books = [{ _id: '', name: '按日期范围导出' }, ...list];
+      // 家人共享只能按礼簿整本导出（服务端同样限制），不提供「按日期范围」
+      const books = viewer ? list : [{ _id: '', name: '按日期范围导出' }, ...list];
       const want = bookId || activeBookId;
       const idx = Math.max(0, books.findIndex(b => b._id === want));
       this.setData({ books, bookIdx: idx });

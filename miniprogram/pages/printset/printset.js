@@ -3,6 +3,7 @@ const req = require('../../utils/request.js');
 const escpos = require('../../utils/escpos.js');
 const printer = require('../../utils/printer.js');
 const theme = require('../../utils/theme.js');
+const perm = require('../../utils/perm.js');
 
 // 字段定义（顺序可调）
 const FIELD_LABELS = {
@@ -33,6 +34,7 @@ Page({
   },
 
   async onLoad(options) {
+    if (!(await perm.guard('style', '你没有修改回执与打印样式的权限'))) { this.setData({ pageLoading: false }); return; } // 文案同 books.saveTpl
     try {
       const { list, activeBookId } = await req.bookList();
       const books = list.filter(b => !b.archived || b._id === activeBookId);
