@@ -183,17 +183,22 @@ async function orgSummary(ctx, event) {
   if (!books.length) return ok({ list: [], total: { count: 0, sum: 0, pending: 0 }, staff: [] });
   const ids = books.map(b => b._id);
   const fenOf = _.aggregate.sum(_.aggregate.multiply(['$amount', 100]));
-  const [byBook, byStaff, members] = await Promise.all([
-    records.aggregate()
-      .match({ ownerOpenid: owner, bookId: _.in(ids), status: _.in(['paid', 'transferred']) })
+  // 按礼簿分批聚合（每批 50 本）：每本最多 4 组（状态 × 方式）/ 若干记账人，单批分组数远低于 limit，场次很多时不会被截断
+  const chunks = [];
+  for (let i = 0; i < ids.length; i += 50) chunks.push(ids.slice(i, i + 50));
+  const [byBookParts, byStaffParts, members] = await Promise.all([
+    Promise.all(chunks.map(c => records.aggregate()
+      .match({ ownerOpenid: owner, bookId: _.in(c), status: _.in(['paid', 'transferred']) })
       .group({ _id: { bookId: '$bookId', status: '$status', method: '$payMethod' }, count: _.aggregate.sum(1), fen: fenOf })
-      .limit(1000).end(),
-    records.aggregate()
-      .match({ ownerOpenid: owner, bookId: _.in(ids), status: 'paid' })
+      .limit(1000).end())),
+    Promise.all(chunks.map(c => records.aggregate()
+      .match({ ownerOpenid: owner, bookId: _.in(c), status: 'paid' })
       .group({ _id: { bookId: '$bookId', handler: '$handlerOpenid' }, name: _.aggregate.first('$handlerName'), count: _.aggregate.sum(1), fen: fenOf })
-      .limit(1000).end(),
+      .limit(1000).end())),
     db.collection('members').where({ aid: ctx.account._id }).limit(100).get()
   ]);
+  const byBook = { list: byBookParts.flatMap(r => r.list || []) };
+  const byStaff = { list: byStaffParts.flatMap(r => r.list || []) };
   members.data = members.data.filter(m => m.status !== 'pending'); // 待主家同意的不算
   const users = {};
   const openids = members.data.map(m => m.memberOpenid);
@@ -262,7 +267,7 @@ async function reconcile(ctx, event) {
   const base = { ownerOpenid: owner, bookId };
   if (/^\d{4}-\d{2}-\d{2}$/.test(String(event.day || ''))) base.payDay = event.day;
   const fenOf = _.aggregate.sum(_.aggregate.multiply(['$amount', 100]));
-  const [byStatus, deskCash, diff, byHandler, deskWechat, mixedRes] = await Promise.all([
+  const [byStatus, deskCash, diff, byHandler, deskWechat, mixedRes, mixedBatches] = await Promise.all([
     records.aggregate().match(base)
       .group({ _id: { status: '$status', method: '$payMethod' }, count: _.aggregate.sum(1), fen: fenOf })
       .limit(100).end(),
@@ -278,10 +283,11 @@ async function reconcile(ctx, event) {
     // 礼台登记的微信（宾客当面转账、礼台看到到账后登记）
     records.aggregate().match({ ...base, status: 'paid', payMethod: 'wechat', payerOpenid: '' })
       .group({ _id: null, count: _.aggregate.sum(1), fen: fenOf }).end(),
-    // 「转账+现金」批次：按批次、支付方式分组
+    // 「转账+现金」批次：按支付方式汇总金额（分组数固定很少），批次数另用 count 取，不依赖聚合 limit 上限
     records.aggregate().match({ ...base, status: 'paid', batchPay: 'mixed' })
-      .group({ _id: { batchId: '$batchId', method: '$payMethod' }, fen: fenOf })
-      .limit(10000).end()
+      .group({ _id: '$payMethod', fen: fenOf }).limit(10).end(),
+    records.aggregate().match({ ...base, status: 'paid', batchPay: 'mixed' })
+      .group({ _id: '$batchId' }).count('n').end()
   ]);
 
   const z = () => ({ count: 0, fen: 0 });
@@ -310,10 +316,9 @@ async function reconcile(ctx, event) {
   });
   const y = x => ({ count: x.count, sum: Math.round(x.fen) / 100 });
   const dw = (deskWechat.list && deskWechat.list[0]) || { count: 0, fen: 0 };
-  const mx = { batches: new Set(), wechatFen: 0, cashFen: 0 };
+  const mx = { batches: ((mixedBatches.list && mixedBatches.list[0]) || {}).n || 0, wechatFen: 0, cashFen: 0 };
   (mixedRes.list || []).forEach(g => {
-    mx.batches.add(g._id.batchId);
-    if (g._id.method === 'cash') mx.cashFen += Math.round(g.fen); else mx.wechatFen += Math.round(g.fen);
+    if (g._id === 'cash') mx.cashFen += Math.round(g.fen); else mx.wechatFen += Math.round(g.fen);
   });
   return ok({
     book: { _id: book._id, name: book.name, type: book.type, date: book.date || '', hostName: book.hostName || '' },
@@ -326,7 +331,7 @@ async function reconcile(ctx, event) {
     deskWechat: y(dw),
     guestWechat: { count: s.wechat.count - dw.count, sum: Math.round(s.wechat.fen - dw.fen) / 100 },
     // 转账+现金批次：批次数、其中转账部分与现金部分（已分别计入上面的微信 / 现金）
-    mixed: { batches: mx.batches.size, wechat: mx.wechatFen / 100, cash: mx.cashFen / 100, sum: (mx.wechatFen + mx.cashFen) / 100 },
+    mixed: { batches: mx.batches, wechat: mx.wechatFen / 100, cash: mx.cashFen / 100, sum: (mx.wechatFen + mx.cashFen) / 100 },
     transferred: y(s.transferred),
     pending: y(s.pending),
     rejected: y(s.rejected),
@@ -580,7 +585,7 @@ async function themes(openid, ctx) {
   const res = await records.aggregate()
     .match({ ownerOpenid: openid, status: 'paid', ...(ctx.bookIds ? { bookId: _.in(ctx.bookIds) } : {}) })
     .group({ _id: '$themeName' })
-    .limit(100)
+    .limit(1000)
     .end();
   return ok({ list: (res.list || []).map(t => t._id).filter(Boolean) });
 }
