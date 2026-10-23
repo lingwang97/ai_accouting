@@ -52,3 +52,8 @@
 .sr-item { flex: 1; font-size: 26rpx; color: #333; background: #F7F7F7; border-radius: 10rpx; padding: 14rpx 6rpx; text-align: center; min-width: 0; word-break: break-all; }
 .sr-item:not(:last-child) { margin-right: 12rpx; }
 .sr-num { color: var(--primary); font-weight: 600; margin-right: 4rpx; }
+
+/* 底部低调求助入口：原生 button 去掉默认样式，高度 80rpx 便于点击，不占主流程 */
+.help-row { text-align: center; padding: 8rpx 0 0; }
+button.help-link:not([size=mini]) { display: inline-block; width: auto; margin: 0; padding: 0 24rpx; background: transparent; border: none; border-radius: 0; font-size: 24rpx; line-height: 80rpx; height: 80rpx; min-height: 0; color: var(--text-3); }
+button.help-link::after { border: none; }

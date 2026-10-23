@@ -1,0 +1,13 @@
+<view class="container" style="{{themeStyle}}">
+  <view class="card">
+    <view class="c-title">在线客服</view>
+    <view class="muted c-desc">现场遇到问题，可直接联系，48 小时内答复</view>
+    <button class="btn-primary c-btn" open-type="contact" show-message-card="{{true}}" send-message-title="慧礼记 · 求助" send-message-path="/pages/index/index">联系在线客服</button>
+  </view>
+  <view class="card">
+    <view class="c-title">提交反馈</view>
+    <view class="muted c-desc">功能建议、问题反馈，会自动附带手机型号和版本</view>
+    <button class="btn-outline c-btn" open-type="feedback">提交反馈</button>
+  </view>
+  <view class="muted c-tip">反馈提交后无法在小程序内查看回复；需要答复请使用在线客服</view>
+</view>

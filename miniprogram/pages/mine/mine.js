@@ -214,6 +214,8 @@ Page({
   goExport() { wx.navigateTo({ url: '/pages/export/export' }); },
   goTrash() { wx.navigateTo({ url: '/pages/trash/trash' }); }, // 回收站（主家本人）
   /** 使用教程：按身份打开对应分页（未完善主家信息的按宾客） */
+  goContact() { wx.navigateTo({ url: '/pages/contact/contact' }); },
+
   goGuide() {
     const { role, account } = this.data;
     const tab = role === 'clerk' ? 'clerk' : (account ? 'host' : 'guest');

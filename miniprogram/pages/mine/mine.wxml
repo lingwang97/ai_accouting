@@ -82,6 +82,9 @@
       <view class="menu-item" bindtap="onPrivacy">
         <image class="mi-icon" src="/assets/icons/lock-m.svg" /><text class="mi-text">隐私说明</text><text class="arrow">›</text>
       </view>
+      <view class="menu-item" bindtap="goContact">
+        <image class="mi-icon" src="/assets/icons/chat-m.svg" /><text class="mi-text">联系我们</text><text class="arrow"><text class="muted">客服 / 意见反馈</text> ›</text>
+      </view>
       <view class="menu-item purge" bindtap="confirmPurge">
         <image class="mi-icon" src="/assets/icons/trash-m.svg" /><text class="mi-text">清除我的全部数据</text><text class="arrow">›</text>
       </view>

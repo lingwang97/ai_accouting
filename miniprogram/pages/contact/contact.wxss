@@ -1,0 +1,4 @@
+.c-title { font-size: 32rpx; font-weight: 600; margin-bottom: 8rpx; }
+.c-desc { font-size: 26rpx; line-height: 1.6; margin-bottom: 24rpx; }
+button.c-btn:not([size=mini]) { width: 100%; }
+.c-tip { font-size: 24rpx; line-height: 1.6; text-align: center; padding: 8rpx 24rpx; }

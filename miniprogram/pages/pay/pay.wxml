@@ -162,5 +162,9 @@
       <button class="btn-primary" bindtap="onRetry">重新随礼</button>
     </block>
   </block>
+  <!-- 低调的求助入口：宾客无需登录；文案中性（白事同样适用） -->
+  <view class="help-row" wx:if="{{loadErr || account}}">
+    <button class="help-link" open-type="contact" show-message-card="{{true}}" send-message-title="随礼页求助" send-message-path="/pages/index/index" hover-class="none">遇到问题？联系客服</button>
+  </view>
   <canvas type="2d" id="receiptCanvas" class="offscreen"></canvas>
 </view>
