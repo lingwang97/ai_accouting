@@ -8,6 +8,7 @@ const giftsOut = db.collection('gifts_out');
 const records = db.collection('records');
 
 const crypto = require('crypto');
+const { mergePage } = require('./outpage.js');
 const { MAX_AMOUNT } = require('./limits.js'); // 单笔金额上限（tools/cloud-shared/limits.js）
 
 /*
@@ -156,24 +157,54 @@ function shiftDay(day, n) {
   return t.toISOString().slice(0, 10);
 }
 
-/** 我送出的礼：手动登记 + 用慧礼记扫码随礼且主家已确认入簿的（自动），合并分页 */
+/**
+ * 我送出的礼：手动登记 + 用慧礼记扫码随礼且主家已确认入簿的（自动），合并分页
+ * 分页方案：手动登记由数据库按 date、createdAt、_id 倒序只取前 offset+size 条，自动送礼（条数少）整体取回，
+ * 两路按同一全序合并后切片（见 outpage.js，本地模拟验证不重不漏）；total / sum 用 count + 聚合，不再每页拉全量
+ */
 async function outList(openid, event) {
   const page = Math.max(1, Number(event.page) || 1);
   const pageSize = Math.min(50, Math.max(1, Number(event.pageSize) || 20));
-  const [manual, auto] = await Promise.all([
-    fetchAll(giftsOut, { ownerOpenid: openid }, {
-      toName: true, toKey: true, relation: true, event: true, eventType: true, amount: true, date: true, remark: true, createdAt: true
-    }),
+  const offset = (page - 1) * pageSize;
+  const kw = String(event.keyword || '').trim().slice(0, 20);
+  const cond = kw
+    ? { ownerOpenid: openid, toName: db.RegExp({ regexp: kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), options: '' }) }
+    : { ownerOpenid: openid };
+  const need = Math.min(offset + pageSize, MAX_ROWS);
+  const FIELDS = { toName: true, toKey: true, relation: true, event: true, eventType: true, amount: true, date: true, remark: true, createdAt: true };
+  const topManual = async () => {
+    const out = [];
+    while (out.length < need) {
+      const want = Math.min(1000, need - out.length);
+      const res = await giftsOut.where(cond).field(FIELDS)
+        .orderBy('date', 'desc').orderBy('createdAt', 'desc').orderBy('_id', 'desc')
+        .skip(out.length).limit(want).get();
+      out.push(...res.data);
+      if (res.data.length < want) break;
+    }
+    return out;
+  };
+  const manualSum = async () => {
+    try {
+      const r = await giftsOut.aggregate().match(cond)
+        .group({ _id: null, fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) }).end();
+      return Math.round(((r.list && r.list[0]) || { fen: 0 }).fen);
+    } catch (e) { // 聚合失败：退回只取金额字段累加
+      const rows = await fetchAll(giftsOut, cond, { amount: true });
+      return rows.reduce((t, g) => t + Math.round(g.amount * 100), 0);
+    }
+  };
+  const [top, cnt, fenManual, autoAll] = await Promise.all([
+    topManual(),
+    giftsOut.where(cond).count(),
+    manualSum(),
     autoGiven(openid)
   ]);
-  let all = manual.concat(auto);
-  const kw = String(event.keyword || '').trim().slice(0, 20);
-  if (kw) all = all.filter(g => String(g.toName).includes(kw));
-  all.sort((a, b) => String(b.date).localeCompare(String(a.date)) || (new Date(b.createdAt) - new Date(a.createdAt)));
-  const fen = all.reduce((t, g) => t + Math.round(g.amount * 100), 0);
+  const auto = kw ? autoAll.filter(g => String(g.toName).includes(kw)) : autoAll;
+  const fen = fenManual + auto.reduce((t, g) => t + Math.round(g.amount * 100), 0);
   return ok({
-    list: all.slice((page - 1) * pageSize, page * pageSize).map(({ ownerOpenid, ...g }) => g), // 不把主家的 openid 给前端
-    total: all.length,
+    list: mergePage(top, auto, offset, pageSize).map(({ ownerOpenid, ...g }) => g), // 不把主家的 openid 给前端
+    total: cnt.total + auto.length,
     sum: fen / 100,
     page,
     pageSize
