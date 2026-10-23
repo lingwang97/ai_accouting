@@ -39,4 +39,6 @@
 .small { font-size: 24rpx; }
 
 .rm-done-head { display: flex; justify-content: space-between; align-items: center; padding: 24rpx 0 8rpx; margin-top: 12rpx; border-top: 2rpx solid #f0f0f0; font-size: 26rpx; color: #666; }
+.rm-done-title { flex: 1; min-width: 0; }
+.link-pad {}
 .rm-done-scroll { max-height: 30vh; }

@@ -102,7 +102,7 @@
       </view>
       <!-- 最近已处理：点错了可撤回 -->
       <block wx:if="{{doneList.length}}">
-        <view class="rm-done-head" bindtap="onToggleDone">最近已处理（{{doneList.length}}）<text class="muted">{{doneOpen ? '收起 ▴' : '展开 ▾'}}</text></view>
+        <view class="rm-done-head"><text class="rm-done-title" bindtap="onToggleDone">最近已处理（{{doneList.length}}）<text class="muted">{{doneOpen ? '收起 ▴' : '展开 ▾'}}</text></text><text class="link" bindtap="onClearDone">清除</text></view>
         <scroll-view scroll-y class="rm-scroll rm-done-scroll" wx:if="{{doneOpen}}">
           <view class="rm-row past" wx:for="{{doneList}}" wx:key="_id" data-idx="{{index}}" bindtap="onUndoDone">
             <text class="rm-name">{{item.name}} · {{item.event || item.typeLabel}}</text>

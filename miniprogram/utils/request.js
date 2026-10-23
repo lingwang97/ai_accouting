@@ -123,6 +123,7 @@ module.exports = {
   remindSave: (remind, subscribed) => call('renqing', { action: 'remindSave', remind, subscribed: !!subscribed, envVersion: envVersion() }),
   remindDone: (id, done) => call('renqing', { action: 'remindDone', id, done: done !== false }),
   remindDelete: id => call('renqing', { action: 'remindDelete', id }),
+  remindClearDone: () => call('renqing', { action: 'remindClearDone' }),
   outList: d => call('renqing', { action: 'outList', ...d }),
   outSave: gift => call('renqing', { action: 'outSave', gift }),
   outDelete: id => call('renqing', { action: 'outDelete', id }),

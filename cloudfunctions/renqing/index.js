@@ -67,6 +67,7 @@ async function route(OPENID, event) {
       case 'remindSave': return await remindSave(OPENID, event.remind, event.subscribed === true, event.envVersion);
       case 'remindDone': return await remindDone(OPENID, event.id, event.done !== false);
       case 'remindDelete': return await remindDelete(OPENID, event.id);
+      case 'remindClearDone': return await remindClearDone(OPENID);
       case 'outSave': return await outSave(OPENID, event.gift);
       case 'outDelete': return await outDelete(OPENID, event.id);
       case 'query': return await query(OPENID, event.key || (event.name ? 'n:' + event.name : ''));
@@ -150,6 +151,13 @@ async function remindDelete(openid, id) {
   const res = await reminders.where({ _id: String(id || ''), ownerOpenid: openid }).remove();
   if (!res.stats.removed) return err('提醒不存在');
   return ok({ removed: 1 });
+}
+
+/** 清除本人所有已处理的提醒（只删 done:true，待办不动；返回删除条数） */
+async function remindClearDone(openid) {
+  await ensureCol('reminders');
+  const res = await reminders.where({ ownerOpenid: openid, done: true }).remove();
+  return ok({ removed: (res.stats && res.stats.removed) || 0 });
 }
 
 /** YYYY-MM-DD 加减天数 */

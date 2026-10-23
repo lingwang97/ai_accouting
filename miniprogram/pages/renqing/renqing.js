@@ -198,7 +198,7 @@ Page({
       const doneList = (done || []).map(r => ({ ...r, typeLabel: scenes.label(r.eventType), dateStr: r.date.slice(5).replace('-', '月') + '日' }));
       this.setData({
         reminds, hotCount, doneList,
-        remindTip: hotCount ? `${hotCount} 条待回礼` : (f ? `${f.name} · ${f.event || f.typeLabel} · ${f.leftStr}` : (doneList.length ? `暂无待办 · 最近已处理 ${doneList.length} 条` : ''))
+        remindTip: hotCount ? `${hotCount} 条待回礼` : (f ? `${f.name} · ${f.event || f.typeLabel} · ${f.leftStr}` : '')
       });
       // 红点与提示条同口径：直接按本次结果更新，不必再请求
       getApp().globalData.remindDot = hotCount > 0;
@@ -206,6 +206,25 @@ Page({
     } catch (e) { /* 静默 */ }
   },
   noop() {},
+  /** 清除全部「最近已处理」：二次确认后删除，无法撤回 */
+  onClearDone() {
+    if (!this.data.doneList.length) return;
+    wx.showModal({
+      title: '清除已处理',
+      content: '清除后这些已处理的提醒将被删除，无法撤回。确定清除吗？',
+      confirmText: '清除',
+      success: async res => {
+        if (!res.confirm) return;
+        try {
+          await req.remindClearDone();
+          wx.showToast({ title: '已清除', icon: 'success' });
+          this.setData({ doneOpen: false });
+          await this.loadReminds();
+          getApp().refreshBadge();
+        } catch (err) { /* toast 已提示 */ }
+      }
+    });
+  },
   onToggleDone() { this.setData({ doneOpen: !this.data.doneOpen }); },
   /** 撤回「已处理」：恢复为未处理（点错了），提示条、「往来」红点、底部菜单同步刷新 */
   onUndoDone(e) {
