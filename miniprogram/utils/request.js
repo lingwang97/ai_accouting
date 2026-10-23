@@ -8,7 +8,9 @@ const envVersion = () => {
 const READ_ACTIONS = ['get', 'list', 'query', 'people', 'outList', 'remindList', 'pending', 'pendingStat', 'dashboard',
   'status', 'receipt', 'myReceipts', 'themes', 'check', 'getByAid', 'gen', 'app', 'plan', 'adminGet', 'detail',
   'nameCheck', 'reconcile', 'orgSummary', 'removePreview', 'members', 'pendingMembers', 'getTpl', 'stats', 'trashList',
-  'viewers', 'payCodeReviews', 'inviteInfo'];
+  'viewers', 'payCodeReviews', 'inviteInfo',
+  // system 只读：ads 读设置；admin*Preview / adminFindHosts / adminLogs / adminPreflight(不带 Fix) 只查不写（adminIndexes 会建索引，不列入）
+  'ads', 'adminFindHosts', 'adminLogs', 'adminPreflight', 'adminPurgePreview', 'adminBookPreview', 'adminOrphanPreview', 'adminWipePreview'];
 function markWrite(data) {
   try {
     if (data && READ_ACTIONS.indexOf(data.action) < 0) getApp().globalData.dataDirtyAt = Date.now();

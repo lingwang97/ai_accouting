@@ -503,6 +503,8 @@ const INDEXES = [
   ['records', 'owner_status_amount', [['ownerOpenid', 1], ['status', 1], ['amount', -1]]], // 礼簿页按金额排序
   ['records', 'owner_day_status', [['ownerOpenid', 1], ['payDay', 1], ['status', 1]]],
   ['records', 'owner_book_status', [['ownerOpenid', 1], ['bookId', 1], ['status', 1]]],
+  ['records', 'owner_book_time', [['ownerOpenid', 1], ['bookId', 1], ['createdAt', -1]]], // 礼簿页按礼簿筛选（默认排序）
+  ['records', 'owner_book_amount', [['ownerOpenid', 1], ['bookId', 1], ['amount', -1]]], // 礼簿页按礼簿 + 金额排序
   ['records', 'payer_status_paid', [['payerOpenid', 1], ['status', 1], ['paidAt', -1]]],
   ['records', 'payer_time', [['payerOpenid', 1], ['createdAt', -1]]],
   ['records', 'batch', [['batchId', 1]]],
