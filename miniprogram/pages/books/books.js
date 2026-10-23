@@ -170,7 +170,7 @@ Page({
     const toArchive = !archived;
     wx.showModal({
       title: toArchive ? '归档礼簿' : '取消归档',
-      content: toArchive ? '归档后不再接收随礼，礼金记录仍可查询和导出' : '恢复为可用礼簿？',
+      content: toArchive ? '归档后不再接收随礼，礼金记录仍可查询和导出' : '恢复为可用礼簿？已生成的存档 PDF 会删除，重新归档时自动生成新的',
       success: async res => {
         if (!res.confirm) return;
         try {

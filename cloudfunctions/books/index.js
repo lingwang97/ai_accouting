@@ -291,7 +291,15 @@ async function archive(openid, account, bookId, archived, ctx) {
   const book = await getBook(openid, bookId);
   if (!book) return err('礼簿不存在');
   if (archived && account.activeBookId === book._id) return err('当前礼簿不能归档，请先切换到其他礼簿');
-  await books.doc(book._id).update({ data: { archived } });
+  // 取消归档：存档 PDF 已过期（之后礼簿会变），清掉字段并删文件；删文件失败不阻断取消归档（登记行保留，清除数据时仍会回收）
+  const stale = !archived && book.archived && book.archivePdf && book.archivePdf.fileID ? String(book.archivePdf.fileID) : '';
+  await books.doc(book._id).update({ data: stale ? { archived, archivePdf: _.remove() } : { archived } });
+  if (stale && stale.includes('/archives/')) {
+    try {
+      await cloud.deleteFile({ fileList: [stale] });
+      await db.collection('exports').where({ ownerOpenid: openid, fileID: stale }).remove();
+    } catch (e) { console.warn('取消归档：删除存档 PDF 失败', e.message); }
+  }
   let affected = [];
   if (archived) {
     const members = db.collection('members');
