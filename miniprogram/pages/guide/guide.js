@@ -44,7 +44,7 @@ const GUIDES = {
       sec: '散场后',
       steps: [
         { title: '一键对账', desc: '按现金、微信、记账人分别汇总，和实际收到的核对', where: '工作台 → 一键对账', mock: grid('一键对账'), url: '/pages/reconcile/reconcile', go: '去对账' },
-        { title: '导出与归档', desc: '导出 PDF / Excel 留底；办完的礼簿可在礼簿管理里归档', where: '礼簿 → 导出；我的 → 导出与备份', mock: page('礼簿', ['搜索', '导出'], '导出'), url: '/pages/export/export', go: '去导出' }
+        { title: '导出与归档', desc: '导出 PDF / Excel 留底；办完的礼簿可在礼簿管理里归档', where: '我的 → 导出与备份；或 工作台 → 礼簿管理 → 某本礼簿的「导出」', mock: menu('导出与备份'), url: '/pages/export/export', go: '去导出' }
       ]
     },
     {
