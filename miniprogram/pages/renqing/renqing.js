@@ -22,7 +22,7 @@ Page({
     receipts: [],      // 随礼回执
     shownReceipts: [],
     keyword: '',
-    people: [],
+    hasPeople: false, // 往来人名单本体放 this._people（不进 data，避免每次搜索 / 切换时传输整张名单）
     shownPeople: [],
     outList: [],
     outSum: '0.00',
@@ -35,7 +35,8 @@ Page({
     // 已退出登录：立即清空上一个账户的往来（不等登录状态恢复，也不再查询身份）
     if (getApp().isLoggedOut()) {
       getApp().refreshTabBar();
-      return this.setData({ loading: false, loggedIn: false, people: [], shownPeople: [], outList: [], receipts: [], shownReceipts: [], reminds: [], doneList: [], hotCount: 0, remindTip: '', remindShow: false });
+      this._people = [];
+      return this.setData({ loading: false, loggedIn: false, hasPeople: false, shownPeople: [], outList: [], receipts: [], shownReceipts: [], reminds: [], doneList: [], hotCount: 0, remindTip: '', remindShow: false });
     }
     // 记账人身份不显示「往来」（切换身份后可能停留在本页）：回到工作台
     if ((await getApp().ensureRole()) === 'clerk') return wx.switchTab({ url: '/pages/index/index' });
@@ -53,7 +54,7 @@ Page({
   async load() {
     await getApp().loginReady;
     if (!getApp().globalData.user) {
-      return this.setData({ loading: false, loggedIn: false, people: [], shownPeople: [], outList: [], receipts: [], shownReceipts: [], reminds: [], doneList: [], hotCount: 0, remindTip: '', remindShow: false });
+      return this.setData({ loading: false, loggedIn: false, hasPeople: false, shownPeople: [], outList: [], receipts: [], shownReceipts: [], reminds: [], doneList: [], hotCount: 0, remindTip: '', remindShow: false });
     }
     this.setData({ loading: true, loggedIn: true });
     try {
@@ -68,8 +69,9 @@ Page({
           outSumStr: fmt.money(p.outSum),
           balanceStr: fmt.money(Math.abs(p.balance))
         }));
+        this._people = people;
         this.setData({
-          people,
+          hasPeople: people.length > 0,
           // 合计以服务端数据库统计为准（全部记录）；旧版云函数未返回时按名单累加
           inTotal: inTotal !== undefined ? inTotal : people.reduce((t, p) => t + (p.inCount || 0), 0),
           inSum: fmt.money(inSum !== undefined ? inSum : people.reduce((t, p) => t + Math.round((p.inSum || 0) * 100), 0) / 100)
@@ -116,7 +118,7 @@ Page({
     const k = (this.data.keyword || '').trim();
     const f = this.data.pFilter;
     this.setData({
-      shownPeople: this.data.people.filter(p => (!k || p.label.includes(k)) &&
+      shownPeople: (this._people || []).filter(p => (!k || p.label.includes(k)) &&
         (f === 'all' || (f === 'owe' ? p.balance > 0 : p.balance < 0)))
     });
   },
@@ -149,8 +151,12 @@ Page({
 
   onKeyword(e) {
     this.setData({ keyword: e.detail.value });
-    if (this.data.tab === 'people') this.filterPeople();
-    if (this.data.tab === 'receipts') this.filterReceipts();
+    // 筛选防抖 150ms：连续输入时只在停顿后过滤一次
+    clearTimeout(this._kwTimer);
+    this._kwTimer = setTimeout(() => {
+      if (this.data.tab === 'people') this.filterPeople();
+      if (this.data.tab === 'receipts') this.filterReceipts();
+    }, 150);
   },
 
   /** 搜索：名单里没有时也可直接查询该姓名 */
@@ -158,7 +164,11 @@ Page({
     const k = (this.data.keyword || '').trim();
     if (this.data.tab === 'out') return this.load();
     if (this.data.tab === 'receipts') return this.filterReceipts();
-    if (k && this.data.shownPeople.length === 0) this.openPerson('n:' + k);
+    if (k) { // 先同步过滤一次（防抖可能还没触发），再判断名单里有没有
+      clearTimeout(this._kwTimer);
+      this.filterPeople();
+      if (this.data.shownPeople.length === 0) this.openPerson('n:' + k); // setData 同步更新 this.data
+    }
   },
 
   onPerson(e) { this.openPerson(e.currentTarget.dataset.key); },

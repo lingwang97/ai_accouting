@@ -31,7 +31,7 @@
     <loading show="{{loading && (tab === 'people' ? !shownPeople.length : (tab === 'receipts' ? !shownReceipts.length : !outList.length))}}" rows="4" />
 
     <!-- 收礼往来：按人（收送对比；逐笔在人详情里看） -->
-    <view class="card out-sum" wx:if="{{tab === 'people' && (people.length || inTotal)}}">共收到 {{inTotal}} 笔 · <text class="money">￥{{inSum}}</text></view>
+    <view class="card out-sum" wx:if="{{tab === 'people' && (hasPeople || inTotal)}}">共收到 {{inTotal}} 笔 · <text class="money">￥{{inSum}}</text></view>
     <view class="sub-row" wx:if="{{tab === 'people'}}">
       <view class="pf-chips">
         <view class="chip {{pFilter === item.v ? 'on' : ''}}" wx:for="{{pFilters}}" wx:key="v" data-v="{{item.v}}" bindtap="onPFilter">{{item.t}}</view>
@@ -52,7 +52,7 @@
         <view class="muted">收礼 {{item.inCount}} 次 ￥{{item.inSumStr}} · 送礼 {{item.outCount}} 次 ￥{{item.outSumStr}}</view>
       </view>
       <view class="muted center pad" wx:if="{{!loading && shownPeople.length === 0}}">
-        {{keyword ? '名单中没有「' + keyword + '」，按回车直接查询' : (pFilter !== 'all' && people.length ? '没有符合条件的往来人' : '暂无往来记录。宾客随礼入簿后会自动出现在这里，也可点「记送礼」登记你送出的礼')}}
+        {{keyword ? '名单中没有「' + keyword + '」，按回车直接查询' : (pFilter !== 'all' && hasPeople ? '没有符合条件的往来人' : '暂无往来记录。宾客随礼入簿后会自动出现在这里，也可点「记送礼」登记你送出的礼')}}
       </view>
     </block>
 
