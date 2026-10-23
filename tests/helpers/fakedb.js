@@ -2,8 +2,14 @@
 // 并把每次 where / orderBy / skip / limit 记到 db.log，供测试断言查询条件。不是通用实现。
 const cmdTarget = {};
 const mkOps = () => new Proxy(cmdTarget, { get: (t, op) => (...a) => ({ __op: String(op), v: a[0], a }) });
+// 字段级操作符支持链式 .and() / .or()（如 _.exists(true).and(_.nin([...]))）
+const mkOp = (op, a) => ({
+  __op: String(op), v: a[0], a,
+  and(x) { return { __op: 'fand', v: [this, x] }; },
+  or(x) { return { __op: 'for', v: [this, x] }; }
+});
 const command = new Proxy({}, {
-  get: (t, op) => (op === 'aggregate' ? mkOps() : (...a) => ({ __op: String(op), v: a[0], a }))
+  get: (t, op) => (op === 'aggregate' ? mkOps() : (...a) => mkOp(op, a))
 });
 
 const num = x => (x instanceof Date ? x.getTime() : x);
@@ -11,6 +17,8 @@ const num = x => (x instanceof Date ? x.getTime() : x);
 function matchVal(v, c) {
   if (c && typeof c === 'object' && c.__op) {
     switch (c.__op) {
+      case 'fand': return c.v.every(x => matchVal(v, x));
+      case 'for': return c.v.some(x => matchVal(v, x));
       case 'exists': return c.v ? v !== undefined : v === undefined;
       case 'in': return c.v.includes(v);
       case 'nin': return !c.v.includes(v);

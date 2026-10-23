@@ -1,11 +1,12 @@
 // 云函数 records — 账目列表 / 汇总 / 打印标记（文档 §5、§8）
 const cloud = require('wx-server-sdk');
+const { ok, err, bjDay, bjHour } = require('./common.js');
+const { REC, MEMBER, PENDING_TTL, STALL_MS, STALL_KEEP_MS, UNREJECT_MS, LISTED, COUNTED } = require('./status.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
 const records = db.collection('records');
 const { resolveCtx, canBook, readonly, can, workBook } = require('./ctx.js');
-const PENDING_TTL = 30 * 60 * 1000;
 
 /** 幂等建集合（init 未跑完时自愈；同一实例每个集合只尝试一次） */
 const colReady = {};
@@ -81,10 +82,10 @@ async function expirePending(openid) {
   try {
     await records.where({
       ownerOpenid: openid,
-      status: 'pending',
+      status: REC.PENDING,
       batchPay: _.neq('mixed'),
       createdAt: _.lt(new Date(Date.now() - PENDING_TTL))
-    }).update({ data: { status: 'cancelled', autoCancelled: true } });
+    }).update({ data: { status: REC.CANCELLED, autoCancelled: true } });
   } catch (e) { console.warn('自动取消超时未转账记录失败', e.message); }
 }
 
@@ -102,11 +103,11 @@ async function dashboard(ctx) {
   const scope = ctx.bookIds ? { bookId: _.in(ctx.bookIds) } : {};
   const activeId = workBook(ctx); // 机构模式记账人：自己选的一场
   // 待确认只算当前礼簿；其他礼簿的只给个数（工作台小提示），确认要先切换礼簿
-  const pendCond = { ownerOpenid: owner, status: 'transferred', bookId: activeId || '__none__' };
+  const pendCond = { ownerOpenid: owner, status: REC.TRANSFERRED, bookId: activeId || '__none__' };
   const [bookRes, todayRes, pendRes, pendCount, otherCount, todayBookRes, joinRes] = await Promise.all([
     activeId ? db.collection('books').doc(activeId).get().catch(() => null) : null,
     records.aggregate()
-      .match({ ownerOpenid: owner, status: 'paid', payDay: today, ...scope })
+      .match({ ownerOpenid: owner, status: REC.PAID, payDay: today, ...scope })
       .group({ _id: null, count: _.aggregate.sum(1), fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) })
       .end(),
     // 待确认份数与合计：计数 + 聚合（不受单次查询 100 条限制）
@@ -116,9 +117,9 @@ async function dashboard(ctx) {
     records.where(pendCond).count(),
     records.where(otherPendCond(ctx, activeId)).count(),
     // 当前礼簿的今日入簿份数：前端据此判断「今日新增」是否与礼簿合计重复
-    activeId ? records.where({ ownerOpenid: owner, status: 'paid', payDay: today, bookId: activeId }).count() : null,
+    activeId ? records.where({ ownerOpenid: owner, status: REC.PAID, payDay: today, bookId: activeId }).count() : null,
     // 主家：通过邀请卡申请加入、待同意的人数
-    ctx.role === 'owner' ? db.collection('members').where({ aid: account._id, status: 'pending' }).count() : null
+    ctx.role === 'owner' ? db.collection('members').where({ aid: account._id, status: MEMBER.PENDING }).count() : null
   ]);
   const b = bookRes && bookRes.data;
   const book = b && b.ownerOpenid === owner && b.statReady
@@ -161,11 +162,11 @@ async function myJoins(ctx) {
     const ms = (await db.collection('members').where({ memberOpenid: me, _openid: _.exists(false) }).limit(20).get()).data;
     const week = Date.now() - 7 * 24 * 3600 * 1000;
     const cur = ctx.account && ctx.account._id;
-    const show = ms.filter(m => m.status === 'pending' || (m.approvedAt && new Date(m.approvedAt).getTime() > week && m.aid !== cur));
+    const show = ms.filter(m => m.status === MEMBER.PENDING || (m.approvedAt && new Date(m.approvedAt).getTime() > week && m.aid !== cur));
     if (!show.length) return [];
     const accs = (await db.collection('accounts').where({ _id: _.in(show.map(m => m.aid)) }).field({ accountName: true }).get()).data;
     const name = id => (accs.find(a => a._id === id) || {}).accountName || '主家';
-    return show.map(m => ({ aid: m.aid, name: name(m.aid), role: m.role, pending: m.status === 'pending' }));
+    return show.map(m => ({ aid: m.aid, name: name(m.aid), role: m.role, pending: m.status === MEMBER.PENDING }));
   } catch (e) { return []; }
 }
 
@@ -188,18 +189,18 @@ async function orgSummary(ctx, event) {
   for (let i = 0; i < ids.length; i += 50) chunks.push(ids.slice(i, i + 50));
   const [byBookParts, byStaffParts, members] = await Promise.all([
     Promise.all(chunks.map(c => records.aggregate()
-      .match({ ownerOpenid: owner, bookId: _.in(c), status: _.in(['paid', 'transferred']) })
+      .match({ ownerOpenid: owner, bookId: _.in(c), status: _.in([REC.PAID, REC.TRANSFERRED]) })
       .group({ _id: { bookId: '$bookId', status: '$status', method: '$payMethod' }, count: _.aggregate.sum(1), fen: fenOf })
       .limit(1000).end())),
     Promise.all(chunks.map(c => records.aggregate()
-      .match({ ownerOpenid: owner, bookId: _.in(c), status: 'paid' })
+      .match({ ownerOpenid: owner, bookId: _.in(c), status: REC.PAID })
       .group({ _id: { bookId: '$bookId', handler: '$handlerOpenid' }, name: _.aggregate.first('$handlerName'), count: _.aggregate.sum(1), fen: fenOf })
       .limit(1000).end())),
     db.collection('members').where({ aid: ctx.account._id }).limit(100).get()
   ]);
   const byBook = { list: byBookParts.flatMap(r => r.list || []) };
   const byStaff = { list: byStaffParts.flatMap(r => r.list || []) };
-  members.data = members.data.filter(m => m.status !== 'pending'); // 待主家同意的不算
+  members.data = members.data.filter(m => m.status !== MEMBER.PENDING); // 待主家同意的不算
   const users = {};
   const openids = members.data.map(m => m.memberOpenid);
   if (openids.length) {
@@ -219,7 +220,7 @@ async function orgSummary(ctx, event) {
   (byBook.list || []).forEach(g => {
     const r = row[g._id.bookId];
     if (!r) return;
-    if (g._id.status === 'transferred') { r.pending += g.count; return; }
+    if (g._id.status === REC.TRANSFERRED) { r.pending += g.count; return; }
     r.count += g.count;
     r.fen += Math.round(g.fen);
     if (g._id.method === 'cash') r.cashFen += Math.round(g.fen); else r.wechatFen += Math.round(g.fen);
@@ -271,22 +272,22 @@ async function reconcile(ctx, event) {
     records.aggregate().match(base)
       .group({ _id: { status: '$status', method: '$payMethod' }, count: _.aggregate.sum(1), fen: fenOf })
       .limit(100).end(),
-    records.aggregate().match({ ...base, status: 'paid', payMethod: 'cash', payerOpenid: '' })
+    records.aggregate().match({ ...base, status: REC.PAID, payMethod: 'cash', payerOpenid: '' })
       .group({ _id: null, count: _.aggregate.sum(1), fen: fenOf }).end(),
     // 按实际到账入簿：宾客登记金额与实收不一致的
-    records.aggregate().match({ ...base, status: 'paid', declaredAmount: _.exists(true) })
+    records.aggregate().match({ ...base, status: REC.PAID, declaredAmount: _.exists(true) })
       .group({ _id: null, count: _.aggregate.sum(1), fen: fenOf, declaredFen: _.aggregate.sum(_.aggregate.multiply(['$declaredAmount', 100])) })
       .end(),
-    records.aggregate().match({ ...base, status: 'paid' })
+    records.aggregate().match({ ...base, status: REC.PAID })
       .group({ _id: { handler: '$handlerOpenid', method: '$payMethod' }, name: _.aggregate.first('$handlerName'), count: _.aggregate.sum(1), fen: fenOf })
       .limit(200).end(),
     // 礼台登记的微信（宾客当面转账、礼台看到到账后登记）
-    records.aggregate().match({ ...base, status: 'paid', payMethod: 'wechat', payerOpenid: '' })
+    records.aggregate().match({ ...base, status: REC.PAID, payMethod: 'wechat', payerOpenid: '' })
       .group({ _id: null, count: _.aggregate.sum(1), fen: fenOf }).end(),
     // 「转账+现金」批次：按支付方式汇总金额（分组数固定很少），批次数另用 count 取，不依赖聚合 limit 上限
-    records.aggregate().match({ ...base, status: 'paid', batchPay: 'mixed' })
+    records.aggregate().match({ ...base, status: REC.PAID, batchPay: 'mixed' })
       .group({ _id: '$payMethod', fen: fenOf }).limit(10).end(),
-    records.aggregate().match({ ...base, status: 'paid', batchPay: 'mixed' })
+    records.aggregate().match({ ...base, status: REC.PAID, batchPay: 'mixed' })
       .group({ _id: '$batchId' }).count('n').end()
   ]);
 
@@ -295,7 +296,7 @@ async function reconcile(ctx, event) {
   (byStatus.list || []).forEach(g => {
     const st = g._id.status;
     const add = (k) => { s[k].count += g.count; s[k].fen += Math.round(g.fen); };
-    if (st === 'paid') {
+    if (st === REC.PAID) {
       add('paid');
       add(g._id.method === 'cash' ? 'cash' : 'wechat');
     } else if (s[st]) {
@@ -356,13 +357,6 @@ async function checkStatDrift(owner, book, count, fen) {
   } catch (e) { console.warn('核对合计失败', e.message); }
 }
 
-/** 云函数运行在 UTC，日期按北京时间（UTC+8） */
-function bjDay(d) {
-  const t = new Date(new Date(d).getTime() + 8 * 3600 * 1000);
-  const p = n => (n < 10 ? '0' + n : '' + n);
-  return `${t.getUTCFullYear()}-${p(t.getUTCMonth() + 1)}-${p(t.getUTCDate())}`;
-}
-
 /** 分页 + 全量汇总；按日/关键词筛选 */
 async function list(openid, event, ctx) {
   const page = Math.max(1, Number(event.page) || 1);
@@ -383,12 +377,12 @@ async function list(openid, event, ctx) {
     kw = { payerName: db.RegExp({ regexp: escapeReg(String(event.keyword).slice(0, 20)), options: 'i' }) };
   }
   const withKw = c => (kw ? _.and([c, kw]) : c);
-  const paidCond = withKw({ ...base, status: 'paid' });
+  const paidCond = withKw({ ...base, status: REC.PAID });
   // 状态筛选只影响列表行与 listTotal；顶部合计 / 笔数 / 待确认数仍是整本口径
   // confirm = 待确认页同口径（status 'transferred'，行内有确认按钮）；paid = 已入簿；其余 = 全部
-  const stFilter = event.status === 'confirm' ? ['transferred'] : event.status === 'paid' ? ['paid'] : ['paid', 'transferred', 'pending'];
+  const stFilter = event.status === 'confirm' ? [REC.TRANSFERRED] : event.status === 'paid' ? [REC.PAID] : LISTED.slice();
   const listCond = withKw({ ...base, status: _.in(stFilter) });
-  const pendingCond = withKw({ ...base, status: 'transferred' });
+  const pendingCond = withKw({ ...base, status: REC.TRANSFERRED });
 
   // 排序白名单，非法值回落到时间倒序；都带 _id 作第二键，同时间 / 同金额翻页不重不漏
   const sortKey = ['time_desc', 'time_asc', 'amount_desc'].includes(event.sort) ? event.sort : 'time_desc';
@@ -449,23 +443,22 @@ async function markPrinted(openid, rids, ctx) {
  * stalled：宾客登记后没点「我已完成转账」的（超过 STALL_MS 仍未点，或 24 小时内被自动取消的），
  * 宾客常常转完账直接回聊天，主家核对微信到账后可直接入簿
  */
-const STALL_MS = 3 * 60 * 1000;
 /** 「宾客未点完成」条件（pending 与 pendingStat 共用，口径必须一致） */
 function stallCondOf(openid, bk, now) {
   return _.or([
-    { ownerOpenid: openid, status: 'pending', createdAt: _.lt(new Date(now - STALL_MS)), bookId: bk },
-    { ownerOpenid: openid, status: 'cancelled', autoCancelled: true, stallDismissed: _.neq(true), createdAt: _.gt(new Date(now - 24 * 3600 * 1000)), bookId: bk }
+    { ownerOpenid: openid, status: REC.PENDING, createdAt: _.lt(new Date(now - STALL_MS)), bookId: bk },
+    { ownerOpenid: openid, status: REC.CANCELLED, autoCancelled: true, stallDismissed: _.neq(true), createdAt: _.gt(new Date(now - STALL_KEEP_MS)), bookId: bk }
   ]);
 }
 /** 「最近标记未收到」条件 */
 function rejectedCondOf(openid, cur, now) {
-  return { ownerOpenid: openid, status: 'rejected', bookId: cur, rejectedAt: _.gt(new Date(now - 24 * 3600 * 1000)) };
+  return { ownerOpenid: openid, status: REC.REJECTED, bookId: cur, rejectedAt: _.gt(new Date(now - UNREJECT_MS)) };
 }
 async function pending(openid, ctx, withRejected) {
   // 只取当前礼簿（workBook）的待确认；确认接口同样限定当前礼簿，避免跨礼簿确认
   const cur = workBook(ctx);
   const bk = cur || '__none__';
-  const cond = { ownerOpenid: openid, status: 'transferred', bookId: bk };
+  const cond = { ownerOpenid: openid, status: REC.TRANSFERRED, bookId: bk };
   const now = Date.now();
   const stallCond = stallCondOf(openid, bk, now);
   const [res, cnt, stall, other, bookRes, rejRes] = await Promise.all([
@@ -491,7 +484,7 @@ async function pending(openid, ctx, withRejected) {
 function otherPendCond(ctx, cur) {
   const ids = ctx.bookIds ? ctx.bookIds.filter(id => id !== cur && id !== '__none__') : null;
   return {
-    ownerOpenid: ctx.ownerOpenid, status: 'transferred',
+    ownerOpenid: ctx.ownerOpenid, status: REC.TRANSFERRED,
     bookId: ids ? _.in(ids.length ? ids : ['__none__']) : _.exists(true).and(_.nin([cur || '__none__', '']))
   };
 }
@@ -501,7 +494,7 @@ function otherPendCond(ctx, cur) {
 async function pendingStat(openid, ctx, selfOpenid, withExtra) {
   if (!ctx.account) return ok({ count: 0, sum: 0, remindDue: await remindDue(selfOpenid) });
   const cur = workBook(ctx);
-  const cond = { ownerOpenid: openid, status: 'transferred', bookId: cur || '__none__' };
+  const cond = { ownerOpenid: openid, status: REC.TRANSFERRED, bookId: cur || '__none__' };
   const now = Date.now();
   const [cnt, agg, other, due, stall, rej] = await Promise.all([
     records.where(cond).count(),
@@ -526,8 +519,8 @@ async function pendingStat(openid, ctx, selfOpenid, withExtra) {
 async function remindDue(openid) {
   try {
     if (!openid) return false;
-    const bj = new Date(Date.now() + 8 * 3600 * 1000).toISOString(); // 北京时间的 ISO 串（只取日期 / 小时）
-    const today = bj.slice(0, 10), hour = Number(bj.slice(11, 13));
+    const nowD = new Date(); // 日期 / 小时按北京时间
+    const today = bjDay(nowD), hour = bjHour(nowD);
     const or = [
       { date: _.lt(today) },
       { date: _.gte(today), remindAt: _.lte(new Date()) },
@@ -552,7 +545,7 @@ async function nameCheck(ctx, names) {
   if (!ctx.account) return ok({ map: {} });
   const list = (Array.isArray(names) ? names : []).map(s => String(s || '').trim().slice(0, 20)).filter(Boolean).slice(0, 10);
   if (!list.length) return ok({ map: {} });
-  const cond = { ownerOpenid: ctx.ownerOpenid, payerName: _.in(list), status: _.in(['paid', 'transferred', 'pending']) }; // 与宾客端口径一致
+  const cond = { ownerOpenid: ctx.ownerOpenid, payerName: _.in(list), status: _.in(COUNTED.slice()) }; // 与宾客端口径一致
   if (ctx.bookIds) cond.bookId = _.in(ctx.bookIds);
   const res = await records.aggregate().match(cond)
     .group({
@@ -601,7 +594,7 @@ const strip = ({ payerOpenid, handlerOpenid, enteredBy, ownerOpenid, personKey, 
 async function themes(openid, ctx) {
   // 只负责部分礼簿的记账人、家人共享：只列负责 / 共享的礼簿
   const res = await records.aggregate()
-    .match({ ownerOpenid: openid, status: 'paid', ...(ctx.bookIds ? { bookId: _.in(ctx.bookIds) } : {}) })
+    .match({ ownerOpenid: openid, status: REC.PAID, ...(ctx.bookIds ? { bookId: _.in(ctx.bookIds) } : {}) })
     .group({ _id: '$themeName' })
     .limit(1000)
     .end();
@@ -609,5 +602,3 @@ async function themes(openid, ctx) {
 }
 
 const escapeReg = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const ok = data => ({ code: 0, msg: 'ok', data });
-const err = msg => ({ code: 1, msg, data: null });

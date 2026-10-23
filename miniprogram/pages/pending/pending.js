@@ -1,5 +1,6 @@
 // pages/pending/pending.js — 待确认礼金：列表批量 / 逐笔大字 两种处理方式
 const req = require('../../utils/request.js');
+const { REC, isToConfirm } = require('../../utils/status.js');
 const fmt = require('../../utils/format.js');
 const confirm = require('../../utils/confirm.js');
 const notify = require('../../utils/notify.js');
@@ -101,7 +102,7 @@ Page({
       this._rejN = (rejected || []).length;
       // 宾客没点「我已完成转账」的（含 24 小时内被自动取消的）：主家核对微信到账后可直接入簿
       this.setData({
-        stalled: groupRecords(stalled || []).map(g => ({ ...g, auto: g.status === 'cancelled', timeStr: fmt.time(g.createdAt) })),
+        stalled: groupRecords(stalled || []).map(g => ({ ...g, auto: g.status === REC.CANCELLED, timeStr: fmt.time(g.createdAt) })),
         // 最近 24 小时内标记「未收到」的：点错了可以撤销
         rejected: groupRecords(rejected || []).map(g => ({ ...g, timeStr: fmt.time(g.rejectedAt || g.createdAt) }))
       });
@@ -248,7 +249,7 @@ Page({
     if (!g) return;
     const res = await this.run(() => confirm.confirmTransfer(g));
     if (res === 'edit') { this.onCloseSheet(); this.openEditor(g); }
-    else if (res) { this.removeLocal(g._id); if (g.status !== 'transferred') this.load(false); }
+    else if (res) { this.removeLocal(g._id); if (!isToConfirm(g)) this.load(false); }
   },
 
   /** 打开批次明细弹层（catchtap，不触发勾选） */
@@ -273,8 +274,8 @@ Page({
     const record = this.findById(e.currentTarget.dataset.id);
     if (!record) return;
     // 弹层里打开的是「宾客未点完成」中已自动取消的批次：按移除处理
-    if (record.status === 'cancelled') { this.onCloseSheet(); return this.onStallReject({ currentTarget: { dataset: { id: record._id } } }); }
-    if (await this.run(() => confirm.rejectTransfer(record))) { this.removeLocal(record._id); if (record.status !== 'transferred') this.load(false); }
+    if (record.status === REC.CANCELLED) { this.onCloseSheet(); return this.onStallReject({ currentTarget: { dataset: { id: record._id } } }); }
+    if (await this.run(() => confirm.rejectTransfer(record))) { this.removeLocal(record._id); if (!isToConfirm(record)) this.load(false); }
   },
 
   onToggleSelect() {

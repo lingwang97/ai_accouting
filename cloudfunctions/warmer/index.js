@@ -2,6 +2,7 @@
 // 另外每轮推送到期的亲友办事提醒（reminders，见 remind.js），每小时清理一次回收站里过期的礼簿（见 trash.js），都与预热开关无关
 // 配置在小程序「我的 → 系统设置」修改（system 云函数），无需重新上传触发器
 const cloud = require('wx-server-sdk');
+const { bjDay, bjHour } = require('./common.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const { DEFAULT_WARMUP, readSetting, writeSetting, normalizeWarmup } = require('./plans.js');
@@ -72,13 +73,12 @@ async function pushReminders(deadline) {
   if (!remind.TMPL_ID) return;
   const _ = db.command;
   const now = new Date();
-  const bj = new Date(now.getTime() + 8 * 3600 * 1000);
-  const t = bj.toISOString().slice(0, 10); // 北京时间今天
+  const t = bjDay(now); // 北京时间今天
   const col = db.collection('reminders');
   // 已到提醒时间（remindAt）；旧版提醒没有 remindAt，按提醒日 9:00
   const due = _.or([
     { remindAt: _.lte(now) },
-    { remindAt: _.exists(false), notifyDay: bj.getUTCHours() >= 9 ? _.lte(t) : _.lt(t) }
+    { remindAt: _.exists(false), notifyDay: bjHour(now) >= 9 ? _.lte(t) : _.lt(t) }
   ]);
   const tried = []; // 本次触发已尝试过的：失败的留到下一次触发（5 分钟后）再试
   for (let round = 0; round < 4; round++) { // 每轮最多 200 条；没推完（或时间预算用完）的下一轮继续

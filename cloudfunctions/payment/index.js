@@ -2,6 +2,8 @@
 // 状态流转：pending(待转账) → transferred(付款方已转账，待收款方确认) → paid(收款方确认到账)
 //          pending → cancelled(付款方取消，或超过 30 分钟未转账被自动取消，仍可补点「已转账」)；transferred → rejected(收款方未收到款)；paid → void(作废)
 const cloud = require('wx-server-sdk');
+const { ok, err, bjDay, bjTime } = require('./common.js');
+const { REC, MEMBER, UNREJECT_MS, COUNTED } = require('./status.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
@@ -40,7 +42,7 @@ exports.main = async (event) => {
       case 'create': return await create(OPENID, event);
       case 'cashEntry': return await cashEntry(OPENID, ctx, event);
       case 'transferred': return await transferred(OPENID, event.rid, event.envVersion);
-      case 'cancel': return await payerUpdate(OPENID, event.rid, [{ status: 'pending' }], 'cancelled');
+      case 'cancel': return await payerUpdate(OPENID, event.rid, [{ status: REC.PENDING }], REC.CANCELLED);
       case 'status': return await status(OPENID, event.rid);
       case 'receipt': return await receipt(OPENID, event.rid, event.batch === true);
       case 'myReceipts': return await myReceipts(OPENID);
@@ -48,16 +50,16 @@ exports.main = async (event) => {
       // 主家或其记账人（权限相同）
       // 批次录入的记录：确认 / 拒绝整批（amounts 为逐人实际金额 {rid: 金额}）
       // 宾客没点「我已完成转账」的（pending，或已被自动取消）主家核对到账后也可直接入簿
-      case 'confirm': return await groupUpdate(ctx, event.rid, ['transferred', 'pending', 'cancelled'], 'paid', event.amount, event.amounts);
+      case 'confirm': return await groupUpdate(ctx, event.rid, [REC.TRANSFERRED, REC.PENDING, REC.CANCELLED], REC.PAID, event.amount, event.amounts);
       case 'confirmBatch': return await confirmBatch(ctx, event.rids);
-      case 'reject': return await groupUpdate(ctx, event.rid, ['transferred', 'pending'], 'rejected');
+      case 'reject': return await groupUpdate(ctx, event.rid, [REC.TRANSFERRED, REC.PENDING], REC.REJECTED);
       // 撤销「未收到」：24 小时内回到标记前的状态
       case 'unreject': return await unreject(ctx, String(event.rid || ''));
       // 修改已入簿礼金（金额 / 姓名 / 关系 / 备注）
       case 'amend': return await amend(ctx, event);
       // 「宾客未点完成」里已被自动取消的：主家核对确实没收到，从这一栏移除（整批）
       case 'dismissStall': return await dismissStall(ctx, String(event.rid || ''));
-      case 'void': return await ownerUpdate(ctx, event.rid, ['paid'], 'void');
+      case 'void': return await ownerUpdate(ctx, event.rid, [REC.PAID], REC.VOID);
       default: return err('未知 action');
     }
   } catch (e) {
@@ -151,7 +153,7 @@ async function create(openid, event) {
     themeName: book ? book.name : ((account.theme && account.theme.name) || ''),
     payMethod: payMethod === 'mixed' ? 'wechat' : payMethod, // mixed 时每人的 payMethod 在 items 里
     ...(payMethod === 'mixed' ? { batchPay: 'mixed' } : {}),
-    status: payMethod === 'cash' ? 'transferred' : 'pending',
+    status: payMethod === 'cash' ? REC.TRANSFERRED : REC.PENDING,
     ...(payMethod === 'cash' ? { transferredAt: now } : {}),
     printed: false,
     payDay,
@@ -165,7 +167,7 @@ async function create(openid, event) {
     try {
       const sts = [];
       for (const id of ids) sts.push((await records.doc(id).get()).data.status);
-      realStatus = sts.every(s => s === 'paid') ? 'paid' : sts[0];
+      realStatus = sts.every(s => s === REC.PAID) ? REC.PAID : sts[0];
     } catch (e) { /* 读取失败按原状态返回 */ }
   }
   const record = {
@@ -233,7 +235,7 @@ async function sameNameOthers(ownerOpenid, openid, people) {
   const todo = people.filter(p => !p.tagged);
   if (!todo.length) return [];
   const res = await records.where({
-    ownerOpenid, payerName: _.in(todo.map(p => p.name)), status: _.in(['paid', 'transferred', 'pending'])
+    ownerOpenid, payerName: _.in(todo.map(p => p.name)), status: _.in(COUNTED.slice())
   }).field({ payerName: true, payerOpenid: true, batchIdx: true }).limit(500).get();
   const out = todo.filter(p => res.data.some(r => {
     if (r.payerName !== p.name) return false;
@@ -397,7 +399,7 @@ async function cashEntry(openid, ctx, event) {
     payMethod: method === 'wechat' ? 'wechat' : 'cash', // mixed 时每人的 payMethod 在 items 里
     ...(method === 'mixed' ? { batchPay: 'mixed' } : {}),
     deskEntry: true, // 礼台登记（不经宾客扫码）
-    status: 'paid',
+    status: REC.PAID,
     printed: false,
     payDay: bjDay(now),
     createdAt: now,
@@ -436,7 +438,7 @@ async function incBookStat(bookId, count, fen, paidAt) {
 /** 付款方已转账：pending（或超时被自动取消的）→ transferred，并通知收款方 */
 async function transferred(openid, rid, envVersion) {
   const res = await payerUpdate(openid, rid,
-    [{ status: 'pending' }, { status: 'cancelled', autoCancelled: true }], 'transferred');
+    [{ status: REC.PENDING }, { status: REC.CANCELLED, autoCancelled: true }], REC.TRANSFERRED);
   if (res.code === 0 && res.data.changed) await notifyOwner(rid, envVersion);
   return res;
 }
@@ -451,7 +453,7 @@ async function payerUpdate(openid, rid, fromConds, to) {
   if (!cur) return err('记录不存在');
   if (cur.payerOpenid !== openid) return err('无权操作');
   const data = { status: to };
-  if (to === 'transferred') { data.transferredAt = new Date(); data.autoCancelled = _.remove(); }
+  if (to === REC.TRANSFERRED) { data.transferredAt = new Date(); data.autoCancelled = _.remove(); }
   // 批次录入：同一批次一起推进
   const key = cur.batchId ? { batchId: cur.batchId } : { _id: rid };
   const res = await records.where(_.or(fromConds.map(c => ({ ...key, payerOpenid: openid, ...c }))))
@@ -476,7 +478,7 @@ async function notifyOwner(rid, envVersion) {
     let acc = null;
     try { acc = (await accounts.doc(rec.aid).get()).data; } catch (e) { /* 忽略 */ }
     to = to.concat(ms.data
-      .filter(m => m.role !== 'viewer' && m.status !== 'pending' && !m._openid)
+      .filter(m => m.role !== 'viewer' && m.status !== MEMBER.PENDING && !m._openid)
       .filter(m => (Array.isArray(m.perms) ? m.perms.includes('confirm') : true))
       .filter(m => (acc && !acc.orgMode
         ? soloBook(m, acc) === rec.bookId
@@ -548,11 +550,11 @@ async function receipt(openid, rid, batch) {
   const rec = await getRecord(rid);
   if (!rec) return err('记录不存在');
   if (!(await canView(openid, rec))) return err('无权查看');
-  if (rec.status !== 'paid') return err('主家确认收到后才能生成回执');
+  if (rec.status !== REC.PAID) return err('主家确认收到后才能生成回执');
   let out = receiptRecord(rec);
   // 批次录入：扫码人看到一张合并回执，列出全部随礼人
   if (batch && rec.batchId) {
-    const paid = (await batchRecords(rec.batchId, { ownerOpenid: rec.ownerOpenid })).filter(r => r.status === 'paid');
+    const paid = (await batchRecords(rec.batchId, { ownerOpenid: rec.ownerOpenid })).filter(r => r.status === REC.PAID);
     if (paid.length > 1) {
       out = {
         ...out,
@@ -579,7 +581,7 @@ async function receipt(openid, rid, batch) {
 
 /** 付款方的收据列表（最近 50 笔已到账） */
 async function myReceipts(openid) {
-  const res = await records.where({ payerOpenid: openid, status: 'paid' })
+  const res = await records.where({ payerOpenid: openid, status: REC.PAID })
     .orderBy('paidAt', 'desc').limit(50).get();
   const aids = [...new Set(res.data.map(r => r.aid))];
   const names = {};
@@ -611,7 +613,7 @@ async function confirmBatch(ctx, rids) {
   for (let i = 0; i < rids.length; i += 5) {
     const part = rids.slice(i, i + 5);
     const results = await Promise.all(part.map(rid =>
-      ownerUpdate(ctx, String(rid), ['transferred', 'pending'], 'paid').catch(e => ({ code: 1, msg: e.message }))));
+      ownerUpdate(ctx, String(rid), [REC.TRANSFERRED, REC.PENDING], REC.PAID).catch(e => ({ code: 1, msg: e.message }))));
     results.forEach((res, k) => {
       if (res.code === 0) done.push(res.data.record);
       else failed.push(part[k]);
@@ -629,9 +631,9 @@ async function groupUpdate(ctx, rid, fromList, to, actualAmount, amounts) {
   if (!rec || !rec.batchId) return ownerUpdate(ctx, rid, fromList, to, actualAmount, rec);
   if (rec.ownerOpenid !== ctx.ownerOpenid || !canBook(ctx, rec.bookId)) return err('无权操作该账目');
   if (notCurrentBook(ctx, rec)) return err(switchMsg(ctx));
-  const all = (await batchRecords(rec.batchId, { ownerOpenid: ctx.ownerOpenid })).filter(r => fromList.includes(r.status) && (r.status !== 'cancelled' || r.autoCancelled));
+  const all = (await batchRecords(rec.batchId, { ownerOpenid: ctx.ownerOpenid })).filter(r => fromList.includes(r.status) && (r.status !== REC.CANCELLED || r.autoCancelled));
   if (!all.length) return err('当前状态不可操作，请刷新');
-  const map = (to === 'paid' && amounts && typeof amounts === 'object') ? amounts : {};
+  const map = (to === REC.PAID && amounts && typeof amounts === 'object') ? amounts : {};
   for (const r of all) {
     const v = map[r._id];
     if (v !== undefined && v !== null && !(Number(v) > 0 && Number(v) <= MAX_AMOUNT)) return err(`${r.payerName} 的实际金额不正确`);
@@ -663,7 +665,7 @@ async function dismissStall(ctx, rid) {
   if (!rec || rec.ownerOpenid !== ctx.ownerOpenid || !canBook(ctx, rec.bookId)) return err('记录不存在');
   if (notCurrentBook(ctx, rec)) return err(switchMsg(ctx));
   const key = rec.batchId ? { batchId: rec.batchId } : { _id: rid };
-  await records.where({ ...key, ownerOpenid: ctx.ownerOpenid, status: 'cancelled', autoCancelled: true }).update({ data: { stallDismissed: true } });
+  await records.where({ ...key, ownerOpenid: ctx.ownerOpenid, status: REC.CANCELLED, autoCancelled: true }).update({ data: { stallDismissed: true } });
   return ok({ dismissed: true });
 }
 
@@ -674,13 +676,13 @@ async function dismissStall(ctx, rid) {
 async function ownerUpdate(ctx, rid, fromList, to, actualAmount, pre) {
   if (!validId(rid)) return err('记录不存在');
   const openid = ctx.ownerOpenid; // 数据属于主家，记账人代为操作
-  const hasAmt = to === 'paid' && actualAmount !== undefined && actualAmount !== null;
-  const r0 = (pre && pre._id === rid) ? pre : ((ctx.bookIds || to !== 'void' || hasAmt) ? await getRecord(rid) : null);
+  const hasAmt = to === REC.PAID && actualAmount !== undefined && actualAmount !== null;
+  const r0 = (pre && pre._id === rid) ? pre : ((ctx.bookIds || to !== REC.VOID || hasAmt) ? await getRecord(rid) : null);
   if (ctx.bookIds && (!r0 || !canBook(ctx, r0.bookId))) return err('该礼金不在你负责的场次');
   // 确认 / 拒绝只能在当前礼簿内进行（作废已入簿的不限）
-  if (r0 && to !== 'void' && notCurrentBook(ctx, r0)) return err(switchMsg(ctx));
+  if (r0 && to !== REC.VOID && notCurrentBook(ctx, r0)) return err(switchMsg(ctx));
   const data = { status: to };
-  if (to === 'paid') {
+  if (to === REC.PAID) {
     data.paidAt = new Date();
     // 记账人：实际确认这笔礼金的人（回执、小票上显示）
     data.handlerOpenid = (ctx.user && ctx.user.openid) || '';
@@ -698,15 +700,15 @@ async function ownerUpdate(ctx, rid, fromList, to, actualAmount, pre) {
     }
   }
   // 标记「未收到」：记下时间与标记前的状态，24 小时内可撤销（见 unreject）；限定为读到的当前状态，保证记下的状态准确
-  if (to === 'rejected') {
+  if (to === REC.REJECTED) {
     data.rejectedAt = new Date();
     if (r0 && fromList.includes(r0.status)) { data.rejectedFrom = r0.status; fromList = [r0.status]; }
   }
   // 已取消的只有「自动取消」的可以操作（宾客自己取消的不行）
-  const statusCond = fromList.includes('cancelled')
-    ? _.or([{ status: _.in(fromList.filter(s => s !== 'cancelled')) }, { status: 'cancelled', autoCancelled: true }])
+  const statusCond = fromList.includes(REC.CANCELLED)
+    ? _.or([{ status: _.in(fromList.filter(s => s !== REC.CANCELLED)) }, { status: REC.CANCELLED, autoCancelled: true }])
     : { status: _.in(fromList) };
-  if (to === 'paid') data.autoCancelled = _.remove();
+  if (to === REC.PAID) data.autoCancelled = _.remove();
   const res = await records.where(_.and([{ _id: rid, ownerOpenid: openid }, statusCond]))
     .update({ data });
   const rec = await getRecord(rid);
@@ -714,15 +716,13 @@ async function ownerUpdate(ctx, rid, fromList, to, actualAmount, pre) {
   if (rec.ownerOpenid !== openid) return err('无权操作该账目');
   if (res.stats.updated !== 1) return err('当前状态不可操作，请刷新');
   // 礼簿份数与合计累加：入簿 +1，作废 -1（旧版创建的礼簿没有 statSince，照常累加）
-  if (rec.bookId && (to === 'paid' || to === 'void')) {
-    const sign = to === 'paid' ? 1 : -1;
-    await incBookStat(rec.bookId, sign, sign * Math.round(rec.amount * 100), to === 'paid' ? rec.paidAt : null);
+  if (rec.bookId && (to === REC.PAID || to === REC.VOID)) {
+    const sign = to === REC.PAID ? 1 : -1;
+    await incBookStat(rec.bookId, sign, sign * Math.round(rec.amount * 100), to === REC.PAID ? rec.paidAt : null);
   }
   return ok({ rid, status: to, record: shown(rec) });
 }
 
-/** 「未收到」可撤销的期限（毫秒）：从标记时间（rejectedAt）算起 */
-const UNREJECT_MS = 24 * 3600 * 1000;
 
 /**
  * 撤销「未收到」：24 小时内把 rejected 恢复为标记前的状态（rejectedFrom，缺省 transferred）
@@ -736,15 +736,15 @@ async function unreject(ctx, rid) {
   if (notCurrentBook(ctx, rec)) return err(switchMsg(ctx));
   const cut = new Date(Date.now() - UNREJECT_MS);
   const all = rec.batchId ? await batchRecords(rec.batchId, { ownerOpenid: ctx.ownerOpenid }) : [rec];
-  const todo = all.filter(r => r.status === 'rejected' && r.rejectedAt && new Date(r.rejectedAt) > cut);
+  const todo = all.filter(r => r.status === REC.REJECTED && r.rejectedAt && new Date(r.rejectedAt) > cut);
   if (!todo.length) {
-    return err(all.some(r => r.status === 'rejected') ? '已超过 24 小时，不能撤销' : '当前状态不可操作，请刷新');
+    return err(all.some(r => r.status === REC.REJECTED) ? '已超过 24 小时，不能撤销' : '当前状态不可操作，请刷新');
   }
   let n = 0;
   await Promise.all(todo.map(async r => {
-    const back = r.rejectedFrom === 'pending' ? 'pending' : 'transferred';
+    const back = r.rejectedFrom === REC.PENDING ? REC.PENDING : REC.TRANSFERRED;
     // 带状态与时间条件的原子更新：并发撤销或期限刚过时不会误改
-    const res = await records.where({ _id: r._id, ownerOpenid: ctx.ownerOpenid, status: 'rejected', rejectedAt: _.gt(cut) })
+    const res = await records.where({ _id: r._id, ownerOpenid: ctx.ownerOpenid, status: REC.REJECTED, rejectedAt: _.gt(cut) })
       .update({ data: { status: back, rejectedAt: _.remove(), rejectedFrom: _.remove() } });
     n += res.stats.updated;
   }));
@@ -769,7 +769,7 @@ async function amend(ctx, event) {
   const rec = await getRecord(rid);
   if (!rec || rec.ownerOpenid !== ctx.ownerOpenid) return err('记录不存在');
   if (!canBook(ctx, rec.bookId)) return err('该礼金不在你负责的场次');
-  if (rec.status !== 'paid') return err('只能修改已入簿的礼金');
+  if (rec.status !== REC.PAID) return err('只能修改已入簿的礼金');
 
   const next = {};
   if (event.amount !== undefined && event.amount !== null && event.amount !== '') {
@@ -809,7 +809,7 @@ async function amend(ctx, event) {
   if (changes.payerName && rec.payerOpenid && !rec.personKey) {
     data.personKey = `o:${rec.payerOpenid}:${normName(rec.payerName)}`;
   }
-  const res = await records.where(_.and([{ _id: rid, ownerOpenid: ctx.ownerOpenid, status: 'paid' }, verCond])).update({ data });
+  const res = await records.where(_.and([{ _id: rid, ownerOpenid: ctx.ownerOpenid, status: REC.PAID }, verCond])).update({ data });
   if (res.stats.updated !== 1) return err('这笔礼金刚被修改或状态已变，请刷新后重试');
   // 金额变化：礼簿合计加减差额（与入簿 / 作废同一个累加函数）
   if (changes.amount && rec.bookId) {
@@ -832,18 +832,8 @@ const RATE_MAX = 3;
 const BATCH_PEOPLE = 10; // 批次录入最多人数
 const RELATIONS = ['亲戚', '朋友', '同事', '同学', '邻里', '其他'];
 
-/** 云函数运行在 UTC，日期统一按北京时间（UTC+8） */
-function bj(d) {
-  const t = new Date(new Date(d).getTime() + 8 * 3600 * 1000);
-  const p = n => (n < 10 ? '0' + n : '' + n);
-  return { day: `${t.getUTCFullYear()}-${p(t.getUTCMonth() + 1)}-${p(t.getUTCDate())}`, hm: `${p(t.getUTCHours())}:${p(t.getUTCMinutes())}` };
-}
-const bjDay = d => bj(d).day;
-const bjTime = d => { const b = bj(d); return `${b.day} ${b.hm}`; };
 
 const centStr = rs => String(rs.reduce((t, r) => t + Math.round(r.amount * 100), 0) / 100);
 const validId = s => /^[a-zA-Z0-9_-]{1,64}$/.test(String(s || ''));
 /** 返回给主家 / 记账人前端的记录：去掉各方 openid 与往来人标识（含宾客 openid） */
 const shown = ({ payerOpenid, handlerOpenid, enteredBy, ownerOpenid, personKey, _openid, ...r }) => r;
-const ok = data => ({ code: 0, msg: 'ok', data });
-const err = msg => ({ code: 1, msg, data: null });

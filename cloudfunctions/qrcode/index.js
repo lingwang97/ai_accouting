@@ -1,5 +1,6 @@
 // 云函数 qrcode — 生成收款专属小程序码（文档 §5、§6.2）；action=app 生成电子回执上的小程序首页码
 const cloud = require('wx-server-sdk');
+const { ok, err } = require('./common.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const ENVS = ['develop', 'trial', 'release'];
 const { shortCodeOf, resolveCtx, canBook, readonly, trusted, can, workBook } = require('./ctx.js');
@@ -119,5 +120,3 @@ async function appCode(envVersion) {
   return ok({ url: f.tempFileURL });
 }
 
-const ok = data => ({ code: 0, msg: 'ok', data });
-const err = msg => ({ code: 1, msg, data: null });

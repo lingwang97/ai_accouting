@@ -1,5 +1,6 @@
 // 云函数 printtpl — 打印模板存取（文档 §6.6）
 const cloud = require('wx-server-sdk');
+const { ok, err } = require('./common.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const tpls = db.collection('print_templates');
@@ -71,5 +72,3 @@ async function save(openid, tpl) {
 
 /** 返回前端的模板：不带主家 openid */
 const pub = ({ ownerOpenid, _openid, ...t }) => t;
-const ok = data => ({ code: 0, msg: 'ok', data });
-const err = msg => ({ code: 1, msg, data: null });

@@ -8,6 +8,7 @@
 //   adminPreflight / adminPreflightFix 管理员：上线前检查（密钥来源、集合、WX_APPSECRET）与建缺失集合
 //   adminIndexes 管理员：一键创建数据库索引（调用云开发 HTTP API updateIndex，需在本函数环境变量配置 WX_APPSECRET）
 const cloud = require('wx-server-sdk');
+const { ok, err } = require('./common.js');
 const https = require('https');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
@@ -458,7 +459,7 @@ async function adminLogs() {
 
 // —— 上线前检查 ——
 // 必需集合（与 init 云函数的 COLLECTIONS 一致，另加 sys_config：往来人标识密钥，不属于任何用户，注销 / 清除测试数据都不会动它）
-const REQUIRED_COLS = ['users', 'accounts', 'records', 'print_templates', 'books', 'gifts_out', 'exports', 'members', 'invites', 'settings', 'subscriptions', 'reminders', 'person_alias', 'admin_logs', 'book_codes', 'trash_books', 'trash_records', 'rate_limits', 'sys_config'];
+const REQUIRED_COLS = require('./collections.js').COLLECTIONS;
 
 /**
  * 上线前检查：只返回状态，不返回任何密钥内容
@@ -567,5 +568,3 @@ function postJSON(url, body) {
   });
 }
 
-const ok = data => ({ code: 0, msg: 'ok', data });
-const err = msg => ({ code: 1, msg, data: null });

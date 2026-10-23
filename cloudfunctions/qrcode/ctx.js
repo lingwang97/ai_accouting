@@ -17,6 +17,8 @@
 // 安全：所有数据都由云函数写入，云函数写入的文档没有 _openid 字段；带 _openid 的是客户端绕过云函数直接写库伪造的，
 // 一律忽略（集合权限另应设为「所有用户不可读写」）。
 
+const { MEMBER } = require('./status.js');
+
 /**
  * 记账人权限项（主家本人始终拥有全部；家人共享只读，一项都没有）
  * 只属于主家本人、不能授予的：移交、机构模式、外观设置、同意加入申请、确认收款码、清除数据
@@ -53,7 +55,7 @@ async function resolveCtx(db, openid) {
   ]);
   const user = (userRes && userRes.data[0]) || null;
   const own = (ownRes && ownRes.data[0]) || null;
-  const memberships = ((memRes && memRes.data) || []).filter(m => m.status !== 'pending');
+  const memberships = ((memRes && memRes.data) || []).filter(m => m.status !== MEMBER.PENDING);
 
   const asClerk = async m => {
     const acc = await safe(accounts.doc(m.aid).get());

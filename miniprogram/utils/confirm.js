@@ -1,6 +1,7 @@
 // utils/confirm.js — 主家确认/拒绝礼金（礼簿页与待确认页共用）
 // 批次录入的礼金以"组"处理：group.records 为同一批次的多位随礼人，确认 / 拒绝整批，金额不符时逐人改金额
 const req = require('./request.js');
+const { REC } = require('./status.js');
 const printer = require('./printer.js');
 const fmt = require('./format.js');
 const notify = require('./notify.js');
@@ -121,7 +122,7 @@ function confirmBatch(records) {
           for (let i = 0; i < done.length; i++) {
             wx.showLoading({ title: `打印 ${i + 1}/${done.length}`, mask: true });
             try {
-              await printer.printRecord({ ...done[i], status: 'paid' });
+              await printer.printRecord({ ...done[i], status: REC.PAID });
               printed++;
             } catch (e) {
               partial = !!(e && e.partial);
@@ -182,7 +183,7 @@ function rejectTransfer(record) {
 async function autoPrint(list) {
   if (!(await printer.ensureConnected())) return '打印机未连接，未打印';
   try {
-    for (const record of list) await printer.printRecord({ ...record, status: 'paid' });
+    for (const record of list) await printer.printRecord({ ...record, status: REC.PAID });
     return '';
   } catch (e) {
     return e && e.partial ? '打印中断，请检查小票后补打' : '打印失败，可补打';

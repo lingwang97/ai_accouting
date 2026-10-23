@@ -1,6 +1,7 @@
 // pages/pay/pay.js — 扫码随礼页（宾客落地页）
 // 步骤：form 登记 → transfer 向主家收款码转账 → waiting 等待主家确认 → success（显示回执）/ failed
 const req = require('../../utils/request.js');
+const { REC } = require('../../utils/status.js');
 const fmt = require('../../utils/format.js');
 const receipt = require('../../utils/receipt.js');
 const scenes = require('../../utils/scenes.js');
@@ -87,11 +88,11 @@ Page({
     if (!o || o.aid !== aid || Date.now() - o.at > 24 * 3600 * 1000 || this.data.step !== 'form') return;
     let status = '';
     try { status = (await req.payStatus(o.rid)).status; } catch (e) { return; }
-    if (status === 'transferred') {
+    if (status === REC.TRANSFERRED) {
       this.setData({ record: viewRecord(o.record), step: 'waiting' });
       return this.startPoll();
     }
-    if (status !== 'pending' && status !== 'cancelled') return this.clearOpen();
+    if (status !== REC.PENDING && status !== REC.CANCELLED) return this.clearOpen();
     const v = viewRecord(o.record);
     wx.showModal({
       title: '有一笔未完成的随礼',
@@ -102,7 +103,7 @@ Page({
         if (r.confirm) this.setData({ record: v, payCodeUrl: o.payCodeUrl || '', showFallback: false, codeSaved: false, step: 'transfer' });
         else if (r.cancel) {
           this.clearOpen();
-          if (status === 'pending') req.payCancel(o.rid).catch(() => {});
+          if (status === REC.PENDING) req.payCancel(o.rid).catch(() => {});
         }
       }
     });
@@ -199,12 +200,12 @@ Page({
         return;
       }
       // 重复提交（弱网重试）时记录状态可能已推进：已转账等待确认 / 已入簿 / 被拒，直接进入对应步骤
-      if (record.status === 'transferred') {
+      if (record.status === REC.TRANSFERRED) {
         this.setData({ record: viewRecord(record), step: 'waiting' });
         this.startPoll();
         return;
       }
-      if (record.status === 'paid' || record.status === 'rejected') {
+      if (record.status === REC.PAID || record.status === REC.REJECTED) {
         this.setData({ record: viewRecord(record) });
         this.startPoll();
         return;
@@ -293,12 +294,12 @@ Page({
     this._polling = true;
     try {
       const { status } = await req.payStatus(this.data.record._id);
-      if (status === 'paid') {
+      if (status === REC.PAID) {
         this.stopPoll();
         wx.vibrateShort({ type: 'medium', fail() {} });
         this.setData({ step: 'success' });
         this.loadReceipt();
-      } else if (status === 'rejected') {
+      } else if (status === REC.REJECTED) {
         this.stopPoll();
         this.setData({ step: 'failed', failReason: '主家未收到该笔转账，请与主家核实' });
       }

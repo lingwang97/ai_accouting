@@ -31,7 +31,8 @@ const baseOf = cond => (cond.__op === 'and' ? cond.v[0] : cond);
 
 test('默认列表：已入簿 + 待确认 + 未点转账，时间倒序且带 _id 作第二键', async () => {
   const { listQ } = await runList(OWNER, {});
-  assert.deepStrictEqual(statusOf(listQ.cond), { __op: 'in', v: ['paid', 'transferred', 'pending'], a: [['paid', 'transferred', 'pending']] });
+  assert.strictEqual(statusOf(listQ.cond).__op, 'in');
+  assert.deepStrictEqual(statusOf(listQ.cond).v, ['paid', 'transferred', 'pending']);
   assert.deepStrictEqual(listQ.orders, [['createdAt', 'desc'], ['_id', 'desc']]);
   assert.strictEqual(baseOf(listQ.cond).ownerOpenid, OWNER);
 });
@@ -88,4 +89,38 @@ test('主家可按任意礼簿 / 日期筛选；关键词用 and 组合而不是
 test('无身份的调用者不会读到别人的记录（ownerOpenid 为调用者自己）', async () => {
   const { listQ } = await runList('stranger', {});
   assert.strictEqual(baseOf(listQ.cond).ownerOpenid, 'stranger');
+});
+
+test('待确认页：待确认 / 宾客未点完成 / 未收到 三类的状态与时间阈值（3 分钟、24 小时）', async () => {
+  seed();
+  state.openid = OWNER;
+  const fn = loadFunction('records');
+  db.log.length = 0;
+  const before = Date.now();
+  const r = await fn.main({ action: 'pending', withRejected: true });
+  assert.strictEqual(r.code, 0, r.msg);
+  const conds = db.log.filter(l => l.op === 'get' && l.col === 'records').map(l => l.cond);
+  const flat = JSON.stringify(conds, function (k, v) { const o = this[k]; return o instanceof Date ? 'D' + o.getTime() : v; });
+  assert.ok(flat.includes('"status":"transferred"'), '待确认');
+  assert.ok(flat.includes('"status":"pending"') && flat.includes('"status":"cancelled"') && flat.includes('"autoCancelled":true'), '宾客未点完成');
+  assert.ok(flat.includes('"status":"rejected"'), '未收到');
+  const times = [...flat.matchAll(/"__op":"(lt|gt)","v":"D(\d+)"/g)].map(m => [m[1], Number(m[2])]);
+  const near = (t, ms) => Math.abs((before - t) - ms) < 60 * 1000; // 允许测试执行耗时
+  assert.ok(times.some(([op, t]) => op === 'lt' && near(t, 3 * 60 * 1000)), '3 分钟阈值');
+  assert.ok(times.filter(([op, t]) => op === 'gt' && near(t, 24 * 3600 * 1000)).length >= 2, '24 小时阈值（自动取消 + 未收到）');
+});
+
+test('expirePending：超过 30 分钟未点转账的 pending 被置为 cancelled(autoCancelled)', async () => {
+  seed();
+  state.openid = OWNER;
+  const fn = loadFunction('records');
+  db.log.length = 0;
+  await fn.main({ action: 'list' });
+  const upd = db.log.find(l => l.op === 'update' && l.col === 'records');
+  assert.ok(upd, '应触发 expirePending');
+  const c = upd.cond;
+  assert.strictEqual(c.status, 'pending');
+  const lt = c.createdAt;
+  assert.strictEqual(lt.__op, 'lt');
+  assert.ok(Math.abs((Date.now() - 30 * 60 * 1000) - lt.v.getTime()) < 60 * 1000);
 });

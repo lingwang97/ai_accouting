@@ -3,6 +3,8 @@
 // 每本礼簿各存一套电子回执 / 打印样式（receiptTpl / printTpl），避免喜事、白事样式串场
 // 份数与合计存在礼簿上（statCount / statFen，确认收到时累加），列表无需每次全量统计
 const cloud = require('wx-server-sdk');
+const { ok, err } = require('./common.js');
+const { REC } = require('./status.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
@@ -153,7 +155,7 @@ async function migrateOrphans(openid, account) {
     .update({ data: { bookId: book._id, bookType: 'other' } });
   // 按刚归入的记录（固定 _id 集合）统计并累加，避免与并发确认重复计算
   const sums = await records.aggregate()
-    .match({ ownerOpenid: openid, status: 'paid', _id: _.in(ids) })
+    .match({ ownerOpenid: openid, status: REC.PAID, _id: _.in(ids) })
     .group({ _id: null, count: _.aggregate.sum(1), fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) })
     .end();
   const t = (sums.list && sums.list[0]) || { count: 0, fen: 0 };
@@ -176,7 +178,7 @@ async function backfillStats(openid, bookId) {
   const since = new Date();
   const sums = await records.aggregate()
     .match(_.and([
-      { ownerOpenid: openid, status: 'paid', bookId },
+      { ownerOpenid: openid, status: REC.PAID, bookId },
       _.or([{ paidAt: _.lt(since) }, { paidAt: _.exists(false) }])
     ]))
     .group({ _id: null, count: _.aggregate.sum(1), fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) })
@@ -331,7 +333,7 @@ async function removeBook(openid, account, bookId, confirm) {
     ? !m.allBooks && Array.isArray(m.bookIds) && m.bookIds.length && m.bookIds.every(id => id === book._id)
     : soloBook(m, account) === book._id)).map(m => m.displayName || '记账人');
   const [paid, all] = await Promise.all([
-    records.aggregate().match({ ownerOpenid: openid, bookId: book._id, status: 'paid' })
+    records.aggregate().match({ ownerOpenid: openid, bookId: book._id, status: REC.PAID })
       .group({ _id: null, count: _.aggregate.sum(1), fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) }).end(),
     records.where({ ownerOpenid: openid, bookId: book._id }).count()
   ]);
@@ -380,7 +382,7 @@ async function trashOp(openid, bookId, op, confirmName) {
 async function stats(openid, bookId, ctx) {
   const book = await getBook(openid, bookId);
   if (!book) return err('礼簿不存在');
-  const match = { ownerOpenid: openid, status: 'paid', bookId: book._id };
+  const match = { ownerOpenid: openid, status: REC.PAID, bookId: book._id };
   const [total, byRel, byMethod] = await Promise.all([
     records.aggregate().match(match)
       .group({ _id: null, count: _.aggregate.sum(1), fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])), maxAmount: _.aggregate.max('$amount') })
@@ -533,5 +535,3 @@ async function syncThemeName(account, name) {
   await accounts.doc(account._id).update({ data: { 'theme.name': name } });
 }
 
-const ok = data => ({ code: 0, msg: 'ok', data });
-const err = msg => ({ code: 1, msg, data: null });

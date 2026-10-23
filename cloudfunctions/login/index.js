@@ -1,5 +1,6 @@
 // 云函数 login — 登录注册（文档 §6.1）
 const cloud = require('wx-server-sdk');
+const { ok, err } = require('./common.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const users = db.collection('users');
@@ -61,5 +62,3 @@ exports.main = async (event) => {
   }
 };
 
-const ok = data => ({ code: 0, msg: 'ok', data });
-const err = msg => ({ code: 1, msg, data: null });

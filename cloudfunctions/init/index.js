@@ -3,7 +3,7 @@ const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 
-const COLLECTIONS = ['users', 'accounts', 'records', 'print_templates', 'books', 'gifts_out', 'exports', 'members', 'invites', 'settings', 'subscriptions', 'reminders', 'person_alias', 'admin_logs', 'book_codes', 'trash_books', 'trash_records', 'rate_limits', 'sys_config'];
+const { COLLECTIONS } = require('./collections.js'); // 与 system 上线前检查共用同一份清单
 
 exports.main = async () => {
   const { OPENID } = cloud.getWXContext();

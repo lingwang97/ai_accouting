@@ -1,6 +1,8 @@
 // 云函数 renqing — 人情往来：我送出的礼（手动登记）+ 按姓名查双方往来
 // 收到的礼来自 records（status=paid），送出的礼存 gifts_out
 const cloud = require('wx-server-sdk');
+const { ok, err } = require('./common.js');
+const { REC } = require('./status.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
@@ -215,7 +217,7 @@ async function outList(openid, event) {
  * 自动"送出的礼"：我作为宾客扫码随礼、主家已确认入簿的记录
  */
 async function autoGiven(openid) {
-  const recs = await fetchAll(records, { payerOpenid: openid, status: 'paid' }, {
+  const recs = await fetchAll(records, { payerOpenid: openid, status: REC.PAID }, {
     aid: true, ownerOpenid: true, amount: true,
     relation: true, remark: true, themeName: true, bookType: true, payDay: true, paidAt: true, createdAt: true,
     batchIdx: true
@@ -310,7 +312,7 @@ async function fetchAll(col, cond, fields) {
 async function buildPersons(openid) {
   let aliases = {};
   const [recs, gifts, auto] = await Promise.all([
-    fetchAll(records, { ownerOpenid: openid, status: 'paid' }, {
+    fetchAll(records, { ownerOpenid: openid, status: REC.PAID }, {
       payerOpenid: true, payerName: true, amount: true, nameTag: true, personKey: true,
       relation: true, remark: true, themeName: true, bookType: true, payDay: true, createdAt: true
     }),
@@ -494,7 +496,7 @@ async function moveEntry(openid, e) {
 const PEOPLE_MAX = 300;
 async function people(openid) {
   truncated = false;
-  const cond = { ownerOpenid: openid, status: 'paid' }; // 与 buildPersons 收礼口径一致：本人礼簿已入簿
+  const cond = { ownerOpenid: openid, status: REC.PAID }; // 与 buildPersons 收礼口径一致：本人礼簿已入簿
   const [persons, cnt, agg] = await Promise.all([
     buildPersons(openid),
     records.where(cond).count(),
@@ -550,5 +552,3 @@ async function query(openid, key) {
 }
 
 const escapeReg = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const ok = data => ({ code: 0, msg: 'ok', data });
-const err = msg => ({ code: 1, msg, data: null });

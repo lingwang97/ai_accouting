@@ -14,7 +14,20 @@ TARGETS = {
     'purge.js': ['account', 'system'],
     'trash.js': ['books', 'warmer'],
     'limits.js': ['payment', 'renqing', 'account'],
+    # 统一返回格式 / 北京时间：用到 ok、err、bjDay 的云函数
+    'common.js': ['account', 'books', 'export', 'login', 'payment', 'printtpl', 'qrcode', 'records', 'renqing', 'system', 'warmer'],
+    # 记录状态与时间阈值：云函数 + 小程序 utils（前端同名模块）
+    'status.js': ['account', 'books', 'export', 'payment', 'qrcode', 'records', 'renqing', 'system', 'MINI:utils'],  # ctx.js 依赖它，凡是带 ctx.js 的云函数都要有
+    # 集合清单：init 与 system 上线前检查共用
+    'collections.js': ['init', 'system'],
 }
+
+
+def dest_dir(target):
+    # 'MINI:utils' 表示 miniprogram/utils，其余为云函数名
+    if target.startswith('MINI:'):
+        return os.path.join(ROOT, 'miniprogram', target[5:])
+    return os.path.join(ROOT, 'cloudfunctions', target)
 
 
 def same(a, b):
@@ -30,7 +43,7 @@ def main():
     for name, funcs in TARGETS.items():
         src = os.path.join(SHARED, name)
         for fn in funcs:
-            dst = os.path.join(ROOT, 'cloudfunctions', fn, name)
+            dst = os.path.join(dest_dir(fn), name)
             if check:
                 if not same(src, dst):
                     bad += 1

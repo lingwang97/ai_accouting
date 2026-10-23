@@ -16,6 +16,8 @@
 // 五、定时触发器 cleanup（每天 3 点）：删除所有用户超过 24 小时且 keep=false 的文件
 //   出参：{ code:0, msg:'ok', data:{ deleted: n } }
 const cloud = require('wx-server-sdk');
+const { ok, err, bjTime: fmtDateTime } = require('./common.js');
+const { REC } = require('./status.js');
 const { resolveCtx, canBook, readonly, can } = require('./ctx.js');
 // 按需加载：pdfkit / exceljs 体积大，只在对应格式时加载，缩短冷启动
 let _pdfkit = null;
@@ -297,7 +299,7 @@ function validRange(startDay, endDay) {
 
 /** 拉取已入簿礼金（分批，单次最多 QUERY_MAX 条）；超过 MAX_ROWS 时返回 tooMany，由调用方提示分段导出 */
 async function fetchRows(openid, { bookId, startDay, endDay, themeName }) {
-  const cond = { ownerOpenid: openid, status: 'paid' };
+  const cond = { ownerOpenid: openid, status: REC.PAID };
   if (startDay && endDay) cond.payDay = _.gte(startDay).and(_.lte(endDay));
   if (bookId) cond.bookId = bookId;
   else if (themeName) cond.themeName = themeName;
@@ -928,7 +930,7 @@ async function adminExtra(openid) {
     throw e;
   });
   const [recs, accs, ms1, ms2, invs, rems, alias, subs] = await Promise.all([
-    safe(fetchAll('records', { ownerOpenid: openid, status: _.neq('paid') })),
+    safe(fetchAll('records', { ownerOpenid: openid, status: _.neq(REC.PAID) })),
     safe(fetchAll('accounts', { ownerOpenid: _.in([openid, 'merged:' + openid]) })),
     safe(fetchAll('members', { ownerOpenid: openid })),
     safe(fetchAll('members', { memberOpenid: openid })),
@@ -1133,15 +1135,6 @@ function sanitizeName(s) {
   return String(s || '').replace(/[\\/:*?"<>|\s\x00-\x1F]+/g, '_').slice(0, 40) || '导出';
 }
 
-function fmtDateTime(d) {
-  // 云函数运行在 UTC，统一转北京时间
-  const t = new Date(new Date(d).getTime() + 8 * 3600 * 1000);
-  const p = n => (n < 10 ? '0' + n : '' + n);
-  return `${t.getUTCFullYear()}-${p(t.getUTCMonth() + 1)}-${p(t.getUTCDate())} ${p(t.getUTCHours())}:${p(t.getUTCMinutes())}`;
-}
-
-const ok = data => ({ code: 0, msg: 'ok', data });
-const err = msg => ({ code: 1, msg, data: null });
 
 // 仅供本地测试使用，不影响云函数入口
 module.exports._test = { buildPdf, buildXlsx, buildBook, buildBackup, buildMeta, amountUpper, sanitizeName, guestText };
