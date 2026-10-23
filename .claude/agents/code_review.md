@@ -54,6 +54,7 @@ color: red
 4. **开发文档**：在 `docs/技术开发文档.md` 末尾追加一节，编号续上一节，写修复内容与控制台待办。
 5. **本地提交**：commit message 用英文，结尾加 `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`。不要 push。
 6. **上传**：只有主会话转达用户说了「上传」才执行。
+   上传前先在项目根目录运行 `python tools/sync_shared.py --check && node tests/run.js`：共享模块比对或测试有任何失败（退出码非 0）就停止上传，把失败输出报告给主会话，修好后再上传。
    ```
    cli.bat upload --project 'C:\Users\wangling\pro_cc\ai_account' -v X.Y.Z -d "描述"
    ```

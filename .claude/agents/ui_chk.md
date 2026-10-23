@@ -29,7 +29,7 @@ color: cyan
   2. `miniprogram/config.js` 的 `VERSION` 递增补丁号。
   3. 在 `docs/技术开发文档.md` 末尾追加一节，编号续上一节，写原因和改法。
   4. 本地提交，commit message 用英文，结尾加 `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`。不要 push。
-- 只有主会话转达用户说了「上传」，才执行上传：`cli.bat upload --project 'C:\Users\wangling\pro_cc\ai_account' -v X.Y.Z -d "描述"`。描述里不能有空格，否则 cli.bat 会报 'C:\Program' 错误。
+- 只有主会话转达用户说了「上传」，才执行上传；上传前先运行 `python tools/sync_shared.py --check && node tests/run.js`，任何失败就停止上传并报告；全部通过后再执行 `cli.bat upload --project 'C:\Users\wangling\pro_cc\ai_account' -v X.Y.Z -d "描述"`。描述里不能有空格，否则 cli.bat 会报 'C:\Program' 错误。
 - 只改前端；涉及云函数的问题只报告，不改。
 
 ## 检查范围（包括但不限于）
