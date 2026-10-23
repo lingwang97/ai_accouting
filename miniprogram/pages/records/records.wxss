@@ -51,3 +51,7 @@
 .sk-l2 { height: 24rpx; width: 80%; }
 /* 「未收到」「确认收到」两个按钮大小一致 */
 button.r-op:not([size=mini]) { width: 160rpx; padding: 0; margin-left: 24rpx; }
+
+.amended { color: var(--primary); }
+.amend-tip { margin-bottom: 16rpx; }
+.small { font-size: 24rpx; }

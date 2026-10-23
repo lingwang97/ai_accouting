@@ -45,7 +45,7 @@
       <text class="payer">{{item.nameStr}}</text>
       <text class="r-right"><text class="cash-tag" wx:if="{{item.payMethod === 'cash'}}">现金</text><text class="xfer-tag" wx:elif="{{item.status === 'transferred' || item.status === 'paid'}}">转账</text><text class="money r-amount">￥{{item.amountStr}}</text></text>
     </view>
-    <view class="muted">{{item.timeStr}}<text wx:if="{{item.relation}}"> · {{item.relation}}</text><text wx:if="{{item.batchId}}"> · 批次录入</text><text wx:if="{{item.remark}}"> · {{item.remark}}</text><text wx:if="{{item.declaredStr}}" class="declared"> · 宾客登记 ￥{{item.declaredStr}}，按实收入簿</text></view>
+    <view class="muted">{{item.timeStr}}<text wx:if="{{item.relation}}"> · {{item.relation}}</text><text wx:if="{{item.batchId}}"> · 批次录入</text><text wx:if="{{item.remark}}"> · {{item.remark}}</text><text wx:if="{{item.declaredStr}}" class="declared"> · 宾客登记 ￥{{item.declaredStr}}，按实收入簿</text><text wx:if="{{item.amendN}}" class="amended" data-idx="{{index}}" catchtap="onAmendLog"> · 已修改 ›</text></view>
 
     <!-- 待确认：宾客已点"我已完成转账" -->
     <view class="r-actions" wx:if="{{item.status === 'transferred'}}">
@@ -75,6 +75,7 @@
       <view class="link" wx:if="{{!readonly && pm.tag}}" data-idx="{{index}}" bindtap="onNameTag">区分备注</view>
       <view class="link" data-id="{{item._id}}" bindtap="onReceipt">回执</view>
       <view class="link" wx:if="{{!readonly && pm.show}}" data-idx="{{index}}" bindtap="onPrint">{{item.printed ? '补打' : '打印'}}</view>
+      <view class="link" wx:if="{{!readonly && pm.amend}}" data-idx="{{index}}" bindtap="onAmend">修改</view>
       <view class="link danger" wx:if="{{!readonly && pm.void}}" data-idx="{{index}}" bindtap="onVoid">作废</view>
     </view>
   </view>
@@ -82,4 +83,21 @@
   <view class="muted center pad" wx:if="{{!loading && list.length === 0}}">{{keyword || relIdx > 0 || stIdx > 0 ? '没有符合条件的记录' : '暂无礼金记录'}}</view>
   <view class="muted center pad" wx:if="{{loading}}">加载中…</view>
   </block>
+
+  <!-- 修改已入簿礼金 -->
+  <view class="mask" wx:if="{{amend}}" catchtap="onAmendClose" catchtouchmove="noop">
+    <view class="sheet" catchtap="noop">
+      <view class="sheet-title">修改礼金记录</view>
+      <view class="muted small amend-tip">金额改动会同步更新{{unit}}合计，每次修改都有记录</view>
+      <view class="field"><view class="muted small">姓名</view><input class="input" maxlength="20" value="{{amend.name}}" data-k="name" bindinput="onAmendInput" /></view>
+      <view class="field"><view class="muted small">金额（元）</view><input class="input" type="digit" maxlength="11" value="{{amend.amount}}" data-k="amount" bindinput="onAmendInput" /></view>
+      <view class="field"><view class="muted small">关系</view><picker range="{{amendRels}}" value="{{amend.relIdx}}" bindchange="onAmendRel"><view class="input">{{amendRels[amend.relIdx]}} ▾</view></picker></view>
+      <view class="field"><view class="muted small">备注</view><input class="input" maxlength="50" placeholder="选填" value="{{amend.remark}}" data-k="remark" bindinput="onAmendInput" /></view>
+      <view class="declared small" wx:if="{{amend.hint}}">{{amend.hint}}</view>
+      <view class="sheet-btns">
+        <button class="btn btn-outline" bindtap="onAmendClose">取消</button>
+        <button class="btn btn-primary" bindtap="onAmendSave">保存</button>
+      </view>
+    </view>
+  </view>
 </view>

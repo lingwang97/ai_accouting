@@ -43,7 +43,9 @@ Page({
     pm: {},           // 当前身份的权限：确认 / 作废 / 打印 / 礼台记账按权限显示
     curBook: null,    // 当前礼簿 id（服务端返回）：只有这一本的待确认可直接确认；null 表示未知
     unit: '礼簿',      // 机构模式称「场次」
-    busy: false
+    busy: false,
+    amend: null,      // 修改已入簿礼金的弹层：{ rid, name, amount, relIdx, remark, orig }
+    amendRels: ['不选', ...scenes.RELATIONS]
   },
 
   async onShow() {
@@ -79,6 +81,7 @@ Page({
     const role = await app.ensureRole();
     const pm = perm.current();
     pm.tag = pm.desk || pm.confirm; // 设区分备注
+    pm.amend = pm.confirm || pm.void; // 修改已入簿礼金（与服务端 payment.amend 一致）
     this.setData({ loggedIn: true, readonly: role === 'viewer', pm });
     // 礼簿下拉：首次进入先用缓存，网络结果回来后再校正；之后每分钟最多重新拉一次
     let booksP = null;
@@ -398,6 +401,56 @@ Page({
         } catch (err) { /* toast 已提示 */ }
       }
     });
+  },
+
+  /** 修改已入簿礼金：打开弹层（姓名 / 金额 / 关系 / 备注） */
+  onAmend(e) {
+    const r = this.data.list[e.currentTarget.dataset.idx];
+    if (!r || this.data.busy) return;
+    const relIdx = Math.max(0, this.data.amendRels.indexOf(r.relation || ''));
+    this.setData({ amend: { rid: r._id, name: r.payerName, amount: String(r.amount), relIdx, remark: r.remark || '', orig: r, hint: r.printed ? '小票已打印过，修改后不会自动重打，需要的话保存后点「补打」' : '' } });
+  },
+  onAmendInput(e) { this.setData({ [`amend.${e.currentTarget.dataset.k}`]: e.detail.value }); },
+  onAmendRel(e) { this.setData({ 'amend.relIdx': Number(e.detail.value) }); },
+  noop() {},
+  onAmendClose() { if (!this.data.busy) this.setData({ amend: null }); },
+  async onAmendSave() {
+    const a = this.data.amend;
+    if (!a || this.data.busy) return;
+    const name = String(a.name || '').trim();
+    const amount = Number(String(a.amount || '').replace(/[,，\s]/g, ''));
+    if (!name) return wx.showToast({ title: '请填写姓名', icon: 'none' });
+    if (!(amount > 0)) return wx.showToast({ title: '请填写正确的金额', icon: 'none' });
+    const o = a.orig;
+    const rel = a.relIdx > 0 ? this.data.amendRels[a.relIdx] : '';
+    const fields = {};
+    if (name !== o.payerName) fields.payerName = name;
+    if (Math.round(amount * 100) !== Math.round(o.amount * 100)) fields.amount = amount;
+    if (rel !== (o.relation || '')) fields.relation = rel;
+    if (String(a.remark || '').trim() !== (o.remark || '')) fields.remark = String(a.remark || '').trim();
+    if (!Object.keys(fields).length) return this.setData({ amend: null });
+    this.setData({ busy: true });
+    try {
+      await req.payAmend(a.rid, fields);
+      this.setData({ amend: null });
+      wx.showToast({ title: '已修改', icon: 'success' });
+      this.reload();
+    } catch (err) { /* toast 已提示（如已被他人修改、权限不足） */ } finally {
+      this.setData({ busy: false });
+    }
+  },
+  /** 查看修改记录（最近 20 次） */
+  onAmendLog(e) {
+    const r = this.data.list[e.currentTarget.dataset.idx];
+    const NAMES = { amount: '金额', payerName: '姓名', relation: '关系', remark: '备注' };
+    const lines = (r.amendLog || []).slice().reverse().map(l => {
+      const cs = Object.keys(l.changes || {}).map(k => {
+        const [b, n] = l.changes[k];
+        return k === 'amount' ? `金额 ￥${fmt.money(b)} → ￥${fmt.money(n)}` : `${NAMES[k] || k} ${b || '空'} → ${n || '空'}`;
+      });
+      return `${fmt.dateTime(l.at)} ${l.by || ''}\n${cs.join('；')}`;
+    });
+    wx.showModal({ title: '修改记录', content: lines.join('\n\n') || '暂无', showCancel: false });
   },
 
   /** 作废错误账目（文档 §8） */
