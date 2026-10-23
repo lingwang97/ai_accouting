@@ -14,6 +14,8 @@ Page({
     inTotal: 0,
     morePeople: 0,     // 名单只显示前 300 人时，其余人数
     reminds: [],       // 亲友办事提醒（未处理，最近的在前）
+    doneList: [],      // 最近已处理的提醒（可撤回）
+    doneOpen: false,   // 提醒弹层里「最近已处理」是否展开
     remindShow: false, // 提醒弹层
     hotCount: 0,       // 已到提醒时间 / 已过期未处理的条数
     remindTip: '',     // 提示条文案
@@ -33,7 +35,7 @@ Page({
     // 已退出登录：立即清空上一个账户的往来（不等登录状态恢复，也不再查询身份）
     if (getApp().isLoggedOut()) {
       getApp().refreshTabBar();
-      return this.setData({ loading: false, loggedIn: false, people: [], shownPeople: [], outList: [], receipts: [], shownReceipts: [], reminds: [], hotCount: 0, remindTip: '', remindShow: false });
+      return this.setData({ loading: false, loggedIn: false, people: [], shownPeople: [], outList: [], receipts: [], shownReceipts: [], reminds: [], doneList: [], hotCount: 0, remindTip: '', remindShow: false });
     }
     // 记账人身份不显示「往来」（切换身份后可能停留在本页）：回到工作台
     if ((await getApp().ensureRole()) === 'clerk') return wx.switchTab({ url: '/pages/index/index' });
@@ -51,7 +53,7 @@ Page({
   async load() {
     await getApp().loginReady;
     if (!getApp().globalData.user) {
-      return this.setData({ loading: false, loggedIn: false, people: [], shownPeople: [], outList: [], receipts: [], shownReceipts: [], reminds: [], hotCount: 0, remindTip: '', remindShow: false });
+      return this.setData({ loading: false, loggedIn: false, people: [], shownPeople: [], outList: [], receipts: [], shownReceipts: [], reminds: [], doneList: [], hotCount: 0, remindTip: '', remindShow: false });
     }
     this.setData({ loading: true, loggedIn: true });
     try {
@@ -164,7 +166,7 @@ Page({
   // —— 亲友办事提醒 ——
   async loadReminds() {
     try {
-      const { list } = await req.remindList();
+      const { list, done } = await req.remindList();
       const today = fmt.day(new Date());
       const dayDiff = d => Math.round((new Date(d + 'T00:00:00') - new Date(today + 'T00:00:00')) / 86400000);
       const reminds = list.map(r => {
@@ -183,9 +185,10 @@ Page({
       // 已到提醒时间或已过期未处理的都算「待回礼」；否则显示最近一条
       const hotCount = reminds.filter(r => r.hot || r.past).length;
       const f = reminds[0];
+      const doneList = (done || []).map(r => ({ ...r, typeLabel: scenes.label(r.eventType), dateStr: r.date.slice(5).replace('-', '月') + '日' }));
       this.setData({
-        reminds, hotCount,
-        remindTip: hotCount ? `${hotCount} 条待回礼` : (f ? `${f.name} · ${f.event || f.typeLabel} · ${f.leftStr}` : '')
+        reminds, hotCount, doneList,
+        remindTip: hotCount ? `${hotCount} 条待回礼` : (f ? `${f.name} · ${f.event || f.typeLabel} · ${f.leftStr}` : (doneList.length ? `暂无待办 · 最近已处理 ${doneList.length} 条` : ''))
       });
       // 红点与提示条同口径：直接按本次结果更新，不必再请求
       getApp().globalData.remindDot = hotCount > 0;
@@ -193,6 +196,26 @@ Page({
     } catch (e) { /* 静默 */ }
   },
   noop() {},
+  onToggleDone() { this.setData({ doneOpen: !this.data.doneOpen }); },
+  /** 撤回「已处理」：恢复为未处理（点错了），提示条、「往来」红点、底部菜单同步刷新 */
+  onUndoDone(e) {
+    const r = this.data.doneList[e.currentTarget.dataset.idx];
+    if (!r) return;
+    wx.showModal({
+      title: '撤回已处理',
+      content: `把「${r.name} · ${r.event || r.typeLabel}」恢复为待办提醒？`,
+      confirmText: '撤回',
+      success: async res => {
+        if (!res.confirm) return;
+        try {
+          await req.remindDone(r._id, false);
+          wx.showToast({ title: '已撤回', icon: 'success' });
+          await this.loadReminds();
+          getApp().refreshBadge(); // 红点与角标以服务端口径再校正一次
+        } catch (err) { /* toast 已提示 */ }
+      }
+    });
+  },
   onOpenRemind() { this.setData({ remindShow: true }); },
   onCloseRemind() { this.setData({ remindShow: false }); },
   // 跳走前先关弹层；回来时 onShow 因写操作（dataDirtyAt）会重新拉提醒

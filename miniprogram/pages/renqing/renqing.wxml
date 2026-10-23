@@ -6,7 +6,7 @@
 
   <block wx:else>
     <!-- 亲友办事提醒：一行提示条（无提醒时不显示），点开底部弹层；只在「收礼往来」显示 -->
-    <view class="tip-bar" wx:if="{{tab === 'people' && reminds.length}}" bindtap="onOpenRemind">
+    <view class="tip-bar" wx:if="{{tab === 'people' && (reminds.length || doneList.length)}}" bindtap="onOpenRemind">
       <image class="tip-icon" src="/assets/icons/bell-r.svg" />
       <text class="tip-text ell {{hotCount ? 'hot' : ''}}">{{remindTip}}</text>
       <text class="tip-go">查看 ›</text>
@@ -100,6 +100,16 @@
         <view class="muted">记下亲友办事的日期，到时提醒你回礼</view>
         <view class="btn btn-primary rm-add" hover-class="btn-hover" bindtap="onAddRemind">＋ 加提醒</view>
       </view>
+      <!-- 最近已处理：点错了可撤回 -->
+      <block wx:if="{{doneList.length}}">
+        <view class="rm-done-head" bindtap="onToggleDone">最近已处理（{{doneList.length}}）<text class="muted">{{doneOpen ? '收起 ▴' : '展开 ▾'}}</text></view>
+        <scroll-view scroll-y class="rm-scroll rm-done-scroll" wx:if="{{doneOpen}}">
+          <view class="rm-row past" wx:for="{{doneList}}" wx:key="_id" data-idx="{{index}}" bindtap="onUndoDone">
+            <text class="rm-name">{{item.name}} · {{item.event || item.typeLabel}}</text>
+            <text class="rm-date">{{item.dateStr}} · 点此撤回</text>
+          </view>
+        </scroll-view>
+      </block>
     </view>
   </view>
 </view>
