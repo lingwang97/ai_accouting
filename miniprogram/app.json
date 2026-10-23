@@ -38,6 +38,10 @@
     { "root": "pages/appearance", "pages": ["appearance"] },
     { "root": "pages/members", "pages": ["members"] }
   ],
+  "preloadRule": {
+    "pages/index/index": { "network": "all", "packages": ["pages/members", "pages/export", "pages/printer", "pages/reconcile"] },
+    "pages/mine/mine": { "network": "all", "packages": ["pages/members", "pages/export", "pages/printer", "pages/reconcile"] }
+  },
   "window": {
     "backgroundTextStyle": "light",
     "navigationBarBackgroundColor": "#C8161D",
