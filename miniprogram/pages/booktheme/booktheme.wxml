@@ -34,12 +34,12 @@
       <view class="swatches">
         <view wx:for="{{mainColors}}" wx:key="*this" class="sw {{cust.main === item ? 'on' : ''}}" style="background:{{item}}" data-f="main" data-v="{{item}}" bindtap="onCust"></view>
       </view>
-      <input class="input" value="{{cust.main}}" maxlength="7" placeholder="#RRGGBB" data-f="main" bindinput="onCustInput" />
+      <input class="input" cursor-spacing="120" adjust-position="{{true}}" bindfocus="onKbOn" bindblur="onKbOff" value="{{cust.main}}" maxlength="7" placeholder="#RRGGBB" data-f="main" bindinput="onCustInput" />
       <view class="cust-lb">辅色（边框、标题）</view>
       <view class="swatches">
         <view wx:for="{{accentColors}}" wx:key="*this" class="sw {{cust.accent === item ? 'on' : ''}}" style="background:{{item}}" data-f="accent" data-v="{{item}}" bindtap="onCust"></view>
       </view>
-      <input class="input" value="{{cust.accent}}" maxlength="7" placeholder="#RRGGBB" data-f="accent" bindinput="onCustInput" />
+      <input class="input" cursor-spacing="120" adjust-position="{{true}}" bindfocus="onKbOn" bindblur="onKbOff" value="{{cust.accent}}" maxlength="7" placeholder="#RRGGBB" data-f="accent" bindinput="onCustInput" />
       <view wx:if="{{custErr}}" class="cust-err">{{custErr}}</view>
       <view class="cust-lb">字体</view>
       <view class="chips"><view wx:for="{{fonts}}" wx:key="k" class="chip {{cust.font === item.k ? 'on' : ''}}" data-f="font" data-v="{{item.k}}" bindtap="onCust">{{item.n}}</view></view>
@@ -48,9 +48,9 @@
       <view class="cust-lb">水印字</view>
       <view class="chips"><view wx:for="{{marks}}" wx:key="k" class="chip {{cust.mark === item.k ? 'on' : ''}}" data-f="mark" data-v="{{item.k}}" bindtap="onCust">{{item.n}}</view></view>
       <view class="cust-lb">封面标题（不填用礼簿名）</view>
-      <input class="input" value="{{cust.title}}" maxlength="20" placeholder="如：李王联姻志喜" data-f="title" bindinput="onCustInput" />
+      <input class="input" cursor-spacing="120" adjust-position="{{true}}" bindfocus="onKbOn" bindblur="onKbOff" value="{{cust.title}}" maxlength="20" placeholder="如：李王联姻志喜" data-f="title" bindinput="onCustInput" />
       <view class="cust-lb">封面落款（不填则没有）</view>
-      <input class="input" value="{{cust.footer}}" maxlength="8" placeholder="如：百年好合" data-f="footer" bindinput="onCustInput" />
+      <input class="input" cursor-spacing="120" adjust-position="{{true}}" bindfocus="onKbOn" bindblur="onKbOff" value="{{cust.footer}}" maxlength="8" placeholder="如：百年好合" data-f="footer" bindinput="onCustInput" />
     </view>
 
     <!-- 白事：颜色固定素灰，只能改字体、角饰、水印、标题、落款 -->
@@ -64,13 +64,13 @@
       <view class="cust-lb">水印字</view>
       <view class="chips"><view wx:for="{{fMarks}}" wx:key="k" class="chip {{fun.mark === item.k ? 'on' : ''}}" data-f="mark" data-v="{{item.k}}" bindtap="onFun">{{item.n}}</view></view>
       <view class="cust-lb">封面标题（不填用礼簿名）</view>
-      <input class="input" value="{{fun.title}}" maxlength="20" placeholder="如：某某先生奠仪簿" data-f="title" bindinput="onFunInput" />
+      <input class="input" cursor-spacing="120" adjust-position="{{true}}" bindfocus="onKbOn" bindblur="onKbOff" value="{{fun.title}}" maxlength="20" placeholder="如：某某先生奠仪簿" data-f="title" bindinput="onFunInput" />
       <view class="cust-lb">封面落款</view>
       <view class="chips">
         <view class="chip {{fun.footer === '' ? 'on' : ''}}" data-f="footer" data-v="" bindtap="onFun">无</view>
         <view wx:for="{{fFooters}}" wx:key="*this" class="chip {{fun.footer === item ? 'on' : ''}}" data-f="footer" data-v="{{item}}" bindtap="onFun">{{item}}</view>
       </view>
-      <input class="input" value="{{fun.footer}}" maxlength="8" placeholder="也可以自己写（8 字以内）" data-f="footer" bindinput="onFunInput" />
+      <input class="input" cursor-spacing="120" adjust-position="{{true}}" bindfocus="onKbOn" bindblur="onKbOff" value="{{fun.footer}}" maxlength="8" placeholder="也可以自己写（8 字以内）" data-f="footer" bindinput="onFunInput" />
     </view>
 
     <!-- 尾页与装订 -->
@@ -86,7 +86,7 @@
             <view wx:for="{{fFooters}}" wx:key="*this" class="chip {{back.footer === item ? 'on' : ''}}" data-v="{{item}}" bindtap="onBackFooter">{{item}}</view>
           </block>
         </view>
-        <input class="input" value="{{back.footer === '-' ? '' : back.footer}}" maxlength="8" placeholder="自动：用封面落款，没有则按事由默认（白事无吉语）" data-f="footer" bindinput="onBackInput" />
+        <input class="input" cursor-spacing="120" adjust-position="{{true}}" bindfocus="onKbOn" bindblur="onKbOff" value="{{back.footer === '-' ? '' : back.footer}}" maxlength="8" placeholder="自动：用封面落款，没有则按事由默认（白事无吉语）" data-f="footer" bindinput="onBackInput" />
         <view class="opt"><text>显示主家</text><switch checked="{{back.host}}" color="#07C160" data-f="host" bindchange="onBackSwitch" /></view>
         <view class="opt"><text>显示日期</text><switch checked="{{back.date}}" color="#07C160" data-f="date" bindchange="onBackSwitch" /></view>
         <view class="opt"><text>显示合计摘要（份数、礼金合计）</text><switch checked="{{back.sum}}" color="#07C160" data-f="sum" bindchange="onBackSwitch" /></view>
@@ -103,7 +103,7 @@
     <view class="muted tip" wx:else>确认导出后，主题会记在这本礼簿上，下次进入自动带出；礼簿归档存档也使用该主题</view>
   </block>
 
-  <view class="bottom-bar" wx:if="{{book}}">
+  <view class="bottom-bar" wx:if="{{book && !kb}}">
     <button class="btn-primary" loading="{{exporting}}" disabled="{{exporting}}" bindtap="onConfirm">确认并导出</button>
   </view>
   <loading show="{{loading}}" type="overlay" />

@@ -1,12 +1,16 @@
 // pages/login/login.js — 登录注册（UC1）
 const req = require('../../utils/request.js');
+const theme = require('../../utils/theme.js');
 
 Page({
   data: {
     nickname: '',
     avatar: '',
-    submitting: false
+    submitting: false,
+    themeStyle: ''
   },
+
+  onShow() { this.setData({ themeStyle: theme.styleOf(theme.current()) }); }, // 白事礼簿的灰色主题与其他页一致
 
   onChooseAvatar(e) {
     this.setData({ avatar: e.detail.avatarUrl });

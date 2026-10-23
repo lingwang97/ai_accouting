@@ -9,6 +9,7 @@ const pt = require('./pdftheme.js');
 Page({
   data: {
     loading: true,
+    kb: false,               // 键盘是否弹起
     id: '',
     book: null,
     isFuneral: false,
@@ -30,6 +31,10 @@ Page({
     mainColors: pt.MAIN_COLORS, accentColors: pt.ACCENT_COLORS,
     themeStyle: ''
   },
+
+  // 键盘弹起时隐藏固定底栏（避免底栏被顶到输入框上方遮挡；未在真机验证，输入框另设 cursor-spacing 兜底）
+  onKbOn() { if (!this.data.kb) this.setData({ kb: true }); },
+  onKbOff() { if (this.data.kb) this.setData({ kb: false }); },
 
   onLoad(options) {
     this.setData({ id: options.bookId || '' });

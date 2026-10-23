@@ -1,4 +1,4 @@
-<view class="container login">
+<view class="container login" style="{{themeStyle}}">
   <!-- 印章式标识：中性墨色，喜事、白事都适用 -->
   <view class="seal">
     <view class="seal-inner">礼</view>

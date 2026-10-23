@@ -1,4 +1,4 @@
-<view class="container">
+<view class="container" style="{{themeStyle}}">
   <view class="card item" wx:for="{{list}}" wx:key="_id" data-id="{{item._id}}" bindtap="onOpen">
     <view class="top">
       <text class="shop">{{item.accountName || '主家'}}<text class="muted" wx:if="{{item.themeName}}"> · {{item.themeName}}</text></text>

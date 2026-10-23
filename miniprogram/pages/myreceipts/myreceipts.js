@@ -1,11 +1,13 @@
 // pages/myreceipts/myreceipts.js — 宾客：我的随礼记录（主家已确认的随礼，可查看电子回执）
 const req = require('../../utils/request.js');
 const fmt = require('../../utils/format.js');
+const theme = require('../../utils/theme.js');
 
 Page({
-  data: { list: [], loading: true },
+  data: { list: [], loading: true, themeStyle: '' },
 
   async onShow() {
+    this.setData({ themeStyle: theme.styleOf(theme.current()) });
     try {
       const { list } = await req.myReceipts();
       this.setData({

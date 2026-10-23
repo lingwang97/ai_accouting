@@ -1,11 +1,13 @@
 // pages/invite/invite.js — 接受邀请：成为记账人 / 接收主家移交
 const req = require('../../utils/request.js');
 const fmt = require('../../utils/format.js');
+const theme = require('../../utils/theme.js');
 
 Page({
   data: {
     token: '',
     info: null,
+    themeStyle: '',
     errMsg: '',
     loggedIn: false,
     accepting: false,
@@ -35,6 +37,7 @@ Page({
 
   async onShow() {
     const app = getApp();
+    this.setData({ themeStyle: theme.styleOf(theme.current()) });
     await app.loginReady;
     this.setData({ loggedIn: !!app.globalData.user });
     // 家人共享沿用微信昵称；记账人必须自己填写真实姓名，不预填昵称
