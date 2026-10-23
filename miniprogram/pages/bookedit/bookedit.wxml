@@ -30,6 +30,12 @@
     </view>
   </view>
 
+  <view class="card" wx:if="{{id}}">
+    <view class="section-title">合计数据</view>
+    <view class="muted" style="margin-bottom:16rpx">礼簿页的份数与合计与明细对不上时，可按全部已入簿记录重新计算（不会修改任何礼金记录）</view>
+    <button class="btn-outline pc-btn" loading="{{recalcing}}" bindtap="onRecalc">重算合计</button>
+  </view>
+
   <view wx:if="{{loadFailed}}" class="load-fail" bindtap="onRetryLoad">礼簿加载失败，点此重试（加载成功前不能保存）</view>
   <button class="btn-primary" disabled="{{loadFailed}}" loading="{{saving}}" bindtap="onSave">{{id ? '保存' : '创建礼簿'}}</button>
 </view>

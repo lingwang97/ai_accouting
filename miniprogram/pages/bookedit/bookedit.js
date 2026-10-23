@@ -22,6 +22,7 @@ Page({
     payCodeFileID: '',
     payCodeChanged: false,
     uploading: false,
+    recalcing: false,
     loadFailed: false // 编辑时加载失败：禁止保存，避免被当成新建
   },
 
@@ -98,6 +99,26 @@ Page({
       success: r => resolve(r.confirm ? true : (r.cancel ? false : null)),
       fail: () => resolve(null)
     }));
+  },
+
+  /** 重算合计：需「管理礼簿」权限（服务端同样校验），先二次确认 */
+  onRecalc() {
+    if (this.data.recalcing || !this.data.id) return;
+    wx.showModal({
+      title: '重算合计',
+      content: '将按这本礼簿全部已入簿的记录重新计算份数与合计，不会修改任何礼金记录。确定重算吗？',
+      confirmText: '重算',
+      success: async r => {
+        if (!r.confirm) return;
+        this.setData({ recalcing: true });
+        try {
+          const res = await req.bookRecalc(this.data.id);
+          wx.showToast({ title: `已重算：${res.count} 份`, icon: 'none' });
+        } catch (e) { /* toast 已提示 */ } finally {
+          this.setData({ recalcing: false });
+        }
+      }
+    });
   },
 
   async onSave() {

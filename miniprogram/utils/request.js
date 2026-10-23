@@ -71,6 +71,7 @@ module.exports = {
   bookSetActive: bookId => call('books', { action: 'setActive', bookId }).then(r => { activeBookChanged(); return r; }),
   // 机构模式记账人：切换自己正在记的一场（不影响主家和其他记账人）
   bookSetMine: bookId => call('books', { action: 'setMine', bookId }).then(r => { activeBookChanged(); return r; }),
+  bookRecalc: bookId => call('books', { action: 'recalc', bookId }).then(r => { ['books', 'dashboard'].forEach(k => require('./cache.js').set(k, null)); return r; }),
   bookArchive: (bookId, archived) => call('books', { action: 'archive', bookId, archived }),
   // 删除礼簿（主家本人，只能删已归档的）：先预览份数与合计，确认后移入回收站（done=false 时再调用接着移）
   bookRemovePreview: bookId => call('books', { action: 'removePreview', bookId }),
