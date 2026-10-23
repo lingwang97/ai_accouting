@@ -1,0 +1,18 @@
+# 依赖：云函数由部署时（--r）在云端安装，本地不需要
+node_modules/
+# 日志与临时文件
+*.log
+npm-debug.log*
+*.tmp
+*.bak
+*.orig
+# 系统 / 编辑器
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+# 开发者工具本机配置（含个人设置，不入库）
+project.private.config.json
+# 本地一次性产物（预览二维码等）
+qr.txt
