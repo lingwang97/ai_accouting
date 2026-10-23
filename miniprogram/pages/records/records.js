@@ -45,6 +45,7 @@ Page({
     curBook: null,    // 当前礼簿 id（服务端返回）：只有这一本的待确认可直接确认；null 表示未知
     unit: '礼簿',      // 机构模式称「场次」
     busy: false,
+    showTop: false,   // 回到顶部按钮
     amend: null,      // 修改已入簿礼金的弹层：{ rid, name, amount, relIdx, remark, orig }
     amendRels: ['不选', ...scenes.RELATIONS]
   },
@@ -277,6 +278,13 @@ Page({
   },
 
   onReachBottom() { this.load(); },
+
+  /** 滚过约两屏才显示「回到顶部」；只在跨过阈值时 setData，滚动中不频繁更新 */
+  onPageScroll(e) {
+    const show = e.scrollTop > 1200;
+    if (show !== !!this._topShown) { this._topShown = show; this.setData({ showTop: show }); }
+  },
+  onTop() { wx.pageScrollTo({ scrollTop: 0, duration: 200 }); },
 
   onPullDownRefresh() {
     this.reload();

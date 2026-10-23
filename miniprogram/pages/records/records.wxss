@@ -55,6 +55,9 @@
 /* 「未收到」「确认收到」两个按钮大小一致 */
 button.r-op:not([size=mini]) { width: 160rpx; padding: 0; margin-left: 24rpx; }
 
+.long-tip { padding: 0 0 24rpx; }
+/* 回到顶部：浮在右下，避开底部菜单与安全区 */
+.to-top { position: fixed; right: 24rpx; bottom: calc(50px + env(safe-area-inset-bottom) + 24rpx); z-index: 4; padding: 0 28rpx; line-height: 72rpx; border-radius: 36rpx; background: #fff; color: var(--primary); font-size: 26rpx; box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, .18); }
 .amended { color: var(--primary); }
 .amend-tip { margin-bottom: 16rpx; }
 .small { font-size: 24rpx; }
