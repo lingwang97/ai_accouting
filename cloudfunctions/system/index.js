@@ -256,6 +256,11 @@ async function purgeBook(admin, bookId, confirmName) {
   const acc = (await db.collection('accounts').where({ ownerOpenid: book.ownerOpenid }).limit(1).get()).data[0];
   const prefix = acc && acc.payCodeFileID ? acc.payCodeFileID.split('/paycodes/')[0] : '';
   if (prefix) ['develop', 'trial', 'release'].forEach(env => files.push(`${prefix}/qrcodes/${bookId}-${env}.png`));
+  // 默认礼簿（id 超过 32 字符）的礼簿码文件用短码命名（见 ctx.shortCodeOf）
+  if (prefix && bookId.length > 32) {
+    const code = 'k' + require('crypto').createHash('md5').update(bookId).digest('hex').slice(0, 24);
+    ['develop', 'trial', 'release'].forEach(env => files.push(`${prefix}/qrcodes/${code}-${env}.png`));
+  }
   try { if (files.length) await cloud.deleteFile({ fileList: files }); } catch (e) { /* 忽略 */ }
   let records = 0;
   for (let i = 0; i < 200; i++) {

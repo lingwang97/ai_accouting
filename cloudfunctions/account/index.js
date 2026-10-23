@@ -623,6 +623,7 @@ async function resumeTransfer(acc, openid) {
   await moveAll('records'); // 送礼记录（gifts_out）属于个人人情往来，不移交
   await moveAll('print_templates');
   await moveAll('exports');
+  await moveAll('book_codes'); // 默认礼簿的礼簿码短码映射（清除数据按 ownerOpenid 删除，不迁移会误删 / 漏删）
   // 回收站里的礼簿与礼金记录也跟着主家走（否则新主家看不到、也无法恢复，到期还会被定时清理）
   await moveAll('trash_books', undefined, { aid: acc._id });
   await moveAll('trash_records');
@@ -750,6 +751,8 @@ async function transferBooks(inv, acc, openid) {
   const archived = (await db.collection('books').where({ _id: _.in(ids) }).field({ archivePdf: true }).get())
     .data.map(b => b.archivePdf && b.archivePdf.fileID).filter(Boolean);
   if (archived.length) await move('exports', { ownerOpenid: oldOwner, fileID: _.in(archived) }, { ownerOpenid: openid });
+  // 所移交礼簿的礼簿码短码映射跟着走（集合可能尚未建过，失败忽略）
+  try { await move('book_codes', { bookId: _.in(ids), ownerOpenid: oldOwner }, { ownerOpenid: openid }); } catch (e) { console.warn('迁移礼簿码映射失败', e.message); }
 
   // 接收人的当前礼簿：还没有时设为移交来的（优先原主家的当前礼簿）
   const firstId = ids.includes(acc.activeBookId) ? acc.activeBookId : ids[0];

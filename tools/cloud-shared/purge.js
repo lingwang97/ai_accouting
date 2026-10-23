@@ -73,6 +73,11 @@ async function fileIds(db, openid, ownPayCode) {
   if (prefix) {
     accs.map(a => a._id).concat(books.map(b => b._id)).forEach(id => {
       ENVS.forEach(env => files.push(`${prefix}/qrcodes/${id}-${env}.png`));
+      // 默认礼簿（id 超过 32 字符）的礼簿码文件用短码命名（见 ctx.shortCodeOf）
+      if (id.length > 32) {
+        const code = 'k' + require('crypto').createHash('md5').update(id).digest('hex').slice(0, 24);
+        ENVS.forEach(env => files.push(`${prefix}/qrcodes/${code}-${env}.png`));
+      }
     });
   }
   // 回收站里的礼簿：删除时登记的文件（存档 PDF、本场收款码、礼簿码）
