@@ -10,6 +10,7 @@ const cache = require('../../utils/cache.js');
 const perm = require('../../utils/perm.js');
 const samename = require('../../utils/samename.js');
 const poller = require('../../utils/poller.js');
+const fresh = require('../../utils/fresh.js');
 
 const PAGE_SIZE = 20;
 const SORT_KEYS = ['time_desc', 'time_asc', 'amount_desc'];
@@ -106,7 +107,9 @@ Page({
       booksP = this.loadBooks();
     }
     const before = this.selectedBookId();
-    this.refreshFirst();
+    // 切回页面：45 秒内且期间没有写操作（修改 / 撤销未收到 / 确认等都会记写操作）、列表非空时不重拉第一页，轮询仍会更新合计；
+    // 礼簿被切换 / 换身份 / 从统计页跳来时列表已清空，必然刷新
+    if (fresh.needs(this) || !this.data.list.length || booksP) this.refreshFirst();
     if (booksP) booksP.then(() => { if (this.selectedBookId() !== before) this.reload(); });
     this.clearTimer();
     if (this._hidden) return; // 加载期间已离开本页：不再启动轮询
@@ -146,10 +149,12 @@ Page({
       if (c) this.applyFirst(c);
     }
     this.setData({ loading: true });
+    const at = Date.now();
     try {
       const res = await req.recordList(params);
       if (JSON.stringify(this.buildParams(1)) !== JSON.stringify(params)) return; // 期间筛选已变
       this.applyFirst(res);
+      fresh.mark(this, at);
       if (key) cache.set(key, res);
     } catch (e) { /* toast 已提示 */ } finally {
       this.setData({ loading: false });

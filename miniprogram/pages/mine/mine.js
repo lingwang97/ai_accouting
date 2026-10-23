@@ -5,6 +5,7 @@ const theme = require('../../utils/theme.js');
 const cache = require('../../utils/cache.js');
 const plan = require('../../utils/plan.js');
 const perm = require('../../utils/perm.js');
+const fresh = require('../../utils/fresh.js');
 
 const { VERSION } = require('../../config.js');
 
@@ -40,13 +41,18 @@ Page({
       }
       if (c && !wx.getStorageSync(LOGOUT_KEY)) this.setData({ ...c, loading: false }); // 冷启动时 globalData.user 尚未恢复
     }
-    this.refresh();
+    // 打印机名称取本地存储，每次显示都更新；账户信息 45 秒内且期间没有写操作（改称呼 / 切身份 / 主题等）时不重复请求
+    const saved = wx.getStorageSync('printerDevice');
+    this.setData({ printerName: (saved && saved.name) || '' });
+    const g = getApp().globalData;
+    const idChanged = this._idVer !== g.identityVer;
+    if (fresh.needs(this) || !this.data.user || !this.data.account || idChanged || wx.getStorageSync(LOGOUT_KEY)) this.refresh();
   },
 
   async refresh() {
     const app = getApp();
-    const saved = wx.getStorageSync('printerDevice');
-    this.setData({ printerName: (saved && saved.name) || '' });
+    const at = Date.now();
+    this._idVer = app.globalData.identityVer;
     try {
       // 恢复登录态（重启小程序后 globalData 为空）；主动退出过则不自动恢复
       if (!app.globalData.user && !wx.getStorageSync(LOGOUT_KEY)) {
@@ -84,6 +90,7 @@ Page({
         orgAllowed: !!(p.features && p.features.org) || !!(account && account.orgMode),
         planText: p.plan && p.plan !== 'free' ? `${p.name}${p.expiresAt ? ' · 到期 ' + require('../../utils/format.js').day(p.expiresAt) : ''}` : ''
       }));
+      fresh.mark(this, at);
     } catch (e) { /* toast 已提示 */ } finally {
       this.setData({ loading: false });
     }

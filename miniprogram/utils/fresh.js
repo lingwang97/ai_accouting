@@ -9,7 +9,8 @@ function needs(page, ttl) {
   const at = page._freshAt || 0;
   return !at || Date.now() - at > (ttl || TTL) || dirtyAt() > at;
 }
-function mark(page) { page._freshAt = Date.now(); }
+// at：请求发出前的时间（请求期间发生的写操作晚于它，下次切回仍会刷新）
+function mark(page, at) { page._freshAt = at || Date.now(); }
 function reset(page) { page._freshAt = 0; }
 
 module.exports = { needs, mark, reset };
