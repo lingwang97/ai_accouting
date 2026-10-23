@@ -18,7 +18,7 @@ Page({
     if (!token) return this.setData({ errMsg: '邀请链接无效' });
     try {
       const info = await req.inviteInfo(token);
-      if (Array.isArray(info.books)) info.books = info.books.map(b => ({ ...b, sumStr: fmt.money(b.sum) }));
+      if (Array.isArray(info.books)) info.books = info.books.map(b => (b.sum === undefined ? b : { ...b, sumStr: fmt.money(b.sum) })); // 记账人 / 共享卡不带金额
       this.setData({ info });
       // 家人共享沿用微信昵称（需等邀请信息返回才知道类型）；记账人不预填
       const app = getApp();

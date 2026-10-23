@@ -424,7 +424,8 @@ async function inviteInfo(token) {
   return ok({
     type: inv.type, accountName: inv.accountName, fromName: inv.fromName, used: inv.used, expired: inv.expiresAt < new Date(),
     full: inv.type === 'transfer' ? inv.full !== false : undefined, // 旧版移交邀请没有 full 字段，视为整体移交（家人共享无此字段）
-    books: inv.books || [],
+    // 邀请卡可能被转发给还没加入的人：记账人 / 家人共享的卡只给礼簿名，不透露份数与合计（移交卡需接收人核对内容，保留）
+    books: inv.type === 'transfer' ? (inv.books || []) : (inv.books || []).map(b => ({ name: b.name })),
     allBooks: !!inv.allBooks,
     perms: inv.type === 'clerk' ? (inv.perms || DEFAULT_PERMS).map(k => PERMS[k]).filter(Boolean) : [], // 授予的权限（显示名）
     stayClerk: inv.stayClerk !== false,
