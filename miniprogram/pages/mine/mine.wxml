@@ -77,7 +77,7 @@
     <view class="group-title">帮助与隐私</view>
     <view class="card menu">
       <view class="menu-item" bindtap="goGuide">
-        <image class="mi-icon" src="/assets/icons/book-m.svg" /><text class="mi-text">使用教程</text><text class="arrow">›</text>
+        <image class="mi-icon" src="/assets/icons/book-m.svg" /><text class="mi-text">使用教程与常见问题</text><text class="arrow">›</text>
       </view>
       <view class="menu-item" bindtap="onPrivacy">
         <image class="mi-icon" src="/assets/icons/lock-m.svg" /><text class="mi-text">隐私说明</text><text class="arrow">›</text>

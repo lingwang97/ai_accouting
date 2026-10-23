@@ -1,0 +1,41 @@
+// v3.51.0 常见问题数据（miniprogram/pages/guide/faq.js）结构校验
+const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
+const { test } = require('./helpers/harness.js');
+const { FAQ, WHO } = require('../miniprogram/pages/guide/faq.js');
+
+const appJson = JSON.parse(fs.readFileSync(path.join(__dirname, '../miniprogram/app.json'), 'utf8'));
+const PAGES = new Set(appJson.pages.map(p => '/' + p));
+(appJson.subpackages || []).forEach(sp => sp.pages.forEach(p => PAGES.add('/' + sp.root + '/' + p)));
+const TAB_PAGES = new Set(((appJson.tabBar && appJson.tabBar.list) || []).map(t => '/' + t.pagePath));
+const all = FAQ.reduce((a, c) => a.concat(c.items.map(it => ({ cat: c.cat, ...it }))), []);
+
+test('faq：分类与条数合理，每条有 q、a、who', () => {
+  assert.ok(FAQ.length >= 5);
+  assert.ok(all.length >= 40 && all.length <= 70, '条数 ' + all.length);
+  FAQ.forEach(c => assert.ok(c.cat && c.items.length > 0, '分类为空：' + c.cat));
+  all.forEach(it => {
+    assert.ok(typeof it.q === 'string' && it.q.trim(), '缺少 q：' + it.cat);
+    assert.ok(typeof it.a === 'string' && it.a.trim(), '缺少 a：' + it.q);
+    assert.ok(Array.isArray(it.who) && it.who.length > 0, '缺少 who：' + it.q);
+    it.who.forEach(w => assert.ok(WHO.includes(w), `${it.q} 的身份「${w}」不合法`));
+    if (it.qOrg || it.aOrg) assert.ok(it.qOrg && it.aOrg, '机构文案须成对：' + it.q);
+  });
+});
+
+test('faq：url 指向 app.json 里存在的页面，tab 页用 switchTab 标记', () => {
+  all.filter(it => it.url).forEach(it => {
+    assert.ok(PAGES.has(it.url), `${it.q} 的 url 不存在：${it.url}`);
+    assert.strictEqual(!!it.tab, TAB_PAGES.has(it.url), `${it.q}：底部菜单页须 tab:true，非菜单页不能 tab:true（${it.url}）`);
+  });
+});
+
+test('faq：没有重复的问题；答案里没有技术信息', () => {
+  const seen = new Set();
+  all.forEach(it => {
+    assert.ok(!seen.has(it.q), '重复的问题：' + it.q);
+    seen.add(it.q);
+    assert.ok(!/§|v\d+\.\d+|\.js|:\d+/.test(it.q + it.a), '含技术信息：' + it.q);
+  });
+});

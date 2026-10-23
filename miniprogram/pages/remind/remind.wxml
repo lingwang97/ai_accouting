@@ -1,5 +1,5 @@
 <view class="container" style="{{themeStyle}}">
-  <view class="tip muted">到期在「往来」提醒你；订阅后当天 9 点再发微信通知</view>
+  <view class="tip muted">到期在「往来」提醒你；订阅后到提醒时间再发微信通知</view>
   <view class="card">
     <view class="field">
       <text class="label">对方姓名 *</text>

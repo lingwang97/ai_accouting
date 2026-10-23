@@ -3,8 +3,43 @@
     <view class="seg-item {{tab === 'host' ? 'on' : ''}}" data-t="host" bindtap="onTab">主家</view>
     <view class="seg-item {{tab === 'clerk' ? 'on' : ''}}" data-t="clerk" bindtap="onTab">记账人</view>
     <view class="seg-item {{tab === 'guest' ? 'on' : ''}}" data-t="guest" bindtap="onTab">宾客</view>
+    <view class="seg-item {{tab === 'faq' ? 'on' : ''}}" data-t="faq" bindtap="onTab">常见问题</view>
   </view>
   <view class="muted small intro" wx:if="{{tab === 'clerk'}}">能看到哪些入口由主家授予的权限决定，看不到的说明没有这项权限</view>
+
+  <!-- 常见问题 -->
+  <block wx:if="{{tab === 'faq'}}">
+    <view class="faq-search">
+      <input class="faq-input" type="text" confirm-type="search" placeholder="搜索问题，如：打印、导出、未收到" value="{{kw}}" bindinput="onKw" />
+      <text class="faq-clear" wx:if="{{kw}}" bindtap="onKwClear">✕</text>
+    </view>
+    <view class="chips faq-who">
+      <view class="chip {{who === item ? 'on' : ''}}" wx:for="{{whoList}}" wx:key="*this" data-w="{{item}}" bindtap="onWho">{{item}}</view>
+    </view>
+    <view class="empty" wx:if="{{!faqView.length}}">
+      <view class="muted">没有找到相关问题</view>
+      <view class="muted small">换个关键词，或把上方身份切到「全部」；仍没有答案请到「我的 → 联系我们」</view>
+    </view>
+    <view class="faq-cat" wx:for="{{faqView}}" wx:for-item="c" wx:key="ci">
+      <view class="faq-cat-head" data-ci="{{c.ci}}" bindtap="onToggleCat">
+        <text class="faq-cat-name">{{c.cat}}</text>
+        <text class="faq-cat-n">{{c.n}}</text>
+        <text class="faq-arrow">{{c.open ? '▴' : '▾'}}</text>
+      </view>
+      <block wx:if="{{c.open}}">
+        <view class="faq-item" wx:for="{{c.items}}" wx:for-item="it" wx:key="k">
+          <view class="faq-q" data-k="{{it.k}}" bindtap="onToggleQ">
+            <text class="faq-q-text">{{it.q}}</text>
+            <text class="faq-arrow">{{it.open ? '▴' : '▾'}}</text>
+          </view>
+          <view class="faq-a" wx:if="{{it.open}}">
+            <view class="faq-a-text">{{it.a}}</view>
+            <view class="go" wx:if="{{it.url}}" data-url="{{it.url}}" data-tab="{{it.tab}}" bindtap="onFaqGo">{{it.go}} ›</view>
+          </view>
+        </view>
+      </block>
+    </view>
+  </block>
 
   <block wx:for="{{secs}}" wx:for-item="sec" wx:for-index="si" wx:key="sec">
     <view class="sec-title">{{sec.sec}}</view>
