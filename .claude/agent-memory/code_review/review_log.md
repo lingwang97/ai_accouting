@@ -54,3 +54,6 @@ v3.41.0 提交 f6f417a/c98ab79/1b9e322/3b907fc。第 18 条 _openid 过滤被跳
 ## 2026-10-23 v3.44.0 已实施（HEAD 4f03a8e，未上传）
 提交 572e3fb..4f03a8e（7 个）。用户确认四版计划：v3.44 数据稳定→v3.45 补功能→v3.46 性能→v3.47 工程，后三版另派。
 设计：记账人读 payCodeFileID 占位 '@current'（account.KEEP_CODE），save 时换回；合计自愈在 books.stats / records.reconcile 里 checkDrift；recalc 在 bookedit 页。
+
+## 2026-10-23 v3.45.0 已实施（未上传）
+提交 57adbd0(amend 后端+撤销未收到)、后续 UI/守卫/提醒撤回/归档清理/邀请提示、版本与文档 §137。amend 用 amendN 乐观锁；personKey 改名：有 openid 且无 personKey 时固定为 o:openid:原名。rejected 无旧 rejectedAt，旧记录不可撤销。
