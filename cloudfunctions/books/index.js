@@ -41,6 +41,8 @@ exports.main = async (event) => {
     const OWNER = ctx.ownerOpenid;
     // 记账人按权限：「管理礼簿」新建 / 修改 / 切换 / 归档，「回执与打印样式」改样式；只能操作负责的礼簿
     if (['save', 'setActive', 'archive'].includes(event.action) && !can(ctx, 'books')) return err('你没有管理礼簿的权限');
+    if (event.action === 'recalc' && !can(ctx, 'books')) return err('你没有管理礼簿的权限');
+    if (event.action === 'recalc' && !canBook(ctx, String(event.bookId || ''))) return err('礼簿不存在');
     if (event.action === 'saveTpl' && !can(ctx, 'style')) return err('你没有修改回执与打印样式的权限');
     if (event.action === 'save' && event.book && event.book._id && !canBook(ctx, String(event.book._id))) return err('礼簿不存在');
     if (event.action === 'save' && event.book && !event.book._id && ctx.bookIds) return err('你只负责部分礼簿，不能新建礼簿');
@@ -62,6 +64,7 @@ exports.main = async (event) => {
       case 'trashRestore': return ctx.role === 'owner' ? await trashOp(OWNER, String(event.bookId || ''), 'restore') : err('只有主家本人可以恢复');
       case 'trashPurge': return ctx.role === 'owner' ? await trashOp(OWNER, String(event.bookId || ''), 'purge', event.confirmName) : err('只有主家本人可以删除');
       case 'stats': return await stats(OWNER, event.bookId, ctx);
+      case 'recalc': return await recalc(OWNER, String(event.bookId || ''));
       case 'getTpl': return await getTpl(OWNER, account, event.bookId);
       case 'saveTpl': return await saveTpl(OWNER, event.bookId, event.receiptTpl, event.printTpl);
       default: return err('未知 action');
@@ -391,6 +394,7 @@ async function stats(openid, bookId, ctx) {
     method[k].sum = Math.round(method[k].sum * 100 + m.fen) / 100;
   });
   const t = (total.list && total.list[0]) || { count: 0, fen: 0, maxAmount: 0 };
+  await checkDrift(openid, book, t.count || 0, Math.round(t.fen || 0)); // 本来就做了实时聚合，顺带核对累计合计
   return ok({
     book: { ...safeBook(book), archivePdf: ctx && (can(ctx, 'export') || readonly(ctx)) ? (book.archivePdf || null) : null },
     count: t.count,
@@ -401,6 +405,40 @@ async function stats(openid, bookId, ctx) {
       .map(r => ({ relation: r._id || '未填写', count: r.count, sum: Math.round(r.fen) / 100 }))
       .sort((a, b) => b.sum - a.sum)
   });
+}
+
+/**
+ * 核对礼簿累计合计（statCount / statFen）与实时聚合：不一致时重读一次礼簿再比（排除刚入簿的并发），
+ * 仍不一致就把 statReady 置 false，下次打开礼簿列表自动重算。只在本来就做了聚合的接口里调用，失败不影响主流程。
+ */
+async function checkDrift(openid, book, count, fen) {
+  try {
+    if (!book || !book.statReady) return false;
+    if ((book.statCount || 0) === count && (book.statFen || 0) === fen) return false;
+    const fresh = (await books.doc(book._id).get()).data;
+    if (!fresh || fresh.ownerOpenid !== openid || !fresh.statReady) return false;
+    if ((fresh.statCount || 0) === count && (fresh.statFen || 0) === fen) return false;
+    await books.where({ _id: book._id, ownerOpenid: openid, statReady: true }).update({ data: { statReady: false } });
+    console.warn('礼簿合计与记录不一致，已标记重算', book._id, fresh.statCount, count, fresh.statFen, fen);
+    return true;
+  } catch (e) { console.warn('核对合计失败', e.message); return false; }
+}
+
+/** 重算合计：先置为待补算，再立即补算（并发安全：只有一个补算会写入，见 backfillStats） */
+async function recalc(openid, bookId) {
+  const book = await getBook(openid, bookId);
+  if (!book) return err('礼簿不存在');
+  await books.where({ _id: book._id, ownerOpenid: openid }).update({ data: { statReady: false } });
+  let wrote = false;
+  try {
+    wrote = await backfillStats(openid, book._id);
+  } catch (e) {
+    // 补算失败：statReady 保持 false，下次打开礼簿列表会自动重试
+    console.error('重算合计失败', e);
+    return err('重算失败，请稍后再试（下次打开礼簿列表会自动重算）');
+  }
+  const fresh = await getBook(openid, book._id);
+  return ok({ count: (fresh && fresh.statCount) || 0, sum: ((fresh && fresh.statFen) || 0) / 100, recalculated: wrote });
 }
 
 /** 返回给前端的礼簿：不带主家 openid、收款码文件路径和待确认收款码的提交人 */

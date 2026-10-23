@@ -77,12 +77,15 @@ async function expirePending(openid) {
   if (Date.now() - last < 60 * 1000) return;
   expiredAt.set(openid, Date.now());
   // 转账+现金批次不自动取消：现金可能已交到礼台，由主家在待确认里处理
-  await records.where({
-    ownerOpenid: openid,
-    status: 'pending',
-    batchPay: _.neq('mixed'),
-    createdAt: _.lt(new Date(Date.now() - PENDING_TTL))
-  }).update({ data: { status: 'cancelled', autoCancelled: true } });
+  // 失败只记日志：这是顺带的维护写操作，不能拖垮列表 / 工作台 / 待确认等读接口（下一分钟会重试）
+  try {
+    await records.where({
+      ownerOpenid: openid,
+      status: 'pending',
+      batchPay: _.neq('mixed'),
+      createdAt: _.lt(new Date(Date.now() - PENDING_TTL))
+    }).update({ data: { status: 'cancelled', autoCancelled: true } });
+  } catch (e) { console.warn('自动取消超时未转账记录失败', e.message); }
 }
 
 /**
@@ -292,6 +295,8 @@ async function reconcile(ctx, event) {
       add(st);
     }
   });
+  // 全部入簿（未按日筛选）时顺带核对礼簿累计合计，不一致则标记重算（下次礼簿列表自动补算）
+  if (!base.payDay) await checkStatDrift(owner, book, s.paid.count, s.paid.fen);
   const desk = (deskCash.list && deskCash.list[0]) || { count: 0, fen: 0 };
   const d = (diff.list && diff.list[0]) || { count: 0, fen: 0, declaredFen: 0 };
   const hs = {};
@@ -329,6 +334,20 @@ async function reconcile(ctx, event) {
     handlers: Object.values(hs).map(h => ({ name: h.name, count: h.count, sum: h.fen / 100, cashCount: h.cashCount, cashSum: h.cashFen / 100 }))
       .sort((a, b) => b.sum - a.sum)
   });
+}
+
+/** 核对礼簿 statCount / statFen 与实时聚合：重读一次排除并发入簿，仍不一致才置 statReady=false；失败不影响对账 */
+async function checkStatDrift(owner, book, count, fen) {
+  try {
+    if (!book || !book.statReady) return;
+    if ((book.statCount || 0) === count && (book.statFen || 0) === fen) return;
+    const bk = db.collection('books');
+    const fresh = (await bk.doc(book._id).get()).data;
+    if (!fresh || fresh.ownerOpenid !== owner || !fresh.statReady) return;
+    if ((fresh.statCount || 0) === count && (fresh.statFen || 0) === fen) return;
+    await bk.where({ _id: book._id, ownerOpenid: owner, statReady: true }).update({ data: { statReady: false } });
+    console.warn('礼簿合计与记录不一致，已标记重算', book._id);
+  } catch (e) { console.warn('核对合计失败', e.message); }
 }
 
 /** 云函数运行在 UTC，日期按北京时间（UTC+8） */

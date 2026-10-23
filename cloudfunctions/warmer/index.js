@@ -18,7 +18,9 @@ exports.main = async (event) => {
   }
   // 每一轮都推送已到提醒时间、尚未推送的提醒（pushed 保证只推一次；某轮失败下一轮补推）
   {
-    try { await pushReminders(deadline); } catch (e) { console.warn('提醒推送失败', e.message); }
+    // 每小时第一轮要给回收站清理留出约 30 秒预算，避免提醒很多时清理长期被挤掉
+    const pushDeadline = new Date().getMinutes() < 5 ? deadline - 30 * 1000 : deadline;
+    try { await pushReminders(pushDeadline); } catch (e) { console.warn('提醒推送失败', e.message); }
   }
   // 每小时第一轮：永久删除回收站里超过保留期的礼簿（每次最多 5 本，没删完的下个小时继续）
   if (new Date().getMinutes() < 5) {
@@ -98,7 +100,11 @@ async function pushReminders(deadline) {
       }
       // 成功、或确定性失败（43101 未订阅 / 次数用完、47003 参数不符、40003 openid 无效）才标记已推送；其余（网络等）下一轮重试，最多 5 次
       const final = result.ok || [43101, 47003, 40003].includes(result.code) || (r.pushTries || 0) >= 4;
-      await col.doc(r._id).update({ data: { pushed: final, pushTries: (r.pushTries || 0) + 1, pushResult: { ...result, at: new Date() } } });
+      // 标记失败不能中断同组其他推送；消息已发出时重试一次标记，仍失败只记日志（避免整组 Promise.all 中断）
+      const mark = () => col.doc(r._id).update({ data: { pushed: final, pushTries: (r.pushTries || 0) + 1, pushResult: { ...result, at: new Date() } } });
+      try { await mark(); } catch (e) {
+        try { await mark(); } catch (e2) { console.warn('提醒推送标记失败', r._id, e2.message); }
+      }
     };
     for (let k = 0; k < res.data.length; k += 10) { // 每组 10 条并发推送
       if (deadline && deadline - Date.now() < 5 * 1000) break;
