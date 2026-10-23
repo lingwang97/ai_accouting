@@ -18,7 +18,7 @@ function cloudActions(fn) {
   set.delete('__warm');
   return set;
 }
-const FUNCS = ['account', 'books', 'export', 'login', 'payment', 'printtpl', 'qrcode', 'records', 'renqing', 'system'];
+const FUNCS = ['account', 'books', 'export', 'fontsetup', 'login', 'payment', 'printtpl', 'qrcode', 'records', 'renqing', 'system'];
 const ACTIONS = Object.fromEntries(FUNCS.map(f => [f, cloudActions(f)]));
 const allActions = new Set(FUNCS.flatMap(f => [...ACTIONS[f]]));
 

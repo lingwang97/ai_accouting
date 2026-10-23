@@ -161,6 +161,8 @@ module.exports = {
   adminFindHosts: keyword => call('system', { action: 'adminFindHosts', keyword }),
   adminIndexes: () => call('system', { action: 'adminIndexes' }),
   adminPreflight: fix => call('system', { action: fix ? 'adminPreflightFix' : 'adminPreflight' }),
+  // 一次性：把导出字体上传到云存储（fontsetup 云函数，用完可删；未部署时 silent 由页面提示）
+  adminFontsUpload: () => call('fontsetup', { action: 'upload' }, { silent: true }),
   // 数据清除（管理员）
   adminPurgePreview: (ownerOpenid, guestRecords) => call('system', { action: 'adminPurgePreview', ownerOpenid, guestRecords: !!guestRecords }),
   adminBackup: ownerOpenid => call('system', { action: 'adminBackup', ownerOpenid }),

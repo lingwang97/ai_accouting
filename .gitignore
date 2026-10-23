@@ -16,3 +16,5 @@ desktop.ini
 project.private.config.json
 # 本地一次性产物（预览二维码等）
 qr.txt
+# 导出字体上传工具的 base64 字体模块（由 python tools/gen_font_js.py 生成，约 15MB，不入库）
+cloudfunctions/fontsetup/font-*.js

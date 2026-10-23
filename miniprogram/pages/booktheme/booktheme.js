@@ -170,6 +170,7 @@ Page({
       // 已下载到本机，立即删除云端文件，避免礼金明细通过链接外泄
       req.exportCleanup(res.fileID).catch(() => {});
       wx.hideLoading();
+      await openfile.notice(res);
       openfile.open(filePath, res.fileName);
     } catch (e) {
       wx.hideLoading();

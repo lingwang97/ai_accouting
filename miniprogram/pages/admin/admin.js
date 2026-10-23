@@ -36,6 +36,7 @@ Page({
     indexResults: [],   // [{ col, name, ok, existed, msg }]
     indexSummary: '',
     pf: null, pfLoading: false, // 上线前检查结果
+    fontLoading: false, // 上传导出字体中
     themeStyle: ''
   },
 
@@ -119,12 +120,32 @@ Page({
         pf: {
           keyText, keyOk: r.key.source === 'env' || r.key.source === 'db' || (!r.key.source && !r.key.generated),
           missing: r.missing, colsOk: !r.missing.length, total: r.cols.length,
-          appSecret: r.hasAppSecret, version: config.VERSION, permCols: r.permCols.join('、')
+          appSecret: r.hasAppSecret, version: config.VERSION, permCols: r.permCols.join('、'),
+          fontsOk: !r.fonts || r.fonts.ready, fontsMissing: r.fonts ? r.fonts.fonts.filter(f => !f.uploaded).map(f => f.label).join('、') : ''
         }
       });
       if (fix) wx.showToast({ title: r.missing.length ? '仍有集合缺失' : '集合已齐全', icon: 'none' });
     } catch (err) { /* toast 已提示 */ } finally {
       this.setData({ pfLoading: false });
+    }
+  },
+
+  // —— 导出字体：一次性上传到云存储（fontsetup 云函数，管理员） ——
+  async onFontsUpload() {
+    if (this.data.fontLoading) return;
+    this.setData({ fontLoading: true });
+    wx.showLoading({ title: '上传中，请稍候', mask: true });
+    try {
+      await req.adminFontsUpload();
+      wx.hideLoading();
+      wx.showToast({ title: '字体已上传', icon: 'success' });
+      this.onPreflight();
+    } catch (e) {
+      wx.hideLoading();
+      // 云函数没部署 / 超时 / 无权限：给明确指引
+      wx.showModal({ title: '上传失败', content: (e && e.message && e.message !== 'biz error') ? e.message : '请确认已部署 fontsetup 云函数后重试', showCancel: false, confirmText: '知道了' });
+    } finally {
+      this.setData({ fontLoading: false });
     }
   },
 

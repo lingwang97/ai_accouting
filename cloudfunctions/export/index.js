@@ -7,6 +7,7 @@
 //   - 归档：{ format:'book', bookId, keep:true } 上传到 archives/{md5(OPENID)前16位}/，登记 kind='archive' keep=true，
 //     并写入礼簿 archivePdf: { fileID, fileName, createdAt }；原有归档文件及其登记一并删除
 //   出参：{ code:0, msg:'ok', data:{ fileID, fileName, count, sum } }
+//   PDF 需要字体（云存储，见 fonts.js）：黑体不可用时报错「字体准备中 / 字体加载失败」；宋体 / 毛笔不可用时回退黑体，出参多一个 notice 说明（存档不回退，直接报错）
 // 二、备份：{ format:'backup' } 全量导出一个 xlsx（礼簿汇总 / 礼金明细 / 送礼记录），登记 kind='backup' keep=false
 //   出参：{ code:0, msg:'ok', data:{ fileID, fileName, count, sum } }（count/sum 为已入簿礼金）
 // 三、清理单个文件：{ action:'cleanup', fileID } 仅删除本人 exports/ 下且 keep=false 的文件；已删除过也返回成功
@@ -30,16 +31,16 @@ const db = cloud.database();
 const _ = db.command;
 
 // 字体为 GB2312 子集，超出 GB2312 的生僻字无字形（已知限制）
-// 中文字体（思源黑体 GB2312 子集 TrueType）以 JS 模块打包：线上运行时读不到随代码上传的 .ttf 文件，
-// 作为代码 require 一定存在。字体以 Buffer 传给 pdfkit（默认字体也用它，不读 pdfkit 内置 Helvetica.afm）
-let _fontBuf = null;
-const fontBuf = () => (_fontBuf = _fontBuf || Buffer.from(require('./font-data.js'), 'base64'));
-// 传统礼簿可选字体：宋体（思源宋体）、毛笔（马善政楷书），均 SIL OFL；体积大，只在用到时加载
-const _fontExtra = {};
-const FONT_MODULE = { serif: './font-serif.js', brush: './font-brush.js' };
-const fontOf = key => FONT_MODULE[key]
-  ? (_fontExtra[key] = _fontExtra[key] || Buffer.from(require(FONT_MODULE[key]), 'base64'))
-  : fontBuf();
+// 中文字体（黑体 / 宋体 / 毛笔，TrueType）存云存储，首次使用时下载到 /tmp 缓存，见 fonts.js（不再打进代码包）。
+// 字体以 Buffer 传给 pdfkit（默认字体也用它，不读 pdfkit 内置 Helvetica.afm）；Excel / 备份不需要字体。
+const Fonts = require('./fonts.js');
+const fontLoader = Fonts.createLoader({
+  getMeta: async () => {
+    const d = (await db.collection('settings').doc('export_fonts').get()).data;
+    return d && !d._openid ? d : null; // 带 _openid 的是客户端伪造，忽略
+  },
+  download: async fileID => (await cloud.downloadFile({ fileID })).fileContent
+});
 const MAX_ROWS = 10000; // 单次导出上限，超出时提示按日期分段导出（不静默截断）
 const BOOK_MAX = 3000; // 传统礼簿（book 格式）单次笔数上限：内存占用大
 const QUERY_MAX = 1000; // 云函数端单次查询上限
@@ -165,10 +166,26 @@ exports.main = async (event) => {
     const meta = buildMeta(rows, { account, book, startDay, endDay, themeName, pdfThemeKey, pdfCustom, pdfBack, pdfBind });
 
     let buffer;
-    stage = '生成文件';
-    if (format === 'xlsx') buffer = await buildXlsx(rows, meta);
-    else if (format === 'book') buffer = await buildBook(rows, meta);
-    else buffer = await buildPdf(rows, meta);
+    let notice = '';
+    if (format === 'xlsx') {
+      stage = '生成文件';
+      buffer = await buildXlsx(rows, meta);
+    } else {
+      // PDF 需要字体：黑体不可用整体报错；宋体 / 毛笔不可用时回退到黑体并在结果里提示（存档不回退，见下）
+      stage = '准备字体';
+      const plan = Fonts.planFor(format, meta.bt || {});
+      const got = plan.resolve(await fontLoader.prepare(plan.keys));
+      if (got.error) return err(got.error);
+      if (got.notes && got.notes.length) {
+        // 存档 PDF 会替换旧存档并长期保存，不用回退字体生成，让用户稍后重试
+        if (archive) return err('所选字体暂时不可用，请稍后重试');
+        notice = got.notes.join('；');
+        console.warn('export font fallback', got.notes.join('|'));
+      }
+      if (got.dropMark) meta.bt = { ...meta.bt, mark: '' };
+      stage = '生成文件';
+      buffer = format === 'book' ? await buildBook(rows, meta, got.fonts) : await buildPdf(rows, meta, got.fonts);
+    }
 
     const ext = format === 'xlsx' ? 'xlsx' : 'pdf';
     const base = book ? book.name : (themeName ? `${themeName}_${startDay}_${endDay}` : `${startDay}_${endDay}`);
@@ -182,7 +199,7 @@ exports.main = async (event) => {
     stage = '记录';
     await track(OWNER, up.fileID, archive, archive ? 'archive' : 'export');
     if (archive) await saveArchive(OWNER, book, bookId, up.fileID, fileName);
-    return ok({ fileID: up.fileID, fileName, count: meta.count, sum: meta.sum });
+    return ok({ fileID: up.fileID, fileName, count: meta.count, sum: meta.sum, ...(notice ? { notice } : {}) });
   } catch (e) {
     // 详细堆栈只写日志（含服务器文件路径），前端只提示阶段
     console.error('export failed', stage, e && e.stack);
@@ -399,14 +416,15 @@ function colsFor(meta) {
 }
 const ROW_H = 20;
 
-function buildPdf(rows, meta) {
+/** @param fonts { sans: Buffer } 由 fonts.planFor 准备好的字体 */
+function buildPdf(rows, meta, fonts) {
   return new Promise((resolve, reject) => {
-    const doc = new (PDF())({ size: 'A4', margin: PAGE.margin, bufferPages: true, font: fontBuf() });
+    const doc = new (PDF())({ size: 'A4', margin: PAGE.margin, bufferPages: true, font: fonts.sans });
     const chunks = [];
     doc.on('data', c => chunks.push(c));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
-    doc.registerFont('cn', fontBuf());
+    doc.registerFont('cn', fonts.sans);
     doc.font('cn');
     const color = meta.theme.main;
     const cols = colsFor(meta);
@@ -575,13 +593,14 @@ function deepen(hex) {
   return at(k);
 }
 
-function buildBook(rows, meta) {
+/** @param fonts { main, mark, sub, sans } 由 fonts.planFor 准备好的字体（main 正文、mark 水印、sub 小字） */
+function buildBook(rows, meta, fonts) {
   return new Promise((resolve, reject) => {
     // 边距全部置 0，所有文字用绝对坐标绘制，避免 pdfkit 自动换页
     const bt = meta.bt;
-    const main = fontOf(bt.font);
-    // 水印字：囍、以及毛笔体（字形不全）一律用宋体绘制；没有水印不加载
-    const markFont = !bt.mark ? main : (bt.mark === '囍' || bt.font === 'brush') ? fontOf('serif') : main;
+    const main = fonts.main;
+    // 水印字：囍、以及毛笔体（字形不全）一律用宋体绘制（由 planFor 选好）
+    const markFont = fonts.mark;
     const doc = new (PDF())({ size: 'A4', layout: 'landscape', margin: 0, bufferPages: true, autoFirstPage: false, font: main });
     const chunks = [];
     doc.on('data', c => chunks.push(c));
@@ -590,7 +609,7 @@ function buildBook(rows, meta) {
     doc.registerFont('cn', main);
     doc.registerFont('mark', markFont);
     // 毛笔字小字号不易辨认：序号、小写金额、备注、栏目名、页码等小字用黑体
-    doc.registerFont('sub', bt.font === 'brush' ? fontBuf() : main);
+    doc.registerFont('sub', fonts.sub);
     doc.font('cn');
 
     // 小字（序号 / 小写金额 / 备注 / 页眉小字）用近黑色，打印和屏幕都清晰；栏目名与页眉标题用「加深后的主色」
@@ -1137,4 +1156,4 @@ function sanitizeName(s) {
 
 
 // 仅供本地测试使用，不影响云函数入口
-module.exports._test = { buildPdf, buildXlsx, buildBook, buildBackup, buildMeta, amountUpper, sanitizeName, guestText };
+module.exports._test = { fontLoader, buildPdf, buildXlsx, buildBook, buildBackup, buildMeta, amountUpper, sanitizeName, guestText };

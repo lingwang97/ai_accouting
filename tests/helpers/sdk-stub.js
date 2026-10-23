@@ -5,7 +5,7 @@ const { FakeDb } = require('./fakedb.js');
 
 const ROOT = path.join(__dirname, '..', '..');
 const db = new FakeDb();
-const state = { openid: 'tester', files: {}, calls: [] };
+const state = { openid: 'tester', files: {}, calls: [], uploads: [], download: async () => { throw new Error('sdk-stub: state.download 未设置'); } };
 
 const sdk = {
   DYNAMIC_CURRENT_ENV: 'test-env',
@@ -13,8 +13,8 @@ const sdk = {
   database: () => db,
   getWXContext: () => ({ OPENID: state.openid, APPID: 'wx-test', ENV: 'test-env' }),
   callFunction: async o => { state.calls.push(o); return { result: { code: 0, data: null } }; },
-  uploadFile: async o => { state.calls.push({ uploadFile: o.cloudPath }); return { fileID: 'cloud://test/' + o.cloudPath }; },
-  downloadFile: async () => { throw new Error('sdk-stub: downloadFile 未设置'); },
+  uploadFile: async o => { state.uploads.push({ cloudPath: o.cloudPath, content: o.fileContent }); return { fileID: 'cloud://test/' + o.cloudPath }; },
+  downloadFile: async o => ({ fileContent: await state.download(o.fileID) }),
   deleteFile: async () => ({ fileList: [] }),
   getTempFileURL: async () => ({ fileList: [] }),
   openapi: {}

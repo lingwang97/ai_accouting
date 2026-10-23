@@ -60,4 +60,11 @@ function showError(e) {
   if (msg && msg !== 'download failed') wx.showModal({ title: '导出未成功', content: msg, showCancel: false });
 }
 
-module.exports = { download, open, showError };
+/** 导出结果带 notice（如「宋体暂时不可用，已改用黑体」）时先弹窗说明，关闭后再打开文件 */
+function notice(res) {
+  const msg = res && res.notice;
+  if (!msg) return Promise.resolve();
+  return new Promise(resolve => wx.showModal({ title: '提示', content: msg, showCancel: false, confirmText: '知道了', complete: () => resolve() }));
+}
+
+module.exports = { download, open, showError, notice };

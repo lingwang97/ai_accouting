@@ -488,13 +488,27 @@ async function preflight(fix) {
     if (s) { key.source = String(s.source || ''); key.at = s.at || null; }
   } catch (e) { /* 无 */ }
   const missing = cols.filter(c => !c.exists).map(c => c.name);
+  const fonts = await fontStatus();
   if (fix) await log('admin', 'preflightFix', { name: '上线前检查修复', created: cols.filter(c => c.created).map(c => c.name), missing });
   return ok({
     key, // source: env 环境变量 / db 自动生成 / default 旧默认值（数据库读不到时兜底）/ 空 尚未被使用
     cols, missing,
     hasAppSecret: !!process.env.WX_APPSECRET, // 只返回是否已配置
+    fonts, // 导出字体（云存储）登记情况：{ ready, fonts:[{key,label,uploaded}] }
     permCols: REQUIRED_COLS
   });
+}
+
+/** 导出字体是否已上传到云存储并登记（settings.export_fonts，由 fontsetup 云函数写入；不返回 fileID） */
+async function fontStatus() {
+  const LABEL = { sans: '黑体', serif: '宋体', brush: '毛笔字体' };
+  let fonts = {};
+  try {
+    const d = (await db.collection('settings').doc('export_fonts').get()).data;
+    if (d && !d._openid && d.fonts) fonts = d.fonts;
+  } catch (e) { /* 未登记 */ }
+  const list = Object.keys(LABEL).map(key => ({ key, label: LABEL[key], uploaded: !!(fonts[key] && fonts[key].fileID) }));
+  return { ready: list.every(f => f.uploaded), fonts: list };
 }
 
 // —— 数据库索引 ——
