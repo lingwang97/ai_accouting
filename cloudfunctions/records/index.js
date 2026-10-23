@@ -46,7 +46,7 @@ exports.main = async (event) => {
         if (!can(ctx, 'show')) return err('你没有打印权限');
         return await markPrinted(OWNER, event.rids, ctx);
       case 'pending':
-        return await pending(OWNER, ctx);
+        return await pending(OWNER, ctx, event.withRejected === true);
       case 'pendingStat':
         return await pendingStat(OWNER, ctx, OPENID);
       case 'themes':
@@ -450,7 +450,7 @@ async function markPrinted(openid, rids, ctx) {
  * 宾客常常转完账直接回聊天，主家核对微信到账后可直接入簿
  */
 const STALL_MS = 3 * 60 * 1000;
-async function pending(openid, ctx) {
+async function pending(openid, ctx, withRejected) {
   // 只取当前礼簿（workBook）的待确认；确认接口同样限定当前礼簿，避免跨礼簿确认
   const cur = workBook(ctx);
   const bk = cur || '__none__';
@@ -460,16 +460,20 @@ async function pending(openid, ctx) {
     { ownerOpenid: openid, status: 'pending', createdAt: _.lt(new Date(now - STALL_MS)), bookId: bk },
     { ownerOpenid: openid, status: 'cancelled', autoCancelled: true, stallDismissed: _.neq(true), createdAt: _.gt(new Date(now - 24 * 3600 * 1000)), bookId: bk }
   ]);
-  const [res, cnt, stall, other, bookRes] = await Promise.all([
+  const [res, cnt, stall, other, bookRes, rejRes] = await Promise.all([
     records.where(cond).orderBy('createdAt', 'desc').limit(100).get(),
     records.where(cond).count(),
     records.where(stallCond).orderBy('createdAt', 'desc').limit(100).get(),
     records.where(otherPendCond(ctx, cur)).count(),
-    cur ? db.collection('books').doc(cur).get().catch(() => null) : null
+    cur ? db.collection('books').doc(cur).get().catch(() => null) : null,
+    // 最近 24 小时内标记「未收到」的（可撤销）：只有待确认页请求时才查，需要确认收礼权限
+    withRejected && cur && can(ctx, 'confirm')
+      ? records.where({ ownerOpenid: openid, status: 'rejected', bookId: cur, rejectedAt: _.gt(new Date(now - 24 * 3600 * 1000)) }).orderBy('rejectedAt', 'desc').limit(50).get().catch(() => null)
+      : null
   ]);
   const b = bookRes && bookRes.data;
   const bookName = b && b.ownerOpenid === openid ? (b.hostName ? `${b.hostName} · ${b.name}` : b.name) : '';
-  return ok({ list: res.data.map(strip), count: cnt.total, stalled: stall.data.map(strip), bookName, otherCount: other.total });
+  return ok({ list: res.data.map(strip), count: cnt.total, stalled: stall.data.map(strip), bookName, otherCount: other.total, rejected: rejRes ? rejRes.data.map(strip) : [] });
 }
 
 /**

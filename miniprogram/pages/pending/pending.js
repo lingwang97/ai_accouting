@@ -88,15 +88,17 @@ Page({
     if (this.data.busy) return false;
     if (!silent && this._poller) this._poller.kick(); // 用户操作后恢复轮询频率
     try {
-      const { list, stalled, bookName, otherCount, count } = await req.recordPending();
+      const { list, stalled, rejected, bookName, otherCount, count } = await req.recordPending(true);
       const hiddenCount = Math.max(0, (count || 0) - list.length); // 超过单次上限 100 笔的部分
       // 轮询取回的内容与上次相同：不动界面（返回 false 让轮询放慢）
-      const sig = JSON.stringify([list.map(r => [r._id, r.status, r.amount, r.transferredAt]), (stalled || []).map(r => [r._id, r.status]), bookName, otherCount, hiddenCount]);
+      const sig = JSON.stringify([list.map(r => [r._id, r.status, r.amount, r.transferredAt]), (stalled || []).map(r => [r._id, r.status]), (rejected || []).map(r => r._id), bookName, otherCount, hiddenCount]);
       if (silent && sig === this._sig) return false;
       this._sig = sig;
       // 宾客没点「我已完成转账」的（含 24 小时内被自动取消的）：主家核对微信到账后可直接入簿
       this.setData({
-        stalled: groupRecords(stalled || []).map(g => ({ ...g, auto: g.status === 'cancelled', timeStr: fmt.time(g.createdAt) }))
+        stalled: groupRecords(stalled || []).map(g => ({ ...g, auto: g.status === 'cancelled', timeStr: fmt.time(g.createdAt) })),
+        // 最近 24 小时内标记「未收到」的：点错了可以撤销
+        rejected: groupRecords(rejected || []).map(g => ({ ...g, timeStr: fmt.time(g.rejectedAt || g.createdAt) }))
       });
       if (silent && list.length > countOf(this._list)) wx.vibrateShort({ type: 'heavy', fail() {} });
       const picked = new Set(this._list.filter(r => r.picked).map(r => r._id));
@@ -205,6 +207,27 @@ Page({
       wx.showToast({ title: '已移除', icon: 'success' });
       this.load(false);
     } catch (err) { /* toast 已提示 */ }
+  },
+  /** 撤销「未收到」：整批恢复到标记前的状态（服务端 24 小时内有效） */
+  async onUnreject(e) {
+    const g = (this.data.rejected || []).find(x => x._id === e.currentTarget.dataset.id);
+    if (!g) return;
+    const ok = await new Promise(resolve => wx.showModal({
+      title: '撤销未收到',
+      content: `把 ${g.payerName} ￥${g.amountStr} 恢复为待确认？`,
+      confirmText: '撤销',
+      success: r => resolve(r.confirm),
+      fail: () => resolve(false)
+    }));
+    if (!ok) return;
+    const done = await this.run(async () => {
+      try { await req.payUnreject(g._id); return true; } catch (err) { return false; } // 失败 toast 已由 request.js 提示（如超过 24 小时）
+    });
+    if (done) {
+      wx.showToast({ title: '已撤销', icon: 'success' });
+      getApp().refreshBadge();
+    }
+    this.load(false);
   },
   onStallAll() { this.setData({ stallAll: !this.data.stallAll }); },
 

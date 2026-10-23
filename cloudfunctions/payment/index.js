@@ -27,12 +27,14 @@ exports.main = async (event) => {
   try {
     await ensureCol('records');
     // 收款方操作：身份只解析一次；家人共享（只读）不能做任何收款方操作
-    const OWNER_ACTIONS = ['cashEntry', 'confirm', 'confirmBatch', 'reject', 'dismissStall', 'void'];
+    const OWNER_ACTIONS = ['cashEntry', 'confirm', 'confirmBatch', 'reject', 'unreject', 'dismissStall', 'void', 'amend'];
     const ctx = OWNER_ACTIONS.includes(event.action) ? await resolveCtx(db, OPENID) : null;
     if (ctx && readonly(ctx)) return err('家人共享为只读，不能修改');
-    // 记账人按权限：礼台记账 / 确认收礼 / 作废
-    const NEED = { cashEntry: 'desk', confirm: 'confirm', confirmBatch: 'confirm', reject: 'confirm', dismissStall: 'confirm', void: 'void' };
-    if (ctx && !can(ctx, NEED[event.action])) return err('你没有「' + { desk: '礼台记账', confirm: '确认收礼', void: '作废' }[NEED[event.action]] + '」权限');
+    // 记账人按权限：礼台记账 / 确认收礼 / 作废；amend（修改已入簿礼金）确认收礼或作废任一即可
+    const NEED = { cashEntry: 'desk', confirm: 'confirm', confirmBatch: 'confirm', reject: 'confirm', unreject: 'confirm', dismissStall: 'confirm', void: 'void', amend: ['confirm', 'void'] };
+    if (ctx && ![].concat(NEED[event.action]).some(p => can(ctx, p))) {
+      return err('你没有「' + (event.action === 'amend' ? '修改礼金' : { desk: '礼台记账', confirm: '确认收礼', void: '作废' }[NEED[event.action]]) + '」权限');
+    }
     switch (event.action) {
       // 付款方
       case 'create': return await create(OPENID, event);
@@ -49,6 +51,10 @@ exports.main = async (event) => {
       case 'confirm': return await groupUpdate(ctx, event.rid, ['transferred', 'pending', 'cancelled'], 'paid', event.amount, event.amounts);
       case 'confirmBatch': return await confirmBatch(ctx, event.rids);
       case 'reject': return await groupUpdate(ctx, event.rid, ['transferred', 'pending'], 'rejected');
+      // 撤销「未收到」：24 小时内回到标记前的状态
+      case 'unreject': return await unreject(ctx, String(event.rid || ''));
+      // 修改已入簿礼金（金额 / 姓名 / 关系 / 备注）
+      case 'amend': return await amend(ctx, event);
       // 「宾客未点完成」里已被自动取消的：主家核对确实没收到，从这一栏移除（整批）
       case 'dismissStall': return await dismissStall(ctx, String(event.rid || ''));
       case 'void': return await ownerUpdate(ctx, event.rid, ['paid'], 'void');
@@ -691,6 +697,11 @@ async function ownerUpdate(ctx, rid, fromList, to, actualAmount, pre) {
       data.declaredAmount = cur.amount;
     }
   }
+  // 标记「未收到」：记下时间与标记前的状态，24 小时内可撤销（见 unreject）；限定为读到的当前状态，保证记下的状态准确
+  if (to === 'rejected') {
+    data.rejectedAt = new Date();
+    if (r0 && fromList.includes(r0.status)) { data.rejectedFrom = r0.status; fromList = [r0.status]; }
+  }
   // 已取消的只有「自动取消」的可以操作（宾客自己取消的不行）
   const statusCond = fromList.includes('cancelled')
     ? _.or([{ status: _.in(fromList.filter(s => s !== 'cancelled')) }, { status: 'cancelled', autoCancelled: true }])
@@ -708,6 +719,104 @@ async function ownerUpdate(ctx, rid, fromList, to, actualAmount, pre) {
     await incBookStat(rec.bookId, sign, sign * Math.round(rec.amount * 100), to === 'paid' ? rec.paidAt : null);
   }
   return ok({ rid, status: to, record: shown(rec) });
+}
+
+/** 「未收到」可撤销的期限（毫秒）：从标记时间（rejectedAt）算起 */
+const UNREJECT_MS = 24 * 3600 * 1000;
+
+/**
+ * 撤销「未收到」：24 小时内把 rejected 恢复为标记前的状态（rejectedFrom，缺省 transferred）
+ * 批次整批撤销（与标记时整批一致）；只恢复标记时间在期限内的，没有 rejectedAt 的旧记录不可撤销
+ * 与确认 / 标记同口径：只能在当前礼簿内进行；rejected 不计入礼簿合计，无需调整合计
+ */
+async function unreject(ctx, rid) {
+  if (!validId(rid)) return err('记录不存在');
+  const rec = await getRecord(rid);
+  if (!rec || rec.ownerOpenid !== ctx.ownerOpenid || !canBook(ctx, rec.bookId)) return err('记录不存在');
+  if (notCurrentBook(ctx, rec)) return err(switchMsg(ctx));
+  const cut = new Date(Date.now() - UNREJECT_MS);
+  const all = rec.batchId ? await batchRecords(rec.batchId, { ownerOpenid: ctx.ownerOpenid }) : [rec];
+  const todo = all.filter(r => r.status === 'rejected' && r.rejectedAt && new Date(r.rejectedAt) > cut);
+  if (!todo.length) {
+    return err(all.some(r => r.status === 'rejected') ? '已超过 24 小时，不能撤销' : '当前状态不可操作，请刷新');
+  }
+  let n = 0;
+  await Promise.all(todo.map(async r => {
+    const back = r.rejectedFrom === 'pending' ? 'pending' : 'transferred';
+    // 带状态与时间条件的原子更新：并发撤销或期限刚过时不会误改
+    const res = await records.where({ _id: r._id, ownerOpenid: ctx.ownerOpenid, status: 'rejected', rejectedAt: _.gt(cut) })
+      .update({ data: { status: back, rejectedAt: _.remove(), rejectedFrom: _.remove() } });
+    n += res.stats.updated;
+  }));
+  if (!n) return err('当前状态不可操作，请刷新');
+  return ok({ rid, restored: n });
+}
+
+const AMEND_KEYS = ['amount', 'payerName', 'relation', 'remark'];
+const AMEND_LOG_MAX = 20;
+const normName = s => String(s || '').replace(/[\s　]/g, '');
+
+/**
+ * 修改已入簿（paid）礼金：金额、姓名、关系、备注（录错了不必作废重录）
+ * - 权限：确认收礼或作废任一；记账人限负责的场次；已归档礼簿不可改；家人共享只读（入口已拦）
+ * - 乐观锁：按读到的版本（amendN）条件写入，并发修改只有一个成功；金额变化用差额增减礼簿合计（失败则置待补算由自愈接手）
+ * - amendLog 记每次修改（最多 AMEND_LOG_MAX 条，含操作人显示名、改前改后）；已打印的小票不自动重打（printed 不动，可手动补打）
+ * - 往来人：扫码宾客记录若没有固定的 personKey，改姓名前先固定为原来的 o:openid:原姓名，改名后仍是同一个人，只换显示名
+ */
+async function amend(ctx, event) {
+  const rid = String(event.rid || '');
+  if (!validId(rid)) return err('记录不存在');
+  const rec = await getRecord(rid);
+  if (!rec || rec.ownerOpenid !== ctx.ownerOpenid) return err('记录不存在');
+  if (!canBook(ctx, rec.bookId)) return err('该礼金不在你负责的场次');
+  if (rec.status !== 'paid') return err('只能修改已入簿的礼金');
+
+  const next = {};
+  if (event.amount !== undefined && event.amount !== null && event.amount !== '') {
+    const amt = Math.round(Number(event.amount) * 100) / 100;
+    if (!Number.isFinite(amt) || amt <= 0) return err('请填写正确的金额');
+    if (amt > MAX_AMOUNT) return err(MAX_MSG);
+    next.amount = amt;
+  }
+  if (event.payerName !== undefined) {
+    const name = cleanText(event.payerName, 20);
+    if (!name) return err('请填写随礼人姓名');
+    next.payerName = name;
+  }
+  if (event.relation !== undefined) next.relation = RELATIONS.includes(event.relation) ? event.relation : '';
+  if (event.remark !== undefined) next.remark = cleanText(event.remark, 50);
+
+  const changes = {};
+  AMEND_KEYS.forEach(k => {
+    if (next[k] === undefined) return;
+    const before = k === 'amount' ? rec.amount : (rec[k] || '');
+    const same = k === 'amount' ? Math.round(before * 100) === Math.round(next[k] * 100) : before === next[k];
+    if (!same) changes[k] = [before, next[k]];
+  });
+  if (!Object.keys(changes).length) return ok({ rid, changed: false, record: shown(rec) });
+
+  if (rec.bookId) {
+    let book = null;
+    try { book = (await db.collection('books').doc(rec.bookId).get()).data; } catch (e) { /* 礼簿已删除：只改记录 */ }
+    if (book && book.archived) return err('该礼簿已归档，不能修改');
+  }
+
+  const ver = Number(rec.amendN) || 0;
+  const verCond = ver === 0 ? _.or([{ amendN: 0 }, { amendN: _.exists(false) }]) : { amendN: ver };
+  const log = (Array.isArray(rec.amendLog) ? rec.amendLog : []).concat([{ at: new Date(), by: handlerName(ctx), changes }]).slice(-AMEND_LOG_MAX);
+  const data = { amendN: ver + 1, amendedAt: new Date(), amendLog: log };
+  Object.keys(changes).forEach(k => { data[k] = next[k]; });
+  if (changes.payerName && rec.payerOpenid && !rec.personKey) {
+    data.personKey = `o:${rec.payerOpenid}:${normName(rec.payerName)}`;
+  }
+  const res = await records.where(_.and([{ _id: rid, ownerOpenid: ctx.ownerOpenid, status: 'paid' }, verCond])).update({ data });
+  if (res.stats.updated !== 1) return err('这笔礼金刚被修改或状态已变，请刷新后重试');
+  // 金额变化：礼簿合计加减差额（与入簿 / 作废同一个累加函数）
+  if (changes.amount && rec.bookId) {
+    await incBookStat(rec.bookId, 0, Math.round(next.amount * 100) - Math.round(rec.amount * 100), rec.paidAt);
+  }
+  const fresh = await getRecord(rid);
+  return ok({ rid, changed: true, record: shown(fresh || { ...rec, ...next, amendLog: log }) });
 }
 
 async function getRecord(rid) {

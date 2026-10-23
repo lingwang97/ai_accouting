@@ -40,6 +40,21 @@
     <view class="link center stall-more" wx:if="{{stalled.length > 3}}" bindtap="onStallAll">{{stallAll ? '收起' : '查看全部 ' + stalled.length + ' 笔'}}</view>
   </view>
 
+  <!-- 最近 24 小时内标记「未收到」的：点错了可撤销 -->
+  <view class="card stall" wx:if="{{canConfirm && rejected.length}}">
+    <view class="stall-title">最近标记「未收到」（{{rejected.length}}）</view>
+    <view class="muted small">24 小时内可撤销，撤销后回到标记前的状态</view>
+    <view class="stall-row" wx:for="{{rejected}}" wx:key="_id">
+      <view class="stall-info">
+        <view class="stall-name"><text class="payer">{{item.nameStr}}</text><text class="money">￥{{item.amountStr}}</text></view>
+        <view class="muted small">{{item.timeStr}} 标记未收到</view>
+        <view class="ops stall-ops">
+          <button class="btn btn-sm btn-outline op-btn" data-id="{{item._id}}" catchtap="onUnreject">撤销未收到</button>
+        </view>
+      </view>
+    </view>
+  </view>
+
   <!-- 首次加载完成前显示加载中，避免空状态闪现 -->
   <block wx:if="{{!loaded}}"><loading show="{{true}}" rows="3" /></block>
   <view class="empty" wx:elif="{{total === 0}}">

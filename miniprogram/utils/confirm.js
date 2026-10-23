@@ -160,7 +160,7 @@ function rejectTransfer(record) {
   return new Promise(resolve => {
     wx.showModal({
       title: '未收到礼金',
-      content: `确定未收到 ${record.payerName} 的 ￥${amount} ？${isGroup(record) ? '整批都将标记为未收到，' : ''}宾客将看到"主家未确认收到"`,
+      content: `确定未收到 ${record.payerName} 的 ￥${amount} ？${isGroup(record) ? '整批都将标记为未收到，' : ''}宾客将看到"主家未确认收到"。点错了 24 小时内可在待确认页撤销`,
       confirmColor: '#FA5151',
       success: async res => {
         if (!res.confirm) return resolve(false);

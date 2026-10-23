@@ -50,3 +50,7 @@ v3.41.0 提交 f6f417a/c98ab79/1b9e322/3b907fc。第 18 条 _openid 过滤被跳
 全仓排查链式 where/aggregate match 漏 ownerOpenid：无同类问题。共享模块 17 份副本与 tools/cloud-shared 全一致。无严重/高。
 报告条目：中 transfer 未迁移 book_codes(account:622)；中 purge/purgeBook 漏默认礼簿短码图片(purge.js:75,system:258)；中 statCount/statFen 无自愈(payment:392,692)；中 主家邀请卡直发 5 人直接生效(account:339,531，待产品决定)；低 expirePending 失败拖垮读(records:29)、clerk(info)可见 payCodeFileID 含主家 openid、warmer pushOne 更新失败重复推送、orgSummary/themes 聚合 limit 截断、init 无鉴权、printtpl 遗留。
 待确认：集合/存储权限（控制台）、export 内存配置、aggregate limit(10000) 是否被平台截断。
+
+## 2026-10-23 v3.44.0 已实施（HEAD 4f03a8e，未上传）
+提交 572e3fb..4f03a8e（7 个）。用户确认四版计划：v3.44 数据稳定→v3.45 补功能→v3.46 性能→v3.47 工程，后三版另派。
+设计：记账人读 payCodeFileID 占位 '@current'（account.KEEP_CODE），save 时换回；合计自愈在 books.stats / records.reconcile 里 checkDrift；recalc 在 bookedit 页。
