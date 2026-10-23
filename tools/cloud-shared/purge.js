@@ -139,4 +139,4 @@ async function run(db, cloud, openid, opts = {}) {
   return { removed, files };
 }
 
-module.exports = { preview, run, isMissing };
+module.exports = { preview, run, isMissing, targets };

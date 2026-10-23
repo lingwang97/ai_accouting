@@ -1119,3 +1119,6 @@ async function getByAid(aid0) {
 
 const ok = data => ({ code: 0, msg: 'ok', data });
 const err = msg => ({ code: 1, msg, data: null });
+
+// 仅供本地测试使用，不影响云函数入口
+module.exports._test = { wider };
