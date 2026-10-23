@@ -145,6 +145,8 @@ module.exports = {
   recordPending: withRejected => call('records', withRejected ? { action: 'pending', withRejected: true } : { action: 'pending' }),
   dashboard: () => call('records', { action: 'dashboard' }),
   pendingStat: () => call('records', { action: 'pendingStat' }, { silent: true }),
+  // 待确认页轮询：带 withExtra 另返回 stall / rej 两个分组的条数
+  recordStat: d => call('records', { action: 'pendingStat', ...d }, { silent: true }),
   recordThemes: () => call('records', { action: 'themes' }),
   exportFile: d => call('export', d),
   tplGet: () => call('printtpl', { action: 'get' }),

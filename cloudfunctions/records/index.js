@@ -48,7 +48,7 @@ exports.main = async (event) => {
       case 'pending':
         return await pending(OWNER, ctx, event.withRejected === true);
       case 'pendingStat':
-        return await pendingStat(OWNER, ctx, OPENID);
+        return await pendingStat(OWNER, ctx, OPENID, event.withExtra === true);
       case 'themes':
         return await themes(OWNER, ctx);
       // 同名区分：礼台记账前查礼簿里同名的人；给某位宾客设区分备注
@@ -450,16 +450,24 @@ async function markPrinted(openid, rids, ctx) {
  * 宾客常常转完账直接回聊天，主家核对微信到账后可直接入簿
  */
 const STALL_MS = 3 * 60 * 1000;
+/** 「宾客未点完成」条件（pending 与 pendingStat 共用，口径必须一致） */
+function stallCondOf(openid, bk, now) {
+  return _.or([
+    { ownerOpenid: openid, status: 'pending', createdAt: _.lt(new Date(now - STALL_MS)), bookId: bk },
+    { ownerOpenid: openid, status: 'cancelled', autoCancelled: true, stallDismissed: _.neq(true), createdAt: _.gt(new Date(now - 24 * 3600 * 1000)), bookId: bk }
+  ]);
+}
+/** 「最近标记未收到」条件 */
+function rejectedCondOf(openid, cur, now) {
+  return { ownerOpenid: openid, status: 'rejected', bookId: cur, rejectedAt: _.gt(new Date(now - 24 * 3600 * 1000)) };
+}
 async function pending(openid, ctx, withRejected) {
   // 只取当前礼簿（workBook）的待确认；确认接口同样限定当前礼簿，避免跨礼簿确认
   const cur = workBook(ctx);
   const bk = cur || '__none__';
   const cond = { ownerOpenid: openid, status: 'transferred', bookId: bk };
   const now = Date.now();
-  const stallCond = _.or([
-    { ownerOpenid: openid, status: 'pending', createdAt: _.lt(new Date(now - STALL_MS)), bookId: bk },
-    { ownerOpenid: openid, status: 'cancelled', autoCancelled: true, stallDismissed: _.neq(true), createdAt: _.gt(new Date(now - 24 * 3600 * 1000)), bookId: bk }
-  ]);
+  const stallCond = stallCondOf(openid, bk, now);
   const [res, cnt, stall, other, bookRes, rejRes] = await Promise.all([
     records.where(cond).orderBy('createdAt', 'desc').limit(100).get(),
     records.where(cond).count(),
@@ -468,7 +476,7 @@ async function pending(openid, ctx, withRejected) {
     cur ? db.collection('books').doc(cur).get().catch(() => null) : null,
     // 最近 24 小时内标记「未收到」的（可撤销）：只有待确认页请求时才查，需要确认收礼权限
     withRejected && cur && can(ctx, 'confirm')
-      ? records.where({ ownerOpenid: openid, status: 'rejected', bookId: cur, rejectedAt: _.gt(new Date(now - 24 * 3600 * 1000)) }).orderBy('rejectedAt', 'desc').limit(50).get().catch(() => null)
+      ? records.where(rejectedCondOf(openid, cur, now)).orderBy('rejectedAt', 'desc').limit(50).get().catch(() => null)
       : null
   ]);
   const b = bookRes && bookRes.data;
@@ -489,19 +497,25 @@ function otherPendCond(ctx, cur) {
 }
 
 /** 待确认份数与合计（工作台轮询用，只做计数 + 聚合） */
-async function pendingStat(openid, ctx, selfOpenid) {
+// withExtra（待确认页轮询）：另返回 stall / rej 两个分组的条数，页面据此判断是否需要重拉完整列表（旧前端不传，行为不变）
+async function pendingStat(openid, ctx, selfOpenid, withExtra) {
   if (!ctx.account) return ok({ count: 0, sum: 0, remindDue: await remindDue(selfOpenid) });
   const cur = workBook(ctx);
   const cond = { ownerOpenid: openid, status: 'transferred', bookId: cur || '__none__' };
-  const [cnt, agg, other, due] = await Promise.all([
+  const now = Date.now();
+  const [cnt, agg, other, due, stall, rej] = await Promise.all([
     records.where(cond).count(),
     records.aggregate().match(cond)
       .group({ _id: null, fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) })
       .end(),
     records.where(otherPendCond(ctx, cur)).count(),
-    remindDue(selfOpenid)
+    remindDue(selfOpenid),
+    withExtra && cur ? records.where(stallCondOf(openid, cur, now)).count().catch(() => null) : null,
+    withExtra && cur && can(ctx, 'confirm') ? records.where(rejectedCondOf(openid, cur, now)).count().catch(() => null) : null
   ]);
-  return ok({ count: cnt.total, sum: Math.round(((agg.list && agg.list[0]) || { fen: 0 }).fen) / 100, other: other.total, remindDue: due });
+  const out = { count: cnt.total, sum: Math.round(((agg.list && agg.list[0]) || { fen: 0 }).fen) / 100, other: other.total, remindDue: due };
+  if (withExtra) { out.stall = stall ? stall.total : -1; out.rej = rej ? rej.total : -1; } // -1：未查询 / 无权限，页面不据此刷新
+  return ok(out);
 }
 
 /**

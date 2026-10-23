@@ -8,7 +8,7 @@ const perm = require('../../utils/perm.js');
 const { countOf, groupRecords } = require('../../utils/group.js');
 const poller = require('../../utils/poller.js');
 
-const POLL_MS = 10000; // 轮询只查计数（pendingStat），数量变化才拉完整列表；每 3 次也拉一次（刷新宾客未点完成的列表）
+const POLL_MS = 10000; // 轮询只查计数（pendingStat，含「宾客未点完成」「最近未收到」两组的条数），任一变化才拉完整列表；另每 30 次兜底拉一次
 const MODE_KEY = 'pending_mode'; // 记住上次使用的处理方式
 
 Page({
@@ -77,9 +77,12 @@ Page({
     // 正在逐人改金额或查看批次明细：不刷新，避免列表在手下变动
     if (this.data.busy || this.data.editor || this.data.sheet) return false;
     this._tick = (this._tick || 0) + 1;
-    if (this._tick % 3 === 0) return this.load(true);
-    const s = await req.pendingStat();
+    if (this._tick % 30 === 0) return this.load(true); // 兜底：条数没变但内容换了（如一组进、一组出）
+    const s = await req.recordStat({ withExtra: true });
     if (Math.min(s.count, 100) !== countOf(this._list) || (s.other || 0) !== this.data.otherCount) return this.load(true);
+    // 两个分组靠条数变化触发刷新（宾客转账后超过 3 分钟未点完成会自己进入「未点完成」；未收到满 24 小时会自己移出）
+    if (s.stall >= 0 && Math.min(s.stall, 100) !== (this._stallN || 0)) return this.load(true);
+    if (s.rej >= 0 && Math.min(s.rej, 50) !== (this._rejN || 0)) return this.load(true);
     return false;
   },
 
@@ -94,6 +97,8 @@ Page({
       const sig = JSON.stringify([list.map(r => [r._id, r.status, r.amount, r.transferredAt]), (stalled || []).map(r => [r._id, r.status]), (rejected || []).map(r => r._id), bookName, otherCount, hiddenCount]);
       if (silent && sig === this._sig) return false;
       this._sig = sig;
+      this._stallN = (stalled || []).length; // 轮询用：两个分组的条数
+      this._rejN = (rejected || []).length;
       // 宾客没点「我已完成转账」的（含 24 小时内被自动取消的）：主家核对微信到账后可直接入簿
       this.setData({
         stalled: groupRecords(stalled || []).map(g => ({ ...g, auto: g.status === 'cancelled', timeStr: fmt.time(g.createdAt) })),
@@ -116,6 +121,13 @@ Page({
       this.setData({ loaded: true });
       return false;
     }
+  },
+
+  /** 下拉刷新：强制重拉（含两个分组） */
+  async onPullDownRefresh() {
+    this._sig = ''; // 即使内容相同也重绘
+    await this.load(false);
+    wx.stopPullDownRefresh();
   },
 
   /** 从未成功收到提醒时，提示开启（确认礼金时会自动续订） */
