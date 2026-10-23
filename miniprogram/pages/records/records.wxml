@@ -42,7 +42,7 @@
 
   <view class="card record {{item.status}}" wx:for="{{list}}" wx:key="_id">
     <view class="r-top">
-      <text class="payer">{{item.nameStr}}</text>
+      <text class="payer">{{item.nameStr}}<text class="dup-n" wx:if="{{item.dupN}}"> · 同名 {{item.dupN}} 条</text></text>
       <text class="r-right"><text class="cash-tag" wx:if="{{item.payMethod === 'cash'}}">现金</text><text class="xfer-tag" wx:elif="{{item.status === 'transferred' || item.status === 'paid'}}">转账</text><text class="money r-amount">￥{{item.amountStr}}</text></text>
     </view>
     <view class="muted">{{item.timeStr}}<text wx:if="{{item.relation}}"> · {{item.relation}}</text><text wx:if="{{item.batchId}}"> · 批次录入</text><text wx:if="{{item.remark}}"> · {{item.remark}}</text><text wx:if="{{item.declaredStr}}" class="declared"> · 宾客登记 ￥{{item.declaredStr}}，按实收入簿</text><text wx:if="{{item.amendN}}" class="amended" data-idx="{{index}}" catchtap="onAmendLog"> · 已修改 ›</text></view>
@@ -80,7 +80,8 @@
     </view>
   </view>
 
-  <view class="muted center pad" wx:if="{{!loading && list.length === 0}}">{{keyword || relIdx > 0 || stIdx > 0 ? '没有符合条件的记录' : '暂无礼金记录'}}</view>
+  <view class="muted center pad" wx:if="{{sortIdx === 5 && dupTruncated}}">重名较多，仅显示部分，可配合搜索缩小范围</view>
+  <view class="muted center pad" wx:if="{{!loading && list.length === 0}}">{{sortIdx === 5 ? '没有重名的记录' : (keyword || relIdx > 0 || stIdx > 0 ? '没有符合条件的记录' : '暂无礼金记录')}}</view>
   <view class="muted center pad" wx:if="{{loading}}">加载中…</view>
   <view class="muted center small long-tip" wx:if="{{!loading && list.length >= 200}}">已加载 {{list.length}} 条，可用搜索或筛选缩小范围</view>
   <view class="to-top" wx:if="{{showTop}}" bindtap="onTop">↑ 顶部</view>

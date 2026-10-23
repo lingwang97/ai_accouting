@@ -358,6 +358,7 @@ async function checkStatDrift(owner, book, count, fen) {
 }
 
 /** 分页 + 全量汇总；按日/关键词筛选 */
+const DUP_MAX = 100;
 async function list(openid, event, ctx) {
   const page = Math.max(1, Number(event.page) || 1);
   const pageSize = Math.min(50, Math.max(1, Number(event.pageSize) || 20));
@@ -385,16 +386,36 @@ async function list(openid, event, ctx) {
   const pendingCond = withKw({ ...base, status: REC.TRANSFERRED });
 
   // 排序白名单，非法值回落到时间倒序；都带 _id 作第二键，同时间 / 同金额翻页不重不漏
-  const sortKey = ['time_desc', 'time_asc', 'amount_desc'].includes(event.sort) ? event.sort : 'time_desc';
-  let listQ = records.where(listCond);
+  const sortKey = ['time_desc', 'time_asc', 'amount_desc', 'amount_asc', 'name', 'dup'].includes(event.sort) ? event.sort : 'time_desc';
+
+  // 只看重名：同样的条件（礼簿 / 状态 / 关系 / 搜索）下按姓名分组计数，取出现 2 次及以上的名字再查列表
+  // 名字上限 DUP_MAX 个（_.in 不宜过长）；超出只取前面的并返回 dupTruncated
+  let dupCount = null, dupTruncated = false, dupNames = [];
+  if (sortKey === 'dup') {
+    const g = await records.aggregate().match(listCond)
+      .group({ _id: '$payerName', n: _.aggregate.sum(1) })
+      .match({ n: _.gte(2) })
+      .limit(DUP_MAX + 1)
+      .end();
+    dupNames = (g.list || []).filter(x => x._id).slice(0, DUP_MAX);
+    dupTruncated = (g.list || []).length > DUP_MAX;
+    dupCount = {};
+    dupNames.forEach(x => { dupCount[x._id] = x.n; });
+  }
+  const pageCond = sortKey !== 'dup' ? listCond
+    : _.and([listCond, dupNames.length ? { payerName: _.in(dupNames.map(x => x._id)) } : { _id: '__none__' }]);
+  let listQ = records.where(pageCond);
   if (sortKey === 'amount_desc') listQ = listQ.orderBy('amount', 'desc').orderBy('_id', 'desc');
+  else if (sortKey === 'amount_asc') listQ = listQ.orderBy('amount', 'asc').orderBy('_id', 'asc');
+  // 按姓名 / 重名：按字符编码排序（不是拼音），同名的挨在一起，同名内按时间
+  else if (sortKey === 'name' || sortKey === 'dup') listQ = listQ.orderBy('payerName', 'asc').orderBy('createdAt', 'asc').orderBy('_id', 'asc');
   else if (sortKey === 'time_asc') listQ = listQ.orderBy('createdAt', 'asc').orderBy('_id', 'asc');
   else listQ = listQ.orderBy('createdAt', 'desc').orderBy('_id', 'desc');
 
   const [totalRes, pendingRes, listTotalRes, sumRes, listRes] = await Promise.all([
     records.where(paidCond).count(),
     records.where(pendingCond).count(),
-    records.where(listCond).count(),
+    records.where(pageCond).count(),
     // 汇总用聚合避免拉全量
     records.aggregate().match(paidCond)
       .group({ _id: null, totalFen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) })
@@ -408,7 +429,8 @@ async function list(openid, event, ctx) {
 
   const totalFen = (sumRes.list && sumRes.list[0] && sumRes.list[0].totalFen) || 0;
   return ok({
-    list: listRes.data.map(strip),
+    list: listRes.data.map(r => { const o = strip(r); if (dupCount) o.dupN = dupCount[r.payerName] || 0; return o; }),
+    dupTruncated,
     total: totalRes.total,          // 已确认笔数
     pendingCount: pendingRes.total, // 待确认笔数
     workBookId: workBook(ctx) || '', // 当前礼簿：只有这一本的待确认可在列表里直接确认

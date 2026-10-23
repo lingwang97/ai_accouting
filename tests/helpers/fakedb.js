@@ -66,7 +66,7 @@ class Agg {
   sort(s) { this.stages.push(['sort', s]); return this; }
   limit(n) { this.stages.push(['limit', n]); return this; }
   project(p) { this.stages.push(['project', p]); return this; }
-  async end() { this.db.log.push({ op: 'aggregate', col: this.name, stages: this.stages }); return { list: [] }; }
+  async end() { this.db.log.push({ op: 'aggregate', col: this.name, stages: this.stages }); return { list: this.db.aggList ? this.db.aggList(this) : [] }; }
 }
 
 class FakeDb {

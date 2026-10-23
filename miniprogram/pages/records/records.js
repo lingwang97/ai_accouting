@@ -13,7 +13,7 @@ const poller = require('../../utils/poller.js');
 const fresh = require('../../utils/fresh.js');
 
 const PAGE_SIZE = 20;
-const SORT_KEYS = ['time_desc', 'time_asc', 'amount_desc'];
+const SORT_KEYS = ['time_desc', 'time_asc', 'amount_desc', 'amount_asc', 'name', 'dup'];
 const ST_KEYS = ['all', 'confirm', 'paid'];
 const POLL_MS = 10000; // 页面停留时自动刷新待确认转账
 
@@ -35,7 +35,7 @@ Page({
     bookIdx: 0,
     relations: ['全部关系', ...scenes.RELATIONS],
     relIdx: 0,
-    sorts: ['最新', '最早', '金额高到低'],
+    sorts: ['最新', '最早', '金额高→低', '金额低→高', '按姓名', '只看重名'],
     sortIdx: 0,
     statuses: ['全部', '待确认', '已入簿'],
     stIdx: 0,
@@ -170,6 +170,7 @@ Page({
       total: res.total,
       pendingCount: res.pendingCount,
       curBook: res.workBookId === undefined ? null : res.workBookId,
+      dupTruncated: !!res.dupTruncated,
       page: 2,
       hasMore: res.list.length < res.listTotal
     });

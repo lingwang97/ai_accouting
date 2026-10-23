@@ -61,6 +61,38 @@ test('分页参数：pageSize 限制在 1~50，page 至少 1', async () => {
   assert.strictEqual(listQ.skip, 0); assert.strictEqual(listQ.limit, 20); // 0 视为未传，取默认 20
 });
 
+test('排序白名单补充：金额低到高、按姓名', async () => {
+  assert.deepStrictEqual((await runList(OWNER, { sort: 'amount_asc' })).listQ.orders, [['amount', 'asc'], ['_id', 'asc']]);
+  assert.deepStrictEqual((await runList(OWNER, { sort: 'name' })).listQ.orders, [['payerName', 'asc'], ['createdAt', 'asc'], ['_id', 'asc']]);
+});
+
+test('只看重名：按同条件分组（match 带 ownerOpenid / bookId / 状态 / 关系 / 搜索），取 n>=2 的名字再 _.in 查询', async () => {
+  seed();
+  db.aggList = a => (a.stages.some(s => s[0] === 'group' && s[1]._id === '$payerName') ? [{ _id: '张三', n: 3 }, { _id: '李四', n: 2 }] : []);
+  state.openid = OWNER;
+  const fn = loadFunction('records');
+  db.log.length = 0;
+  const r = await fn.main({ action: 'list', sort: 'dup', bookId: 'b1', status: 'paid', relation: '亲戚', keyword: '张' });
+  db.aggList = null;
+  assert.strictEqual(r.code, 0, r.msg);
+  const agg = db.log.filter(l => l.op === 'aggregate').find(l => l.stages.some(s => s[0] === 'group' && s[1]._id === '$payerName'));
+  const m = JSON.stringify(agg.stages[0][1], (k, v) => (v && v.__op === 'regexp' ? 'RE' : v));
+  assert.ok(m.includes('"ownerOpenid":"o-owner"') && m.includes('"bookId":"b1"') && m.includes('"relation":"亲戚"') && m.includes('"status"') && m.includes('RE'));
+  const gets = db.log.filter(l => l.op === 'get' && l.col === 'records');
+  const q = gets[gets.length - 1];
+  assert.strictEqual(q.cond.__op, 'and');
+  assert.deepStrictEqual(q.cond.v[1].payerName.v, ['张三', '李四']);
+  assert.deepStrictEqual(q.orders, [['payerName', 'asc'], ['createdAt', 'asc'], ['_id', 'asc']]);
+  const cnt = db.log.filter(l => l.op === 'count' && l.col === 'records').map(l => JSON.stringify(l.cond));
+  assert.ok(cnt.some(c => c.includes('张三')), 'listTotal 与列表同条件');
+});
+
+test('只看重名：没有重名时查询落到不存在的 _id，列表为空', async () => {
+  const { listQ, r } = await runList(OWNER, { sort: 'dup' });
+  assert.strictEqual(listQ.cond.v[1]._id, '__none__');
+  assert.deepStrictEqual(r.data.list, []);
+});
+
 test('合计 / 笔数只统计 paid，待确认数只统计 transferred，与列表状态筛选无关', async () => {
   const { log } = await runList(OWNER, { status: 'confirm' });
   const counts = log.filter(l => l.op === 'count' && l.col === 'records').map(l => statusOf(l.cond));

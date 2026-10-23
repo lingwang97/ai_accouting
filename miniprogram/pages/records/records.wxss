@@ -9,6 +9,7 @@
   border-radius: 999rpx; padding: 16rpx 28rpx;
 }
 .search-btn { border-radius: 999rpx; }
+.dup-n { font-size: 22rpx; color: #FF9F1C; font-weight: normal; }
 .filter-row { display: flex; align-items: center; margin-top: 16rpx; }
 .filter-row .st-seg { flex: 1; min-width: 0; background: var(--fill); }
 .filter-row .st-seg .seg-item { padding: 8rpx 0; }
