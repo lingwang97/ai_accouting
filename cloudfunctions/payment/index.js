@@ -152,9 +152,18 @@ async function create(openid, event) {
     createdAt: now
   };
   // 幂等：宾客端带 reqId 时，重复提交（弱网重试、连点）只记一条；键含主家与付款人。旧前端不传 reqId 时保持原行为
-  const { ids, batchId } = await addItems(base, items, reqKeyOf(account.ownerOpenid + ':' + openid, event.reqId));
+  const { ids, batchId, existed } = await addItems(base, items, reqKeyOf(account.ownerOpenid + ':' + openid, event.reqId));
+  // 重复提交（弱网重试）：这些记录上一次已写入，状态可能已推进（已转账 / 已入簿 / 被拒），按库里真实状态返回，不能固定成 pending
+  let realStatus = base.status;
+  if (existed.every(Boolean)) {
+    try {
+      const sts = [];
+      for (const id of ids) sts.push((await records.doc(id).get()).data.status);
+      realStatus = sts.every(s => s === 'paid') ? 'paid' : sts[0];
+    } catch (e) { /* 读取失败按原状态返回 */ }
+  }
   const record = {
-    _id: ids[0], aid: accountId, batchId, payMethod, status: base.status, payDay, createdAt: now,
+    _id: ids[0], aid: accountId, batchId, payMethod, status: realStatus, payDay, createdAt: now,
     payerName: batchName(items), amount: totalFen / 100,
     transferAmount: (payMethod === 'cash' ? 0 : (payMethod === 'mixed' ? split.wechat : totalFen)) / 100, // 需扫码转账的金额
     cashAmount: (payMethod === 'cash' ? totalFen : (payMethod === 'mixed' ? split.cash : 0)) / 100,       // 交给礼台的现金

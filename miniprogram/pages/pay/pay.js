@@ -198,6 +198,17 @@ Page({
         this.startPoll();
         return;
       }
+      // 重复提交（弱网重试）时记录状态可能已推进：已转账等待确认 / 已入簿 / 被拒，直接进入对应步骤
+      if (record.status === 'transferred') {
+        this.setData({ record: viewRecord(record), step: 'waiting' });
+        this.startPoll();
+        return;
+      }
+      if (record.status === 'paid' || record.status === 'rejected') {
+        this.setData({ record: viewRecord(record) });
+        this.startPoll();
+        return;
+      }
       // 优先用云函数生成的临时链接（宾客无权直接读取主家上传的图片）
       const payCodeUrl = record.payCodeUrl || (record.payCodeFileID ? await this.getTempUrl(record.payCodeFileID) : '');
       this.setData({
@@ -247,7 +258,10 @@ Page({
         if (!res.confirm) return;
         try {
           await req.payCancel(this.data.record._id);
-        } catch (e) { /* 忽略 */ }
+        } catch (e) {
+          // 取消失败（已转账、已被确认等）：不重置表单（request.js 已提示原因），避免宾客以为取消了又重复提交
+          return;
+        }
         this.clearOpen();
         this.setData({ step: 'form', record: null, payCodeUrl: '' });
       }
