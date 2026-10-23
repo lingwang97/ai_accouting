@@ -389,6 +389,20 @@ Page({
     }
   },
 
+  /** 「更多」：区分备注 / 作废（按权限显示，最多 2 项） */
+  onMore(e) {
+    const idx = e.currentTarget.dataset.idx;
+    const pm = this.data.pm;
+    const items = [];
+    if (pm.tag) items.push(['区分备注', () => this.onNameTag({ currentTarget: { dataset: { idx } } })]);
+    if (pm.void) items.push(['作废', () => this.onVoid({ currentTarget: { dataset: { idx } } })]);
+    if (!items.length) return;
+    wx.showActionSheet({
+      itemList: items.map(i => i[0]),
+      success: r => items[r.tapIndex] && items[r.tapIndex][1]()
+    });
+  },
+
   /** 设区分备注：区分同名宾客（扫码宾客改其全部记录，礼台登记的只改这一条） */
   onNameTag(e) {
     const record = this.data.list[e.currentTarget.dataset.idx];

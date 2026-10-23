@@ -50,7 +50,7 @@
 .meta-row { display: flex; align-items: center; margin-top: 8rpx; }
 .meta { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 /* 列表里的操作按钮：大小一致；写成与原生 button 默认样式同样的选择器，才能覆盖其 184px 宽度 */
-button.op-btn:not([size=mini]) { width: 120rpx; height: 56rpx; padding: 0; margin-left: 16rpx; font-size: 26rpx; }
+button.op-btn:not([size=mini]) { min-width: 120rpx; width: auto; height: 64rpx; line-height: 64rpx; padding: 0 16rpx; margin-left: 16rpx; font-size: 26rpx; white-space: nowrap; }
 button.op-btn.wide:not([size=mini]) { width: auto; padding: 0 20rpx; margin-left: 0; margin-right: auto; }
 .batch-ops { margin: 12rpx 0 0; justify-content: flex-end; }
 .others { margin-top: 6rpx; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

@@ -27,8 +27,11 @@
   border-top: 2rpx solid #f5f5f5;
 }
 .r-actions .flex1, .r-actions .link, .r-actions .btn, .r-actions .muted, .r-actions .badge:not(:first-child) { margin-left: 24rpx; }
+.r-actions .link { margin-left: 0; }
 /* 窄屏换行：保持右对齐，换行后行间留 12rpx；左侧状态徽章与 flex1 占位撑开（flex1 min-width 0 可收缩） */
-.r-actions .link, .r-actions .badge { margin-top: 6rpx; margin-bottom: 6rpx; white-space: nowrap; }
+.r-actions .badge { margin-top: 6rpx; margin-bottom: 6rpx; white-space: nowrap; }
+/* 操作链接：触控区高 72rpx、左右各 16rpx 内边距（间距由内边距提供，相邻链接不易误触） */
+.r-actions .link { margin-left: 0; padding: 0 16rpx; line-height: 72rpx; white-space: nowrap; }
 .r-actions .badge:first-child { margin-right: auto; }
 .r-actions .flex1 { min-width: 0; }
 .flex1 { flex: 1; }
