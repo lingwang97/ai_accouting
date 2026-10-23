@@ -116,7 +116,7 @@ module.exports = {
   rqUnmerge: from => call('renqing', { action: 'unmerge', from }),
   rqMoveEntry: d => call('renqing', { action: 'moveEntry', ...d }),
   // 礼簿里同名的宾客（礼台记账前选择是哪一位）、给宾客设区分备注
-  bookNameCheck: names => call('records', { action: 'nameCheck', names }, { silent: true }),
+  bookNameCheck: (names, bookId) => call('records', { action: 'nameCheck', names, bookId: bookId || '' }, { silent: true }),
   setNameTag: (rid, tag) => call('records', { action: 'setNameTag', rid, tag }),
   // 亲友办事提醒
   remindList: () => call('renqing', { action: 'remindList' }),

@@ -63,4 +63,34 @@ async function choose(name, people) {
   return tag ? { tag } : null;
 }
 
-module.exports = { NEW_ITEM, SHEET_MAX, cleanTag, nameStr, sheet, askTag, choose };
+/**
+ * 礼台记账同名判断（纯函数，可测）。people 为 nameCheck 返回的某个姓名下的人 [{ ref, tag, scanned, relation, count, inBook, lastDay }]
+ *  - none：没有同名的人，直接记
+ *  - ask：弹窗选。本场（inBook > 0）已有同名（可能重复登记或同名不同人），或以前的礼簿里有两位及以上
+ *    people 返回排好序的副本：本场的在前（标 inBook），其余按最近往来倒序
+ *  - auto：本场没有、以前的礼簿只有一位：不弹窗，按同一个人处理（personRef / tag 取这一位的）
+ * 旧云函数没有 inBook 字段时无法判断本场，一律按 ask（原行为）
+ */
+function decide(people) {
+  const list = (people || []).slice().sort((a, b) =>
+    ((b.inBook > 0) - (a.inBook > 0)) || String(b.lastDay || '').localeCompare(String(a.lastDay || '')));
+  if (!list.length) return { type: 'none', people: list };
+  const known = list.every(p => typeof p.inBook === 'number');
+  if (!known || list.some(p => p.inBook > 0) || list.length > 1) return { type: 'ask', people: list };
+  return { type: 'auto', people: list, person: list[0] };
+}
+
+/** 弹窗里一位的文字：张伟（李村） · 本场 · 亲戚 · 2笔；有 inBook 字段才区分本场 / 以前的礼簿 */
+function labelOf(name, p) {
+  const where = typeof p.inBook !== 'number' ? '' : (p.inBook > 0 ? '本场' : '以前的礼簿');
+  return [`${name}（${p.tag || (p.scanned ? '扫码' : '未区分')}）`, where, p.relation, `${p.count}笔`].filter(Boolean).join(' · ');
+}
+
+/** 自动归并后的提示（批次多人合成一条）：notes [{ name, person }] */
+function autoNotice(notes) {
+  if (!notes.length) return '';
+  const one = n => `${nameStr(n.name, n.person.tag)}（${[n.person.relation, n.person.count + '笔'].filter(Boolean).join(' · ')}）`;
+  return `已归到以前随过礼的 ${notes.map(one).join('、')}。如果其实是不同的人，可到「往来」页区分。`;
+}
+
+module.exports = { decide, labelOf, autoNotice, NEW_ITEM, SHEET_MAX, cleanTag, nameStr, sheet, askTag, choose };

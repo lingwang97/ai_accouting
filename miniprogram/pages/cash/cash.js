@@ -107,7 +107,8 @@ Page({
       // 先检查礼簿再选同名，避免选完同名才提示没选礼簿
       const b = this.data.books[this.data.bookIdx];
       if (this.data.books.length && !b) return wx.showToast({ title: '请先选择记入哪本礼簿', icon: 'none' });
-      if (!(await this.pickSameName(payload))) return;
+      const picked = await this.pickSameName(payload, b ? b._id : '');
+      if (!picked) return;
       if (this.data.books.length && b) payload.bookId = b._id;
       payload.payMethod = this.data.payMethod;
       // 幂等键：弱网下超时重试、重复点击都带同一个 reqId，服务端不会重复入簿；成功后才换新的
@@ -129,10 +130,16 @@ Page({
       this.setData({ ...emptyForm(), done, doneCount: this.data.doneCount + added.length, doneSum: fmt.money(this._doneFen / 100) });
       if (this.data.batchMode) this.selectComponent('#batch').reset();
       const addFen = added.reduce((s, r) => s + Math.round(r.amount * 100), 0);
-      wx.showToast({
-        title: added.length > 1 ? `${added.length} 人 ￥${fmt.money(addFen / 100)} 已入簿` : `${added[0].payerName} ￥${added[0].amountStr} 已入簿`,
-        icon: 'none'
-      });
+      const notice = samename.autoNotice(picked.notes);
+      if (notice) {
+        // 自动归到以前随过礼的人：说明一下，可到往来页区分（modal 按钮文字不超过 4 字）
+        wx.showModal({ title: added.length > 1 ? `${added.length} 人已入簿` : `${added[0].payerName} 已入簿`, content: notice, showCancel: false, confirmText: '知道了' });
+      } else {
+        wx.showToast({
+          title: added.length > 1 ? `${added.length} 人 ￥${fmt.money(addFen / 100)} 已入簿` : `${added[0].payerName} ￥${added[0].amountStr} 已入簿`,
+          icon: 'none'
+        });
+      }
       this.print(added);
     } catch (e) { /* toast 已提示 */ } finally {
       this.setData({ saving: false });
@@ -141,20 +148,28 @@ Page({
 
   /**
    * 同名区分：查询礼簿里已有的同名宾客，逐个选择「是哪一位」或「新的一位」并填区分备注
-   * 选中已有 → personRef（那一位的某条记录 id，服务端换成往来人）+ tag；新的一位 → tag。返回 false 表示用户取消；查询失败（网络）按无备注继续
+   * 选中已有 → personRef（那一位的某条记录 id，服务端换成往来人）+ tag；新的一位 → tag。返回 false 表示用户取消，否则 { notes }（自动归并的提示）；查询失败（网络）按无备注继续
    */
-  async pickSameName(payload) {
+  async pickSameName(payload, bookId) {
     const items = payload.items || [payload];
     const nameOf = it => it.name || it.payerName;
+    const notes = [];
     let map = {};
     try {
-      map = (await req.bookNameCheck(items.map(nameOf))).map || {};
-    } catch (e) { return true; }
+      map = (await req.bookNameCheck(items.map(nameOf), bookId)).map || {};
+    } catch (e) { return { notes }; }
     for (const it of items) {
       const name = nameOf(it);
-      const people = (map[name] || []).slice().sort((a, b) => String(b.lastDay).localeCompare(String(a.lastDay)));
-      if (!people.length) continue;
-      people.forEach(p => { p.label = [`${name}（${p.tag || (p.scanned ? '扫码' : '未区分')}）`, p.relation, `${p.count}笔`].filter(Boolean).join(' · '); });
+      const d = samename.decide(map[name]);
+      if (d.type === 'none') continue;
+      if (d.type === 'auto') { // 本场没有、以前的礼簿只有一位：不弹窗，按同一个人记
+        it.personRef = d.person.ref;
+        it.tag = d.person.tag;
+        notes.push({ name, person: d.person });
+        continue;
+      }
+      const people = d.people;
+      people.forEach(p => { p.label = samename.labelOf(name, p); });
       const r = await samename.choose(name, people);
       if (!r) return false;
       if (r.person) {
@@ -164,7 +179,7 @@ Page({
         it.tag = r.tag;
       }
     }
-    return true;
+    return { notes };
   },
 
   /** 自动打印回执（批次每人一张）；打印机未连接只提示，不影响登记 */

@@ -125,7 +125,9 @@ async function create(openid, event) {
     });
   }
   items.forEach(x => { if (x.nameTag && !x.nameTagBy) x.nameTagBy = 'guest'; }); // 宾客自己填的区分信息（小票、回执上可印）
-  const needTag = await sameNameOthers(account.ownerOpenid, openid, items.map((x, i) => ({ name: x.payerName, self: i === 0, tagged: !!x.nameTag })));
+  // 只比对本次要记入的这一本礼簿（和下面 addItems 写入的 bookId 一致）：每场的宾客大多相同，跨礼簿同名不再要求填区分备注
+  const book = fixed || await activeBookOf(account);
+  const needTag = await sameNameOthers(account.ownerOpenid, openid, items.map((x, i) => ({ name: x.payerName, self: i === 0, tagged: !!x.nameTag })), book ? book._id : '');
   if (needTag.length) return ok({ needTag });
 
 
@@ -141,7 +143,6 @@ async function create(openid, event) {
   if (payMethod !== 'mixed') items.forEach(x => { delete x.payMethod; });
 
   // 记入本场礼簿码指定的礼簿，否则记入当前礼簿（旧数据无礼簿时退回旧版主题名）
-  const book = fixed || await activeBookOf(account);
   const hostName = (book && book.hostName) || ''; // 机构版：本场主家
   const base = {
     aid: accountId,
@@ -224,19 +225,19 @@ async function sameNameQuota(openid, n) {
   return true;
 }
 
-/** 主家礼簿里，与这些姓名同名、但不是该宾客扫码登记的记录所用的姓名 */
 /**
  * 需要填区分信息的姓名：主家礼簿里已有同名、但不是"同一个人"的记录（任何状态，作废的除外）
  * 同一个人 = 同一个微信扫码登记、且同为本人（批次第 1 位 / 单人）或同为代登记的家人（批次第 2 位起）；
  * 礼台登记的、其他宾客的、本人代登记的同名家人，都算别人
- * people：[{ name, self（是否扫码人本人）, tagged（已填区分信息） }]
+ * people：[{ name, self（是否扫码人本人）, tagged（已填区分信息） }]；bookId：只看这一本礼簿（v3.50.0 起，不再跨礼簿）
  */
-async function sameNameOthers(ownerOpenid, openid, people) {
+async function sameNameOthers(ownerOpenid, openid, people, bookId) {
   const todo = people.filter(p => !p.tagged);
   if (!todo.length) return [];
-  const res = await records.where({
-    ownerOpenid, payerName: _.in(todo.map(p => p.name)), status: _.in(COUNTED.slice())
-  }).field({ payerName: true, payerOpenid: true, batchIdx: true }).limit(500).get();
+  // ownerOpenid 与 bookId 必须在同一个 where 里（连续 where 后一个会覆盖前一个）；没有礼簿时退回按主家全部礼簿
+  const cond = { ownerOpenid, payerName: _.in(todo.map(p => p.name)), status: _.in(COUNTED.slice()) };
+  if (bookId) cond.bookId = bookId;
+  const res = await records.where(cond).field({ payerName: true, payerOpenid: true, batchIdx: true }).limit(500).get();
   const out = todo.filter(p => res.data.some(r => {
     if (r.payerName !== p.name) return false;
     const sameScanner = r.payerOpenid === openid;
