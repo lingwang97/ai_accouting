@@ -37,7 +37,8 @@
     { "root": "pages/export", "pages": ["export"] },
     { "root": "pages/appearance", "pages": ["appearance"] },
     { "root": "pages/members", "pages": ["members"] },
-    { "root": "pages/contact", "pages": ["contact"] }
+    { "root": "pages/contact", "pages": ["contact"] },
+    { "root": "pages/privacy", "pages": ["privacy"] }
   ],
   "preloadRule": {
     "pages/index/index": { "network": "all", "packages": ["pages/members", "pages/export", "pages/printer", "pages/reconcile"] },

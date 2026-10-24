@@ -51,3 +51,11 @@ test('faq：没有重复的问题；答案里没有技术信息', () => {
     assert.ok(!/§|v\d+\.\d+|\.js|:\d+/.test(it.q + it.a), '含技术信息：' + it.q);
   });
 });
+
+test('faq / guide：不再出现旧路径（隐私说明、我的 → 清除我的全部数据）', () => {
+  const guideSrc = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/guide/guide.js'), 'utf8');
+  const text = JSON.stringify(FAQ) + guideSrc;
+  assert.ok(!/我的\s*→\s*隐私说明/.test(text), '仍有「我的 → 隐私说明」');
+  assert.ok(!/我的\s*→\s*清除我的全部数据/.test(text), '仍有「我的 → 清除我的全部数据」');
+  assert.ok(/隐私与数据 → 清除我的全部数据/.test(text), '缺少新路径');
+});

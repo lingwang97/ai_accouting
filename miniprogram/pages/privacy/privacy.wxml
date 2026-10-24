@@ -1,0 +1,23 @@
+<view class="container" style="{{themeStyle}}">
+  <view class="card">
+    <view class="p-h">隐私说明</view>
+    <block wx:for="{{sections}}" wx:key="t">
+      <view class="p-t">{{item.t}}</view>
+      <view class="p-b">{{item.b}}</view>
+    </block>
+  </view>
+
+  <block wx:if="{{user}}">
+    <view class="group-title">我的数据</view>
+    <view class="card menu" wx:if="{{canExport}}">
+      <view class="menu-item" bindtap="goExport">
+        <text class="mi-text">{{role === 'viewer' ? '导出礼簿' : '导出与备份'}}</text><text class="arrow">›</text>
+      </view>
+    </view>
+    <view class="card">
+      <view class="p-t">清除我的全部数据</view>
+      <view class="p-b">永久删除你的所有礼簿、礼金记录、送礼记录、模板、存档文件和主家信息（含回收站），无法恢复。建议先做一次备份。</view>
+      <button class="btn-danger p-btn" bindtap="confirmPurge">清除我的全部数据</button>
+    </view>
+  </block>
+</view>

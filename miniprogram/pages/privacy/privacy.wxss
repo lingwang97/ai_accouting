@@ -1,0 +1,8 @@
+.p-h { font-size: 32rpx; font-weight: 600; margin-bottom: 8rpx; }
+.p-t { font-size: 28rpx; font-weight: 600; margin-top: 24rpx; margin-bottom: 8rpx; }
+.p-b { font-size: 26rpx; line-height: 1.7; color: var(--text-2); }
+.group-title { font-size: 26rpx; color: var(--text-3); margin: 24rpx 8rpx 12rpx; }
+.menu { padding-top: 4rpx; padding-bottom: 4rpx; }
+.menu-item { display: flex; align-items: center; justify-content: space-between; min-height: 96rpx; font-size: 30rpx; }
+.arrow { color: var(--text-3); }
+button.p-btn:not([size=mini]) { width: 100%; margin-top: 24rpx; }

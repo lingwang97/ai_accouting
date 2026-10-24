@@ -31,6 +31,8 @@ Page({
 
   onShow() {
     this.setData({ primary: theme.apply(this).primary });
+    // 在「隐私与数据」页清除数据后回到这里：界面按退出状态重置
+    if (wx.getStorageSync(LOGOUT_KEY) && this.data.user) this.onLogout();
     // 先显示上次的数据，避免白屏
     if (!this.data.user) {
       let c = cache.get('mine');
@@ -222,44 +224,7 @@ Page({
     wx.navigateTo({ url: '/pages/guide/guide?tab=' + tab });
   },
 
-  /** 隐私说明（清除全部数据已拆成独立入口 confirmPurge） */
-  onPrivacy() {
-    wx.showModal({
-      title: '隐私说明',
-      content: '慧礼记仅保存你登记的礼簿、礼金、送礼记录和收款码图片，用于记账、回执与导出；数据存于微信云开发，仅你和你授权的记账人、家人可见。宾客的姓名、礼金仅对主家和宾客本人可见。导出文件下载后即从云端删除；删除的礼簿在回收站保留 15 天后永久删除。你可随时在「我的」页底部清除全部数据（含回收站）。',
-      showCancel: false
-    });
-  },
-
-  confirmPurge() {
-    wx.showModal({
-      title: '清除全部数据',
-      content: '将永久删除你的所有礼簿、礼金记录、送礼记录、模板、存档文件和主家信息，无法恢复。建议先在「导出与备份」里做一次备份。如确认，请输入"清除"',
-      editable: true,
-      placeholderText: '输入：清除',
-      confirmColor: '#FA5151',
-      success: async res => {
-        if (!res.confirm) return;
-        if ((res.content || '').trim() !== '清除') {
-          return wx.showToast({ title: '输入不正确，已取消', icon: 'none' });
-        }
-        wx.showLoading({ title: '正在清除…', mask: true });
-        try {
-          await req.exportPurge();
-          await req.purgeAccount();
-          wx.hideLoading();
-          try {
-            wx.removeStorageSync('db_inited');
-            (wx.getStorageInfoSync().keys || []).filter(k => k.indexOf('qr_') === 0).forEach(k => wx.removeStorageSync(k));
-          } catch (e) { /* 忽略 */ }
-          wx.showModal({ title: '已清除', content: '你的数据已全部删除', showCancel: false });
-          this.onLogout();
-        } catch (e) {
-          wx.hideLoading(); // request.js 已提示
-        }
-      }
-    });
-  },
+  goPrivacy() { wx.navigateTo({ url: '/pages/privacy/privacy' }); }, // 隐私与数据（含清除全部数据）
 
   onLogout() {
     const app = getApp();
