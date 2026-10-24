@@ -15,6 +15,7 @@
       <view class="muted">已入簿</view>
       <view class="t-sum money">￥{{r.paid.sumStr}}</view>
       <view class="muted">{{r.paid.count}} 份</view>
+      <view class="recalc-link" wx:if="{{canRecalc}}" bindtap="onRecalc">合计和礼簿页对不上？重算整本礼簿的合计 ›</view>
     </view>
 
     <!-- 按支付方式 -->

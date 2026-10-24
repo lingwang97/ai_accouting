@@ -13,12 +13,14 @@ Page({
     r: null,          // 对账结果（已格式化）
     loading: true,
     saving: false,
+    canRecalc: false, // 有「管理礼簿」权限（列表里的礼簿都是负责范围内的，与 books.recalc 的服务端校验一致）
     themeStyle: ''
   },
 
   async onLoad(options) {
     if (!(await perm.guard('export', '你没有对账与导出的权限', { viewer: true }))) return; // 文案同 records.reconcile
     try {
+      this.setData({ canRecalc: perm.can('books') && getApp().globalData.role !== 'viewer' });
       const { list, activeBookId } = await req.bookList();
       const books = list.map(b => ({ _id: b._id, name: b.hostName ? `${b.hostName} · ${b.name}` : b.name }));
       const want = options.bookId || activeBookId;
@@ -70,6 +72,28 @@ Page({
   onRange(e) {
     this.setData({ range: e.currentTarget.dataset.v });
     this.load();
+  },
+
+  /** 重算整本礼簿的合计（与「按日筛选」无关）；二次确认后调用 books.recalc */
+  onRecalc() {
+    const b = this.data.books[this.data.bookIdx];
+    if (!b || this.data.recalcing) return;
+    wx.showModal({
+      title: '重算合计',
+      content: '将按这本礼簿全部已入簿的记录重新计算份数与合计（不是只算当前筛选的日期），不会修改任何礼金记录。确定重算吗？',
+      confirmText: '重算',
+      success: async r => {
+        if (!r.confirm) return;
+        this.data.recalcing = true;
+        try {
+          await req.bookRecalc(b._id);
+          wx.showToast({ title: '已重算', icon: 'success' });
+          await this.load();
+        } catch (e) { /* toast 已提示 */ } finally {
+          this.data.recalcing = false;
+        }
+      }
+    });
   },
 
   goPending() {

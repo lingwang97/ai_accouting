@@ -17,3 +17,5 @@
 .ops .op:not(:last-child) { margin-right: 20rpx; }
 .op { flex: 1; }
 .offscreen { position: fixed; left: -2000px; top: 0; width: 750px; height: 1400px; }
+
+.recalc-link { margin-top: 16rpx; font-size: 24rpx; color: #999; text-decoration: underline; }
