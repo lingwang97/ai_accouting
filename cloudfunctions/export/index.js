@@ -87,6 +87,9 @@ exports.main = async (event) => {
     if (event.format === 'backup' && ctx.bookIds) return err('你只负责部分场次，请按场次导出');
     if (event.format === 'backup') return await exportBackup(OWNER, ctx.role === 'owner');
 
+    // 传统礼簿 PDF 预览：权限与导出一致（上面的 clerk 导出权限判断已过），不写 books、不存档
+    if (event.action === 'bookPreview' || event.action === 'bookPreviewData') return await bookPreview(event, ctx, OWNER);
+
     stage = '参数';
     const format = ['xlsx', 'book'].includes(event.format) ? event.format : 'pdf';
     const bookId = String(event.bookId || '');
@@ -329,6 +332,82 @@ async function fetchRows(openid, { bookId, startDay, endDay, themeName }) {
     if (res.data.length < QUERY_MAX) break;
   }
   return out;
+}
+
+// —— 传统礼簿 PDF 预览（v3.53.0） ——
+const PREVIEW_ROWS = 8; // 预览只取前 8 笔：封面 + 1 页内页 + 封底
+const SAMPLE_ROWS = [
+  { payerName: '张三', amount: 200, relation: '朋友', payMethod: 'wechat' },
+  { payerName: '李四', amount: 600, relation: '同事', payMethod: 'wechat' },
+  { payerName: '王小明', amount: 1000, relation: '亲戚', payMethod: 'cash', remark: '红包' },
+  { payerName: '赵丽', amount: 500, relation: '同学', payMethod: 'wechat' },
+  { payerName: '欧阳明月', amount: 888, relation: '朋友', payMethod: 'wechat' }
+];
+
+/** 预览取数：与导出同一口径（已入簿、按登记时间 + _id 升序），一个 where 带 ownerOpenid 和 bookId，最多 PREVIEW_ROWS 笔 */
+async function previewRows(openid, bookId) {
+  const res = await db.collection('records').where({ ownerOpenid: openid, status: REC.PAID, bookId })
+    .orderBy('createdAt', 'asc').orderBy('_id', 'asc').limit(PREVIEW_ROWS).get();
+  return res.data;
+}
+
+/** 预览参数校验：与导出同一套 themes.sanitize*，白事强制规则一致；返回 { key, custom, back, bind } 或 { error } */
+function previewTheme(book, event) {
+  let key = '', custom = null;
+  if (book.type === 'funeral') {
+    custom = themes.sanitizeFuneral(event.pdfCustom);
+    key = 'custom';
+  } else {
+    const k = String(event.pdfTheme || '');
+    if (k === 'custom') {
+      const r = themes.sanitizeCustom(event.pdfCustom);
+      if (r.error) return { error: r.error };
+      custom = r.value;
+    } else if (k && !themes.isPresetKey(k)) return { error: '主题不存在' };
+    key = k;
+  }
+  return { key, custom, back: themes.sanitizeBack(event.pdfBack), bind: themes.sanitizeBind(event.pdfBind) };
+}
+
+/**
+ * bookPreviewData：返回前几笔宾客（姓名 + 金额）供前端示意图使用，没有数据用示例（sample: true）
+ * bookPreview：用同一个 buildBook 生成封面 + 1 页内页 + 封底的小 PDF；不保存主题、不存档，临时文件登记后由前端下载即清理 / 定时清理
+ */
+async function bookPreview(event, ctx, OWNER) {
+  const bookId = String(event.bookId || '');
+  if (!bookId) return err('请选择一本礼簿');
+  const book = await getBook(bookId, OWNER);
+  if (!book || !canBook(ctx, book._id)) return err('礼簿不存在');
+  let rows = await previewRows(OWNER, bookId);
+  const sample = rows.length === 0;
+  if (sample) rows = SAMPLE_ROWS.map(r => ({ ...r }));
+  if (event.action === 'bookPreviewData') {
+    return ok({ sample, rows: rows.map(r => ({ name: String(r.payerName || ''), amount: Number(r.amount) || 0 })) });
+  }
+  const th = previewTheme(book, event);
+  if (th.error) return err(th.error);
+  const account = (await db.collection('accounts').where({ ownerOpenid: OWNER }).limit(1).get()).data[0] || { accountName: '' };
+  const meta = buildMeta(rows, { account, book, startDay: '', endDay: '', themeName: '', pdfThemeKey: th.key, pdfCustom: th.custom, pdfBack: th.back, pdfBind: th.bind });
+  meta.preview = true;
+  meta.previewSample = sample;
+  let stage = '准备字体';
+  try {
+    const plan = Fonts.planFor('book', meta.bt || {});
+    const got = plan.resolve(await fontLoader.prepare(plan.keys));
+    if (got.error) return err(got.error);
+    const notice = got.notes && got.notes.length ? '预览使用了回退字体：' + got.notes.join('；') : '';
+    if (got.dropMark) meta.bt = { ...meta.bt, mark: '' };
+    stage = '生成文件';
+    const buffer = await buildBook(rows, meta, got.fonts);
+    const fileName = `礼簿预览_${sanitizeName(book.name || '礼簿')}.pdf`;
+    stage = '上传';
+    const up = await cloud.uploadFile({ cloudPath: `exports/${dirOf(OWNER)}/${Date.now()}-${rnd()}.pdf`, fileContent: buffer });
+    await track(OWNER, up.fileID, false, 'export');
+    return ok({ fileID: up.fileID, fileName, sample, ...(notice ? { notice } : {}) });
+  } catch (e) {
+    console.error('export preview failed', stage, e && e.stack);
+    return err(`预览失败（${stage}），请稍后重试`);
+  }
 }
 
 /** 汇总导出所需的元信息 */
@@ -655,7 +734,7 @@ function buildBook(rows, meta, fonts) {
       doc.switchToPage(g.page);
       setGeom(meta.bind, i + 1);
       drawGrid(doc, pal, g.merge);
-      doc.font('sub').fontSize(8).fillColor('#555').text(`— ${i + 1} / ${n} —`, BK.left, BK.gridBottom + 14,
+      doc.font('sub').fontSize(8).fillColor('#555').text(`— ${i + 1} / ${n} —${meta.preview ? `　预览（${meta.previewSample ? '示例数据' : '仅前几笔'}，非正式礼簿）` : ''}`, BK.left, BK.gridBottom + 14,
         { width: BK.right - BK.left, align: 'center', lineBreak: false });
     });
     setGeom('none', 1);
@@ -721,6 +800,7 @@ function drawBack(doc, meta) {
     doc.moveTo(x0 + 380, sy + 16).lineTo(x0 + 540, sy + 16).stroke();
   }
   if (back.brand) doc.font('sub').fontSize(10).fillColor(c.text).text('慧礼记', 0, H - 70, { width: W, align: 'center', lineBreak: false });
+  if (meta.preview) doc.font('sub').fontSize(9).fillColor(c.text).text(`预览（${meta.previewSample ? '示例数据' : '仅前几笔，合计为这几笔'}，非正式礼簿）`, 0, H - 52, { width: W, align: 'center', lineBreak: false });
 }
 
 /** 封面：按主题配色（预设默认红底金色双框；白事浅灰底深灰框） */

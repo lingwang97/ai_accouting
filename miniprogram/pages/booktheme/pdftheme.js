@@ -76,7 +76,55 @@ function funeralPreview() {
   return { bg: '#F5F5F5', border: '#333333', text: '#333333' };
 }
 
+// 示意图用：没有真实宾客时的示例（云函数 bookPreviewData 也会返回示例）
+const SAMPLE = [{ name: '张三', amount: 200 }, { name: '李四', amount: 600 }, { name: '王小明', amount: 1000 }, { name: '赵丽', amount: 500 }, { name: '欧阳明月', amount: 888 }];
+const BACK_FOOTER = { wedding: '百年好合', birthday: '福寿安康', baby: '福泽绵长', house: '乔迁大吉' };
+// 角饰示意字符（示意图用字符近似，实际角饰为矢量图形）
+const CORNER_CHARS = { huiwen: '回', flower: '✿', cloud: '≋', diamond: '◆' };
+
+/** 金额大写（与云函数 export/index.js 的 amountUpper 一致） */
+function amountUpper(n) {
+  const D = ['零', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖'];
+  const U = ['', '拾', '佰', '仟'];
+  const G = ['', '万', '亿', '万亿'];
+  let fen = Math.round(Number(n) * 100);
+  if (!isFinite(fen)) return '';
+  const neg = fen < 0;
+  if (neg) fen = -fen;
+  if (fen === 0) return '零元整';
+  const yuan = Math.floor(fen / 100);
+  const jiao = Math.floor(fen / 10) % 10;
+  const f = fen % 10;
+  let s = '';
+  let zero = false;
+  const groups = [];
+  for (let v = yuan; v > 0; v = Math.floor(v / 10000)) groups.push(v % 10000);
+  for (let gi = groups.length - 1; gi >= 0; gi--) {
+    const g = groups[gi];
+    if (g === 0) { if (s) zero = true; continue; }
+    if (s && g < 1000) zero = true;
+    let started = false;
+    for (let p = 3; p >= 0; p--) {
+      const d = Math.floor(g / Math.pow(10, p)) % 10;
+      if (d === 0) { if (started) zero = true; continue; }
+      if (zero) { s += '零'; zero = false; }
+      s += D[d] + U[p];
+      started = true;
+    }
+    s += G[gi];
+  }
+  if (yuan > 0) s += '元';
+  if (jiao === 0 && f === 0) s += '整';
+  else {
+    if (jiao > 0) s += D[jiao] + '角';
+    else if (yuan > 0) s += '零';
+    s += f > 0 ? D[f] + '分' : '整';
+  }
+  return (neg ? '负' : '') + s;
+}
+
 module.exports = {
+  SAMPLE, BACK_FOOTER, CORNER_CHARS, amountUpper,
   LIST, DEFAULT_KEY, FONTS, PATTERNS, MARKS, MAIN_COLORS, ACCENT_COLORS, DEFAULT_CUSTOM,
   FUNERAL_PATTERNS, FUNERAL_MARKS, FUNERAL_FOOTERS, DEFAULT_FUNERAL, GREY, DEFAULT_BACK, BINDS, BIND_TIPS,
   checkCustom, previewOf, expand, funeralPreview

@@ -2,13 +2,72 @@
   <block wx:if="{{book}}">
     <view class="book-name">{{book.name}}</view>
 
-    <view class="cv" wx:if="{{pv}}" style="background:{{pv.bg}};border-color:{{pv.border}};color:{{pv.text}}">
-      <view class="cv-in" style="border-color:{{pv.border}}"></view>
-      <view class="cv-mark" wx:if="{{pv.mark}}" style="color:{{pv.border}}">{{pv.mark}}</view>
-      <view class="cv-title" style="color:{{pv.border}}">{{pv.title}}</view>
-      <view class="cv-foot" style="color:{{pv.border}}" wx:if="{{pv.footer}}">{{pv.footer}}</view>
+    <swiper wx:if="{{pv}}" class="pv-swiper" current="{{cur}}" bindchange="onSwipe" duration="250">
+      <!-- 封面 -->
+      <swiper-item>
+        <view class="pc" style="background:{{pv.bg}};border-color:{{pv.border}};color:{{pv.text}}">
+          <view class="pc-in" style="border-color:{{pv.border}}"></view>
+          <view class="pc-mark" wx:if="{{pv.mark}}" style="color:{{pv.border}}">{{pv.mark}}</view>
+          <block wx:if="{{pv.corners}}">
+            <view class="pc-cn pc-tl" style="color:{{pv.border}}">{{pv.corners[0]}}</view>
+            <view class="pc-cn pc-tr" style="color:{{pv.border}}">{{pv.corners[1]}}</view>
+            <view class="pc-cn pc-bl" style="color:{{pv.border}}">{{pv.corners[2]}}</view>
+            <view class="pc-cn pc-br" style="color:{{pv.border}}">{{pv.corners[3]}}</view>
+          </block>
+          <view class="pc-mid">
+            <view class="pc-title" style="color:{{pv.border}}">{{pv.title}}</view>
+            <view class="pc-line" style="background:{{pv.border}}"></view>
+            <view class="pc-sm" wx:for="{{pv.info}}" wx:key="*this">{{item}}</view>
+          </view>
+          <view class="pc-foot" style="color:{{pv.border}}" wx:if="{{pv.footer}}">{{pv.footer}}</view>
+          <view class="pc-brand">慧礼记</view>
+        </view>
+      </swiper-item>
+      <!-- 内页（右起，本礼簿前几位宾客） -->
+      <swiper-item>
+        <view class="pc pg" style="border-color:{{pg.line}}">
+          <view class="pc-mark" wx:if="{{pv.mark}}" style="color:{{pg.line}};opacity:.06">{{pv.mark}}</view>
+          <view class="pg-gut" wx:if="{{bind !== 'none'}}" style="{{pg.gut}}"><text>装订边</text></view>
+          <view class="pg-head" style="color:{{pg.line}}">{{pg.head}}</view>
+          <view class="pg-grid" style="{{pg.grid}};border-color:{{pg.line}};color:#222">
+            <view class="pg-slot" wx:for="{{pg.slots}}" wx:key="i" style="border-color:{{pg.line}}">
+              <view class="pg-nm" style="border-color:{{pg.line}}"><text class="pg-c" wx:for="{{item.name}}" wx:for-item="ch" wx:for-index="ci" wx:key="ci">{{ch}}</text></view>
+              <view class="pg-am">
+                <text class="pg-ca" wx:for="{{item.amt}}" wx:for-item="ch" wx:for-index="ci" wx:key="ci">{{ch}}</text>
+                <text class="pg-yen" wx:if="{{item.yen}}">{{item.yen}}</text>
+              </view>
+            </view>
+          </view>
+        </view>
+      </swiper-item>
+      <!-- 封底 -->
+      <swiper-item>
+        <view wx:if="{{!back.on}}" class="pc pc-none">不含封底</view>
+        <view wx:else class="pc" style="background:{{pv.bg}};border-color:{{pv.border}};color:{{pv.text}}">
+          <view class="pc-in" style="border-color:{{pv.border}}"></view>
+          <view class="pc-mark" wx:if="{{pv.mark}}" style="color:{{pv.border}}">{{pv.mark}}</view>
+          <block wx:if="{{pv.corners}}">
+            <view class="pc-cn pc-tl" style="color:{{pv.border}}">{{pv.corners[0]}}</view>
+            <view class="pc-cn pc-tr" style="color:{{pv.border}}">{{pv.corners[1]}}</view>
+            <view class="pc-cn pc-bl" style="color:{{pv.border}}">{{pv.corners[2]}}</view>
+            <view class="pc-cn pc-br" style="color:{{pv.border}}">{{pv.corners[3]}}</view>
+          </block>
+          <view class="pc-mid">
+            <view class="pc-title" wx:if="{{bk.foot}}" style="color:{{pv.border}};font-size:36rpx;letter-spacing:6rpx">{{bk.foot}}</view>
+            <view class="pc-line" wx:if="{{bk.foot}}" style="background:{{pv.border}}"></view>
+            <view class="pc-sm" wx:for="{{bk.lines}}" wx:key="*this">{{item}}</view>
+            <view class="pc-sign" wx:if="{{back.sign}}"><view>记账人（签字）</view><view>日期</view></view>
+          </view>
+          <view class="pc-brand" wx:if="{{back.brand}}">慧礼记</view>
+        </view>
+      </swiper-item>
+    </swiper>
+    <view class="pv-tabs" wx:if="{{pv}}">
+      <view class="pv-tab {{cur === 0 ? 'on' : ''}}" data-i="0" bindtap="onTab">封面</view>
+      <view class="pv-tab {{cur === 1 ? 'on' : ''}}" data-i="1" bindtap="onTab">内页</view>
+      <view class="pv-tab {{cur === 2 ? 'on' : ''}}" data-i="2" bindtap="onTab">封底</view>
     </view>
-    <view class="muted tip">预览只示意配色与文字，实际版式以导出的 PDF 为准</view>
+    <view class="muted tip">示意图，字体和细节以「预览」或导出为准；内页为本礼簿前几位宾客{{pvSample ? '（暂无数据，用示例）' : ''}}</view>
 
     <!-- 喜事：预设 + 自定义 -->
     <view class="card" wx:if="{{!isFuneral}}">
@@ -104,7 +163,10 @@
   </block>
 
   <view class="bottom-bar" wx:if="{{book && !kb}}">
-    <button class="btn-primary" loading="{{exporting}}" disabled="{{exporting}}" bindtap="onConfirm">确认并导出</button>
+    <view class="bb-row">
+      <button class="btn-outline pv-btn" disabled="{{exporting || previewing || pvLock}}" bindtap="onPreview">预览</button>
+      <button class="btn-primary ok-btn" loading="{{exporting}}" disabled="{{exporting || previewing}}" bindtap="onConfirm">确认并导出</button>
+    </view>
   </view>
   <loading show="{{loading}}" type="overlay" />
 </view>

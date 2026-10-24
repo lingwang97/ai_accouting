@@ -152,3 +152,99 @@ t('定时清理（Timer）不加载字体', async () => {
   assert.strictEqual(calls.length, 0);
   state.openid = OWNER;
 });
+
+// —— v3.53.0 传统礼簿 PDF 预览（bookPreview / bookPreviewData） ——
+const writes = () => db.log.filter(l => ['update', 'remove'].includes(l.op) && ['books', 'archives'].includes(l.col));
+
+t('预览：生成 PDF（封面 + 内页 + 封底），不写 books / 存档，文件名带「预览」', async () => {
+  seed();
+  const { fn } = load();
+  const r = await fn.main({ action: 'bookPreview', bookId: 'b1', pdfTheme: 'wine_gold', pdfBack: { on: true }, pdfBind: 'none' });
+  assert.strictEqual(r.code, 0, r.msg);
+  assert.ok(isPdf(state.uploads[0]));
+  assert.ok(r.data.fileName.includes('预览') && r.data.sample === false);
+  assert.ok(state.uploads[0].cloudPath.startsWith('exports/'), '临时文件走 exports 目录（不是 archives）');
+  assert.strictEqual(writes().length, 0, '预览不应更新 books / 存档');
+  const pages = (state.uploads[0].content.toString('latin1').match(/\/Type \/Page\b/g) || []).length;
+  assert.strictEqual(pages, 3, '封面 + 1 页内页 + 封底');
+});
+
+t('预览：双面装订页数补齐为偶数；关闭封底少一页', async () => {
+  seed();
+  const { fn } = load();
+  const count = () => (state.uploads[state.uploads.length - 1].content.toString('latin1').match(/\/Type \/Page\b/g) || []).length;
+  assert.strictEqual((await fn.main({ action: 'bookPreview', bookId: 'b1', pdfBind: 'double' })).code, 0);
+  assert.strictEqual(count() % 2, 0);
+  assert.strictEqual((await fn.main({ action: 'bookPreview', bookId: 'b1', pdfBack: { on: false } })).code, 0);
+  assert.strictEqual(count(), 2);
+});
+
+t('预览：取数条件带 ownerOpenid 和 bookId，最多 8 笔，同导出的排序口径', async () => {
+  seed();
+  const { fn } = load();
+  db.log.length = 0;
+  const r = await fn.main({ action: 'bookPreviewData', bookId: 'b1' });
+  assert.strictEqual(r.code, 0, r.msg);
+  assert.strictEqual(r.data.rows.length, 8);
+  assert.deepStrictEqual(Object.keys(r.data.rows[0]).sort(), ['amount', 'name'], '出参不含 openid 等内部字段');
+  const g = db.log.filter(l => l.op === 'get' && l.col === 'records');
+  assert.strictEqual(g.length, 1);
+  assert.strictEqual(g[0].cond.ownerOpenid, OWNER);
+  assert.strictEqual(g[0].cond.bookId, 'b1');
+  assert.ok(g[0].limit <= 8);
+  assert.strictEqual(g[0].orders.length, 2, '按登记时间、_id 升序（与导出一致）');
+  assert.strictEqual(r.data.sample, false);
+});
+
+t('预览：别人的礼簿 / 不存在的礼簿报「礼簿不存在」，且不读礼金', async () => {
+  seed();
+  const { fn } = load();
+  db.log.length = 0;
+  state.openid = 'o-stranger';
+  let r = await fn.main({ action: 'bookPreviewData', bookId: 'b1' });
+  state.openid = OWNER;
+  assert.strictEqual(r.code, 1);
+  assert.strictEqual(db.log.filter(l => l.col === 'records').length, 0);
+  r = await fn.main({ action: 'bookPreview', bookId: 'nope' });
+  assert.strictEqual(r.code, 1);
+  assert.strictEqual(state.uploads.length, 0);
+});
+
+t('预览：没有礼金时用示例数据', async () => {
+  seed();
+  db.data.records = [];
+  const { fn } = load();
+  const d = await fn.main({ action: 'bookPreviewData', bookId: 'b1' });
+  assert.strictEqual(d.code, 0);
+  assert.ok(d.data.sample && d.data.rows.length > 0);
+  const r = await fn.main({ action: 'bookPreview', bookId: 'b1' });
+  assert.strictEqual(r.code, 0, r.msg);
+  assert.strictEqual(r.data.sample, true);
+});
+
+t('预览：参数经过 sanitize（非法主题 / 配色报错；白事强制素灰）', async () => {
+  seed();
+  const { fn } = load();
+  let r = await fn.main({ action: 'bookPreview', bookId: 'b1', pdfTheme: 'no_such_theme' });
+  assert.strictEqual(r.code, 1); assert.strictEqual(r.msg, '主题不存在');
+  r = await fn.main({ action: 'bookPreview', bookId: 'b1', pdfTheme: 'custom', pdfCustom: { main: 'red', accent: '#FFFFFF' } });
+  assert.strictEqual(r.code, 1);
+  assert.strictEqual(state.uploads.length, 0);
+  // 白事：忽略传入的预设 / 颜色
+  db.data.books[0].type = 'funeral';
+  r = await fn.main({ action: 'bookPreview', bookId: 'b1', pdfTheme: 'wine_gold', pdfCustom: { main: '#FF0000', font: 'sans', pattern: 'line', mark: '奠' } });
+  assert.strictEqual(r.code, 0, r.msg);
+  assert.ok(isPdf(state.uploads[0]));
+  assert.strictEqual(writes().length, 0);
+});
+
+t('预览：字体不可用时回退黑体并提示；黑体不可用报错', async () => {
+  seed();
+  let { fn } = load(fileID => { if (fileID.endsWith(F.FONT_FILES.serif)) throw new Error('network'); return files[Object.keys(F.FONT_FILES).find(k => fileID.endsWith(F.FONT_FILES[k]))]; });
+  let r = await fn.main({ action: 'bookPreview', bookId: 'b1', pdfTheme: 'wine_gold' });
+  assert.strictEqual(r.code, 0, r.msg);
+  assert.ok(r.data.notice && r.data.notice.includes('预览使用了回退字体'));
+  ({ fn } = load(() => { throw new Error('network'); }));
+  r = await fn.main({ action: 'bookPreview', bookId: 'b1' });
+  assert.strictEqual(r.code, 1);
+});
