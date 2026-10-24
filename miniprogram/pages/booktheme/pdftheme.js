@@ -28,7 +28,7 @@ const DEFAULT_FUNERAL = { font: 'sans', pattern: 'none', mark: '', footer: '', t
 const GREY = { main: '#555555', accent: '#333333' };
 
 // 尾页（封底）与装订（与云函数 export/themes.js 一致）：默认有封底、不留装订边
-const DEFAULT_BACK = { on: true, footer: '', sign: false, brand: true };
+const DEFAULT_BACK = { on: true, footer: '', sign: true, brand: true };
 const BINDS = [
   { k: 'none', n: '不留边' },
   { k: 'single', n: '单面装订' },

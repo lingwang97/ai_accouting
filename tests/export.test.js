@@ -308,5 +308,6 @@ t('sanitizeBack：兼容旧字段 host / date / sum，不再输出', async () =>
   const b = BT.sanitizeBack({ on: true, footer: '福', host: true, date: false, sum: false, sign: true, brand: true });
   assert.deepStrictEqual(Object.keys(b).sort(), ['brand', 'footer', 'on', 'sign']);
   assert.strictEqual(b.sign, true);
-  assert.deepStrictEqual(BT.sanitizeBack(null), { on: true, footer: '', sign: false, brand: true });
+  assert.deepStrictEqual(BT.sanitizeBack(null), { on: true, footer: '', sign: true, brand: true }); // v3.54.1 签名栏默认开
+  assert.strictEqual(BT.sanitizeBack({ sign: false }).sign, false, '明确关闭的仍保持关闭');
 });

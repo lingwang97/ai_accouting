@@ -100,10 +100,10 @@ function resolve(funeral, key, custom) {
 
 // 尾页（封底）与装订：默认有封底、不留装订边（旧礼簿、旧版前端不传时同此）
 const BINDS = ['none', 'single', 'double'];
-const DEFAULT_BACK = { on: true, footer: '', sign: false, brand: true };
+const DEFAULT_BACK = { on: true, footer: '', sign: true, brand: true };
 
 /**
- * 校验尾页设置 { on, footer, sign, brand }（旧数据里的 host / date / sum 忽略）；永远返回合法值，缺省项取默认
+ * 校验尾页设置 { on, footer, sign（默认开）, brand }（旧数据里的 host / date / sum 忽略）；永远返回合法值，缺省项取默认
  * footer：空 = 自动（封面落款，没有则按事由默认吉语；白事无吉语）；'-' = 不要落款；其他为自定义文字（≤8 字）
  */
 function sanitizeBack(b) {
@@ -112,7 +112,7 @@ function sanitizeBack(b) {
   return {
     on: b.on !== false,
     footer: raw === '-' ? '-' : raw.slice(0, 8),
-    sign: b.sign === true,
+    sign: b.sign !== false, // v3.54.1 起默认开：未设置过的礼簿显示记账人签名
     brand: b.brand !== false
   };
 }
