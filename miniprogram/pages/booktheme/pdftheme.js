@@ -13,6 +13,21 @@ const LIST = [
 ];
 const DEFAULT_KEY = 'red_gold';
 
+// v3.55.0 没保存过主题的礼簿，按礼簿类型取默认预设和水印（与云函数 export/themes.js 的 TYPE_DEFAULTS 一致，tests 有比对）
+const TYPE_DEFAULTS = {
+  wedding: { key: 'red_gold', mark: '囍' },
+  birthday: { key: 'shou_gold', mark: '寿' },
+  baby: { key: 'orange', mark: '福' },
+  house: { key: 'purple_gold', mark: '福' },
+  funeral: { key: 'grey', mark: '奠' },
+  other: { key: 'red_gold', mark: '' }
+};
+const TYPE_LABELS = { wedding: '喜事', birthday: '寿宴', baby: '满月/周岁', house: '乔迁', funeral: '白事', other: '其他' };
+/** 礼簿类型的默认 { key, mark }；未知类型同 other */
+function typeDefault(bookType) {
+  return Object.assign({}, TYPE_DEFAULTS[bookType] || TYPE_DEFAULTS.other);
+}
+
 const FONTS = [{ k: 'sans', n: '黑体' }, { k: 'serif', n: '宋体' }, { k: 'brush', n: '毛笔' }];
 const PATTERNS = [{ k: 'none', n: '无' }, { k: 'double', n: '双线' }, { k: 'huiwen', n: '回纹' }, { k: 'flower', n: '花朵' }, { k: 'cloud', n: '云纹' }, { k: 'diamond', n: '菱形' }, { k: 'line', n: '直角' }];
 const MARKS = [{ k: '', n: '无' }, { k: '喜', n: '喜' }, { k: '囍', n: '囍' }, { k: '寿', n: '寿' }, { k: '福', n: '福' }];
@@ -71,6 +86,18 @@ function expand(key) {
   return { main: p.main, accent: p.accent, font: p.font, pattern: p.pattern, mark: p.mark, footer: p.footer, title: '', cover: p.cover };
 }
 
+/**
+ * 没保存过主题时页面的预选：预设自带的水印与默认一致 -> 直接选预设；
+ * 否则用「在预设基础上修改」的快照形式（themeKey 'custom' + base 预设 + 展开后加水印）
+ * 白事不走这里（颜色固定素灰，只把默认水印设为奠）
+ */
+function defaultSelection(bookType) {
+  const d = typeDefault(bookType);
+  const p = LIST.find(x => x.key === d.key) || LIST[0];
+  if (p.mark === d.mark) return { themeKey: p.key, base: '', cust: null, name: p.name, mark: d.mark };
+  return { themeKey: 'custom', base: p.key, cust: Object.assign(expand(p.key), { mark: d.mark }), name: p.name, mark: d.mark };
+}
+
 /** 白事预览色：素灰封面 */
 function funeralPreview() {
   return { bg: '#F5F5F5', border: '#333333', text: '#333333' };
@@ -125,6 +152,7 @@ function amountUpper(n) {
 
 module.exports = {
   SAMPLE, BACK_FOOTER, CORNER_CHARS, amountUpper,
+  TYPE_DEFAULTS, TYPE_LABELS, typeDefault, defaultSelection,
   LIST, DEFAULT_KEY, FONTS, PATTERNS, MARKS, MAIN_COLORS, ACCENT_COLORS, DEFAULT_CUSTOM,
   FUNERAL_PATTERNS, FUNERAL_MARKS, FUNERAL_FOOTERS, DEFAULT_FUNERAL, GREY, DEFAULT_BACK, BINDS, BIND_TIPS,
   checkCustom, previewOf, expand, funeralPreview

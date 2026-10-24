@@ -64,6 +64,7 @@ t('表格 PDF：只下载黑体，生成成功；第二次导出走内存缓存�
 
 t('传统礼簿（黑体 / 宋体 + 水印 / 毛笔 + 囍水印）：按需下载对应字体，生成成功且无提示', async () => {
   seed();
+  db.data.books[0].type = 'other'; // v3.55.0 起喜事默认带囍水印（要宋体）；「其他」类型无水印，只用黑体
   let { fn, calls } = load();
   let r = await fn.main({ format: 'book', bookId: 'b1' });
   assert.strictEqual(r.code, 0, r.msg);
@@ -310,4 +311,71 @@ t('sanitizeBack：兼容旧字段 host / date / sum，不再输出', async () =>
   assert.strictEqual(b.sign, true);
   assert.deepStrictEqual(BT.sanitizeBack(null), { on: true, footer: '', sign: true, brand: true }); // v3.54.1 签名栏默认开
   assert.strictEqual(BT.sanitizeBack({ sign: false }).sign, false, '明确关闭的仍保持关闭');
+});
+
+// —— v3.55.0 默认主题按礼簿类型 ——
+const PT = require('../miniprogram/pages/booktheme/pdftheme.js');
+const DEF_TABLE = { wedding: ['red_gold', '囍'], birthday: ['shou_gold', '寿'], baby: ['orange', '福'], house: ['purple_gold', '福'], funeral: ['grey', '奠'], other: ['red_gold', ''] };
+
+test('默认主题：typeDefault 映射表与未知类型', () => {
+  for (const [ty, [key, mark]] of Object.entries(DEF_TABLE)) assert.deepStrictEqual(BT.typeDefault(ty), { key, mark }, ty);
+  assert.deepStrictEqual(BT.typeDefault('xxx'), BT.typeDefault('other'));
+  assert.deepStrictEqual(BT.typeDefault(undefined), { key: 'red_gold', mark: '' });
+  BT.typeDefault('wedding').mark = 'X';
+  assert.strictEqual(BT.typeDefault('wedding').mark, '囍', '返回副本，不污染映射表');
+});
+
+test('默认主题：resolveDefault 的 key / main / mark', () => {
+  const w = BT.resolveDefault('wedding');
+  assert.strictEqual(w.key, 'red_gold'); assert.strictEqual(w.main, '#B71C1C'); assert.strictEqual(w.mark, '囍');
+  assert.strictEqual(BT.resolveDefault('birthday'), BT.PRESETS.find(p => p.key === 'shou_gold'), '预设自带寿，直接用预设');
+  assert.strictEqual(BT.resolveDefault('baby').mark, '福');
+  assert.strictEqual(BT.resolveDefault('house').key, 'purple_gold');
+  assert.strictEqual(BT.resolveDefault('other').mark, '');
+  const f = BT.resolveDefault('funeral');
+  assert.strictEqual(f.key, 'grey'); assert.strictEqual(f.main, '#555555'); assert.strictEqual(f.mark, '奠'); assert.ok(f.funeral);
+  assert.strictEqual(BT.PRESETS.find(p => p.key === 'red_gold').mark, '', '不改动预设表本身');
+});
+
+test('默认主题：前后端映射一致', () => {
+  assert.deepStrictEqual(PT.TYPE_DEFAULTS, BT.TYPE_DEFAULTS);
+  for (const ty of Object.keys(DEF_TABLE).concat(['zzz'])) assert.deepStrictEqual(PT.typeDefault(ty), BT.typeDefault(ty));
+  // 前端预选：与后端 resolveDefault 展开后一致
+  for (const ty of ['wedding', 'birthday', 'baby', 'house', 'other']) {
+    const sel = PT.defaultSelection(ty), bt = BT.resolveDefault(ty);
+    const c = sel.cust || PT.expand(sel.themeKey);
+    assert.strictEqual(c.mark, bt.mark, ty); assert.strictEqual(c.main, bt.main, ty);
+    assert.strictEqual(sel.base || sel.themeKey, bt.key, ty);
+  }
+  assert.strictEqual(PT.defaultSelection('wedding').themeKey, 'custom');
+  assert.strictEqual(PT.defaultSelection('birthday').themeKey, 'shou_gold');
+});
+
+t('默认主题：pdfTheme 为空时 buildMeta 按类型；已保存的不受影响', async () => {
+  seed();
+  const { fn } = load();
+  const bm = (book, extra) => fn._test.buildMeta([], { account: { accountName: 'x' }, book, startDay: '', endDay: '', themeName: '', pdfThemeKey: '', pdfCustom: null, ...(extra || {}) });
+  for (const [ty, [key, mark]] of Object.entries(DEF_TABLE)) {
+    const m = bm({ type: ty, name: 'n' });
+    assert.strictEqual(m.bt.key, key, ty); assert.strictEqual(m.bt.mark, mark, ty);
+  }
+  assert.strictEqual(bm({ type: 'wedding' }).bt.main, '#B71C1C');
+  assert.strictEqual(bm({ type: 'funeral' }).bt.main, '#555555');
+  assert.strictEqual(bm({ type: 'mystery' }).bt.mark, '');
+  // 已保存：预设 / 自定义不变（红金仍无水印）
+  assert.strictEqual(bm({ type: 'wedding' }, { pdfThemeKey: 'red_gold' }).bt.mark, '');
+  assert.strictEqual(bm({ type: 'wedding' }, { pdfThemeKey: 'peach' }).bt.key, 'peach');
+  const cu = bm({ type: 'baby' }, { pdfThemeKey: 'custom', pdfCustom: { main: '#0B3D6B', accent: '#F5D76E', mark: '' } });
+  assert.strictEqual(cu.bt.key, 'custom'); assert.strictEqual(cu.bt.mark, '');
+  assert.strictEqual(bm({ type: 'funeral' }, { pdfThemeKey: 'custom', pdfCustom: { mark: '' } }).bt.mark, '', '白事已保存无水印保持不变');
+});
+
+t('默认主题：导出 / 预览不写库；喜事无主题导出成功（囍用宋体）', async () => {
+  seed();
+  const { fn, calls } = load();
+  let r = await fn.main({ action: 'bookPreview', bookId: 'b1' });
+  assert.strictEqual(r.code, 0, r.msg);
+  assert.ok(isPdf(state.uploads[0]));
+  assert.ok(names(calls).some(n => /Serif/i.test(n)), '囍水印需要宋体：' + names(calls));
+  assert.ok(!('pdfTheme' in db.data.books[0]) && writes().length === 0, '没有把默认值写进 books');
 });

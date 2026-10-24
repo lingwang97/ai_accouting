@@ -16,6 +16,7 @@ Page({
     canSave: true,           // 有「管理礼簿」权限才会把主题记到礼簿
     themeKey: pt.DEFAULT_KEY, // 预设 key 或 'custom'
     base: '',                // 自定义是基于哪个预设改的（仅记录）
+    defTip: '',              // 没保存过主题时的默认说明（按礼簿类型）
     cust: Object.assign({}, pt.DEFAULT_CUSTOM),
     fun: Object.assign({}, pt.DEFAULT_FUNERAL),
     pv: null,                // 封面预览 { bg, border, text, title, footer, mark }
@@ -61,16 +62,26 @@ Page({
       }
       const isFuneral = book.type === 'funeral';
       const saved = book.pdfCustom || null;
+      // 没保存过主题：按礼簿类型预选默认主题和水印（v3.55.0）；保存过的原样显示
+      const fresh = !book.pdfTheme;
+      const def = fresh && !isFuneral ? pt.defaultSelection(book.type) : null;
+      let defTip = '';
+      if (fresh) {
+        const lb = pt.TYPE_LABELS[book.type] || pt.TYPE_LABELS.other;
+        const mk = pt.typeDefault(book.type).mark;
+        defTip = isFuneral ? `按「${lb}」默认：素灰${mk ? '，水印「' + mk + '」' : ''}，可在下方修改`
+          : `按「${lb}」默认选了「${def.name}」${def.mark ? '，水印「' + def.mark + '」' : '，无水印'}，可更换或修改`;
+      }
       this.setData({
-        book, isFuneral,
+        book, isFuneral, defTip,
         canSave: perm.can('books'),
-        themeKey: isFuneral ? 'custom' : (book.pdfTheme || pt.DEFAULT_KEY),
-        base: book.pdfBase || '',
+        themeKey: isFuneral ? 'custom' : (def ? def.themeKey : (book.pdfTheme || pt.DEFAULT_KEY)),
+        base: def ? def.base : (book.pdfBase || ''),
         back: Object.assign({}, pt.DEFAULT_BACK, book.pdfBack || {}),
         bind: book.pdfBind || 'none',
         bindTip: pt.BIND_TIPS[book.pdfBind || 'none'],
-        cust: Object.assign({}, pt.DEFAULT_CUSTOM, isFuneral ? {} : (saved || {})),
-        fun: Object.assign({}, pt.DEFAULT_FUNERAL, isFuneral && saved ? saved : {})
+        cust: Object.assign({}, pt.DEFAULT_CUSTOM, isFuneral ? {} : (def && def.cust ? def.cust : (saved || {}))),
+        fun: Object.assign({}, pt.DEFAULT_FUNERAL, isFuneral && fresh ? { mark: pt.typeDefault('funeral').mark } : {}, isFuneral && saved ? saved : {})
       });
       this.refresh();
       this.loadRows();
@@ -159,7 +170,7 @@ Page({
 
   onPickTheme(e) {
     const k = e.currentTarget.dataset.k;
-    this.setData({ themeKey: k, base: k === 'custom' ? this.data.base : '' });
+    this.setData({ themeKey: k, base: k === 'custom' ? this.data.base : '', defTip: '' });
     this.refresh();
   },
 

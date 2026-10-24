@@ -11,6 +11,9 @@
 .th-in { width: 40rpx; height: 4rpx; }
 .th.on .th-sw { box-shadow: 0 0 0 4rpx var(--primary); }
 .th-name { font-size: 26rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.th.base .th-sw { box-shadow: 0 0 0 4rpx var(--primary); opacity: 0.85; }
+.th.base .th-name { color: var(--primary); font-weight: 600; }
+.def-tip { font-size: 24rpx; color: var(--primary); background: var(--fill); border-radius: 12rpx; padding: 12rpx 16rpx; margin-bottom: 12rpx; line-height: 1.5; }
 .th.on .th-name { color: var(--primary); font-weight: 600; }
 .th-scene { font-size: 22rpx; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .th-custom { border-color: var(--border); color: var(--text-2); font-size: 40rpx; background: var(--fill); }

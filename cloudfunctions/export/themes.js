@@ -120,4 +120,24 @@ const sanitizeBind = v => (BINDS.includes(v) ? v : 'none');
 
 const isPresetKey = k => PRESETS.some(p => p.key === k && !p.funeral);
 
-module.exports = { PRESETS, DEFAULT_KEY, resolve, isPresetKey, sanitizeCustom, sanitizeFuneral, sanitizeBack, sanitizeBind, DEFAULT_BACK };
+// v3.55.0 默认主题：没保存过主题的礼簿，按礼簿类型取默认预设和水印（前端 pages/booktheme/pdftheme.js 的 TYPE_DEFAULTS 须与此一致，tests 有比对）
+const TYPE_DEFAULTS = {
+  wedding: { key: 'red_gold', mark: '囍' },
+  birthday: { key: 'shou_gold', mark: '寿' },
+  baby: { key: 'orange', mark: '福' },
+  house: { key: 'purple_gold', mark: '福' },
+  funeral: { key: 'grey', mark: '奠' },
+  other: { key: 'red_gold', mark: '' }
+};
+/** 礼簿类型的默认 { key, mark }；未知类型同 other */
+function typeDefault(bookType) {
+  return Object.assign({}, TYPE_DEFAULTS[bookType] || TYPE_DEFAULTS.other);
+}
+/** 没保存过主题时的最终主题：默认预设 + 默认水印（预设自带的水印与默认一致时即预设本身）；只在内存里用，不写库 */
+function resolveDefault(bookType) {
+  const d = typeDefault(bookType);
+  const p = PRESETS.find(x => x.key === d.key) || PRESETS.find(x => x.key === DEFAULT_KEY);
+  return p.mark === d.mark ? p : Object.assign({}, p, { mark: d.mark });
+}
+
+module.exports = { PRESETS, DEFAULT_KEY, TYPE_DEFAULTS, typeDefault, resolveDefault, resolve, isPresetKey, sanitizeCustom, sanitizeFuneral, sanitizeBack, sanitizeBind, DEFAULT_BACK };

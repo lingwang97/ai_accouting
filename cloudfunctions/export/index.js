@@ -424,7 +424,7 @@ function buildMeta(rows, { account, book, startDay, endDay, themeName, pdfThemeK
     title: book ? book.name || '礼簿' : (account.accountName || '礼簿'),
     bookType, funeral,
     theme: funeral ? THEME.grey : THEME.red,
-    bt: themes.resolve(funeral, pdfThemeKey, pdfCustom), // 传统礼簿主题
+    bt: pdfThemeKey ? themes.resolve(funeral, pdfThemeKey, pdfCustom) : themes.resolveDefault(bookType), // 传统礼簿主题；没保存过（key 为空）按礼簿类型取默认主题 + 水印（v3.55.0，只在内存里用）
     back: themes.sanitizeBack(pdfBack), // 尾页设置
     bind: themes.sanitizeBind(pdfBind), // 装订：none | single | double
     startDay, endDay, themeName,

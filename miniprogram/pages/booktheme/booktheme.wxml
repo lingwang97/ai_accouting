@@ -71,8 +71,9 @@
     <!-- 喜事：预设 + 自定义 -->
     <view class="card" wx:if="{{!isFuneral}}">
       <view class="section-title">主题</view>
+      <view wx:if="{{defTip}}" class="def-tip">{{defTip}}</view>
       <view class="themes">
-        <view wx:for="{{presets}}" wx:key="key" class="th {{themeKey === item.key ? 'on' : ''}}" data-k="{{item.key}}" bindtap="onPickTheme">
+        <view wx:for="{{presets}}" wx:key="key" class="th {{themeKey === item.key ? 'on' : ''}} {{themeKey === 'custom' && base === item.key ? 'base' : ''}}" data-k="{{item.key}}" bindtap="onPickTheme">
           <view class="th-sw" style="background:{{item.main}};border-color:{{item.accent}}"><view class="th-in" style="background:{{item.accent}}"></view></view>
           <view class="th-name">{{item.name}}</view>
           <view class="th-scene">{{item.scene}}</view>
@@ -115,6 +116,7 @@
     <view class="card cust" wx:if="{{isFuneral}}">
       <view class="section-title">白事礼簿样式</view>
       <view class="muted">颜色固定为素灰，不可更换；其余可按需设置</view>
+      <view wx:if="{{defTip}}" class="def-tip">{{defTip}}</view>
       <view class="cust-lb">字体</view>
       <view class="chips"><view wx:for="{{fonts}}" wx:key="k" class="chip {{fun.font === item.k ? 'on' : ''}}" data-f="font" data-v="{{item.k}}" bindtap="onFun">{{item.n}}</view></view>
       <view class="cust-lb">角饰</view>
