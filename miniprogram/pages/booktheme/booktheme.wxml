@@ -55,8 +55,7 @@
           <view class="pc-mid">
             <view class="pc-title" wx:if="{{bk.foot}}" style="color:{{pv.border}};font-size:36rpx;letter-spacing:6rpx">{{bk.foot}}</view>
             <view class="pc-line" wx:if="{{bk.foot}}" style="background:{{pv.border}}"></view>
-            <view class="pc-sm" wx:for="{{bk.lines}}" wx:key="*this">{{item}}</view>
-            <view class="pc-sign" wx:if="{{back.sign}}"><view>记账人（签字）</view></view>
+            <view class="pc-sign" wx:if="{{back.sign}}"><view>{{bk.sign}}</view></view>
           </view>
           <view class="pc-brand" wx:if="{{back.brand}}">慧礼记</view>
         </view>
@@ -146,9 +145,6 @@
           </block>
         </view>
         <input class="input" cursor-spacing="120" adjust-position="{{true}}" bindfocus="onKbOn" bindblur="onKbOff" value="{{back.footer === '-' ? '' : back.footer}}" maxlength="8" placeholder="自动：用封面落款，没有则按事由默认（白事无吉语）" data-f="footer" bindinput="onBackInput" />
-        <view class="opt"><text>显示主家</text><switch checked="{{back.host}}" color="#07C160" data-f="host" bindchange="onBackSwitch" /></view>
-        <view class="opt"><text>显示日期</text><switch checked="{{back.date}}" color="#07C160" data-f="date" bindchange="onBackSwitch" /></view>
-        <view class="opt"><text>显示合计摘要（份数、礼金合计）</text><switch checked="{{back.sum}}" color="#07C160" data-f="sum" bindchange="onBackSwitch" /></view>
         <view class="opt"><text>记账人签名栏</text><switch checked="{{back.sign}}" color="#07C160" data-f="sign" bindchange="onBackSwitch" /></view>
         <view class="opt"><text>显示「慧礼记」小字</text><switch checked="{{back.brand}}" color="#07C160" data-f="brand" bindchange="onBackSwitch" /></view>
       </block>

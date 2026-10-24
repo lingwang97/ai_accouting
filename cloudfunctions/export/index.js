@@ -382,7 +382,7 @@ async function bookPreview(event, ctx, OWNER) {
   const sample = rows.length === 0;
   if (sample) rows = SAMPLE_ROWS.map(r => ({ ...r }));
   if (event.action === 'bookPreviewData') {
-    return ok({ sample, rows: rows.map(r => ({ name: String(r.payerName || ''), amount: Number(r.amount) || 0 })) });
+    return ok({ sample, rows: rows.map(r => ({ name: String(r.payerName || ''), amount: Number(r.amount) || 0 })), signers: sample ? { names: [], total: 0 } : signersOf(rows) }); // 经手人只含姓名，取自这几笔
   }
   const th = previewTheme(book, event);
   if (th.error) return err(th.error);
@@ -428,6 +428,7 @@ function buildMeta(rows, { account, book, startDay, endDay, themeName, pdfThemeK
     back: themes.sanitizeBack(pdfBack), // 尾页设置
     bind: themes.sanitizeBind(pdfBind), // 装订：none | single | double
     startDay, endDay, themeName,
+    signers: signersOf(rows), // 封底记账人（只含姓名）
     count: rows.length,
     sum: rows.reduce((s, r) => s + Math.round(Number(r.amount) * 100), 0) / 100,
     methodLine: methodSummary(rows),
@@ -765,38 +766,72 @@ function drawFrame(doc, bt, c) {
 const BACK_FOOTER = { wedding: '百年好合', birthday: '福寿安康', baby: '福泽绵长', house: '乔迁大吉' };
 
 /**
- * 封底：与封面同底色 / 边框 / 角饰 / 水印；落款、主家、日期、合计摘要（一行）、记账人签名栏、「慧礼记」按设置显示
+ * 封底人员（v3.54.0）：本礼簿 paid 记录的经手人姓名（records.handlerName，确认入簿时记下的快照，含主家本人），
+ * 去重后按经手笔数从多到少（同笔数按先出现的在前）；只取姓名，不碰 openid。返回 { names: 最多 4 位, total: 去重后总人数 }
+ */
+function signersOf(rows) {
+  const stat = new Map(); // key -> { name, n, i }
+  (rows || []).forEach((r, i) => {
+    let name = String(r.handlerName || '').replace(/[ -\s]+/g, ' ').trim();
+    if (!name || /^o[A-Za-z0-9_-]{20,}$/.test(name)) return; // 空名 / 形似 openid 的不要
+    name = name.slice(0, 10);
+    const key = r.handlerOpenid ? 'o:' + r.handlerOpenid : 'n:' + name;
+    const e = stat.get(key);
+    if (e) e.n++; else stat.set(key, { name, n: 1, i });
+  });
+  const list = [...stat.values()].sort((a, b) => b.n - a.n || a.i - b.i);
+  // 不同人同名时只显示一次
+  const names = [];
+  list.forEach(e => { if (!names.includes(e.name)) names.push(e.name); });
+  return { names: names.slice(0, 4), total: names.length };
+}
+
+/** 封底签名文字：「记账人：张三　李四」，超过 4 位后加「等 N 人」；没有经手人返回空串 */
+function signText(sg) {
+  if (!sg || !sg.names || !sg.names.length) return '';
+  return sg.names.join('　') + (sg.total > sg.names.length ? `等 ${sg.total} 人` : '');
+}
+
+/**
+ * 封底：与封面同底色 / 边框 / 角饰 / 水印；落款、记账人签名栏、「慧礼记」按设置显示（不再画主家 / 日期 / 合计摘要）
  * 落款：自定义 > 封面落款 > 事由默认吉语（白事无默认）；'-' 表示不要
+ * 签名栏：版心居中的一行「记账人：张三　李四」，姓名下方一条签字横线（横线覆盖整行，可在姓名旁手写签名）；
+ * 超宽自动缩小字号（最小 9）；没有经手人时为「记账人（签字）」加一条空白横线。封底边框两侧对称，装订不影响版心
  */
 function drawBack(doc, meta) {
   const W = BK.width, H = BK.height;
   const bt = meta.bt, back = meta.back;
   const c = coverColors(bt);
   drawFrame(doc, bt, c);
-  let foot = back.footer === '-' ? '' : (back.footer || bt.footer || (meta.funeral ? '' : BACK_FOOTER[meta.bookType] || ''));
-  let y = 190;
+  const foot = back.footer === '-' ? '' : (back.footer || bt.footer || (meta.funeral ? '' : BACK_FOOTER[meta.bookType] || ''));
+  const hasSign = !!back.sign;
+  // 落款居中偏上；有签名栏时落款上移，签名栏在下方
+  let y = hasSign ? 170 : 220;
   if (foot) {
     doc.font('cn').fontSize(36).fillColor(c.title).text(foot.split('').join(' '), 0, y, { width: W, align: 'center', lineBreak: false });
     y += 70;
     doc.lineWidth(1).moveTo(W / 2 - 80, y).lineTo(W / 2 + 80, y).stroke(c.border);
-    y += 28;
   }
-  const lines = [];
-  if (back.host && meta.accountName) lines.push(`主家：${meta.accountName}`);
-  if (back.date) {
-    const d = meta.bookDate || (meta.startDay && meta.endDay ? `${meta.startDay} 至 ${meta.endDay}` : '');
-    if (d) lines.push(`日期：${d}`);
-  }
-  if (back.sum) lines.push(`共 ${meta.count} 份　礼金合计 ￥${fmtAmount(meta.sum)}`);
-  doc.font('sub').fontSize(16).fillColor(c.text);
-  lines.forEach(t => { doc.text(t, 0, y, { width: W, align: 'center', lineBreak: false }); y += 28; });
-  if (back.sign) {
-    const x0 = (W - 540) / 2, sy = H - 150;
-    doc.font('sub').fontSize(14).fillColor(c.text);
-    // 只留签字栏：日期已在上方「日期」行显示，不再重复
-    doc.text('记账人（签字）', x0, sy, { lineBreak: false });
+  if (hasSign) {
+    const sy = H - 170, maxW = W - 220;
+    const names = signText(meta.signers);
     doc.lineWidth(0.8).strokeColor(c.border);
-    doc.moveTo(x0 + 110, sy + 16).lineTo(x0 + 400, sy + 16).stroke();
+    if (names) {
+      const txt = `记账人：${names}`;
+      let size = 16;
+      doc.font('sub').fontSize(size);
+      while (size > 9 && doc.widthOfString(txt) > maxW) { size -= 1; doc.fontSize(size); }
+      const tw = Math.min(doc.widthOfString(txt), maxW);
+      const lw = Math.min(maxW, Math.max(tw + 60, 240));
+      doc.fillColor(c.text).text(txt, (W - tw) / 2, sy, { lineBreak: false });
+      doc.moveTo((W - lw) / 2, sy + size + 6).lineTo((W + lw) / 2, sy + size + 6).stroke();
+    } else {
+      doc.fontSize(16).fillColor(c.text);
+      const label = '记账人（签字）', lw = doc.widthOfString(label), line = 260;
+      const x0 = (W - lw - line - 8) / 2;
+      doc.text(label, x0, sy, { lineBreak: false });
+      doc.moveTo(x0 + lw + 8, sy + 18).lineTo(x0 + lw + 8 + line, sy + 18).stroke();
+    }
   }
   if (back.brand) doc.font('sub').fontSize(10).fillColor(c.text).text('慧礼记', 0, H - 70, { width: W, align: 'center', lineBreak: false });
   if (meta.preview) doc.font('sub').fontSize(9).fillColor(c.text).text(`预览（${meta.previewSample ? '示例数据' : '仅前几笔，合计为这几笔'}，非正式礼簿）`, 0, H - 52, { width: W, align: 'center', lineBreak: false });
@@ -1235,4 +1270,4 @@ function sanitizeName(s) {
 
 
 // 仅供本地测试使用，不影响云函数入口
-module.exports._test = { fontLoader, buildPdf, buildXlsx, buildBook, buildBackup, buildMeta, amountUpper, sanitizeName, guestText };
+module.exports._test = { signersOf, signText, drawBack, fontLoader, buildPdf, buildXlsx, buildBook, buildBackup, buildMeta, amountUpper, sanitizeName, guestText };

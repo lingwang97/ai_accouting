@@ -248,3 +248,65 @@ t('预览：字体不可用时回退黑体并提示；黑体不可用报错', as
   r = await fn.main({ action: 'bookPreview', bookId: 'b1' });
   assert.strictEqual(r.code, 1);
 });
+
+// —— v3.54.0 封底：去掉主家 / 日期 / 合计，记账人签名自动填写 ——
+const BT = require('../cloudfunctions/export/themes.js');
+function fakeDoc() {
+  const texts = [];
+  const d = new Proxy({}, { get: (_, k) => {
+    if (k === 'text') return (t) => { texts.push(String(t)); return d; };
+    if (k === 'widthOfString') return (t) => String(t).length * 10;
+    return () => d;
+  } });
+  return { doc: d, texts };
+}
+const backMeta = (signers, extra) => ({ bt: BT.resolve(false, 'wine_gold', null), back: BT.sanitizeBack({ sign: true, ...(extra || {}) }), bookType: 'wedding', accountName: '测试主家', bookDate: '2026-10-01', count: 8, sum: 828, signers });
+
+t('封底：不再出现「主家：」「日期：」「合计」', async () => {
+  const { _test } = load().fn;
+  const { doc, texts } = fakeDoc();
+  _test.drawBack(doc, backMeta({ names: ['张三'], total: 1 }));
+  const all = texts.join('|');
+  assert.ok(!/主家：|日期：|合计/.test(all), all);
+  assert.ok(all.includes('记账人：张三'));
+});
+
+t('封底：经手人按笔数排序、最多 4 位、等 N 人，不含 openid', async () => {
+  const { _test } = load().fn;
+  const mk = (n, o, nm) => Array.from({ length: n }, () => ({ handlerOpenid: o, handlerName: nm }));
+  const rows = [...mk(1, 'oA', '甲'), ...mk(3, 'oB', '乙'), ...mk(2, 'oC', '丙'), ...mk(1, 'oD', '丁'), ...mk(1, 'oE', '戊'), ...mk(1, 'oF', '')];
+  const sg = _test.signersOf(rows);
+  assert.deepStrictEqual(sg.names, ['乙', '丙', '甲', '丁']);
+  assert.strictEqual(sg.total, 5);
+  assert.strictEqual(_test.signText(sg), '乙　丙　甲　丁等 5 人');
+  const { doc, texts } = fakeDoc();
+  _test.drawBack(doc, backMeta(sg));
+  assert.ok(texts.join('|').includes('记账人：乙　丙　甲　丁等 5 人'));
+  assert.ok(!/oA|oB|oC|oD|oE/.test(JSON.stringify(sg) + texts.join('')));
+  assert.deepStrictEqual(_test.signersOf([{ handlerName: 'oAbCdEfGhIjKlMnOpQrSt1' }]).names, [], '形似 openid 的名字丢弃');
+});
+
+t('封底：没有经手人时留空白签字横线', async () => {
+  const { _test } = load().fn;
+  assert.deepStrictEqual(_test.signersOf([{ amount: 1 }]), { names: [], total: 0 });
+  const { doc, texts } = fakeDoc();
+  _test.drawBack(doc, backMeta({ names: [], total: 0 }));
+  assert.ok(texts.includes('记账人（签字）'));
+});
+
+t('封底：预览 bookPreviewData 返回经手人姓名，不带 openid；buildMeta 带 signers', async () => {
+  seed();
+  db.data.records.forEach((r, i) => { r.handlerOpenid = i < 5 ? 'o-secret-1' : 'o-secret-2'; r.handlerName = i < 5 ? '张会计' : '李记账'; });
+  const { fn } = load();
+  const r = await fn.main({ action: 'bookPreviewData', bookId: 'b1' });
+  assert.strictEqual(r.code, 0, r.msg);
+  assert.deepStrictEqual(r.data.signers, { names: ['张会计', '李记账'], total: 2 });
+  assert.ok(!JSON.stringify(r.data).includes('o-secret'));
+});
+
+t('sanitizeBack：兼容旧字段 host / date / sum，不再输出', async () => {
+  const b = BT.sanitizeBack({ on: true, footer: '福', host: true, date: false, sum: false, sign: true, brand: true });
+  assert.deepStrictEqual(Object.keys(b).sort(), ['brand', 'footer', 'on', 'sign']);
+  assert.strictEqual(b.sign, true);
+  assert.deepStrictEqual(BT.sanitizeBack(null), { on: true, footer: '', sign: false, brand: true });
+});

@@ -33,6 +33,7 @@ Page({
     cur: 0,                  // 示意图当前页：0 封面 / 1 内页 / 2 封底
     pg: null,                // 内页示意
     bk: null,                // 封底示意
+    signers: null,           // 封底记账人姓名（云端 bookPreviewData；只有姓名）
     pvRows: pt.SAMPLE,       // 内页示意用的前几位宾客（云端 bookPreviewData，拿不到用示例）
     pvSample: false,
     previewing: false,       // 正在生成预览 PDF
@@ -82,7 +83,7 @@ Page({
   async loadRows() {
     try {
       const r = await req.exportPreviewData(this.data.id);
-      if (r && r.rows && r.rows.length) this.setData({ pvRows: r.rows, pvSample: !!r.sample });
+      if (r && r.rows && r.rows.length) this.setData({ pvRows: r.rows, pvSample: !!r.sample, signers: r.signers || null });
       this.refresh();
     } catch (e) { /* 用示例 */ }
   },
@@ -148,16 +149,12 @@ Page({
   /** 封底示意：按尾页设置显示 / 隐藏各项（落款：自定义 > 封面落款 > 事由默认吉语；'-' 表示不要） */
   backOf(e, pv) {
     const d = this.data, b = d.back, book = d.book || {};
-    if (!b.on) return { foot: '', lines: [] };
+    if (!b.on) return { foot: '', sign: '' };
     const foot = b.footer === '-' ? '' : (b.footer || e.footer || (d.isFuneral ? '' : pt.BACK_FOOTER[book.type] || ''));
-    const lines = [];
-    if (b.host && book.hostName) lines.push(`主家：${book.hostName}`);
-    if (b.date && book.date) lines.push(`日期：${book.date}`);
-    if (b.sum) {
-      const sum = d.pvRows.reduce((s, r) => s + Math.round(Number(r.amount) * 100), 0) / 100;
-      lines.push(`共 ${d.pvRows.length} 份　礼金合计 ￥${sum}`);
-    }
-    return { foot, lines };
+    // 签名：本礼簿经手人姓名（云端 bookPreviewData 返回，只有姓名）；没有则显示留空签字栏
+    const sg = d.signers || {}, ns = sg.names || [];
+    const sign = ns.length ? `记账人：${ns.join('　')}${sg.total > ns.length ? `等 ${sg.total} 人` : ''}` : '记账人（签字）';
+    return { foot, sign };
   },
 
   onPickTheme(e) {
