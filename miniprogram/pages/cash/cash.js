@@ -130,16 +130,11 @@ Page({
       this.setData({ ...emptyForm(), done, doneCount: this.data.doneCount + added.length, doneSum: fmt.money(this._doneFen / 100) });
       if (this.data.batchMode) this.selectComponent('#batch').reset();
       const addFen = added.reduce((s, r) => s + Math.round(r.amount * 100), 0);
-      const notice = samename.autoNotice(picked.notes);
-      if (notice) {
-        // 自动归到以前随过礼的人：说明一下，可到往来页区分（modal 按钮文字不超过 4 字）
-        wx.showModal({ title: added.length > 1 ? `${added.length} 人已入簿` : `${added[0].payerName} 已入簿`, content: notice, showCancel: false, confirmText: '知道了' });
-      } else {
-        wx.showToast({
-          title: added.length > 1 ? `${added.length} 人 ￥${fmt.money(addFen / 100)} 已入簿` : `${added[0].payerName} ￥${added[0].amountStr} 已入簿`,
-          icon: 'none'
-        });
-      }
+      // 自动归到以前随过礼的人时不再弹窗说明（第二场起老亲戚几乎每位都会触发，太打扰）；归错了到往来页区分
+      wx.showToast({
+        title: added.length > 1 ? `${added.length} 人 ￥${fmt.money(addFen / 100)} 已入簿` : `${added[0].payerName} ￥${added[0].amountStr} 已入簿`,
+        icon: 'none'
+      });
       this.print(added);
     } catch (e) { /* toast 已提示 */ } finally {
       this.setData({ saving: false });
