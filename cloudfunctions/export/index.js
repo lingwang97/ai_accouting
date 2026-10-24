@@ -793,11 +793,10 @@ function drawBack(doc, meta) {
   if (back.sign) {
     const x0 = (W - 540) / 2, sy = H - 150;
     doc.font('sub').fontSize(14).fillColor(c.text);
+    // 只留签字栏：日期已在上方「日期」行显示，不再重复
     doc.text('记账人（签字）', x0, sy, { lineBreak: false });
-    doc.text('日期', x0 + 340, sy, { lineBreak: false });
     doc.lineWidth(0.8).strokeColor(c.border);
-    doc.moveTo(x0 + 110, sy + 16).lineTo(x0 + 300, sy + 16).stroke();
-    doc.moveTo(x0 + 380, sy + 16).lineTo(x0 + 540, sy + 16).stroke();
+    doc.moveTo(x0 + 110, sy + 16).lineTo(x0 + 400, sy + 16).stroke();
   }
   if (back.brand) doc.font('sub').fontSize(10).fillColor(c.text).text('慧礼记', 0, H - 70, { width: W, align: 'center', lineBreak: false });
   if (meta.preview) doc.font('sub').fontSize(9).fillColor(c.text).text(`预览（${meta.previewSample ? '示例数据' : '仅前几笔，合计为这几笔'}，非正式礼簿）`, 0, H - 52, { width: W, align: 'center', lineBreak: false });

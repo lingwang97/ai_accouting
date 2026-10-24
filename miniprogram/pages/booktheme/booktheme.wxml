@@ -56,7 +56,7 @@
             <view class="pc-title" wx:if="{{bk.foot}}" style="color:{{pv.border}};font-size:36rpx;letter-spacing:6rpx">{{bk.foot}}</view>
             <view class="pc-line" wx:if="{{bk.foot}}" style="background:{{pv.border}}"></view>
             <view class="pc-sm" wx:for="{{bk.lines}}" wx:key="*this">{{item}}</view>
-            <view class="pc-sign" wx:if="{{back.sign}}"><view>记账人（签字）</view><view>日期</view></view>
+            <view class="pc-sign" wx:if="{{back.sign}}"><view>记账人（签字）</view></view>
           </view>
           <view class="pc-brand" wx:if="{{back.brand}}">慧礼记</view>
         </view>

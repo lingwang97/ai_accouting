@@ -36,7 +36,7 @@
 .pc-foot { position: absolute; bottom: 52rpx; left: 0; right: 0; text-align: center; font-size: 26rpx; letter-spacing: 6rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pc-brand { position: absolute; bottom: 28rpx; left: 0; right: 0; text-align: center; font-size: 18rpx; }
 .pc-sign { display: flex; flex-direction: row; justify-content: space-between; width: 80%; margin-top: 24rpx; font-size: 20rpx; }
-.pc-sign view { width: 46%; border-bottom: 2rpx solid; text-align: left; white-space: nowrap; }
+.pc-sign view { width: 70%; border-bottom: 2rpx solid; text-align: left; white-space: nowrap; }
 .pc-none { display: flex; align-items: center; justify-content: center; color: var(--text-3); font-size: 28rpx; background: var(--fill); border-color: var(--border); }
 /* 内页：右起 12 列，姓名 | 大写金额 | 小写；装订边用一侧斜纹示意 */
 .pg { background: #fff; }
