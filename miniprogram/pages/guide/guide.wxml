@@ -13,12 +13,9 @@
       <input class="faq-input" type="text" confirm-type="search" placeholder="搜索问题，如：打印、导出、未收到" value="{{kw}}" bindinput="onKw" />
       <text class="faq-clear" wx:if="{{kw}}" bindtap="onKwClear">✕</text>
     </view>
-    <view class="chips faq-who">
-      <view class="chip {{who === item ? 'on' : ''}}" wx:for="{{whoList}}" wx:key="*this" data-w="{{item}}" bindtap="onWho">{{item}}</view>
-    </view>
     <view class="empty" wx:if="{{!faqView.length}}">
       <view class="muted">没有找到相关问题</view>
-      <view class="muted small">换个关键词，或把上方身份切到「全部」；仍没有答案请到「我的 → 联系我们」</view>
+      <view class="muted small">换个关键词试试；仍没有答案请到「我的 → 联系我们」</view>
     </view>
     <view class="faq-cat" wx:for="{{faqView}}" wx:for-item="c" wx:key="ci">
       <view class="faq-cat-head" data-ci="{{c.ci}}" bindtap="onToggleCat">

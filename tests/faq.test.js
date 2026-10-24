@@ -24,6 +24,18 @@ test('faq：分类与条数合理，每条有 q、a、who', () => {
   });
 });
 
+test('faq：分类 key 唯一且含 guest（页面链接 cat=guest 依赖它）', () => {
+  const keys = FAQ.map(c => c.key);
+  assert.ok(keys.every(k => /^[a-z]+$/.test(k)), '分类缺少 key');
+  assert.strictEqual(new Set(keys).size, keys.length, '分类 key 重复');
+  assert.ok(keys.includes('guest'));
+  // 随礼页、宾客首页的链接参数必须能对上分类
+  ['pages/pay/pay.js', 'pages/index/index.js'].forEach(f => {
+    const m = fs.readFileSync(path.join(__dirname, '../miniprogram', f), 'utf8').match(/guide\?tab=faq&cat=(\w+)/);
+    assert.ok(m && keys.includes(m[1]), f + ' 的 cat 参数无对应分类');
+  });
+});
+
 test('faq：url 指向 app.json 里存在的页面，tab 页用 switchTab 标记', () => {
   all.filter(it => it.url).forEach(it => {
     assert.ok(PAGES.has(it.url), `${it.q} 的 url 不存在：${it.url}`);

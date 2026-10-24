@@ -1,7 +1,7 @@
 // pages/guide/guide.js — 使用教程与常见问题：主家 / 记账人 / 宾客 三类身份按办事流程分段讲解，第 4 个分页为常见问题（数据在 faq.js）
 // 每一步配一张示意图（mock，用代码画的简化界面，高亮要点的位置），不用截图、不占小程序体积；改界面时同步这里
 const theme = require('../../utils/theme.js');
-const { FAQ, WHO } = require('./faq.js');
+const { FAQ } = require('./faq.js');
 
 // 示意图里的界面元素（与实际页面保持一致）
 const GRID = ['出示礼簿码', '待确认礼金', '礼台记账', '打印机', '一键对账', '礼簿管理']; // 工作台宫格（三行两列）
@@ -99,7 +99,6 @@ const GUIDES = {
   ]
 };
 const TABS = ['host', 'clerk', 'guest', 'faq'];
-const WHO_PARAM = { owner: '主家', clerk: '记账人', viewer: '家人', guest: '宾客' }; // 链接参数 who= 对应的筛选
 
 /** 机构模式的称呼替换（与教程一致：礼簿管理→场次管理、记账人→礼台人员） */
 const orgText = s => String(s).replace(/礼簿管理/g, '场次管理').replace(/记账人/g, '礼台人员').replace(/当前礼簿/g, '当前场次');
@@ -108,9 +107,7 @@ Page({
   data: {
     tab: 'host',
     secs: [],
-    // 常见问题：身份筛选、搜索词、展开状态；faqView 为过滤后的分类与问题
-    whoList: ['全部'].concat(WHO),
-    who: '全部',
+    // 常见问题：搜索词、展开状态；faqView 为过滤后的分类与问题
     kw: '',
     openCat: {},
     openQ: {},
@@ -123,10 +120,12 @@ Page({
   onLoad(options) {
     const tab = TABS.includes(options.tab) ? options.tab : 'host';
     this.setData({ tab, secs: this.secsOf(tab) });
-    // 常见问题默认筛选：链接带 who= 的按它；未登录（多半是宾客）筛「宾客」；其余显示全部
-    const app = getApp();
-    const who = WHO_PARAM[options.who] || (app.globalData.user ? '全部' : '宾客');
-    this.setData({ who, openCat: { 0: true } });
+    // 常见问题默认展开：链接带 cat=（分类 key，如 guest）展开该类，否则展开第一类；
+    // 旧版随礼页链接用 who=guest，兼容映射为 cat=guest
+    const key = options.cat || (options.who === 'guest' ? 'guest' : '');
+    const hit = FAQ.findIndex(c => c.key === key);
+    this._defCat = hit >= 0 ? hit : 0;
+    this.setData({ openCat: { [this._defCat]: true } });
     this.buildFaq();
   },
 
@@ -163,7 +162,7 @@ Page({
   buildFaq() {
     const a = getApp().globalData.account;
     const org = !!(a && a.orgMode);
-    const { who, openCat, openQ } = this.data;
+    const { openCat, openQ } = this.data;
     const kw = this.data.kw.trim().toLowerCase();
     const txt = s => (org ? orgText(s) : s);
     let count = 0;
@@ -172,7 +171,6 @@ Page({
       const items = [];
       c.items.forEach((it, ii) => {
         if (org && it.hideOrg) return;
-        if (who !== '全部' && it.who.indexOf(who) < 0) return;
         const q = org && it.qOrg ? it.qOrg : txt(it.q);
         const ans = org && it.aOrg ? it.aOrg : txt(it.a);
         if (kw && (q + ans).toLowerCase().indexOf(kw) < 0) return;
@@ -186,19 +184,22 @@ Page({
     this.setData({ faqView, faqCount: count });
   },
 
-  onWho(e) {
-    this.setData({ who: e.currentTarget.dataset.w });
-    this.buildFaq();
-  },
-
   onKw(e) {
-    this.setData({ kw: e.detail.value || '' });
+    const kw = e.detail.value || '';
+    this.setData({ kw });
     clearTimeout(this._kwTimer);
-    this._kwTimer = setTimeout(() => this.buildFaq(), 150);
+    // 搜索词清空时恢复默认展开；否则按关键词过滤（命中自动展开）
+    this._kwTimer = setTimeout(() => (kw.trim() ? this.buildFaq() : this.resetFaqOpen()), 150);
   },
 
+  /** 清空搜索：恢复成默认展开状态 */
   onKwClear() {
     this.setData({ kw: '' });
+    this.resetFaqOpen();
+  },
+
+  resetFaqOpen() {
+    this.setData({ openCat: { [this._defCat || 0]: true }, openQ: {} });
     this.buildFaq();
   },
 

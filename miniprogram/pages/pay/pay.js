@@ -250,8 +250,8 @@ Page({
     }
   },
 
-  /** 常见问题：教程页第 4 分页，默认筛选宾客 */
-  goFaq() { wx.navigateTo({ url: '/pages/guide/guide?tab=faq&who=guest' }); },
+  /** 常见问题：教程页第 4 分页，默认展开「宾客常见问题」 */
+  goFaq() { wx.navigateTo({ url: '/pages/guide/guide?tab=faq&cat=guest' }); },
 
   /** 取消本次转账（尚未转账时） */
   onCancel() {

@@ -53,7 +53,6 @@
 .faq-search { display: flex; align-items: center; background: #fff; border-radius: var(--r-m); padding: 0 24rpx; height: 80rpx; margin-bottom: 16rpx; }
 .faq-input { flex: 1; min-width: 0; height: 80rpx; font-size: 28rpx; }
 .faq-clear { padding: 0 8rpx 0 20rpx; color: var(--text-3); font-size: 28rpx; line-height: 80rpx; }
-.faq-who { margin-bottom: 12rpx; }
 .faq-cat { background: #fff; border-radius: var(--r-m); margin-bottom: 20rpx; overflow: hidden; }
 .faq-cat-head { display: flex; align-items: center; padding: 26rpx 28rpx; }
 .faq-cat-name { flex: 1; min-width: 0; font-size: 30rpx; font-weight: 600; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

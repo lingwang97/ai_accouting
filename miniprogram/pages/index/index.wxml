@@ -13,7 +13,7 @@
 
     <!-- 老用户：使用教程入口，✕ 关闭后不再显示 -->
     <view class="tip-bar guide-tip" wx:if="{{guideTip}}" bindtap="goGuide">
-      <text class="tip-text">第一次使用？看看使用教程 ›</text>
+      <text class="tip-text">使用教程 / 常见问题 ›</text>
       <text class="guide-close" catchtap="onCloseGuideTip">✕</text>
     </view>
 
@@ -127,6 +127,8 @@
       </view>
     </view>
     <ad-slot slot="workbench" book-type="{{book ? book.type : ''}}" />
+    <!-- 提示条关闭后：页面底部常驻低调入口 -->
+    <view class="guide-foot" wx:if="{{!guideTip}}" bindtap="goGuide">使用教程与常见问题 ›</view>
   </block>
 
   <!-- ===== 加载中骨架（首次打开、没有缓存时） ===== -->
@@ -182,7 +184,10 @@
       <view class="step"><text class="num">4</text><text>主家确认收到，礼金入簿并生成回执</text></view>
     </view>
 
-    <view class="my-receipts" bindtap="goMyReceipts">我的随礼记录 ›</view>
+    <view class="my-receipts">
+      <text class="mr-link" bindtap="goMyReceipts">我的随礼记录 ›</text>
+      <text class="mr-link" bindtap="goFaq">常见问题 ›</text>
+    </view>
 
     <view class="card host-entry">
       <view>
