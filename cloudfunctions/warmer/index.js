@@ -33,6 +33,10 @@ exports.main = async (event) => {
     if (left() > 15 * 1000) {
       try { await trash.purgeExpired(db, cloud, 5); } catch (e) { console.warn('回收站清理失败', e.message); }
     }
+    // 小程序码一次性凭据（settings.urlnonce_*，payment 写、system 用后即删）：payment 中途超时会留下，清掉 10 分钟前的（v3.59.1）
+    if (left() > 5 * 1000) {
+      try { await cleanNonces(); } catch (e) { console.warn('凭据清理失败', e.message); }
+    }
   }
   const cfg = normalizeWarmup(await readSetting(db, 'warmup', DEFAULT_WARMUP));
   // 关闭时不做任何读写（不再每 5 分钟写一次状态）
@@ -114,6 +118,13 @@ async function pushReminders(deadline) {
   }
 }
 
+/** 删除过期的小程序码一次性凭据（有效期 60 秒，这里只删 10 分钟前的，不会和正在进行的生成冲突） */
+async function cleanNonces() {
+  const _ = db.command;
+  const res = await db.collection('settings').where({ kind: 'urllink', createdAt: _.lt(Date.now() - 10 * 60 * 1000) }).remove();
+  return (res.stats && res.stats.removed) || 0;
+}
+
 /** 是否存在未过期的非免费订阅 */
 async function hasPaidSubscription() {
   try {
@@ -125,3 +136,6 @@ async function hasPaidSubscription() {
     return false; // 集合尚不存在
   }
 }
+
+// 仅供本地测试
+exports._test = { cleanNonces };

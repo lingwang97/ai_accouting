@@ -162,8 +162,6 @@ module.exports = {
   // 传统礼簿 PDF 预览（3 页小 PDF）与示意图用的前几笔宾客数据
   exportPreview: d => call('export', Object.assign({}, d, { action: 'bookPreview' })),
   exportPreviewData: bookId => call('export', { action: 'bookPreviewData', bookId }, { silent: true }),
-  tplGet: () => call('printtpl', { action: 'get' }),
-  tplSave: tpl => call('printtpl', { action: 'save', tpl }),
   qrcodeGen: (aid, bookId) => call('qrcode', { action: 'gen', aid, bookId, envVersion: envVersion() }),
   appCode: () => call('qrcode', { action: 'app', envVersion: envVersion() }, { silent: true }),
   // 套餐与系统设置（付费订阅预留）

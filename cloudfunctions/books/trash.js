@@ -67,9 +67,9 @@ async function restore(db, owner, bookId) {
   return { done };
 }
 
-/** 永久删除回收站里的一本：文件、礼金记录、礼簿 */
+/** 永久删除回收站里的一本：文件（含这本礼金记录的小票二维码缓存，v3.59.1）、礼金记录、礼簿 */
 async function purge(db, cloud, t) {
-  const files = (t.files || []).filter(Boolean);
+  const files = (t.files || []).filter(Boolean).concat(await qrCacheFiles(db, 'trash_records', { ownerOpenid: t.ownerOpenid, bookId: t._id }));
   for (let i = 0; i < files.length; i += 50) {
     try { await cloud.deleteFile({ fileList: files.slice(i, i + 50) }); } catch (e) { /* 忽略 */ }
   }
@@ -81,6 +81,23 @@ async function purge(db, cloud, t) {
     try { await db.collection('exports').where({ fileID: t.archivePdf.fileID }).remove(); } catch (e) { /* 忽略 */ }
   }
   await db.collection('trash_books').doc(t._id).remove();
+}
+
+/**
+ * 小票二维码的光栅缓存文件（records / trash_records 的 rcptQrFileID，v3.58.0）：删记录前先取出来一并删除。
+ * 每页 1000 条，最多 20 页；集合不存在返回已取到的
+ */
+async function qrCacheFiles(db, col, cond) {
+  const files = [];
+  try {
+    for (let page = 0; page < 20; page++) {
+      const rows = (await db.collection(col).where({ ...cond, rcptQrFileID: db.command.exists(true) })
+        .field({ rcptQrFileID: true }).skip(page * 1000).limit(1000).get()).data;
+      rows.forEach(r => { if (r.rcptQrFileID && !r._openid) files.push(r.rcptQrFileID); });
+      if (rows.length < 1000) break;
+    }
+  } catch (e) { /* 集合不存在 */ }
+  return files;
 }
 
 /** 到期的永久删除（warmer 定时调用；每次最多 limit 本，没删完的下次继续） */

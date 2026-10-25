@@ -264,7 +264,10 @@ async function purgeBook(admin, bookId, confirmName) {
     const code = 'k' + require('crypto').createHash('md5').update(bookId).digest('hex').slice(0, 24);
     ['develop', 'trial', 'release'].forEach(env => files.push(`${prefix}/qrcodes/${code}-${env}.png`));
   }
-  try { if (files.length) await cloud.deleteFile({ fileList: files }); } catch (e) { /* 忽略 */ }
+  files.push(...(await Purge.qrCacheFiles(db, 'records', { ownerOpenid: book.ownerOpenid, bookId }))); // 小票二维码缓存（v3.59.1）
+  for (let i = 0; i < files.length; i += 50) {
+    try { await cloud.deleteFile({ fileList: files.slice(i, i + 50) }); } catch (e) { /* 忽略 */ }
+  }
   let records = 0;
   for (let i = 0; i < 200; i++) {
     const r = await db.collection('records').where({ ownerOpenid: book.ownerOpenid, bookId }).remove();
@@ -340,6 +343,12 @@ async function orphans(admin, doIt) {
         count += rs.length;
       }
     } else {
+      if (col === 'records') { // 无主礼金记录的小票二维码缓存（v3.59.1）
+        const qf = await Purge.qrCacheFiles(db, 'records', cond);
+        for (let i = 0; i < qf.length; i += 50) {
+          try { await cloud.deleteFile({ fileList: qf.slice(i, i + 50) }); files += Math.min(50, qf.length - i); } catch (e) { /* 忽略 */ }
+        }
+      }
       for (let i = 0; i < 200; i++) {
         let r;
         try { r = await db.collection(col).where(cond).remove(); } catch (e) { break; }

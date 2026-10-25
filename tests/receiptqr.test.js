@@ -148,15 +148,13 @@ test('qrprint：原生指令序列完整（模型 / 大小 / 纠错 / 存数据 
   assert.strictEqual(qrprint.nativeBytes('中文', 6), null); // 只接受可打印 ASCII
 });
 
-test('qrprint：图片方式输出 GS v 0 光栅，尺寸放得进 58mm（384 点），超宽返回 null', () => {
-  const b = qrprint.rasterBytes(URL, 5, 384);
-  assert.deepStrictEqual(b.slice(0, 4), [0x1d, 0x76, 0x30, 0x00]);
-  const wBytes = b[4] + b[5] * 256, h = b[6] + b[7] * 256;
-  assert.ok(h * 1 <= 384);
-  assert.strictEqual(b.length, 8 + wBytes * h);
-  assert.strictEqual(qrprint.rasterBytes(URL, 20, 384), null);
-  const a = qrprint.qrBytes(URL, 'image', 32), c = qrprint.qrBytes(URL, 'native', 32);
-  assert.ok(a.length > 1000 && c.length < 200);
+test('qrprint（v3.59.1）：前端不再带二维码矩阵库与光栅生成；fromBase64 还原云端光栅', () => {
+  assert.ok(!fs.existsSync(path.join(__dirname, '../miniprogram/utils/qrcode-lib.js')));
+  assert.ok(!fs.readFileSync(path.join(__dirname, '../miniprogram/utils/qrprint.js'), 'utf8').includes("require('./qrcode-lib"));
+  assert.strictEqual(qrprint.rasterBytes, undefined);
+  const raw = [0x1d, 0x76, 0x30, 0x00, 1, 0, 2, 0, 0xff, 0x00];
+  assert.deepStrictEqual(qrprint.fromBase64(Buffer.from(raw).toString('base64')), raw);
+  assert.strictEqual(qrprint.fromBase64(''), null);
 });
 
 test('escpos：二维码默认关（v3.59.0，任何事由未设置都不打），模板明确打开才打；提示文字', () => {

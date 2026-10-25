@@ -362,7 +362,8 @@ async function cashEntry(openid, ctx, event) {
     const ref = String((raw[i] && raw[i].personRef) || '');
     if (validId(ref)) {
       const r = await getRecord(ref);
-      if (r && r.ownerOpenid === ctx.ownerOpenid && r.payerName === items[i].payerName) {
+      // 只认负责范围内礼簿的记录（与 records.nameCheck 的范围一致，v3.59.1）
+      if (r && r.ownerOpenid === ctx.ownerOpenid && canBook(ctx, r.bookId) && r.payerName === items[i].payerName) {
         items[i].personKey = r.personKey || (r.payerOpenid ? `o:${r.payerOpenid}:${String(r.payerName).replace(/[\s\u3000]/g, '')}` : '');
         if (!items[i].personKey) delete items[i].personKey;
         if (r.nameTag) { items[i].nameTag = r.nameTag; items[i].nameTagBy = r.nameTagBy || 'desk'; }

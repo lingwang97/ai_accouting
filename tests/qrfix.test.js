@@ -160,3 +160,89 @@ test('回执页：扫码冷启动时以服务端 claim=staff 判断主家 / 记�
   const src = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/receipt/receipt.js'), 'utf8');
   assert.ok(/isHost: this\.data\.isHost \|\| claim === 'staff'/.test(src));
 });
+
+// —— v3.59.1：缓存文件清理、一次性凭据清理、personRef 范围 ——
+const SHARED = path.join(__dirname, '../tools/cloud-shared');
+
+test('回收站彻底删除：一并删除这本礼金记录的小票二维码缓存文件（含 50 个一批）', async () => {
+  const trash = require(path.join(SHARED, 'trash.js'));
+  const rows = Array.from({ length: 60 }, (_, i) => ({ _id: 'r' + i, ownerOpenid: OWNER, bookId: 'b1', rcptQrFileID: i % 2 ? 'cloud://x/rcptqr/r' + i + '.bin' : '' }));
+  db.reset().seed('trash_records', rows.concat([{ _id: 'o1', ownerOpenid: OWNER, bookId: 'b2', rcptQrFileID: 'cloud://x/other.bin' }]));
+  const deleted = [];
+  const cloud = { deleteFile: async o => { assert.ok(o.fileList.length <= 50); deleted.push(...o.fileList); return { fileList: [] }; } };
+  await trash.purge(db, cloud, { _id: 'b1', ownerOpenid: OWNER, files: ['cloud://x/archive.pdf'] });
+  assert.strictEqual(deleted.length, 31);
+  assert.ok(deleted.includes('cloud://x/archive.pdf') && deleted.includes('cloud://x/rcptqr/r1.bin'));
+  assert.ok(!deleted.includes('cloud://x/other.bin'));
+});
+
+test('清除账户数据：回收站里的礼金记录的二维码缓存也删除', async () => {
+  const purge = require(path.join(SHARED, 'purge.js'));
+  db.reset()
+    .seed('records', [{ _id: 'r1', ownerOpenid: OWNER, rcptQrFileID: 'cloud://x/a.bin' }])
+    .seed('trash_records', [{ _id: 't1', ownerOpenid: OWNER, rcptQrFileID: 'cloud://x/b.bin' }, { _id: 't2', ownerOpenid: 'other', rcptQrFileID: 'cloud://x/c.bin' }]);
+  const deleted = [];
+  await purge.run(db, { deleteFile: async o => { deleted.push(...o.fileList); return { fileList: [] }; } }, OWNER, {});
+  assert.ok(deleted.includes('cloud://x/a.bin') && deleted.includes('cloud://x/b.bin'));
+  assert.ok(!deleted.includes('cloud://x/c.bin'));
+});
+
+test('管理员按礼簿清除：删除这本礼簿记录的二维码缓存文件', async () => {
+  const ADMIN = 'o-admin';
+  db.reset()
+    .seed('settings', [{ _id: 'admins', openids: [ADMIN] }])
+    .seed('accounts', [{ _id: 'acc1', ownerOpenid: OWNER }])
+    .seed('books', [{ _id: 'b1', ownerOpenid: OWNER, name: '婚宴' }])
+    .seed('records', [{ _id: 'r1', ownerOpenid: OWNER, bookId: 'b1', rcptQrFileID: 'cloud://x/a.bin' }, { _id: 'r2', ownerOpenid: OWNER, bookId: 'b9', rcptQrFileID: 'cloud://x/z.bin' }]);
+  const deleted = [];
+  const origDel = sdk.deleteFile;
+  sdk.deleteFile = async o => { deleted.push(...o.fileList); return { fileList: [] }; };
+  try {
+    state.openid = ADMIN;
+    const r = await loadFunction('system').main({ action: 'adminPurgeBook', bookId: 'b1', confirmName: '婚宴' });
+    assert.strictEqual(r.code, 0, r.msg);
+    assert.ok(deleted.includes('cloud://x/a.bin') && !deleted.includes('cloud://x/z.bin'));
+  } finally { sdk.deleteFile = origDel; }
+});
+
+test('warmer：清理 10 分钟前的小程序码一次性凭据（按 kind + createdAt，不碰其他设置）', async () => {
+  db.reset();
+  const seen = [];
+  const origCol = db.collection.bind(db);
+  db.collection = name => { const c = origCol(name); const w = c.where; c.where = cond => { seen.push({ name, cond }); return w(cond); }; return c; };
+  try {
+    state.openid = '';
+    await loadFunction('warmer')._test.cleanNonces();
+    const q = seen.find(s => s.name === 'settings');
+    assert.strictEqual(q.cond.kind, 'urllink');
+    assert.strictEqual(q.cond.createdAt.__op, 'lt');
+    assert.ok(Date.now() - q.cond.createdAt.v >= 10 * 60 * 1000 - 1000);
+  } finally { db.collection = origCol; }
+});
+
+test('礼台记账 personRef：只认负责礼簿内的记录；负责范围外的记录 id 不能借来归并往来人', async () => {
+  const CLERK1 = 'u-desk';
+  const base = (id, bookId) => ({ _id: id, aid: 'acc1', ownerOpenid: OWNER, bookId, status: 'paid', payerName: '王五', amount: 100, payerOpenid: 'g-wang', personKey: 'h:wang', nameTag: '李村' });
+  const run = async ref => {
+    db.reset()
+      .seed('accounts', [{ _id: 'acc1', ownerOpenid: OWNER, accountName: '李府', activeBookId: 'b1', orgMode: true }])
+      .seed('users', [{ openid: CLERK1, currentAid: 'acc1' }])
+      .seed('members', [{ _id: 'm1', aid: 'acc1', memberOpenid: CLERK1, role: 'clerk', bookIds: ['b1'], perms: ['desk'] }])
+      .seed('books', [{ _id: 'b1', ownerOpenid: OWNER, type: 'wedding', name: '婚宴' }, { _id: 'b2', ownerOpenid: OWNER, type: 'birthday', name: '寿宴' }])
+      .seed('records', [base('in1', 'b1'), base('out1', 'b2')]);
+    const added = [];
+    const origCol = db.collection.bind(db);
+    db.collection = name => { const c = origCol(name); if (name === 'records') c.add = async o => { added.push(o.data); return { _id: 'new' + added.length }; }; return c; };
+    try {
+      state.openid = CLERK1;
+      const r = await loadFunction('payment').main({ action: 'cashEntry', payerName: '王五', amount: 200, personRef: ref, bookId: 'b1' });
+      assert.strictEqual(r.code, 0, r.msg);
+      return added[0];
+    } finally { db.collection = origCol; }
+  };
+  const inScope = await run('in1');
+  assert.strictEqual(inScope.personKey, 'h:wang');
+  const outScope = await run('out1');
+  assert.strictEqual(outScope.personKey, undefined);
+  assert.strictEqual(outScope.nameTag, undefined);
+});
