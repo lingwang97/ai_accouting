@@ -6,6 +6,11 @@ page {
   --primary-soft: rgba(200, 22, 29, .1);
   --danger: #FA5151;
   --success: #07C160;
+  /* 警示橙（文字、徽章、提示条统一；#C25E00 在白底对比度约 4.9:1，原 #FA9D3B 仅约 2.2:1） */
+  --warn: #C25E00;
+  --warn-bg: #FFF7E6;
+  --warn-soft: rgba(194, 94, 0, .12);
+  --warn-border: #FFC069;
   --link: #576B95;
   --border: #e5e5e5;
   --fill: #f2f3f5;

@@ -7,8 +7,8 @@
 /* 事由过长省略，金额不换行 */
 .i-name { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .i-amt { flex-shrink: 0; white-space: nowrap; margin-left: 16rpx; }
-.auto { color: #FF9F1C; }
-.dup-tip { font-size: 24rpx; color: #FF9F1C; background: #FFF7E6; }
+.auto { color: var(--warn); }
+.dup-tip { font-size: 24rpx; color: var(--warn); background: var(--warn-bg); }
 .empty { padding: 0 8rpx 16rpx; text-align: left; }
 /* 同名区分：同名提示 / 已合并 */
 .same-tip { display: flex; align-items: center; justify-content: space-between; font-size: 26rpx; }

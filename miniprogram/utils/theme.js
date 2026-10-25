@@ -62,7 +62,10 @@ function apply(page, bookType) {
   const app = getApp();
   if (bookType !== undefined) app.globalData.bookType = bookType || 'other';
   const t = current();
-  if (page && page.data.themeStyle !== styleOf(t)) page.setData({ themeStyle: styleOf(t) });
+  // themeIcon：主题图标后缀（bell-{themeIcon}.svg 等）；themePrimary：switch 等原生组件的颜色（不能用 CSS 变量）
+  if (page && (page.data.themeStyle !== styleOf(t) || page.data.themeIcon !== t.icon)) {
+    page.setData({ themeStyle: styleOf(t), themeIcon: t.icon, themePrimary: t.primary });
+  }
   wx.setNavigationBarColor({ frontColor: '#ffffff', backgroundColor: t.primary, fail() {} });
   app.refreshTabBar();
   return t;

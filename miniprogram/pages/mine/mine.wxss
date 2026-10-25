@@ -25,7 +25,7 @@
 .version { text-align: center; font-size: 22rpx; padding: 24rpx 0 8rpx; }
 
 .switch-id { color: var(--link); font-size: 26rpx; margin-left: auto; padding-left: 16rpx; white-space: nowrap; }
-.plan-tag { display: inline-block; margin-top: 8rpx; font-size: 22rpx; color: #B8860B; background: #FFF7E6; border-radius: 6rpx; padding: 2rpx 12rpx; }
+.plan-tag { display: inline-block; margin-top: 8rpx; font-size: 22rpx; color: #B8860B; background: var(--warn-bg); border-radius: 6rpx; padding: 2rpx 12rpx; }
 
 /* 长昵称 / 长主家名不挤掉「切换身份」 */
 .user-card .info { flex: 1; min-width: 0; }

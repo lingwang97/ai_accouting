@@ -18,7 +18,7 @@
 .th-scene { font-size: 22rpx; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .th-custom { border-color: var(--border); color: var(--text-2); font-size: 40rpx; background: var(--fill); }
 .cust-lb { font-size: 26rpx; color: var(--text-2); margin: 20rpx 0 10rpx; }
-.cust-err { color: #d93025; font-size: 24rpx; margin-top: 10rpx; }
+.cust-err { color: var(--danger); font-size: 24rpx; margin-top: 10rpx; }
 .swatches { display: flex; flex-wrap: wrap; margin: 0 -8rpx 12rpx; }
 .sw { width: 64rpx; height: 64rpx; border-radius: 50%; margin: 6rpx 8rpx; border: 2rpx solid #ddd; box-sizing: border-box; }
 .sw.on { box-shadow: 0 0 0 4rpx var(--primary); }

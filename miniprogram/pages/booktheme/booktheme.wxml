@@ -136,7 +136,7 @@
     <!-- 尾页与装订 -->
     <view class="card cust">
       <view class="section-title">尾页与装订</view>
-      <view class="opt"><text>封底尾页</text><switch checked="{{back.on}}" color="#07C160" data-f="on" bindchange="onBackSwitch" /></view>
+      <view class="opt"><text>封底尾页</text><switch checked="{{back.on}}" color="{{themePrimary || '#C8161D'}}" data-f="on" bindchange="onBackSwitch" /></view>
       <block wx:if="{{back.on}}">
         <view class="cust-lb">尾页落款</view>
         <view class="chips">
@@ -147,8 +147,8 @@
           </block>
         </view>
         <input class="input" cursor-spacing="120" adjust-position="{{true}}" bindfocus="onKbOn" bindblur="onKbOff" value="{{back.footer === '-' ? '' : back.footer}}" maxlength="8" placeholder="自动：用封面落款，没有则按事由默认（白事无吉语）" data-f="footer" bindinput="onBackInput" />
-        <view class="opt"><text>记账人签名栏</text><switch checked="{{back.sign}}" color="#07C160" data-f="sign" bindchange="onBackSwitch" /></view>
-        <view class="opt"><text>显示「慧礼记」小字</text><switch checked="{{back.brand}}" color="#07C160" data-f="brand" bindchange="onBackSwitch" /></view>
+        <view class="opt"><text>记账人签名栏</text><switch checked="{{back.sign}}" color="{{themePrimary || '#C8161D'}}" data-f="sign" bindchange="onBackSwitch" /></view>
+        <view class="opt"><text>显示「慧礼记」小字</text><switch checked="{{back.brand}}" color="{{themePrimary || '#C8161D'}}" data-f="brand" bindchange="onBackSwitch" /></view>
       </block>
       <view class="cust-lb">装订</view>
       <view class="chips"><view wx:for="{{binds}}" wx:key="k" class="chip {{bind === item.k ? 'on' : ''}}" data-k="{{item.k}}" bindtap="onBind">{{item.n}}</view></view>

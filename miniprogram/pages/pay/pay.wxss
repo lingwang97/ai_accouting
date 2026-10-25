@@ -41,7 +41,7 @@
 .offscreen { position: fixed; left: -2000px; top: 0; width: 750px; height: 1400px; }
 .big-amount { font-size: 72rpx; margin: 8rpx 0; }
 .saved-tip { color: var(--primary); font-size: 28rpx; margin: 16rpx 0 4rpx; }
-.cash-tip { color: #FF9F1C; font-size: 30rpx; font-weight: 600; margin: 16rpx 0; }
+.cash-tip { color: var(--warn); font-size: 30rpx; font-weight: 600; margin: 16rpx 0; }
 .batch-switch { display: flex; justify-content: space-between; align-items: center; }
 .batch-switch switch { margin-left: 24rpx; }
 .pay-method { margin-top: 28rpx; }
