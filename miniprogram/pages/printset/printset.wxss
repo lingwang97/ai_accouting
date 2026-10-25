@@ -8,6 +8,8 @@
   max-width: 480rpx;
 }
 .p-line.big { font-size: 34rpx; font-weight: 700; }
+.p-line.tall { font-size: 28rpx; font-weight: 700; }
+.p-line.bold { font-weight: 700; }
 .p-line.right { text-align: right; }
 .p-line.center { text-align: center; }
 .row { display: flex; align-items: center; margin-bottom: 20rpx; }

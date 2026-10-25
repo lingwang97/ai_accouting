@@ -16,7 +16,7 @@
     <view class="section-title">小票预览</view>
     <view class="paper">
       <view wx:for="{{previewLines}}" wx:key="index"
-            class="p-line {{item.big ? 'big' : ''}} {{item.right ? 'right' : ''}} {{item.center ? 'center' : ''}}">{{item.t}}</view>
+            class="p-line {{item.big ? 'big' : ''}} {{item.tall ? 'tall' : ''}} {{item.bold ? 'bold' : ''}} {{item.right ? 'right' : ''}} {{item.center ? 'center' : ''}}">{{item.t}}</view>
     </view>
   </view>
 
@@ -32,12 +32,44 @@
     <view class="row"><text class="lbl">推广语</text>
       <text class="muted flex1">底部打印"微信搜索「慧礼记」"（白事不打印）</text>
       <switch checked="{{promo}}" bindchange="onPromo" color="{{primary}}" /></view>
+    <view class="row"><text class="lbl">页脚</text>
+      <input class="input flex1" value="{{footer}}" maxlength="30" placeholder="可选，一行，如：电话 138xxxx" bindinput="onFooter" /></view>
+    <view class="row"><text class="lbl">标题对齐</text>
+      <view class="chips">
+        <view class="chip {{titleAlign === 'center' ? 'on' : ''}}" data-v="center" bindtap="onTitleAlign">居中</view>
+        <view class="chip {{titleAlign === 'left' ? 'on' : ''}}" data-v="left" bindtap="onTitleAlign">靠左</view>
+      </view></view>
+    <view class="row"><text class="lbl">标题加粗</text>
+      <switch checked="{{titleBold}}" bindchange="onTitleBold" color="{{primary}}" /></view>
+    <view class="row"><text class="lbl">记账人</text>
+      <text class="muted flex1">标题下打印"记账：某某"（主家称呼始终打印）</text>
+      <switch checked="{{showHandler}}" bindchange="onHandler" color="{{primary}}" /></view>
+    <view class="row"><text class="lbl">金额字号</text>
+      <view class="chips">
+        <view class="chip {{amountSize === 'double' ? 'on' : ''}}" data-v="double" bindtap="onAmountSize">特大</view>
+        <view class="chip {{amountSize === 'tall' ? 'on' : ''}}" data-v="tall" bindtap="onAmountSize">加高</view>
+        <view class="chip {{amountSize === 'normal' ? 'on' : ''}}" data-v="normal" bindtap="onAmountSize">正常</view>
+      </view></view>
     <view class="row"><text class="lbl">纸宽</text>
       <view class="chips">
         <view class="chip {{paperWidth === 32 ? 'on' : ''}}" data-w="32" bindtap="onWidth">58mm(32列)</view>
         <view class="chip {{paperWidth === 48 ? 'on' : ''}}" data-w="48" bindtap="onWidth">80mm(48列)</view>
       </view>
     </view>
+  </view>
+
+  <!-- 上下留白：打印前后走纸行数，每行约 3mm；没有切刀的机器靠下留白手撕 -->
+  <view class="card">
+    <view class="section-title">上下留白（行）</view>
+    <view class="row"><text class="lbl">上方</text>
+      <view class="chips">
+        <view wx:for="{{topOpts}}" wx:key="*this" class="chip {{feedTop === item ? 'on' : ''}}" data-n="{{item}}" bindtap="onFeedTop">{{item}}</view>
+      </view></view>
+    <view class="row"><text class="lbl">下方</text>
+      <view class="chips">
+        <view wx:for="{{bottomOpts}}" wx:key="*this" class="chip {{feedBottom === item ? 'on' : ''}}" data-n="{{item}}" bindtap="onFeedBottom">{{item}}</view>
+      </view></view>
+    <view class="muted">下方留白太少撕纸时容易撕坏字；默认上 1 行、下 5 行</view>
   </view>
 
   <!-- 字段排版 -->

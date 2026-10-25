@@ -19,7 +19,9 @@ const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 const RECEIPT_FIELDS = ['receiptNo', 'payee', 'payerName', 'relation', 'amountUpper', 'theme', 'remark', 'paidAt'];
 const RECEIPT_STYLES = ['card', 'ticket', 'simple'];
-const PRINT_FIELDS = ['title', 'divider', 'theme', 'payDay', 'time', 'payerName', 'relation', 'amount', 'remark', 'thanks'];
+const PRINT_FIELDS = ['title', 'divider', 'theme', 'payDay', 'time', 'receiptNo', 'payerName', 'relation', 'payMethod', 'amount', 'amountUpper', 'remark', 'thanks'];
+const AMOUNT_SIZES = ['double', 'tall', 'normal'];
+const clampInt = (v, lo, hi, d) => { const n = Math.round(Number(v)); return isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
 
 /** 幂等建集合（init 未跑完时自愈；同一实例只尝试一次） */
 let colReady = false;
@@ -498,7 +500,7 @@ async function saveTpl(openid, bookId, receiptTpl, printTpl) {
   }
   if (printTpl) {
     const t = printTpl;
-    const fields = Array.isArray(t.fields) ? t.fields.filter(f => PRINT_FIELDS.includes(f)).slice(0, 12) : PRINT_FIELDS;
+    const fields = Array.isArray(t.fields) ? t.fields.filter(f => PRINT_FIELDS.includes(f)).slice(0, 14) : PRINT_FIELDS;
     if (fields.length === 0) return err('至少保留一个打印字段');
     data.printTpl = _.set({
       paperWidth: t.paperWidth === 48 ? 48 : 32,
@@ -506,7 +508,15 @@ async function saveTpl(openid, bookId, receiptTpl, printTpl) {
       title: String(t.title || '礼金回执').slice(0, 30),
       showDivider: t.showDivider !== false,
       thanks: String(t.thanks || '').slice(0, 40),
-      promo: t.promo !== false // 小票底部推广语
+      promo: t.promo !== false, // 小票底部推广语
+      // v3.56.0 新增；旧模板缺这些字段时前端按默认值补齐
+      footer: String(t.footer || '').replace(/\s+/g, ' ').slice(0, 30),
+      amountSize: AMOUNT_SIZES.includes(t.amountSize) ? t.amountSize : 'double',
+      titleAlign: t.titleAlign === 'left' ? 'left' : 'center',
+      titleBold: t.titleBold !== false,
+      showHandler: t.showHandler !== false,
+      feedTop: clampInt(t.feedTop, 0, 4, 1),
+      feedBottom: clampInt(t.feedBottom, 2, 8, 5)
     });
   }
   if (!Object.keys(data).length) return err('参数错误');
