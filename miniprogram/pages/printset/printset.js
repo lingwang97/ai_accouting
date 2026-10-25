@@ -13,6 +13,21 @@ const FIELD_LABELS = {
 };
 const label = f => FIELD_LABELS[f] || f;
 
+/** 二维码链接失败原因码 → 中文提示（reason 由 payment.issueQr / qrCheck 返回，不含敏感信息） */
+function qrReasonText(reason) {
+  const r = String(reason || '');
+  const tips = [];
+  if (/secret-missing/.test(r)) tips.push('AppSecret 未配置：云开发控制台 → 云函数 system → 配置 → 环境变量添加 WX_APPSECRET');
+  if (/token:/.test(r)) tips.push('AppSecret 不正确或已被重置：请到公众平台重新获取，更新 system 的 WX_APPSECRET 环境变量');
+  if (/openapi:/.test(r) && !/http:|token:|secret-missing/.test(r)) tips.push('云函数缺少 urllink 权限');
+  if (/http:40001|http:42001/.test(r)) tips.push('access_token 失效，请重试');
+  if (/http:40165|http:40066|http:85/.test(r)) tips.push('页面路径无效：该版本尚未包含此页面（请用对应版本，或先发布）');
+  if (/http:45009|http:45047/.test(r)) tips.push('今日生成额度已用完');
+  if (/call:/.test(r)) tips.push('备用通道调用失败：请确认 system 云函数已部署');
+  if (!tips.length) tips.push('请把下面的原因码发给开发者');
+  return tips.join('；');
+}
+
 Page({
   data: {
     paperWidth: 32,
@@ -28,6 +43,7 @@ Page({
     qr: true,
     qrMode: 'native',
     qrTesting: false,
+    qrChecking: false,
     feedTop: 1,
     feedBottom: 5,
     topOpts: [0, 1, 2, 3, 4],
@@ -131,6 +147,18 @@ Page({
       wx.showModal({ title: '打印失败', content: e.message || '请先连接打印机', showCancel: false });
     } finally {
       this.setData({ qrTesting: false });
+    }
+  },
+  /** 检测二维码链接：生成一条指向首页、有效期 1 天的链接，只检测，不打印（链接首位独占，请勿扫） */
+  async onQrCheck() {
+    if (this.data.qrChecking) return;
+    this.setData({ qrChecking: true });
+    try {
+      const r = await req.qrCheck();
+      if (r.ok) return wx.showToast({ title: '链接生成正常', icon: 'success' });
+      wx.showModal({ title: '链接生成失败', content: `${qrReasonText(r.reason)}\n\n原因码：${r.reason || '无'}`, showCancel: false });
+    } catch (e) { /* toast 已提示 */ } finally {
+      this.setData({ qrChecking: false });
     }
   },
   onFeedTop(e) { this.setData({ feedTop: Number(e.currentTarget.dataset.n) }, () => this.buildPreview()); },

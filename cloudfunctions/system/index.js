@@ -18,6 +18,8 @@ const Purge = require('./purge.js');
 
 exports.main = async (event) => {
   if (event && event.action === '__warm') return { code: 0, msg: 'warm', data: null };
+  // 内部 action：只给 payment 云函数调用，不在前端 request.js 里出现；自带一次性凭据校验（见 internalUrlLink）
+  if (event && event.action === '_urlLink') return await internalUrlLink(event);
   const { OPENID } = cloud.getWXContext();
   if (!OPENID) return err('未获取到用户身份');
   try {
@@ -569,6 +571,58 @@ async function ensureIndexes() {
     return { col, name, ok: r.errcode === 0 || exists, existed: exists, msg: r.errcode === 0 || exists ? '' : `${r.errcode} ${r.errmsg || ''}` };
   }));
   return ok({ env, results, created: results.filter(x => x.ok && !x.existed).length, failed: results.filter(x => !x.ok).length });
+}
+
+// —— 内部 action `_urlLink`：用 AppSecret 走 HTTPS 接口生成 URL Link（payment 的云调用权限缺失时的备用路径）——
+// 为什么不用「没有 OPENID / SOURCE」判断：云函数之间 callFunction 时，被调用方的 getWXContext 可能沿用最初调用者的 OPENID，
+// SOURCE 的取值也没有可依赖的文档约定，据此判断可能把合法调用挡在外面，也可能被客户端直接调用绕过。
+// 所以改用一次性凭据：payment 先往 settings 集合写 urlnonce_xxx（该集合客户端不可读写，且带 _openid 的伪造文档会被忽略），
+// 这里读到、未过期（60 秒）、没有 _openid 才放行，并立即删除。客户端拿不到也伪造不出这个凭据。
+// 只允许固定页面，防止被拿来批量生成任意链接。
+const URL_LINK_PATHS = ['pages/receipt/receipt', 'pages/index/index'];
+let tokenCache = null; // { token, exp } 实例内缓存 access_token（stable_token 有效期 2 小时，这里只缓存 90 分钟）
+
+async function internalUrlLink(event) {
+  const fail = reason => ({ code: 0, msg: 'ok', data: { url: '', reason } });
+  const id = String(event.nonce || '');
+  if (!/^urlnonce_[0-9a-f]{24}$/.test(id)) return err('无权调用');
+  let doc = null;
+  try { doc = (await db.collection('settings').doc(id).get()).data; } catch (e) { /* 不存在 */ }
+  if (!doc || doc._openid || doc.kind !== 'urllink' || Date.now() - Number(doc.createdAt || 0) > 60000) return err('无权调用');
+  try { await db.collection('settings').doc(id).remove(); } catch (e) { /* 忽略 */ }
+  const path = String(event.path || '');
+  const query = String(event.query || '');
+  const days = Math.min(30, Math.max(1, Math.round(Number(event.days) || 30)));
+  if (!URL_LINK_PATHS.includes(path) || !/^[\w=&-]{0,64}$/.test(query)) return fail('bad-param');
+  const env = ['develop', 'trial', 'release'].includes(event.envVersion) ? event.envVersion : 'release';
+  try {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const tk = await getAccessToken(attempt > 0);
+      if (tk.reason) return fail(tk.reason);
+      const r = await postJSON(`https://api.weixin.qq.com/wxa/generate_urllink?access_token=${tk.token}`, {
+        path, query, expire_type: 1, expire_interval: days, env_version: env
+      });
+      if (r.errcode === 0 && r.url_link) return { code: 0, msg: 'ok', data: { url: r.url_link } };
+      if ((r.errcode === 40001 || r.errcode === 42001) && attempt === 0) { tokenCache = null; continue; } // access_token 失效：强制刷新后重试一次
+      return fail('http:' + r.errcode);
+    }
+  } catch (e) {
+    console.error('system._urlLink', e && e.message);
+    return fail('net:' + String((e && e.message) || 'err').slice(0, 20));
+  }
+  return fail('http:retry');
+}
+
+/** 取 access_token（stable_token）；force 时强制刷新。失败返回 { reason }，reason 不含密钥 */
+async function getAccessToken(force) {
+  const secret = process.env.WX_APPSECRET;
+  if (!secret) return { reason: 'secret-missing' };
+  if (!force && tokenCache && tokenCache.exp > Date.now()) return { token: tokenCache.token };
+  const { APPID } = cloud.getWXContext();
+  const tk = await postJSON('https://api.weixin.qq.com/cgi-bin/stable_token', { grant_type: 'client_credential', appid: APPID, secret, force_refresh: !!force });
+  if (!tk.access_token) return { reason: 'token:' + tk.errcode }; // 如 40125 AppSecret 不正确（含被重置过）、40013 AppID 无效
+  tokenCache = { token: tk.access_token, exp: Date.now() + 90 * 60 * 1000 };
+  return { token: tk.access_token };
 }
 
 function postJSON(url, body) {

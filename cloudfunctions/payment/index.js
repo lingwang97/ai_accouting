@@ -29,13 +29,13 @@ exports.main = async (event) => {
   try {
     await ensureCol('records');
     // 收款方操作：身份只解析一次；家人共享（只读）不能做任何收款方操作
-    const OWNER_ACTIONS = ['cashEntry', 'confirm', 'confirmBatch', 'reject', 'unreject', 'dismissStall', 'void', 'amend', 'issueQr', 'resetToken', 'unclaim'];
+    const OWNER_ACTIONS = ['cashEntry', 'confirm', 'confirmBatch', 'reject', 'unreject', 'dismissStall', 'void', 'amend', 'issueQr', 'resetToken', 'unclaim', 'qrCheck'];
     const ctx = OWNER_ACTIONS.includes(event.action) ? await resolveCtx(db, OPENID) : null;
     if (ctx && readonly(ctx)) return err('家人共享为只读，不能修改');
     // 记账人按权限：礼台记账 / 确认收礼 / 作废；amend（修改已入簿礼金）确认收礼或作废任一即可
-    const NEED = { cashEntry: 'desk', confirm: 'confirm', confirmBatch: 'confirm', reject: 'confirm', unreject: 'confirm', dismissStall: 'confirm', void: 'void', amend: ['confirm', 'void'], issueQr: ['confirm', 'desk'], resetToken: 'members', unclaim: 'members' };
+    const NEED = { cashEntry: 'desk', confirm: 'confirm', confirmBatch: 'confirm', reject: 'confirm', unreject: 'confirm', dismissStall: 'confirm', void: 'void', amend: ['confirm', 'void'], issueQr: ['confirm', 'desk'], resetToken: 'members', unclaim: 'members', qrCheck: 'style' };
     if (ctx && ![].concat(NEED[event.action]).some(p => can(ctx, p))) {
-      return err('你没有「' + (event.action === 'amend' ? '修改礼金' : { desk: '礼台记账', confirm: '确认收礼', void: '作废', members: '管理' }[NEED[event.action]]) + '」权限');
+      return err('你没有「' + (event.action === 'amend' ? '修改礼金' : { desk: '礼台记账', confirm: '确认收礼', void: '作废', members: '管理', style: '修改回执与打印样式' }[NEED[event.action]]) + '」权限');
     }
     switch (event.action) {
       // 付款方
@@ -53,6 +53,7 @@ exports.main = async (event) => {
       case 'issueQr': return await issueQr(ctx, String(event.rid || ''), event.envVersion);
       case 'resetToken': return await resetToken(ctx, String(event.rid || ''));
       case 'unclaim': return await unclaim(ctx, String(event.rid || ''));
+      case 'qrCheck': return await qrCheck(event.envVersion);
       // 收款方
       // 主家或其记账人（权限相同）
       // 批次录入的记录：确认 / 拒绝整批（amounts 为逐人实际金额 {rid: 金额}）
@@ -892,21 +893,51 @@ async function issueQr(ctx, rid, envVersion) {
       if (!TOKEN_RE.test(String(token))) return err('二维码生成失败');
     }
   }
-  let url = '';
+  const r = await makeUrlLink({ path: 'pages/receipt/receipt', query: 't=' + token, days: URL_LINK_DAYS, envVersion });
+  // reason 只放错误码 / 简短原因（不含 token、密钥），失败时便于在设置页「检测二维码链接」或前端日志里定位
+  return ok(r.url ? { url: r.url } : { url: '', reason: r.reason });
+}
+
+/** 取一个错误里的错误码（云调用 errCode / HTTP errcode），拼成简短原因 */
+const codeOf = e => String((e && (e.errCode !== undefined ? e.errCode : e.code !== undefined ? e.code : e.errcode)) || 'err').slice(0, 20);
+
+/**
+ * 生成 URL Link：先试云调用 cloud.openapi.urllink.generate（需要 payment 云函数有 urllink.generate 权限）；
+ * 失败（命令行部署不一定应用 config.json 的权限）再请求 system 的内部 action `_urlLink`（用 AppSecret 走 HTTPS 接口）。
+ * 内部调用的身份证明：本函数先往 settings 集合写一条一次性凭据（集合客户端不可读写），system 核对并删除后才执行。
+ * 返回 { url, reason, via }
+ */
+async function makeUrlLink({ path, query, days, envVersion }) {
+  const env = ENVS.includes(envVersion) ? envVersion : 'release';
+  let reason = '';
   try {
-    const r = await cloud.openapi.urllink.generate({
-      path: 'pages/receipt/receipt',
-      query: 't=' + token,
-      isExpire: true,
-      expireType: 1,
-      expireInterval: URL_LINK_DAYS,
-      envVersion: ENVS.includes(envVersion) ? envVersion : 'release'
-    });
-    url = (r && r.urlLink) || '';
+    const r = await cloud.openapi.urllink.generate({ path, query, isExpire: true, expireType: 1, expireInterval: days, envVersion: env });
+    if (r && r.urlLink) return { url: r.urlLink, via: 'openapi' };
+    reason = 'openapi:empty';
   } catch (e) {
-    console.error('urllink.generate failed', e && (e.errMsg || e.message)); // 没权限 / 额度 / 页面未发布：只写日志，这张小票不印二维码
+    reason = 'openapi:' + codeOf(e);
+    console.error('urllink.generate failed', e && (e.errMsg || e.message));
   }
-  return ok({ url });
+  const nonce = 'urlnonce_' + require('crypto').randomBytes(12).toString('hex');
+  try {
+    await ensureCol('settings');
+    await db.collection('settings').doc(nonce).set({ data: { kind: 'urllink', createdAt: Date.now() } });
+    const res = await cloud.callFunction({ name: 'system', data: { action: '_urlLink', nonce, path, query, days, envVersion: env } });
+    const out = (res && res.result) || {};
+    if (out.code === 0 && out.data && out.data.url) return { url: out.data.url, via: 'system' };
+    reason += ',system:' + String((out.data && out.data.reason) || out.msg || 'err').slice(0, 40);
+  } catch (e) {
+    reason += ',call:' + codeOf(e);
+    console.error('system._urlLink call failed', e && (e.errMsg || e.message));
+  }
+  try { await db.collection('settings').doc(nonce).remove(); } catch (e) { /* 已被 system 删除 */ }
+  return { url: '', reason };
+}
+
+/** 设置页「检测二维码链接」：生成一条指向首页、有效期 1 天的链接，只检测不打印（首位独占，别扫） */
+async function qrCheck(envVersion) {
+  const r = await makeUrlLink({ path: 'pages/index/index', query: '', days: 1, envVersion });
+  return ok({ ok: !!r.url, via: r.via || '', reason: r.reason || '' });
 }
 
 /** 主家重置二维码：换新 token，旧小票上的码立即失效；已认领关系不变 */

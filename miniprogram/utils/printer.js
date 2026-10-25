@@ -112,6 +112,7 @@ async function _qrBytes(record, tpl) {
       request.issueQr(record._id),
       new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000))
     ]);
+    if (r && !r.url && r.reason) console.warn('二维码链接生成失败', r.reason); // 原因码，不含敏感信息
     return (r && r.url && qrprint.qrBytes(r.url, tpl.qrMode, tpl.paperWidth)) || null;
   } catch (e) {
     return null;

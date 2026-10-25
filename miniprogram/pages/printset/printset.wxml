@@ -62,6 +62,9 @@
       <view class="row"><text class="lbl"></text>
         <view class="btn btn-outline btn-sm" bindtap="onQrTest">{{qrTesting ? "打印中…" : "打印测试码"}}</view>
         <text class="muted flex1" style="margin-left:16rpx">测试码打不出或是乱码，请改用图片方式</text></view>
+      <view class="row"><text class="lbl"></text>
+        <view class="btn btn-outline btn-sm" bindtap="onQrCheck">{{qrChecking ? "检测中…" : "检测二维码链接"}}</view>
+        <text class="muted flex1" style="margin-left:16rpx">真实小票没有二维码时先点这里看原因（只检测，不打印）</text></view>
     </block>
     <view class="row"><text class="lbl">纸宽</text>
       <view class="chips">
