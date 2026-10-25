@@ -103,7 +103,7 @@ async function connect(deviceId) {
       deviceId,
       timeout: 6000,
       success: () => {
-        state.deviceId = deviceId;
+        _setDevice(deviceId);
         state.chunk = 20; // 每次连接先回到 20，再按协商结果提升
         _watchState();
         _resolveWritable(deviceId).then(info => _negotiateMtu(deviceId).then(() => resolve(info))).catch(e => {
@@ -120,12 +120,40 @@ async function connect(deviceId) {
 function _closeOld() {
   if (!state.deviceId) return Promise.resolve();
   const id = state.deviceId;
-  state.deviceId = '';
+  _setDevice('');
   return new Promise(resolve => {
     try {
       wx.closeBLEConnection({ deviceId: id, complete: () => resolve() });
     } catch (e) { resolve(); }
   });
+}
+
+/**
+ * 连接状态订阅（v3.59.2，工作台「打印机」格子实时跟随）：连上、断开都通知 cb(connected)。
+ * 订阅时顺带注册系统断开监听，不依赖是否已连接过。
+ */
+const _listeners = [];
+function onStateChange(cb) {
+  if (typeof cb !== 'function') return;
+  if (_listeners.indexOf(cb) < 0) _listeners.push(cb);
+  try { _watchState(); } catch (e) { /* 忽略 */ }
+}
+function offStateChange(cb) {
+  const i = _listeners.indexOf(cb);
+  if (i >= 0) _listeners.splice(i, 1);
+}
+/** 统一修改连接设备并通知订阅者（只在连接与否发生变化时通知） */
+function _setDevice(id) {
+  const was = !!state.deviceId;
+  state.deviceId = id || '';
+  const now = !!state.deviceId;
+  if (was === now) return;
+  _listeners.slice().forEach(cb => { try { cb(now); } catch (e) { /* 忽略 */ } });
+}
+/** 打印机状态：connected 已连接 / paired 已配对未连接 / none 未配对（saved 为 printerDevice 缓存） */
+function printerStatus(saved, connected) {
+  if (connected) return 'connected';
+  return saved && (saved.deviceId || saved.name) ? 'paired' : 'none';
 }
 
 /** 打印机断电/走远时清空连接状态，下次打印自动重连 */
@@ -134,7 +162,7 @@ function _watchState() {
   if (_watching) return;
   _watching = true;
   wx.onBLEConnectionStateChange(res => {
-    if (!res.connected && res.deviceId === state.deviceId) state.deviceId = '';
+    if (!res.connected && res.deviceId === state.deviceId) _setDevice('');
   });
 }
 
@@ -230,7 +258,7 @@ function _resolveWritable(deviceId) {
 function disconnect() {
   if (state.deviceId) {
     try { wx.closeBLEConnection({ deviceId: state.deviceId }); } catch (e) { /* 忽略 */ }
-    state.deviceId = '';
+    _setDevice('');
   }
 }
 
@@ -283,6 +311,7 @@ async function reconnectSaved() {
 module.exports = {
   PRINTER_PREFIX, state,
   openAdapter, startDiscovery, stopDiscovery, onFound, offFound, getDevices, isPrinterLike,
+  onStateChange, offStateChange, printerStatus,
   connect, disconnect, writeBuffer, errMsg, isSlow, setSlow, gapOf, RATE_BPS,
   saveDevice, loadDevice, reconnectSaved, sleep
 };

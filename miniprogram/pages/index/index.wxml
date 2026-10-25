@@ -108,7 +108,7 @@
       <view class="g-item" hover-class="g-hover" wx:if="{{pm.show}}" bindtap="goPrinter">
         <view class="g-icon"><image src="/assets/icons/printer-w.svg" /></view>
         <view class="g-title">打印机</view>
-        <view class="g-sub {{printerName ? 'ok' : ''}}">{{printerName ? '已配对' : '未配对'}}</view>
+        <view class="g-sub {{printerStatus === 'connected' ? 'ok' : (printerStatus === 'paired' ? 'warn' : '')}}">{{printerStatus === 'connected' ? '已连接' : (printerStatus === 'paired' ? '已配对 · 未连接' : '未配对')}}</view>
       </view>
       <view class="g-item" hover-class="g-hover" wx:if="{{pm.export}}" bindtap="goReconcile">
         <view class="g-icon"><image src="/assets/icons/receipt-w.svg" /></view>

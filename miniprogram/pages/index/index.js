@@ -12,6 +12,7 @@ const device = require('../../utils/device.js');
 const setup = require('../../utils/setup.js');
 const poller = require('../../utils/poller.js');
 const fresh = require('../../utils/fresh.js');
+const ble = require('../../utils/ble.js');
 
 const POLL_MS = 10000; // 连续无变化会自动放慢（见 utils/poller.js），刷新 / 操作后恢复
 const DISMISS_KEY = 'idx_dismissed';
@@ -47,6 +48,7 @@ Page({
     otherPending: 0,   // 其他礼簿的待确认份数（提示用）
     todayBook: 0,      // 当前礼簿今日入簿份数
     printerName: '',
+    printerStatus: 'none', // connected 已连接 / paired 已配对未连接 / none 未配对
     pm: {},            // 当前身份的权限（记账人按各自权限显示操作）
     notifyTip: '',     // 新礼金提醒未开启 / 发送失败时的提示
     notifyOff: false,  // 提示已被关闭（见 notifyOff()）
@@ -85,15 +87,29 @@ Page({
     // 切回页面：45 秒内且期间没有写操作时不重复拉整页（轮询仍会更新待确认数）；首次 / 下拉等强制刷新走 refresh()
     if (fresh.needs(this) || this.data.mode === 'loading') this.refresh();
     this.startTimer();
+    this.watchPrinter();
   },
+  /** 打印机状态：重新判断，并订阅连接变化（页面停留时实时跟随） */
+  syncPrinter() {
+    const saved = wx.getStorageSync('printerDevice');
+    const status = ble.printerStatus(saved, !!ble.state.deviceId);
+    const name = (saved && saved.name) || '';
+    if (status !== this.data.printerStatus || name !== this.data.printerName) this.setData({ printerStatus: status, printerName: name });
+  },
+  watchPrinter() {
+    this.syncPrinter();
+    if (!this._onPrinter) this._onPrinter = () => this.syncPrinter();
+    ble.onStateChange(this._onPrinter);
+  },
+  unwatchPrinter() { if (this._onPrinter) ble.offStateChange(this._onPrinter); },
   startTimer() {
     this.clearTimer();
     this._pollMs = this.data.readonly ? POLL_MS_READONLY : POLL_MS;
     this._poller = poller.create(() => this.refreshPending(true), { base: this._pollMs, slow: !this.data.readonly });
     this._poller.start();
   },
-  onHide() { this.clearTimer(); },
-  onUnload() { this.clearTimer(); },
+  onHide() { this.clearTimer(); this.unwatchPrinter(); },
+  onUnload() { this.clearTimer(); this.unwatchPrinter(); },
   clearTimer() {
     if (this._poller) { this._poller.stop(); this._poller = null; }
   },
@@ -102,8 +118,7 @@ Page({
     if (this._poller) this._poller.kick(); // 刷新 / 用户操作后恢复轮询频率
     fresh.mark(this);
     const app = getApp();
-    const saved = wx.getStorageSync('printerDevice');
-    this.setData({ printerName: (saved && saved.name) || '' });
+    this.syncPrinter();
     try {
       // 一次取齐：主家信息、当前礼簿、今日、待确认；与启动时的登录检查并行发出
       const loggedOut = !!wx.getStorageSync(LOGOUT_KEY);
