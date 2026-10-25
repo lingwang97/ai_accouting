@@ -2,7 +2,7 @@
 // 源文件在 tools/cloud-shared/purge.js，由 tools/sync_shared.py 复制到 account、system 云函数目录，勿在云函数目录里直接修改。
 //
 // 范围（openid 为被清除的用户）：
-//   作为主家：主家信息（含合并别名）、礼簿、礼金记录、回收站里的礼簿与礼金记录、打印样式、导出 / 存档登记及文件、收款码与礼簿码图片、
+//   作为主家：主家信息（含合并别名）、礼簿、礼金记录、回收站里的礼簿与礼金记录、打印样式、导出 / 存档登记及文件、收款码与礼簿码图片、小票二维码缓存、
 //             记账人与家人共享关系、发出的邀请卡
 //   本人数据：送礼记录、办事提醒、同名合并记录、作为记账人 / 家人的加入关系、用户信息
 //   opts.subscription：套餐订阅（管理员清除时删，用户自己注销时保留开通记录）
@@ -80,6 +80,15 @@ async function fileIds(db, openid, ownPayCode) {
       }
     });
   }
+  // 小票二维码的光栅缓存（records.rcptQrFileID，v3.58.0）：每页 1000 条，最多 20 页
+  try {
+    for (let page = 0; page < 20; page++) {
+      const rows = (await db.collection('records').where({ ownerOpenid: openid, rcptQrFileID: db.command.exists(true) })
+        .field({ rcptQrFileID: true }).skip(page * 1000).limit(1000).get()).data;
+      rows.forEach(r => { if (r.rcptQrFileID) files.push(r.rcptQrFileID); });
+      if (rows.length < 1000) break;
+    }
+  } catch (e) { /* 集合不存在 */ }
   // 回收站里的礼簿：删除时登记的文件（存档 PDF、本场收款码、礼簿码）
   try {
     (await db.collection('trash_books').where({ ownerOpenid: openid }).field({ files: true }).limit(1000).get()).data

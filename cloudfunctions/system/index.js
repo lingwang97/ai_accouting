@@ -18,8 +18,8 @@ const Purge = require('./purge.js');
 
 exports.main = async (event) => {
   if (event && event.action === '__warm') return { code: 0, msg: 'warm', data: null };
-  // 内部 action：只给 payment 云函数调用，不在前端 request.js 里出现；自带一次性凭据校验（见 internalUrlLink）
-  if (event && event.action === '_urlLink') return await internalUrlLink(event);
+  // 内部 action：只给 payment 云函数调用，不在前端 request.js 里出现；自带一次性凭据校验（见 internalWxaCode）
+  if (event && event.action === '_wxaCode') return await internalWxaCode(event);
   const { OPENID } = cloud.getWXContext();
   if (!OPENID) return err('未获取到用户身份');
   try {
@@ -573,41 +573,43 @@ async function ensureIndexes() {
   return ok({ env, results, created: results.filter(x => x.ok && !x.existed).length, failed: results.filter(x => !x.ok).length });
 }
 
-// —— 内部 action `_urlLink`：用 AppSecret 走 HTTPS 接口生成 URL Link（payment 的云调用权限缺失时的备用路径）——
+// —— 内部 action `_wxaCode`：用 AppSecret 走 HTTPS 接口（getwxacodeunlimit）取小程序码图片（payment 的云调用权限缺失时的备用通道）——
+// （v3.57.1 的 `_urlLink` 已删除：URL Link 只开放给大陆非个人主体，个人主体报 85407。）
 // 为什么不用「没有 OPENID / SOURCE」判断：云函数之间 callFunction 时，被调用方的 getWXContext 可能沿用最初调用者的 OPENID，
 // SOURCE 的取值也没有可依赖的文档约定，据此判断可能把合法调用挡在外面，也可能被客户端直接调用绕过。
 // 所以改用一次性凭据：payment 先往 settings 集合写 urlnonce_xxx（该集合客户端不可读写，且带 _openid 的伪造文档会被忽略），
 // 这里读到、未过期（60 秒）、没有 _openid 才放行，并立即删除。客户端拿不到也伪造不出这个凭据。
-// 只允许固定页面，防止被拿来批量生成任意链接。
-const URL_LINK_PATHS = ['pages/receipt/receipt', 'pages/index/index'];
+// 只允许固定页面，scene 只允许小程序码合法字符且 ≤32 位，防止被拿来批量生成任意码。
+const WXA_PAGES = ['pages/receipt/receipt', 'pages/index/index'];
 let tokenCache = null; // { token, exp } 实例内缓存 access_token（stable_token 有效期 2 小时，这里只缓存 90 分钟）
 
-async function internalUrlLink(event) {
-  const fail = reason => ({ code: 0, msg: 'ok', data: { url: '', reason } });
+async function internalWxaCode(event) {
+  const fail = reason => ({ code: 0, msg: 'ok', data: { image: '', reason } });
   const id = String(event.nonce || '');
   if (!/^urlnonce_[0-9a-f]{24}$/.test(id)) return err('无权调用');
   let doc = null;
   try { doc = (await db.collection('settings').doc(id).get()).data; } catch (e) { /* 不存在 */ }
   if (!doc || doc._openid || doc.kind !== 'urllink' || Date.now() - Number(doc.createdAt || 0) > 60000) return err('无权调用');
   try { await db.collection('settings').doc(id).remove(); } catch (e) { /* 忽略 */ }
-  const path = String(event.path || '');
-  const query = String(event.query || '');
-  const days = Math.min(30, Math.max(1, Math.round(Number(event.days) || 30)));
-  if (!URL_LINK_PATHS.includes(path) || !/^[\w=&-]{0,64}$/.test(query)) return fail('bad-param');
+  const page = String(event.page || '');
+  const scene = String(event.scene || '');
+  if (!WXA_PAGES.includes(page) || !/^[A-Za-z0-9=_.-]{1,32}$/.test(scene)) return fail('bad-param');
   const env = ['develop', 'trial', 'release'].includes(event.envVersion) ? event.envVersion : 'release';
   try {
     for (let attempt = 0; attempt < 2; attempt++) {
       const tk = await getAccessToken(attempt > 0);
       if (tk.reason) return fail(tk.reason);
-      const r = await postJSON(`https://api.weixin.qq.com/wxa/generate_urllink?access_token=${tk.token}`, {
-        path, query, expire_type: 1, expire_interval: days, env_version: env
+      // 280 = 官方允许的最小宽度；纯黑白（不自动配色、黑色线条、不透明底），热敏打印二值化后最清晰；check_path=false：未发布 / 体验版也能生成
+      const r = await postRaw(`https://api.weixin.qq.com/wxa/getwxacodeunlimit?access_token=${tk.token}`, {
+        scene, page, width: 280, check_path: false, env_version: env,
+        auto_color: false, line_color: { r: 0, g: 0, b: 0 }, is_hyaline: false
       });
-      if (r.errcode === 0 && r.url_link) return { code: 0, msg: 'ok', data: { url: r.url_link } };
+      if (r.image) return { code: 0, msg: 'ok', data: { image: r.image.toString('base64') } };
       if ((r.errcode === 40001 || r.errcode === 42001) && attempt === 0) { tokenCache = null; continue; } // access_token 失效：强制刷新后重试一次
       return fail('http:' + r.errcode);
     }
   } catch (e) {
-    console.error('system._urlLink', e && e.message);
+    console.error('system._wxaCode', e && e.message);
     return fail('net:' + String((e && e.message) || 'err').slice(0, 20));
   }
   return fail('http:retry');
@@ -623,6 +625,26 @@ async function getAccessToken(force) {
   if (!tk.access_token) return { reason: 'token:' + tk.errcode }; // 如 40125 AppSecret 不正确（含被重置过）、40013 AppID 无效
   tokenCache = { token: tk.access_token, exp: Date.now() + 90 * 60 * 1000 };
   return { token: tk.access_token };
+}
+
+/** POST JSON，返回 { image: Buffer } 或 { errcode, errmsg }（getwxacodeunlimit 成功时直接返回图片二进制） */
+function postRaw(url, body) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify(body);
+    const req = https.request(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) }, timeout: 8000 }, res => {
+      const bufs = [];
+      res.on('data', c => bufs.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+      res.on('end', () => {
+        const buf = Buffer.concat(bufs);
+        const isImg = (buf[0] === 0x89 && buf[1] === 0x50) || (buf[0] === 0xff && buf[1] === 0xd8);
+        if (isImg) return resolve({ image: buf });
+        try { resolve(JSON.parse(buf.toString('utf8'))); } catch (e) { reject(new Error('返回解析失败')); }
+      });
+    });
+    req.on('timeout', () => req.destroy(new Error('请求超时')));
+    req.on('error', reject);
+    req.end(data);
+  });
 }
 
 function postJSON(url, body) {

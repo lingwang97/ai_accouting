@@ -621,7 +621,7 @@ async function setNameTag(ctx, rid, tag) {
 
 /** 返回给前端的账目去掉宾客与经办人的 openid（前端用不到） */
 // 返回给前端的记录：去掉各方 openid，以及含宾客 openid 的往来人标识
-const strip = ({ payerOpenid, handlerOpenid, enteredBy, ownerOpenid, personKey, rcptToken, claimedOpenid, claimedAt, _openid, ...r }) => (claimedOpenid ? { ...r, claimed: true } : r); // 小票二维码 token 与认领人不返回前端
+const strip = ({ payerOpenid, handlerOpenid, enteredBy, ownerOpenid, personKey, rcptToken, rcptQrKey, rcptQrFileID, claimedOpenid, claimedAt, _openid, ...r }) => (claimedOpenid ? { ...r, claimed: true } : r); // 小票二维码 token 与认领人不返回前端
 
 /** 出现过的记账主题（导出筛选用） */
 async function themes(openid, ctx) {

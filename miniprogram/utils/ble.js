@@ -8,8 +8,12 @@ const PRINTER_PREFIX = ['Print', 'Xprinter', 'HM', 'MT', 'GB', 'HPRT', 'MTP', 'Z
 const state = {
   deviceId: '',
   serviceId: '',
-  charId: ''     // 可写特征值 UUID
+  charId: '',    // 可写特征值 UUID
+  chunk: 20      // 单包字节数：默认 20；安卓协商 MTU 成功后为 MTU-3（v3.58.0）
 };
+
+const MTU_REQUEST = 185; // 请求的 MTU；打印机实际支持的由 setBLEMTU 的返回值决定
+
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -90,8 +94,9 @@ async function connect(deviceId) {
       timeout: 6000,
       success: () => {
         state.deviceId = deviceId;
+        state.chunk = 20; // 每次连接先回到 20，再按协商结果提升
         _watchState();
-        _resolveWritable(deviceId).then(resolve).catch(e => {
+        _resolveWritable(deviceId).then(info => _negotiateMtu(deviceId).then(() => resolve(info))).catch(e => {
           disconnect();
           reject(e);
         });
@@ -120,6 +125,31 @@ function _watchState() {
   _watching = true;
   wx.onBLEConnectionStateChange(res => {
     if (!res.connected && res.deviceId === state.deviceId) state.deviceId = '';
+  });
+}
+
+/**
+ * 安卓：请求更大的 MTU，成功后单包按 MTU-3 发送（二维码光栅约 10KB，20 字节一包要多等十几秒）；失败或超时保持 20。
+ * iOS 不调用（系统自动协商，且 setBLEMTU 在 iOS 上无效）。任何情况都不抛错，不影响连接。
+ */
+function _negotiateMtu(deviceId) {
+  if (!device.isAndroid() || typeof wx.setBLEMTU !== 'function') return Promise.resolve();
+  return new Promise(resolve => {
+    let done = false;
+    const finish = () => { if (!done) { done = true; resolve(); } };
+    setTimeout(finish, 3000); // 个别机型不回调
+    try {
+      wx.setBLEMTU({
+        deviceId,
+        mtu: MTU_REQUEST,
+        success: res => {
+          const mtu = Number(res && res.mtu) || MTU_REQUEST;
+          if (!done && mtu > 23) state.chunk = Math.min(mtu, 512) - 3;
+          finish();
+        },
+        fail: finish
+      });
+    } catch (e) { finish(); }
   });
 }
 
@@ -168,12 +198,12 @@ function disconnect() {
 }
 
 /**
- * 分包写入（BLE 单包 ≤20 字节），返回 Promise
+ * 分包写入（单包默认 20 字节，安卓协商 MTU 成功后为 MTU-3），返回 Promise
  * 失败时 reject 的 Error 带 written（已成功写入的字节数）与 errCode，供上层判断是否可整单重试
  */
-function writeBuffer(buffer) {
+function writeBuffer(buffer, chunkSize) {
   const data = new Uint8Array(buffer);
-  const CHUNK = 20;
+  const CHUNK = chunkSize || state.chunk || 20;
   let written = 0;
   let p = Promise.resolve();
   for (let i = 0; i < data.length; i += CHUNK) {

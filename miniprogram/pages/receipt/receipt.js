@@ -1,6 +1,7 @@
 // pages/receipt/receipt.js — 电子回执（宾客与主家均可查看、保存图片）
 const req = require('../../utils/request.js');
 const receipt = require('../../utils/receipt.js');
+const rcptscene = require('../../utils/rcptscene.js');
 
 Page({
   data: {
@@ -16,11 +17,13 @@ Page({
 
   async onLoad(options) {
     this.setData({ isHost: !!getApp().globalData.account });
-    if (!options.rid && !options.t) return this.setData({ errMsg: '回执不存在' });
+    // 扫小票小程序码：参数在 options.scene（t=token，URL 编码）；兼容 ?t=token
+    const token = rcptscene.tokenFromOptions(options);
+    if (!options.rid && !token) return this.setData({ errMsg: options.scene ? '二维码无效' : '回执不存在' });
     try {
       // 扫小票二维码（?t=token）：按 token 取这一笔；否则按记录 id（付款人 / 主家 / 认领人）
-      const { record, accountName, tpl, claim } = options.t ? await req.receiptByToken(options.t) : await req.receiptGet(options.rid);
-      if (options.t) this.setData({ token: options.t, claim });
+      const { record, accountName, tpl, claim } = token ? await req.receiptByToken(token) : await req.receiptGet(options.rid);
+      if (token) this.setData({ token, claim });
       const model = receipt.buildModel(record, tpl, accountName);
       this.setData({ model, bookType: record.bookType || 'other' });
       this.setData({ model: await receipt.withAppCode(model) }); // 小程序码后补，不拖慢回执显示

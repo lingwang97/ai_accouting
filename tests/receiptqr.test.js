@@ -1,4 +1,4 @@
-// 小票二维码与认领（v3.57.0）：token 生成 / 复用、不进列表接口、认领条件与先到先得、myReceipts 的 _.or、重置后旧 token 失效、二维码字节
+// 小票二维码与认领（v3.57.0；小程序码生成见 wxacode.test.js）：token 生成 / 复用、不进列表接口、认领条件与先到先得、myReceipts 的 _.or、重置后旧 token 失效、二维码字节
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
@@ -19,43 +19,10 @@ function seed(extra = {}) {
       payerOpenid: '', payMethod: 'cash', paidAt: new Date(), createdAt: new Date(), ...extra
     }]);
   db.applyUpdates = true;
-  sdk.openapi.urllink = { generate: async o => { state.calls.push({ urllink: o }); return { urlLink: 'https://wxaurl.cn/test' + o.query.slice(2, 6) }; } };
   state.calls.length = 0;
 }
 const pay = (openid, event) => { state.openid = openid; return loadFunction('payment').main(event); };
 const rec = () => db.data.records.find(r => r._id === 'r1');
-
-test('issueQr：首次生成 12 位 token 写入记录，再次复用不换码；只返回链接不返回 token', async () => {
-  seed();
-  const r1 = await pay(OWNER, { action: 'issueQr', rid: 'r1', envVersion: 'trial' });
-  assert.strictEqual(r1.code, 0, r1.msg);
-  assert.ok(/^[0-9A-Za-z]{12}$/.test(rec().rcptToken));
-  assert.ok(r1.data.url.startsWith('https://wxaurl.cn/'));
-  assert.deepStrictEqual(Object.keys(r1.data), ['url']);
-  const t = rec().rcptToken;
-  const r2 = await pay(OWNER, { action: 'issueQr', rid: 'r1' });
-  assert.strictEqual(r2.code, 0);
-  assert.strictEqual(rec().rcptToken, t);
-  // URL Link 参数：打开回执页，30 天（官方最大）
-  const o = state.calls.filter(c => c.urllink)[0].urllink;
-  assert.strictEqual(o.path, 'pages/receipt/receipt');
-  assert.strictEqual(o.query, 't=' + t);
-  assert.strictEqual(o.expireType, 1);
-  assert.strictEqual(o.expireInterval, 30);
-  assert.strictEqual(o.envVersion, 'trial');
-});
-
-test('issueQr：URL Link 生成失败不报错（url 为空，打印端不印二维码）；他人记录 / 未入簿被拒', async () => {
-  seed();
-  sdk.openapi.urllink = { generate: async () => { throw new Error('no permission'); } };
-  const r = await pay(OWNER, { action: 'issueQr', rid: 'r1' });
-  assert.strictEqual(r.code, 0);
-  assert.strictEqual(r.data.url, '');
-  seed();
-  assert.notStrictEqual((await pay('stranger', { action: 'issueQr', rid: 'r1' })).code, 0);
-  seed({ status: 'transferred' });
-  assert.notStrictEqual((await pay(OWNER, { action: 'issueQr', rid: 'r1' })).code, 0);
-});
 
 test('token / 认领人不出现在 payment 与 records 的列表接口里，只给 claimed 标记', async () => {
   seed({ rcptToken: TOKEN, claimedOpenid: G1 });
@@ -164,13 +131,6 @@ test('带 _openid 的伪造记录不能凭 token 读取或认领', async () => {
   seed({ rcptToken: TOKEN, _openid: 'attacker' });
   assert.notStrictEqual((await pay(G1, { action: 'receiptByToken', token: TOKEN })).code, 0);
   assert.notStrictEqual((await pay(G1, { action: 'claimReceipt', token: TOKEN })).code, 0);
-});
-
-test('payment 云函数声明 urllink.generate 权限；前端 / system 配套', () => {
-  const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, '../cloudfunctions/payment/config.json'), 'utf8'));
-  assert.ok(cfg.permissions.openapi.includes('urllink.generate'));
-  const sys = fs.readFileSync(path.join(__dirname, '../cloudfunctions/system/index.js'), 'utf8');
-  assert.ok(sys.includes("'claimed_status_paid'") && sys.includes("'rcpt_token'"));
 });
 
 // —— 二维码字节 ——

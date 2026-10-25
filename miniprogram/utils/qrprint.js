@@ -61,10 +61,21 @@ function rasterBytes(data, cell, maxDots) {
   return out;
 }
 
-/** 按模式生成二维码字节；mode: 'native'（默认）| 'image' */
+/** 云端返回的 GS v 0 光栅（base64）→ 字节数组；小程序里用 wx.base64ToArrayBuffer，Node 测试里用 Buffer */
+function fromBase64(b64) {
+  if (!b64) return null;
+  try {
+    if (typeof wx !== 'undefined' && wx.base64ToArrayBuffer) return Array.from(new Uint8Array(wx.base64ToArrayBuffer(b64)));
+    return Array.from(Buffer.from(b64, 'base64'));
+  } catch (e) {
+    return null;
+  }
+}
+
+/** 按模式生成二维码字节；mode: 'native'（默认）| 'image'。小票上的小程序码走 fromBase64，这里的两种方式留给普通链接二维码 */
 function qrBytes(data, mode, paperWidth) {
   if (mode === 'image') return rasterBytes(data, 5, paperWidth === 48 ? 576 : 384);
   return nativeBytes(data, 6);
 }
 
-module.exports = { validData, matrixOf, nativeBytes, rasterBytes, qrBytes };
+module.exports = { validData, matrixOf, nativeBytes, rasterBytes, qrBytes, fromBase64 };

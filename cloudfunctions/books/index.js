@@ -515,9 +515,9 @@ async function saveTpl(openid, bookId, receiptTpl, printTpl) {
       titleAlign: t.titleAlign === 'left' ? 'left' : 'center',
       titleBold: t.titleBold !== false,
       showHandler: t.showHandler !== false,
-      // v3.57.0 小票二维码：qr 未设置时按事由默认（白事关）；qrMode native 原生指令 / image 图片方式
+      // v3.57.0 小票二维码：qr 未设置时按事由默认（白事关）；qrMode：小程序码只能图片方式，native 预留给以后的普通链接二维码
       ...(typeof t.qr === 'boolean' ? { qr: t.qr } : {}),
-      qrMode: t.qrMode === 'image' ? 'image' : 'native',
+      qrMode: t.qrMode === 'native' ? 'native' : 'image',
       feedTop: clampInt(t.feedTop, 0, 4, 1),
       feedBottom: clampInt(t.feedBottom, 2, 8, 5)
     });

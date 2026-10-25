@@ -94,7 +94,7 @@ async function _printRecord(record) {
     accountName: record.hostName || record.accountName || (app.globalData.account && app.globalData.account.accountName) || '',
     handlerName: record.handlerName || (app.globalData.user && app.globalData.user.nickname) || ''
   };
-  const qr = escpos.qrOn(tpl, record.bookType) && record._id ? await _qrBytes(record, tpl) : null;
+  const qr = escpos.qrOn(tpl, record.bookType) && record._id ? await _qrBytes(record) : null;
   await _writeRetry(escpos.buildReceipt(record, tpl, qr ? { qr } : undefined));
   try {
     await request.markPrinted([record._id]);
@@ -105,27 +105,27 @@ async function _printRecord(record) {
   return true;
 }
 
-/** 取这一笔的二维码字节；任何失败（无权限、额度、网络慢）都返回 null：这张小票不印二维码，打印照常 */
-async function _qrBytes(record, tpl) {
+/** 取这一笔的小程序码光栅字节（云端已转好 GS v 0）；任何失败（无权限、额度、网络慢）都返回 null：这张小票不印二维码，打印照常 */
+async function _qrBytes(record) {
   try {
     const r = await Promise.race([
       request.issueQr(record._id),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000))
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 12000))
     ]);
-    if (r && !r.url && r.reason) console.warn('二维码链接生成失败', r.reason); // 原因码，不含敏感信息
-    return (r && r.url && qrprint.qrBytes(r.url, tpl.qrMode, tpl.paperWidth)) || null;
+    if (r && !r.raster && r.reason) console.warn('小程序码生成失败', r.reason); // 原因码，不含敏感信息
+    return (r && qrprint.fromBase64(r.raster)) || null;
   } catch (e) {
     return null;
   }
 }
 
-/** 二维码测试页：mode native 原生指令 / image 图片方式；用于设置页自测这台机器支持哪种 */
-function printQrTest(mode, paperWidth) {
+/** 小程序码测试页：真实小程序码（指向首页，scene test=1），用于设置页实测识别率 */
+function printQrTest() {
   return enqueue(async () => {
     if (!(await _ensure())) throw new Error('打印机未连接');
-    const bytes = qrprint.qrBytes('HUILIJI QR TEST 123', mode, paperWidth);
-    if (!bytes) throw new Error('二维码生成失败');
-    await _writeRetry(escpos.buildQrTest(bytes, mode));
+    const r = await request.qrCheck(true);
+    if (!r.ok || !r.raster) { const e = new Error('小程序码生成失败'); e.reason = r.reason; throw e; }
+    await _writeRetry(escpos.buildQrTest(qrprint.fromBase64(r.raster)));
     return true;
   });
 }

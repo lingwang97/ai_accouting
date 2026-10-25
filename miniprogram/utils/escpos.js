@@ -143,13 +143,13 @@ function buildReceipt(record, rawTpl, opts) {
 }
 
 /** 联机测试页 */
-/** 二维码测试页：用一段固定文字，扫出来能看到文字即说明这台机器支持当前方式 */
-function buildQrTest(qrBytes, mode) {
+/** 小程序码测试页：真实小程序码（指向首页，scene test=1）；用微信扫一扫应打开慧礼记首页，用来实测这台机器的识别率 */
+function buildQrTest(rasterBytes) {
   const bytes = [
     ...CMD.init, ...CMD.alignCenter, ...CMD.boldOn,
-    ...text(mode === 'image' ? '二维码测试（图片方式）' : '二维码测试（原生指令）'), ...CMD.feed, ...CMD.boldOff,
-    ...CMD.feed, ...qrBytes, ...CMD.feed,
-    ...text('微信扫一扫应显示：'), ...CMD.feed, ...text('HUILIJI QR TEST 123'), ...CMD.feed,
+    ...text('小程序码测试'), ...CMD.feed, ...CMD.boldOff,
+    ...CMD.feed, ...rasterBytes, ...CMD.feed,
+    ...text('微信扫一扫应打开慧礼记首页'), ...CMD.feed,
     ...feedLines(4), ...CMD.cut
   ];
   return new Uint8Array(bytes).buffer;

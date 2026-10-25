@@ -2,7 +2,7 @@
   "permissions": {
     "openapi": [
       "subscribeMessage.send",
-      "urllink.generate"
+      "wxacode.getUnlimited"
     ]
   },
   "timeout": 20

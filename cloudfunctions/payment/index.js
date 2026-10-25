@@ -53,7 +53,7 @@ exports.main = async (event) => {
       case 'issueQr': return await issueQr(ctx, String(event.rid || ''), event.envVersion);
       case 'resetToken': return await resetToken(ctx, String(event.rid || ''));
       case 'unclaim': return await unclaim(ctx, String(event.rid || ''));
-      case 'qrCheck': return await qrCheck(event.envVersion);
+      case 'qrCheck': return await qrCheck(event.envVersion, event.withRaster === true);
       // 收款方
       // 主家或其记账人（权限相同）
       // 批次录入的记录：确认 / 拒绝整批（amounts 为逐人实际金额 {rid: 金额}）
@@ -851,14 +851,14 @@ const RELATIONS = ['亲戚', '朋友', '同事', '同学', '邻里', '其他'];
 const centStr = rs => String(rs.reduce((t, r) => t + Math.round(r.amount * 100), 0) / 100);
 const validId = s => /^[a-zA-Z0-9_-]{1,64}$/.test(String(s || ''));
 /** 返回给主家 / 记账人前端的记录：去掉各方 openid 与往来人标识（含宾客 openid） */
-const shown = ({ payerOpenid, handlerOpenid, enteredBy, ownerOpenid, personKey, rcptToken, claimedOpenid, claimedAt, _openid, ...r }) => (claimedOpenid ? { ...r, claimed: true } : r);
+const shown = ({ payerOpenid, handlerOpenid, enteredBy, ownerOpenid, personKey, rcptToken, rcptQrKey, rcptQrFileID, claimedOpenid, claimedAt, _openid, ...r }) => (claimedOpenid ? { ...r, claimed: true } : r);
 
-// —— 小票二维码（v3.57.0）——
+// —— 小票二维码（v3.57.0 起；v3.58.0 改为小程序码）——
 // token：12 位随机（base62），存 records.rcptToken，任何列表 / 详情接口都不返回；知道 token 的人（持有小票的人）可看这一笔回执。
-// 二维码里放微信 URL Link（打开 pages/receipt/receipt?t=token）。URL Link 官方规则（2022-04-11 起）：
-//   有效期最长 30 天（expireType=1 时 expireInterval 最大 30），不再有永久链接；同一链接被一个微信用户打开后，其他人不能再用它打开小程序；
-//   每个小程序每天生成上限 50 万（URL Scheme 与 URL Link 合计）。所以每次打印都新生成链接（token 不变），超过 30 天的小票码会失效，
-//   但持有人认领后可在「我的随礼记录」继续查看。
+// 小票上印的是小程序码（wxacode.getUnlimited，scene = 't=' + token，共 14 位，≤32 且字符合法），打开 pages/receipt/receipt。
+// 小程序码永久有效、任何人都能扫（不像 URL Link 有 30 天限制和首位独占；URL Link 只开放给大陆非个人主体，个人主体报 85407，所以不用）。
+// 先认先得：礼台登记的记录由第一位点「放入我的随礼记录」的人认领；主家可解除认领、重置二维码（换 token，旧码扫出来提示失效）。
+// 云端把码图解码成 1 位光栅（GS v 0）再返回，按 token 缓存到云存储（records.rcptQrKey / rcptQrFileID），补打不重复生成。
 const TOKEN_RE = /^[0-9A-Za-z]{12}$/;
 const B62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 function newToken() {
@@ -870,7 +870,8 @@ function newToken() {
   return t;
 }
 const ENVS = ['develop', 'trial', 'release'];
-const URL_LINK_DAYS = 30; // 官方允许的最大有效期
+const RASTER_VER = 'w280v1'; // 光栅规格（宽 280 点、阈值 128）；改规格时换版本号，旧缓存自动失效
+const toRaster = (...a) => require('./wxaraster.js').toRaster(...a); // 用到时才加载（pngjs / jpeg-js 只在云端装好后才有）
 
 /** 通过 token 找记录（忽略客户端伪造的带 _openid 文档） */
 async function recordByToken(token) {
@@ -893,51 +894,72 @@ async function issueQr(ctx, rid, envVersion) {
       if (!TOKEN_RE.test(String(token))) return err('二维码生成失败');
     }
   }
-  const r = await makeUrlLink({ path: 'pages/receipt/receipt', query: 't=' + token, days: URL_LINK_DAYS, envVersion });
-  // reason 只放错误码 / 简短原因（不含 token、密钥），失败时便于在设置页「检测二维码链接」或前端日志里定位
-  return ok(r.url ? { url: r.url } : { url: '', reason: r.reason });
+  const key = token + ':' + RASTER_VER;
+  if (rec.rcptQrKey === key && rec.rcptQrFileID) { // 缓存命中：补打不重复生成
+    try {
+      const d = await cloud.downloadFile({ fileID: rec.rcptQrFileID });
+      if (d.fileContent && d.fileContent.length > 100) return ok({ raster: Buffer.from(d.fileContent).toString('base64') });
+    } catch (e) { /* 缓存丢失，重新生成 */ }
+  }
+  const code = await makeCode({ scene: 't=' + token, page: 'pages/receipt/receipt', envVersion });
+  // reason 只放错误码 / 简短原因（不含 token、密钥），失败时便于在设置页「检测小程序码生成」或前端日志里定位
+  if (!code.image) return ok({ raster: '', reason: code.reason });
+  let r;
+  try { r = toRaster(code.image); } catch (e) { return ok({ raster: '', reason: /^decode:/.test(e.message) ? e.message : 'decode:err' }); }
+  try {
+    const up = await cloud.uploadFile({ cloudPath: `rcptqr/${rid}-${token}.bin`, fileContent: r.bytes });
+    await records.where({ _id: rid, rcptToken: token }).update({ data: { rcptQrKey: key, rcptQrFileID: up.fileID } });
+  } catch (e) { console.error('rcptqr cache failed', e && (e.errMsg || e.message)); } // 缓存失败不影响本次打印
+  return ok({ raster: r.bytes.toString('base64') });
 }
 
 /** 取一个错误里的错误码（云调用 errCode / HTTP errcode），拼成简短原因 */
 const codeOf = e => String((e && (e.errCode !== undefined ? e.errCode : e.code !== undefined ? e.code : e.errcode)) || 'err').slice(0, 20);
 
 /**
- * 生成 URL Link：先试云调用 cloud.openapi.urllink.generate（需要 payment 云函数有 urllink.generate 权限）；
- * 失败（命令行部署不一定应用 config.json 的权限）再请求 system 的内部 action `_urlLink`（用 AppSecret 走 HTTPS 接口）。
+ * 生成小程序码图片：先试云调用 cloud.openapi.wxacode.getUnlimited（需要 payment 云函数有 wxacode.getUnlimited 权限）；
+ * 失败（命令行部署不一定应用 config.json 的权限）再请求 system 的内部 action `_wxaCode`（用 AppSecret 走 HTTPS 接口）。
  * 内部调用的身份证明：本函数先往 settings 集合写一条一次性凭据（集合客户端不可读写），system 核对并删除后才执行。
- * 返回 { url, reason, via }
+ * width 280 为官方最小值；纯黑白（auto_color=false、黑色线条、不透明底），热敏机二值化后最清晰；check_path=false：未发布 / 体验版也能生成。
+ * 返回 { image: Buffer, via } 或 { reason }
  */
-async function makeUrlLink({ path, query, days, envVersion }) {
+async function makeCode({ scene, page, envVersion }) {
   const env = ENVS.includes(envVersion) ? envVersion : 'release';
   let reason = '';
   try {
-    const r = await cloud.openapi.urllink.generate({ path, query, isExpire: true, expireType: 1, expireInterval: days, envVersion: env });
-    if (r && r.urlLink) return { url: r.urlLink, via: 'openapi' };
-    reason = 'openapi:empty';
+    const r = await cloud.openapi.wxacode.getUnlimited({
+      scene, page, width: 280, checkPath: false, envVersion: env,
+      autoColor: false, lineColor: { r: 0, g: 0, b: 0 }, isHyaline: false
+    });
+    if (r && r.buffer && r.buffer.length > 100) return { image: Buffer.from(r.buffer), via: 'openapi' };
+    reason = 'openapi:' + (r && r.errCode ? r.errCode : 'empty');
   } catch (e) {
     reason = 'openapi:' + codeOf(e);
-    console.error('urllink.generate failed', e && (e.errMsg || e.message));
+    console.error('wxacode.getUnlimited failed', e && (e.errMsg || e.message));
   }
   const nonce = 'urlnonce_' + require('crypto').randomBytes(12).toString('hex');
   try {
     await ensureCol('settings');
     await db.collection('settings').doc(nonce).set({ data: { kind: 'urllink', createdAt: Date.now() } });
-    const res = await cloud.callFunction({ name: 'system', data: { action: '_urlLink', nonce, path, query, days, envVersion: env } });
+    const res = await cloud.callFunction({ name: 'system', data: { action: '_wxaCode', nonce, scene, page, envVersion: env } });
     const out = (res && res.result) || {};
-    if (out.code === 0 && out.data && out.data.url) return { url: out.data.url, via: 'system' };
+    if (out.code === 0 && out.data && out.data.image) return { image: Buffer.from(out.data.image, 'base64'), via: 'system' };
     reason += ',system:' + String((out.data && out.data.reason) || out.msg || 'err').slice(0, 40);
   } catch (e) {
     reason += ',call:' + codeOf(e);
-    console.error('system._urlLink call failed', e && (e.errMsg || e.message));
+    console.error('system._wxaCode call failed', e && (e.errMsg || e.message));
   }
   try { await db.collection('settings').doc(nonce).remove(); } catch (e) { /* 已被 system 删除 */ }
-  return { url: '', reason };
+  return { reason };
 }
 
-/** 设置页「检测二维码链接」：生成一条指向首页、有效期 1 天的链接，只检测不打印（首位独占，别扫） */
-async function qrCheck(envVersion) {
-  const r = await makeUrlLink({ path: 'pages/index/index', query: '', days: 1, envVersion });
-  return ok({ ok: !!r.url, via: r.via || '', reason: r.reason || '' });
+/** 设置页「检测小程序码生成 / 打印测试码」：生成指向首页的小程序码（scene test=1）；withRaster 时一并返回光栅供打印 */
+async function qrCheck(envVersion, withRaster) {
+  const code = await makeCode({ scene: 'test=1', page: 'pages/index/index', envVersion });
+  if (!code.image) return ok({ ok: false, via: '', reason: code.reason });
+  let r;
+  try { r = toRaster(code.image); } catch (e) { return ok({ ok: false, via: code.via, reason: /^decode:/.test(e.message) ? e.message : 'decode:err' }); }
+  return ok({ ok: true, via: code.via, reason: '', ...(withRaster ? { raster: r.bytes.toString('base64') } : {}) });
 }
 
 /** 主家重置二维码：换新 token，旧小票上的码立即失效；已认领关系不变 */
@@ -945,7 +967,8 @@ async function resetToken(ctx, rid) {
   if (ctx.role !== 'owner') return err('只有主家本人可以重置二维码');
   const rec = await getRecord(rid);
   if (!rec || !trusted(rec) || rec.ownerOpenid !== ctx.ownerOpenid) return err('记录不存在');
-  await records.where({ _id: rid, ownerOpenid: ctx.ownerOpenid }).update({ data: { rcptToken: newToken() } });
+  await records.where({ _id: rid, ownerOpenid: ctx.ownerOpenid }).update({ data: { rcptToken: newToken(), rcptQrKey: '', rcptQrFileID: '' } });
+  if (rec.rcptQrFileID) { try { await cloud.deleteFile({ fileList: [rec.rcptQrFileID] }); } catch (e) { /* 旧缓存文件删不掉不影响 */ } }
   return ok({});
 }
 

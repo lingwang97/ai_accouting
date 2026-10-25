@@ -66,7 +66,7 @@ module.exports = {
   // 小票二维码（v3.57.0）：issueQr 静默（失败不弹提示，小票照常打印）
   issueQr: rid => call('payment', { action: 'issueQr', rid, envVersion: envVersion() }, { silent: true }),
   receiptByToken: token => call('payment', { action: 'receiptByToken', token }),
-  qrCheck: () => call('payment', { action: 'qrCheck', envVersion: envVersion() }),
+  qrCheck: withRaster => call('payment', { action: 'qrCheck', envVersion: envVersion(), withRaster: !!withRaster }),
   claimReceipt: token => call('payment', { action: 'claimReceipt', token }),
   resetQr: rid => call('payment', { action: 'resetToken', rid }),
   unclaim: rid => call('payment', { action: 'unclaim', rid }),

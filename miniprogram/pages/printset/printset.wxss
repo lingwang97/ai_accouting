@@ -29,3 +29,4 @@
 
 /* 电子回执 / 打印小票 切换 */
 .seg { margin-bottom: 24rpx; }
+.chip.disabled { opacity: 0.45; }

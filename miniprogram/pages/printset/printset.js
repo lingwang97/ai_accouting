@@ -13,17 +13,25 @@ const FIELD_LABELS = {
 };
 const label = f => FIELD_LABELS[f] || f;
 
-/** 二维码链接失败原因码 → 中文提示（reason 由 payment.issueQr / qrCheck 返回，不含敏感信息） */
+/**
+ * 小程序码生成失败原因码 → 中文提示（reason 由 payment.issueQr / qrCheck 返回，不含敏感信息）
+ * 码含义以微信官方文档为准：85407 无 URL Link 权限（旧版）、40001 access_token 无效、40125 AppSecret 错误、40013 AppID 无效、
+ * 41030 页面不存在、45009 调用超过限额、40097 参数错误、-604101 云函数没有该云调用权限
+ */
 function qrReasonText(reason) {
   const r = String(reason || '');
   const tips = [];
   if (/secret-missing/.test(r)) tips.push('AppSecret 未配置：云开发控制台 → 云函数 system → 配置 → 环境变量添加 WX_APPSECRET');
-  if (/token:/.test(r)) tips.push('AppSecret 不正确或已被重置：请到公众平台重新获取，更新 system 的 WX_APPSECRET 环境变量');
-  if (/openapi:/.test(r) && !/http:|token:|secret-missing/.test(r)) tips.push('云函数缺少 urllink 权限');
-  if (/http:40001|http:42001/.test(r)) tips.push('access_token 失效，请重试');
-  if (/http:40165|http:40066|http:85/.test(r)) tips.push('页面路径无效：该版本尚未包含此页面（请用对应版本，或先发布）');
-  if (/http:45009|http:45047/.test(r)) tips.push('今日生成额度已用完');
+  if (/token:(40125|40001|40013)/.test(r)) tips.push('AppSecret 不正确或已被重置：请到公众平台重新获取，更新 system 的 WX_APPSECRET 环境变量');
+  else if (/token:/.test(r)) tips.push('获取 access_token 失败，请核对 AppID 与 AppSecret');
+  if (/(-604101|-604100)/.test(r)) tips.push('云函数缺少 wxacode 权限');
+  if (/http:(40001|42001)/.test(r)) tips.push('access_token 失效，请重试');
+  if (/http:85407|openapi:85407/.test(r)) tips.push('无生成权限（小程序主体类型不支持）');
+  if (/http:41030/.test(r)) tips.push('页面不存在：该版本尚未包含此页面（请用对应版本，或先发布）');
+  if (/http:(45009|45029)/.test(r)) tips.push('今日生成额度已用完，请明天再试');
+  if (/http:(40097|40129|40130)/.test(r)) tips.push('参数不合法，请把原因码发给开发者');
   if (/call:/.test(r)) tips.push('备用通道调用失败：请确认 system 云函数已部署');
+  if (/decode:/.test(r)) tips.push('码图解码失败，请把原因码发给开发者');
   if (!tips.length) tips.push('请把下面的原因码发给开发者');
   return tips.join('；');
 }
@@ -41,7 +49,7 @@ Page({
     amountSize: 'double',
     footer: '',
     qr: true,
-    qrMode: 'native',
+    qrMode: 'image',
     qrTesting: false,
     qrChecking: false,
     feedTop: 1,
@@ -103,7 +111,7 @@ Page({
       feedTop: tpl.feedTop,
       feedBottom: tpl.feedBottom,
       qr: tpl.qr !== false,
-      qrMode: tpl.qrMode === 'image' ? 'image' : 'native',
+      qrMode: 'image', // 小程序码只能图片方式
       fields: (tpl.fields || escpos.DEFAULT_FIELDS).filter(f => FIELD_LABELS[f]) // 去掉已下线的字段（如旧版的「代随礼」）
     }, () => this.refresh());
   },
@@ -135,28 +143,28 @@ Page({
   onAmountSize(e) { this.setData({ amountSize: e.currentTarget.dataset.v }, () => this.buildPreview()); },
   onFooter(e) { this.setData({ footer: e.detail.value }, () => this.buildPreview()); },
   onQr(e) { this.setData({ qr: e.detail.value }, () => this.buildPreview()); },
-  onQrMode(e) { this.setData({ qrMode: e.currentTarget.dataset.v }); },
-  /** 打印测试码：按当前选择的方式（未保存也可测），扫出 HUILIJI QR TEST 123 即支持 */
+  /** 打印测试码：真实小程序码（指向首页，scene test=1），微信扫一扫应打开首页，用来实测这台机器的识别率 */
   async onQrTest() {
     if (this.data.qrTesting) return;
     this.setData({ qrTesting: true });
     try {
-      await printer.printQrTest(this.data.qrMode, this.data.paperWidth);
+      await printer.printQrTest();
       wx.showToast({ title: '已发送打印', icon: 'success' });
     } catch (e) {
-      wx.showModal({ title: '打印失败', content: e.message || '请先连接打印机', showCancel: false });
+      const why = e.reason ? `${qrReasonText(e.reason)}\n\n原因码：${e.reason}` : (e.message || '请先连接打印机');
+      wx.showModal({ title: '打印失败', content: why, showCancel: false });
     } finally {
       this.setData({ qrTesting: false });
     }
   },
-  /** 检测二维码链接：生成一条指向首页、有效期 1 天的链接，只检测，不打印（链接首位独占，请勿扫） */
+  /** 检测小程序码生成：只生成不打印，成功提示正常，失败给出中文原因与原因码 */
   async onQrCheck() {
     if (this.data.qrChecking) return;
     this.setData({ qrChecking: true });
     try {
       const r = await req.qrCheck();
-      if (r.ok) return wx.showToast({ title: '链接生成正常', icon: 'success' });
-      wx.showModal({ title: '链接生成失败', content: `${qrReasonText(r.reason)}\n\n原因码：${r.reason || '无'}`, showCancel: false });
+      if (r.ok) return wx.showToast({ title: '小程序码正常', icon: 'success' });
+      wx.showModal({ title: '小程序码生成失败', content: `${qrReasonText(r.reason)}\n\n原因码：${r.reason || '无'}`, showCancel: false });
     } catch (e) { /* toast 已提示 */ } finally {
       this.setData({ qrChecking: false });
     }
