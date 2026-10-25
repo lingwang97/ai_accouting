@@ -25,6 +25,9 @@ Page({
     showHandler: true,
     amountSize: 'double',
     footer: '',
+    qr: true,
+    qrMode: 'native',
+    qrTesting: false,
     feedTop: 1,
     feedBottom: 5,
     topOpts: [0, 1, 2, 3, 4],
@@ -83,6 +86,8 @@ Page({
       footer: tpl.footer,
       feedTop: tpl.feedTop,
       feedBottom: tpl.feedBottom,
+      qr: tpl.qr !== false,
+      qrMode: tpl.qrMode === 'image' ? 'image' : 'native',
       fields: (tpl.fields || escpos.DEFAULT_FIELDS).filter(f => FIELD_LABELS[f]) // 去掉已下线的字段（如旧版的「代随礼」）
     }, () => this.refresh());
   },
@@ -113,6 +118,21 @@ Page({
   onHandler(e) { this.setData({ showHandler: e.detail.value }, () => this.buildPreview()); },
   onAmountSize(e) { this.setData({ amountSize: e.currentTarget.dataset.v }, () => this.buildPreview()); },
   onFooter(e) { this.setData({ footer: e.detail.value }, () => this.buildPreview()); },
+  onQr(e) { this.setData({ qr: e.detail.value }, () => this.buildPreview()); },
+  onQrMode(e) { this.setData({ qrMode: e.currentTarget.dataset.v }); },
+  /** 打印测试码：按当前选择的方式（未保存也可测），扫出 HUILIJI QR TEST 123 即支持 */
+  async onQrTest() {
+    if (this.data.qrTesting) return;
+    this.setData({ qrTesting: true });
+    try {
+      await printer.printQrTest(this.data.qrMode, this.data.paperWidth);
+      wx.showToast({ title: '已发送打印', icon: 'success' });
+    } catch (e) {
+      wx.showModal({ title: '打印失败', content: e.message || '请先连接打印机', showCancel: false });
+    } finally {
+      this.setData({ qrTesting: false });
+    }
+  },
   onFeedTop(e) { this.setData({ feedTop: Number(e.currentTarget.dataset.n) }, () => this.buildPreview()); },
   onFeedBottom(e) { this.setData({ feedBottom: Number(e.currentTarget.dataset.n) }, () => this.buildPreview()); },
   onWidth(e) {
@@ -172,6 +192,11 @@ Page({
         case 'thanks': if (d.thanks) add(d.thanks, { center: true }); break;
       }
     }
+    if (d.qr) {
+      const book = d.books[d.bookIdx];
+      lines.push({ t: '[ 二维码 ]', center: true });
+      add(book && book.type === 'funeral' ? '扫码查看回执' : '扫码查看电子回执', { center: true });
+    }
     if (d.footer) add(d.footer, { center: true });
     if (d.promo) add('微信搜索「慧礼记」记礼金·查往来', { center: true });
     for (let i = 0; i < d.feedBottom; i++) lines.push({ t: ' ', blank: true });
@@ -201,7 +226,9 @@ Page({
           titleBold: this.data.titleBold,
           showHandler: this.data.showHandler,
           feedTop: this.data.feedTop,
-          feedBottom: this.data.feedBottom
+          feedBottom: this.data.feedBottom,
+          qr: this.data.qr,
+          qrMode: this.data.qrMode
         }
       });
       printer.clearTemplateCache();

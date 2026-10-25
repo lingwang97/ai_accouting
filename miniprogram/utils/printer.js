@@ -4,6 +4,7 @@ const ble = require('./ble.js');
 const escpos = require('./escpos.js');
 const request = require('./request.js');
 const scenes = require('./scenes.js');
+const qrprint = require('./qrprint.js');
 
 const tplCache = {}; // bookId -> 打印模板
 
@@ -23,7 +24,9 @@ async function getTemplate(force, bookId) {
   if (tplCache[key] && !force) return tplCache[key];
   try {
     const r = await request.bookGetTpl(bookId);
-    tplCache[key] = r.printTpl || defaultTemplate(r.book.type, r.paperWidth);
+    const t = r.printTpl || defaultTemplate(r.book.type, r.paperWidth);
+    // 二维码开关：模板没设置过时按事由类型默认（白事关）
+    tplCache[key] = typeof t.qr === 'boolean' ? t : { ...t, qr: escpos.qrOn(t, r.book.type) };
   } catch (e) {
     // 拉取失败只本次用默认模板，不写缓存，下次打印再重试，避免一次网络抖动后一直用错样式
     return defaultTemplate('other', 32);
@@ -91,7 +94,8 @@ async function _printRecord(record) {
     accountName: record.hostName || record.accountName || (app.globalData.account && app.globalData.account.accountName) || '',
     handlerName: record.handlerName || (app.globalData.user && app.globalData.user.nickname) || ''
   };
-  await _writeRetry(escpos.buildReceipt(record, tpl));
+  const qr = escpos.qrOn(tpl, record.bookType) && record._id ? await _qrBytes(record, tpl) : null;
+  await _writeRetry(escpos.buildReceipt(record, tpl, qr ? { qr } : undefined));
   try {
     await request.markPrinted([record._id]);
   } catch (e) {
@@ -99,6 +103,30 @@ async function _printRecord(record) {
     console.warn('markPrinted 失败', e);
   }
   return true;
+}
+
+/** 取这一笔的二维码字节；任何失败（无权限、额度、网络慢）都返回 null：这张小票不印二维码，打印照常 */
+async function _qrBytes(record, tpl) {
+  try {
+    const r = await Promise.race([
+      request.issueQr(record._id),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000))
+    ]);
+    return (r && r.url && qrprint.qrBytes(r.url, tpl.qrMode, tpl.paperWidth)) || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/** 二维码测试页：mode native 原生指令 / image 图片方式；用于设置页自测这台机器支持哪种 */
+function printQrTest(mode, paperWidth) {
+  return enqueue(async () => {
+    if (!(await _ensure())) throw new Error('打印机未连接');
+    const bytes = qrprint.qrBytes('HUILIJI QR TEST 123', mode, paperWidth);
+    if (!bytes) throw new Error('二维码生成失败');
+    await _writeRetry(escpos.buildQrTest(bytes, mode));
+    return true;
+  });
 }
 
 function printTest() {
@@ -139,4 +167,4 @@ async function _writeRetry(buffer) {
   }
 }
 
-module.exports = { getTemplate, defaultTemplate, clearTemplateCache, isConnected, ensureConnected, printRecord, printTest };
+module.exports = { getTemplate, defaultTemplate, clearTemplateCache, isConnected, ensureConnected, printRecord, printTest, printQrTest };

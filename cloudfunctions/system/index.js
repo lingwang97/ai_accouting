@@ -523,6 +523,8 @@ const INDEXES = [
   ['records', 'owner_book_amount', [['ownerOpenid', 1], ['bookId', 1], ['amount', -1]]], // 礼簿页按礼簿 + 金额排序
   ['records', 'payer_status_paid', [['payerOpenid', 1], ['status', 1], ['paidAt', -1]]],
   ['records', 'payer_time', [['payerOpenid', 1], ['createdAt', -1]]],
+  ['records', 'claimed_status_paid', [['claimedOpenid', 1], ['status', 1], ['paidAt', -1]]], // 我的随礼记录（小票二维码认领）
+  ['records', 'rcpt_token', [['rcptToken', 1]]], // 扫小票二维码按 token 查回执
   ['records', 'batch', [['batchId', 1]]],
   ['records', 'owner_payer', [['ownerOpenid', 1], ['payerName', 1]]], // 往来按姓名查询 / nameCheck
   ['trash_records', 'owner_book', [['ownerOpenid', 1], ['bookId', 1]]],

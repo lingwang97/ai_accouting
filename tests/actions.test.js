@@ -74,6 +74,6 @@ test('payment：OWNER_ACTIONS 与 NEED 的键完全一致，且都有 case 处�
 test('payment：只有 OWNER_ACTIONS 之外的 action 才是宾客端动作，二者不重叠', () => {
   const src = read('cloudfunctions/payment/index.js');
   const owner = new Set(strs(src.match(/const OWNER_ACTIONS = \[([^\]]*)\]/)[1]));
-  const guestSide = ['create', 'transferred', 'cancel', 'status', 'receipt', 'myReceipts'];
+  const guestSide = ['create', 'transferred', 'cancel', 'status', 'receipt', 'myReceipts', 'receiptByToken', 'claimReceipt'];
   guestSide.forEach(a => { assert.ok(ACTIONS.payment.has(a), a); assert.ok(!owner.has(a), a + ' 不应在 OWNER_ACTIONS'); });
 });

@@ -50,6 +50,19 @@
         <view class="chip {{amountSize === 'tall' ? 'on' : ''}}" data-v="tall" bindtap="onAmountSize">加高</view>
         <view class="chip {{amountSize === 'normal' ? 'on' : ''}}" data-v="normal" bindtap="onAmountSize">正常</view>
       </view></view>
+    <view class="row"><text class="lbl">二维码</text>
+      <text class="muted flex1">致谢语下打印二维码，扫码可查看电子回执（白事默认关）</text>
+      <switch checked="{{qr}}" bindchange="onQr" color="{{primary}}" /></view>
+    <block wx:if="{{qr}}">
+      <view class="row"><text class="lbl">打印方式</text>
+        <view class="chips">
+          <view class="chip {{qrMode === 'native' ? 'on' : ''}}" data-v="native" bindtap="onQrMode">原生指令（快）</view>
+          <view class="chip {{qrMode === 'image' ? 'on' : ''}}" data-v="image" bindtap="onQrMode">图片方式（兼容，稍慢）</view>
+        </view></view>
+      <view class="row"><text class="lbl"></text>
+        <view class="btn btn-outline btn-sm" bindtap="onQrTest">{{qrTesting ? "打印中…" : "打印测试码"}}</view>
+        <text class="muted flex1" style="margin-left:16rpx">测试码打不出或是乱码，请改用图片方式</text></view>
+    </block>
     <view class="row"><text class="lbl">纸宽</text>
       <view class="chips">
         <view class="chip {{paperWidth === 32 ? 'on' : ''}}" data-w="32" bindtap="onWidth">58mm(32列)</view>

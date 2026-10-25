@@ -55,7 +55,14 @@ class Query {
     this.db.log.push({ op: 'count', col: this.name, cond: this.cond });
     return { total: this._rows().length };
   }
-  async update() { this.db.log.push({ op: 'update', col: this.name, cond: this.cond }); return { stats: { updated: 0 } }; }
+  // db.applyUpdates = true 时按条件把 data 里的字段写进匹配的行（用于验证条件更新 / 先到先得）；默认只记录、返回 0
+  async update(o) {
+    this.db.log.push({ op: 'update', col: this.name, cond: this.cond, data: o && o.data });
+    if (!this.db.applyUpdates) return { stats: { updated: 0 } };
+    const rows = this._rows();
+    rows.forEach(d => Object.assign(d, o.data));
+    return { stats: { updated: rows.length } };
+  }
   async remove() { this.db.log.push({ op: 'remove', col: this.name, cond: this.cond }); return { stats: { removed: 0 } }; }
 }
 
@@ -70,8 +77,8 @@ class Agg {
 }
 
 class FakeDb {
-  constructor() { this.command = command; this.RegExp = o => ({ __op: 'regexp', v: o }); this.reset(); }
-  reset() { this.data = {}; this.log = []; return this; }
+  constructor() { this.command = command; this.RegExp = o => ({ __op: 'regexp', v: o }); this.serverDate = () => new Date(); this.reset(); }
+  reset() { this.data = {}; this.log = []; this.applyUpdates = false; return this; }
   seed(col, docs) { this.data[col] = (this.data[col] || []).concat(docs); return this; }
   async createCollection() { return {}; }
   collection(name) {

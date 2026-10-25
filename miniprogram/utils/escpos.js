@@ -128,8 +128,11 @@ function buildReceipt(record, rawTpl, opts) {
     }
   }
 
-  // 二维码（可选，位于致谢语之后）
-  if (opts && opts.qr) put(opts.qr);
+  // 二维码（可选，位于致谢语之后）：二维码字节由 qrprint 生成，下面印一行提示
+  if (opts && opts.qr) {
+    put(CMD.feed, CMD.alignCenter, opts.qr, CMD.feed);
+    lines(record.bookType === 'funeral' ? '扫码查看回执' : '扫码查看电子回执', CMD.alignCenter);
+  }
   // 自定义页脚一行
   if (tpl.footer) lines(tpl.footer, CMD.alignCenter);
   // 底部推广语：白事不打印；「回执样式 → 打印小票」里可关闭
@@ -140,6 +143,18 @@ function buildReceipt(record, rawTpl, opts) {
 }
 
 /** 联机测试页 */
+/** 二维码测试页：用一段固定文字，扫出来能看到文字即说明这台机器支持当前方式 */
+function buildQrTest(qrBytes, mode) {
+  const bytes = [
+    ...CMD.init, ...CMD.alignCenter, ...CMD.boldOn,
+    ...text(mode === 'image' ? '二维码测试（图片方式）' : '二维码测试（原生指令）'), ...CMD.feed, ...CMD.boldOff,
+    ...CMD.feed, ...qrBytes, ...CMD.feed,
+    ...text('微信扫一扫应显示：'), ...CMD.feed, ...text('HUILIJI QR TEST 123'), ...CMD.feed,
+    ...feedLines(4), ...CMD.cut
+  ];
+  return new Uint8Array(bytes).buffer;
+}
+
 function buildTestLine() {
   const bytes = [
     ...CMD.init, ...CMD.alignCenter, ...CMD.boldOn,
@@ -150,6 +165,9 @@ function buildTestLine() {
   return new Uint8Array(bytes).buffer;
 }
 
+/** 是否打印二维码：模板明确设置了按模板；没设置时喜事等默认开，白事默认关 */
+const qrOn = (tpl, bookType) => (tpl && typeof tpl.qr === 'boolean' ? tpl.qr : bookType !== 'funeral');
+
 const DEFAULT_FIELDS = ['title', 'divider', 'theme', 'payDay', 'time', 'receiptNo', 'payerName', 'amount', 'amountUpper', 'remark', 'thanks'];
 
-module.exports = { buildReceipt, buildTestLine, DEFAULT_FIELDS, TPL_DEFAULTS, withDefaults, wrap, CMD };
+module.exports = { qrOn, buildReceipt, buildTestLine, buildQrTest, DEFAULT_FIELDS, TPL_DEFAULTS, withDefaults, wrap, CMD };

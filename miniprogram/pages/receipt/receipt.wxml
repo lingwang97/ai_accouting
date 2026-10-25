@@ -2,6 +2,12 @@
   <view wx:if="{{errMsg}}" class="card center muted">{{errMsg}}</view>
   <block wx:if="{{model}}">
     <receipt-view model="{{model}}" />
+    <view class="card claim" wx:if="{{claim === 'open'}}">
+      <view class="muted">这笔随礼是礼台代为登记的。放入后，可在「我的随礼记录」里随时查看这张回执。</view>
+      <button class="btn-primary save" loading="{{claiming}}" bindtap="onClaim">放入我的随礼记录</button>
+    </view>
+    <view class="claim-tip" wx:if="{{claim === 'mine'}}" bindtap="goMine">已在你的「我的随礼记录」中 ›</view>
+    <view class="claim-tip" wx:if="{{claim === 'taken'}}">这笔记录已被认领</view>
     <button class="btn-primary save" loading="{{saving}}" bindtap="onSave">保存回执到相册</button>
     <view class="host-cta" wx:if="{{!isHost && bookType !== 'funeral'}}" bindtap="goHostEntry">我家也要办事？免费创建电子礼簿 ›</view>
     <ad-slot slot="receipt" book-type="{{bookType}}" />

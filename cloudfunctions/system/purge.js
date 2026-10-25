@@ -127,6 +127,12 @@ async function run(db, cloud, openid, opts = {}) {
     await db.collection('exports').where({ _id: db.command.in(rows.map(r => r._id)) }).remove();
     if (rows.length < BATCH) break;
   }
+  // 他在小票二维码上认领过的随礼记录属于对方礼簿：不删，只解除认领，避免对方礼簿里残留他的标识
+  for (let i = 0; i < 200; i++) {
+    let res;
+    try { res = await db.collection('records').where({ claimedOpenid: openid }).update({ data: { claimedOpenid: '' } }); } catch (e) { if (isMissing(e)) break; throw e; }
+    if (!res.stats.updated) break;
+  }
   const removed = [];
   for (const [label, col, cond] of targets(openid, opts)) {
     const count = await removeAll(col, cond);

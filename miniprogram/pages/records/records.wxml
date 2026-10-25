@@ -76,7 +76,7 @@
       <view class="link" data-id="{{item._id}}" bindtap="onReceipt">回执</view>
       <view class="link" wx:if="{{!readonly && pm.show}}" data-idx="{{index}}" bindtap="onPrint">{{item.printed ? '补打' : '打印'}}</view>
       <view class="link" wx:if="{{!readonly && pm.amend}}" data-idx="{{index}}" bindtap="onAmend">修改</view>
-      <view class="link" wx:if="{{!readonly && (pm.tag || pm.void)}}" data-idx="{{index}}" bindtap="onMore">更多</view>
+      <view class="link" wx:if="{{!readonly && (pm.tag || pm.void || isOwner)}}" data-idx="{{index}}" bindtap="onMore">更多</view>
     </view>
   </view>
 

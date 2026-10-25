@@ -8,6 +8,7 @@ const confirm = require('../../utils/confirm.js');
 const theme = require('../../utils/theme.js');
 const cache = require('../../utils/cache.js');
 const perm = require('../../utils/perm.js');
+const { REC } = require('../../utils/status.js');
 const samename = require('../../utils/samename.js');
 const poller = require('../../utils/poller.js');
 const fresh = require('../../utils/fresh.js');
@@ -84,7 +85,7 @@ Page({
     const pm = perm.current();
     pm.tag = pm.desk || pm.confirm; // 设区分备注
     pm.amend = pm.confirm || pm.void; // 修改已入簿礼金（与服务端 payment.amend 一致）
-    this.setData({ loggedIn: true, readonly: role === 'viewer', pm });
+    this.setData({ loggedIn: true, readonly: role === 'viewer', isOwner: role === 'owner', pm });
     // 礼簿下拉：首次进入先用缓存，网络结果回来后再校正；之后每分钟最多重新拉一次
     let booksP = null;
     if (app.globalData.activeBookChanged) {
@@ -405,10 +406,51 @@ Page({
     const items = [];
     if (pm.tag) items.push(['区分备注', () => this.onNameTag({ currentTarget: { dataset: { idx } } })]);
     if (pm.void) items.push(['作废', () => this.onVoid({ currentTarget: { dataset: { idx } } })]);
+    // 小票二维码：重置 / 解除认领只有主家本人（服务端同样校验）
+    const rec = this.data.list[idx];
+    if (this.data.isOwner && rec && rec.status === REC.PAID) {
+      items.push(['重置二维码', () => this.onResetQr(idx)]);
+      if (rec.claimed) items.push(['解除认领', () => this.onUnclaim(idx)]);
+    }
     if (!items.length) return;
     wx.showActionSheet({
       itemList: items.map(i => i[0]),
       success: r => items[r.tapIndex] && items[r.tapIndex][1]()
+    });
+  },
+
+  /** 重置二维码：旧小票上的码立即失效（token 换新），需要时补打 */
+  onResetQr(idx) {
+    const record = this.data.list[idx];
+    wx.showModal({
+      title: '重置二维码',
+      content: '重置后，这笔已打印小票上的二维码立即失效，需要补打新小票。确定重置吗？',
+      confirmText: '重置',
+      success: async res => {
+        if (!res.confirm) return;
+        try {
+          await req.resetQr(record._id);
+          wx.showToast({ title: '已重置', icon: 'success' });
+        } catch (err) { /* toast 已提示 */ }
+      }
+    });
+  },
+
+  /** 解除认领：对方的「我的随礼记录」不再显示这笔，二维码可被他人重新认领 */
+  onUnclaim(idx) {
+    const record = this.data.list[idx];
+    wx.showModal({
+      title: '解除认领',
+      content: '解除后，对方的「我的随礼记录」里将不再显示这笔。如担心被他人认领，可再「重置二维码」。',
+      confirmText: '解除',
+      success: async res => {
+        if (!res.confirm) return;
+        try {
+          await req.unclaim(record._id);
+          this.setData({ [`list[${idx}].claimed`]: false });
+          wx.showToast({ title: '已解除', icon: 'success' });
+        } catch (err) { /* toast 已提示 */ }
+      }
     });
   },
 

@@ -6,7 +6,7 @@ const envVersion = () => {
 
 // 只读 action：其余一律视为写操作，成功后记下时间（页面切回时据此判断是否必须刷新，见 utils/fresh.js）
 const READ_ACTIONS = ['get', 'list', 'query', 'people', 'outList', 'remindList', 'pending', 'pendingStat', 'dashboard',
-  'status', 'receipt', 'myReceipts', 'themes', 'check', 'getByAid', 'gen', 'app', 'plan', 'adminGet', 'detail',
+  'status', 'receipt', 'myReceipts', 'receiptByToken', 'issueQr', 'themes', 'check', 'getByAid', 'gen', 'app', 'plan', 'adminGet', 'detail',
   'nameCheck', 'reconcile', 'orgSummary', 'removePreview', 'members', 'pendingMembers', 'getTpl', 'stats', 'trashList',
   'viewers', 'payCodeReviews', 'inviteInfo',
   // export 预览：只生成临时文件，不改礼簿 / 礼金数据（与导出不同，不触发页面强制刷新）
@@ -63,6 +63,12 @@ module.exports = {
   accountGetByAid: aid => call('account', { action: 'getByAid', aid }),
   receiptGet: (rid, batch) => call('payment', { action: 'receipt', rid, batch: !!batch }),
   myReceipts: () => call('payment', { action: 'myReceipts' }),
+  // 小票二维码（v3.57.0）：issueQr 静默（失败不弹提示，小票照常打印）
+  issueQr: rid => call('payment', { action: 'issueQr', rid, envVersion: envVersion() }, { silent: true }),
+  receiptByToken: token => call('payment', { action: 'receiptByToken', token }),
+  claimReceipt: token => call('payment', { action: 'claimReceipt', token }),
+  resetQr: rid => call('payment', { action: 'resetToken', rid }),
+  unclaim: rid => call('payment', { action: 'unclaim', rid }),
   bookList: () => call('books', { action: 'list' }),
   // 当前礼簿变化（切换 / 新建即设为当前）：通知礼簿页下次显示时切到新的当前礼簿
   // 修改已有礼簿：礼簿下拉、工作台缓存里的名称等已过期

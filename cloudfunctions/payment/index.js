@@ -29,13 +29,13 @@ exports.main = async (event) => {
   try {
     await ensureCol('records');
     // 收款方操作：身份只解析一次；家人共享（只读）不能做任何收款方操作
-    const OWNER_ACTIONS = ['cashEntry', 'confirm', 'confirmBatch', 'reject', 'unreject', 'dismissStall', 'void', 'amend'];
+    const OWNER_ACTIONS = ['cashEntry', 'confirm', 'confirmBatch', 'reject', 'unreject', 'dismissStall', 'void', 'amend', 'issueQr', 'resetToken', 'unclaim'];
     const ctx = OWNER_ACTIONS.includes(event.action) ? await resolveCtx(db, OPENID) : null;
     if (ctx && readonly(ctx)) return err('家人共享为只读，不能修改');
     // 记账人按权限：礼台记账 / 确认收礼 / 作废；amend（修改已入簿礼金）确认收礼或作废任一即可
-    const NEED = { cashEntry: 'desk', confirm: 'confirm', confirmBatch: 'confirm', reject: 'confirm', unreject: 'confirm', dismissStall: 'confirm', void: 'void', amend: ['confirm', 'void'] };
+    const NEED = { cashEntry: 'desk', confirm: 'confirm', confirmBatch: 'confirm', reject: 'confirm', unreject: 'confirm', dismissStall: 'confirm', void: 'void', amend: ['confirm', 'void'], issueQr: ['confirm', 'desk'], resetToken: 'members', unclaim: 'members' };
     if (ctx && ![].concat(NEED[event.action]).some(p => can(ctx, p))) {
-      return err('你没有「' + (event.action === 'amend' ? '修改礼金' : { desk: '礼台记账', confirm: '确认收礼', void: '作废' }[NEED[event.action]]) + '」权限');
+      return err('你没有「' + (event.action === 'amend' ? '修改礼金' : { desk: '礼台记账', confirm: '确认收礼', void: '作废', members: '管理' }[NEED[event.action]]) + '」权限');
     }
     switch (event.action) {
       // 付款方
@@ -46,6 +46,13 @@ exports.main = async (event) => {
       case 'status': return await status(OPENID, event.rid);
       case 'receipt': return await receipt(OPENID, event.rid, event.batch === true);
       case 'myReceipts': return await myReceipts(OPENID);
+      // 小票二维码（v3.57.0）：宾客扫码查看回执 / 放入「我的随礼记录」
+      case 'receiptByToken': return await receiptByToken(OPENID, event.token);
+      case 'claimReceipt': return await claimReceipt(OPENID, event.token);
+      // 小票二维码：打印时取链接（主家 / 记账人）；重置二维码、解除认领只有主家本人
+      case 'issueQr': return await issueQr(ctx, String(event.rid || ''), event.envVersion);
+      case 'resetToken': return await resetToken(ctx, String(event.rid || ''));
+      case 'unclaim': return await unclaim(ctx, String(event.rid || ''));
       // 收款方
       // 主家或其记账人（权限相同）
       // 批次录入的记录：确认 / 拒绝整批（amounts 为逐人实际金额 {rid: 金额}）
@@ -524,7 +531,7 @@ async function notifyOwner(rid, envVersion) {
 
 /** 是否可查看该记录：宾客本人，或主家 / 其记账人 */
 async function canView(openid, rec) {
-  if (rec.payerOpenid === openid || rec.ownerOpenid === openid) return true;
+  if (rec.payerOpenid === openid || rec.ownerOpenid === openid || (rec.claimedOpenid && rec.claimedOpenid === openid)) return true;
   const ctx = await resolveCtx(db, openid);
   return ctx.ownerOpenid === rec.ownerOpenid && canBook(ctx, rec.bookId);
 }
@@ -552,6 +559,11 @@ async function receipt(openid, rid, batch) {
   if (!rec) return err('记录不存在');
   if (!(await canView(openid, rec))) return err('无权查看');
   if (rec.status !== REC.PAID) return err('主家确认收到后才能生成回执');
+  return ok(await receiptView(rec, batch));
+}
+
+/** 回执内容：记录（可合并批次）+ 主家称呼 + 该礼簿的回执样式 */
+async function receiptView(rec, batch) {
   let out = receiptRecord(rec);
   // 批次录入：扫码人看到一张合并回执，列出全部随礼人
   if (batch && rec.batchId) {
@@ -573,16 +585,17 @@ async function receipt(openid, rid, batch) {
   if (rec.bookId) {
     try { book = (await db.collection('books').doc(rec.bookId).get()).data; } catch (e) { /* 礼簿已删除 */ }
   }
-  return ok({
+  return {
     record: out,
     accountName: rec.hostName || (book && book.hostName) || account.accountName || '',
     tpl: (book && book.receiptTpl) || null // 为空时前端按事由类型套用场景默认样式
-  });
+  };
 }
 
 /** 付款方的收据列表（最近 50 笔已到账） */
 async function myReceipts(openid) {
-  const res = await records.where({ payerOpenid: openid, status: REC.PAID })
+  // 本人扫码付款的 + 小票二维码认领的（礼台登记的）
+  const res = await records.where(_.and([{ status: REC.PAID }, _.or([{ payerOpenid: openid }, { claimedOpenid: openid }])]))
     .orderBy('paidAt', 'desc').limit(50).get();
   const aids = [...new Set(res.data.map(r => r.aid))];
   const names = {};
@@ -837,4 +850,110 @@ const RELATIONS = ['亲戚', '朋友', '同事', '同学', '邻里', '其他'];
 const centStr = rs => String(rs.reduce((t, r) => t + Math.round(r.amount * 100), 0) / 100);
 const validId = s => /^[a-zA-Z0-9_-]{1,64}$/.test(String(s || ''));
 /** 返回给主家 / 记账人前端的记录：去掉各方 openid 与往来人标识（含宾客 openid） */
-const shown = ({ payerOpenid, handlerOpenid, enteredBy, ownerOpenid, personKey, _openid, ...r }) => r;
+const shown = ({ payerOpenid, handlerOpenid, enteredBy, ownerOpenid, personKey, rcptToken, claimedOpenid, claimedAt, _openid, ...r }) => (claimedOpenid ? { ...r, claimed: true } : r);
+
+// —— 小票二维码（v3.57.0）——
+// token：12 位随机（base62），存 records.rcptToken，任何列表 / 详情接口都不返回；知道 token 的人（持有小票的人）可看这一笔回执。
+// 二维码里放微信 URL Link（打开 pages/receipt/receipt?t=token）。URL Link 官方规则（2022-04-11 起）：
+//   有效期最长 30 天（expireType=1 时 expireInterval 最大 30），不再有永久链接；同一链接被一个微信用户打开后，其他人不能再用它打开小程序；
+//   每个小程序每天生成上限 50 万（URL Scheme 与 URL Link 合计）。所以每次打印都新生成链接（token 不变），超过 30 天的小票码会失效，
+//   但持有人认领后可在「我的随礼记录」继续查看。
+const TOKEN_RE = /^[0-9A-Za-z]{12}$/;
+const B62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+function newToken() {
+  const crypto = require('crypto');
+  let t = '';
+  while (t.length < 12) {
+    for (const b of crypto.randomBytes(24)) { if (b < 248 && t.length < 12) t += B62[b % 62]; } // 248 = 62*4，避免取模偏差
+  }
+  return t;
+}
+const ENVS = ['develop', 'trial', 'release'];
+const URL_LINK_DAYS = 30; // 官方允许的最大有效期
+
+/** 通过 token 找记录（忽略客户端伪造的带 _openid 文档） */
+async function recordByToken(token) {
+  if (!TOKEN_RE.test(String(token || ''))) return null;
+  const rec = (await records.where({ rcptToken: String(token) }).limit(1).get()).data[0];
+  return rec && trusted(rec) ? rec : null;
+}
+
+/** 打印小票前取二维码链接：记录没有 token 就条件写入一个（并发只有一个成功），已有则复用；生成链接失败返回空 url，不报错 */
+async function issueQr(ctx, rid, envVersion) {
+  const rec = await getRecord(rid);
+  if (!rec || !trusted(rec) || rec.ownerOpenid !== ctx.ownerOpenid || !canBook(ctx, rec.bookId)) return err('无权操作该账目');
+  if (rec.status !== REC.PAID) return err('入簿后才有二维码');
+  let token = TOKEN_RE.test(String(rec.rcptToken || '')) ? rec.rcptToken : '';
+  if (!token) {
+    token = newToken();
+    const res = await records.where({ _id: rid, rcptToken: _.exists(false) }).update({ data: { rcptToken: token } });
+    if (!res.stats.updated) { // 别处刚写入：读回已有的
+      token = ((await getRecord(rid)) || {}).rcptToken || '';
+      if (!TOKEN_RE.test(String(token))) return err('二维码生成失败');
+    }
+  }
+  let url = '';
+  try {
+    const r = await cloud.openapi.urllink.generate({
+      path: 'pages/receipt/receipt',
+      query: 't=' + token,
+      isExpire: true,
+      expireType: 1,
+      expireInterval: URL_LINK_DAYS,
+      envVersion: ENVS.includes(envVersion) ? envVersion : 'release'
+    });
+    url = (r && r.urlLink) || '';
+  } catch (e) {
+    console.error('urllink.generate failed', e && (e.errMsg || e.message)); // 没权限 / 额度 / 页面未发布：只写日志，这张小票不印二维码
+  }
+  return ok({ url });
+}
+
+/** 主家重置二维码：换新 token，旧小票上的码立即失效；已认领关系不变 */
+async function resetToken(ctx, rid) {
+  if (ctx.role !== 'owner') return err('只有主家本人可以重置二维码');
+  const rec = await getRecord(rid);
+  if (!rec || !trusted(rec) || rec.ownerOpenid !== ctx.ownerOpenid) return err('记录不存在');
+  await records.where({ _id: rid, ownerOpenid: ctx.ownerOpenid }).update({ data: { rcptToken: newToken() } });
+  return ok({});
+}
+
+/** 主家解除认领：那位微信用户的「我的随礼记录」里不再显示这一笔，其他人可重新认领 */
+async function unclaim(ctx, rid) {
+  if (ctx.role !== 'owner') return err('只有主家本人可以解除认领');
+  const rec = await getRecord(rid);
+  if (!rec || !trusted(rec) || rec.ownerOpenid !== ctx.ownerOpenid) return err('记录不存在');
+  await records.where({ _id: rid, ownerOpenid: ctx.ownerOpenid }).update({ data: { claimedOpenid: '' } });
+  return ok({});
+}
+
+/** 扫小票二维码：已登录即可，只返回这一笔的回执（不能枚举）。claim：mine 已在我的记录 / open 可认领 / taken 已被认领 / staff 主家或记账人 */
+async function receiptByToken(openid, token) {
+  const rec = await recordByToken(token);
+  if (!rec) return err('二维码已失效');
+  if (rec.status !== REC.PAID) return err('这笔礼金尚未入簿');
+  const view = await receiptView(rec, false);
+  const { aid, bookId, batchId, ...record } = view.record; // 不外露内部 id
+  let claim = 'taken';
+  if (rec.payerOpenid === openid || (rec.claimedOpenid && rec.claimedOpenid === openid)) claim = 'mine';
+  else if (await canView(openid, rec)) claim = 'staff';
+  else if (!rec.payerOpenid && !rec.claimedOpenid) claim = 'open';
+  return ok({ ...view, record, claim });
+}
+
+/** 认领：仅当 payerOpenid 与 claimedOpenid 都为空（礼台登记、尚无人认领）才能认领，条件更新保证先到先得；不改 payerOpenid */
+async function claimReceipt(openid, token) {
+  const rec = await recordByToken(token);
+  if (!rec) return err('二维码已失效');
+  if (rec.status !== REC.PAID) return err('这笔礼金尚未入簿');
+  if (rec.payerOpenid === openid || rec.claimedOpenid === openid) return ok({ claim: 'mine' });
+  if (await canView(openid, rec)) return err('这是你自己的礼簿，不需要放入');
+  const empty = k => _.or([{ [k]: '' }, { [k]: _.exists(false) }]);
+  const res = await records.where(_.and([
+    { _id: rec._id, rcptToken: String(token), status: REC.PAID },
+    empty('payerOpenid'),
+    empty('claimedOpenid')
+  ])).update({ data: { claimedOpenid: openid, claimedAt: db.serverDate() } });
+  if (res.stats.updated !== 1) return err('这笔记录已被认领');
+  return ok({ claim: 'mine' });
+}

@@ -8,14 +8,19 @@ Page({
     bookType: '', // 白事不展示广告、不展示推广
     isHost: false, // 主家 / 记账人自己查看时不展示"我家也要办事"
     errMsg: '',
-    saving: false
+    saving: false,
+    token: '',      // 小票二维码进入时的 token
+    claim: '',      // open 可认领 / mine 已在我的记录 / taken 已被认领 / staff 主家或记账人
+    claiming: false
   },
 
   async onLoad(options) {
     this.setData({ isHost: !!getApp().globalData.account });
-    if (!options.rid) return this.setData({ errMsg: '回执不存在' });
+    if (!options.rid && !options.t) return this.setData({ errMsg: '回执不存在' });
     try {
-      const { record, accountName, tpl } = await req.receiptGet(options.rid);
+      // 扫小票二维码（?t=token）：按 token 取这一笔；否则按记录 id（付款人 / 主家 / 认领人）
+      const { record, accountName, tpl, claim } = options.t ? await req.receiptByToken(options.t) : await req.receiptGet(options.rid);
+      if (options.t) this.setData({ token: options.t, claim });
       const model = receipt.buildModel(record, tpl, accountName);
       this.setData({ model, bookType: record.bookType || 'other' });
       this.setData({ model: await receipt.withAppCode(model) }); // 小程序码后补，不拖慢回执显示
@@ -26,6 +31,23 @@ Page({
 
   /** 宾客转化：我家也要办事收礼 → 首页（登录后创建礼簿） */
   goHostEntry() { wx.switchTab({ url: '/pages/index/index' }); },
+
+  /** 放入我的随礼记录（礼台登记的记录，先到先得；主家可解除） */
+  async onClaim() {
+    if (this.data.claiming || !this.data.token) return;
+    this.setData({ claiming: true });
+    try {
+      await req.claimReceipt(this.data.token);
+      this.setData({ claim: 'mine' });
+      wx.showToast({ title: '已放入', icon: 'success' });
+    } catch (e) {
+      // toast 已提示（如已被他人认领），刷新状态
+      try { const r = await req.receiptByToken(this.data.token); this.setData({ claim: r.claim }); } catch (e2) { /* 忽略 */ }
+    } finally {
+      this.setData({ claiming: false });
+    }
+  },
+  goMine() { wx.navigateTo({ url: '/pages/myreceipts/myreceipts' }); },
 
   async onSave() {
     if (this.data.saving || !this.data.model) return;
