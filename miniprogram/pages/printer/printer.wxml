@@ -3,7 +3,7 @@
     <view class="section-title">已保存打印机</view>
     <block wx:if="{{savedDevice}}">
       <view class="dev-row">
-        <view>
+        <view class="dev-info">
           <view class="dev-name">{{savedDevice.name}}</view>
           <view class="muted">{{connected ? '已连接' : '未连接'}}</view>
         </view>
@@ -31,7 +31,7 @@
     </view>
     <block wx:if="{{discovering}}">
       <view class="dev-row" wx:for="{{devices}}" wx:key="deviceId">
-        <view>
+        <view class="dev-info">
           <view class="dev-name">{{item.name}}</view>
           <view class="muted">{{item.deviceId}}</view>
         </view>

@@ -4,7 +4,10 @@
 .book-pick { font-size: 30rpx; font-weight: 600; color: var(--primary); max-width: 400rpx; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .total { text-align: center; }
 .t-sum { font-size: 64rpx; margin: 8rpx 0; }
-.row { display: flex; justify-content: space-between; padding: 14rpx 0; font-size: 30rpx; }
+.row { display: flex; justify-content: space-between; align-items: flex-start; padding: 14rpx 0; font-size: 30rpx; }
+/* 左侧名称可收缩断行，右侧「N 份 · 金额」不换行（大字体 / 窄屏不错位） */
+.row > text:first-child { flex: 1; min-width: 0; word-break: break-all; margin-right: 16rpx; }
+.row > text:last-child { flex-shrink: 0; white-space: nowrap; text-align: right; }
 .row.sub { padding-left: 28rpx; font-size: 26rpx; color: #555; }
 .hot { color: var(--danger); }
 .h-row { border-bottom: 2rpx solid #f5f5f5; padding-bottom: 8rpx; }

@@ -62,3 +62,7 @@ button.r-op:not([size=mini]) { width: 160rpx; padding: 0; margin-left: 24rpx; }
 .amended { color: var(--primary); }
 .amend-tip { margin-bottom: 16rpx; }
 .small { font-size: 24rpx; }
+
+/* 修改弹层：本页是 tab 页，自定义底部菜单盖在弹层之上，遮罩止于菜单上沿，「取消 / 保存」不再被挡住（同往来页） */
+.mask.tab-mask { bottom: calc(50px + env(safe-area-inset-bottom)); }
+.sheet.tab-sheet { max-height: 86vh; padding-bottom: 32rpx; }

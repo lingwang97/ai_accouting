@@ -32,3 +32,7 @@
 .user-card .info .name, .user-card .info .muted { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .user-card .switch-id { flex-shrink: 0; }
 
+
+/* 菜单行右侧说明（如蓝牙名称）过长时省略，不把左侧标题挤成竖排 */
+text.mi-text { white-space: nowrap; flex-shrink: 0; }
+.menu-item .arrow { flex-shrink: 1; min-width: 0; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; margin-left: 12rpx; }

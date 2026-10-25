@@ -1,4 +1,5 @@
 <view class="container">
+  <loading show="{{!model && !errMsg}}" rows="3" />
   <view wx:if="{{errMsg}}" class="card center muted">{{errMsg}}</view>
   <block wx:if="{{model}}">
     <receipt-view model="{{model}}" />

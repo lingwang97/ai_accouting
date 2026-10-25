@@ -88,8 +88,8 @@
   </block>
 
   <!-- 修改已入簿礼金 -->
-  <view class="mask" wx:if="{{amend}}" catchtap="onAmendClose" catchtouchmove="noop">
-    <view class="sheet" catchtap="noop">
+  <view class="mask tab-mask" wx:if="{{amend}}" catchtap="onAmendClose" catchtouchmove="noop">
+    <view class="sheet tab-sheet" catchtap="noop">
       <view class="sheet-title">修改礼金记录</view>
       <view class="muted small amend-tip">金额改动会同步更新{{unit}}合计，每次修改都有记录</view>
       <view class="field"><view class="muted small">姓名</view><input class="input" maxlength="20" value="{{amend.name}}" data-k="name" bindinput="onAmendInput" /></view>

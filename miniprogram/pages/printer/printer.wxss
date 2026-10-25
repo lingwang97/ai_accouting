@@ -10,3 +10,9 @@
 
 .slow-row { display: flex; justify-content: space-between; align-items: center; margin-top: 24rpx; padding-top: 20rpx; border-top: 2rpx solid #f5f5f5; }
 .slow-text { flex: 1; min-width: 0; margin-right: 16rpx; }
+
+/* 设备名 / deviceId 过长（iOS 为 36 位 UUID）时左侧收缩省略，右侧按钮不被挤变形 */
+.dev-info { flex: 1; min-width: 0; margin-right: 16rpx; }
+.dev-info .dev-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dev-info .muted { word-break: break-all; }
+.dev-actions { flex-shrink: 0; }
