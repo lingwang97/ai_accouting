@@ -105,16 +105,39 @@ async function _printRecord(record) {
   return true;
 }
 
+// 熔断（v3.58.1）：生成小程序码失败时，后面的小票不再每张都等一遍
+//  - 配置类原因（未配置 / 错误的 AppSecret、无生成权限、页面不存在、额度用完、码图解析失败）：30 分钟内直接跳过
+//  - 偶发原因（超时、网络、云函数调用失败）：连续 2 次后 5 分钟内跳过
+// 设置页「检测小程序码生成」成功时 resetQrBreaker() 清除
+const QR_SKIP_LONG = 30 * 60 * 1000;
+const QR_SKIP_SHORT = 5 * 60 * 1000;
+const _qrBreak = { until: 0, fails: 0, reason: '' };
+const _permanent = reason => /secret-missing|85407|token:|40001|40013|40125|41030|45009|decode:/.test(String(reason || ''));
+function _qrFail(reason, now) {
+  _qrBreak.reason = String(reason || 'timeout');
+  if (_permanent(reason)) { _qrBreak.until = now + QR_SKIP_LONG; return; }
+  _qrBreak.fails++;
+  if (_qrBreak.fails >= 2) _qrBreak.until = now + QR_SKIP_SHORT;
+}
+function resetQrBreaker() { _qrBreak.until = 0; _qrBreak.fails = 0; _qrBreak.reason = ''; }
+
 /** 取这一笔的小程序码光栅字节（云端已转好 GS v 0）；任何失败（无权限、额度、网络慢）都返回 null：这张小票不印二维码，打印照常 */
-async function _qrBytes(record) {
+async function _qrBytes(record, now = Date.now()) {
+  if (_qrBreak.until > now) return null; // 熔断中：不印二维码，不等待
   try {
     const r = await Promise.race([
       request.issueQr(record._id),
       new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 12000))
     ]);
-    if (r && !r.raster && r.reason) console.warn('小程序码生成失败', r.reason); // 原因码，不含敏感信息
-    return (r && qrprint.fromBase64(r.raster)) || null;
+    const bytes = (r && qrprint.fromBase64(r.raster)) || null;
+    if (bytes) { _qrBreak.fails = 0; return bytes; }
+    if (r && r.reason) console.warn('小程序码生成失败', r.reason); // 原因码，不含敏感信息
+    _qrFail(r && r.reason, now);
+    return null;
   } catch (e) {
+    // 超时 / 网络算偶发；这一笔本身被拒（如未入簿、无权）只影响这一笔，不计入熔断
+    if (e && e.message === 'timeout') _qrFail('timeout', now);
+    else if (e && e.errMsg) _qrFail('net', now); // wx.cloud.callFunction 失败（网络 / 云函数超时）；业务拒绝是 request.js 抛的 Error，没有 errMsg
     return null;
   }
 }
@@ -168,4 +191,4 @@ async function _writeRetry(buffer) {
   }
 }
 
-module.exports = { getTemplate, defaultTemplate, clearTemplateCache, isConnected, ensureConnected, printRecord, printTest, printQrTest };
+module.exports = { getTemplate, defaultTemplate, clearTemplateCache, isConnected, ensureConnected, printRecord, printTest, printQrTest, resetQrBreaker, _qrBytes };

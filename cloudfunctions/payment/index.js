@@ -33,9 +33,11 @@ exports.main = async (event) => {
     const ctx = OWNER_ACTIONS.includes(event.action) ? await resolveCtx(db, OPENID) : null;
     if (ctx && readonly(ctx)) return err('家人共享为只读，不能修改');
     // 记账人按权限：礼台记账 / 确认收礼 / 作废；amend（修改已入簿礼金）确认收礼或作废任一即可
-    const NEED = { cashEntry: 'desk', confirm: 'confirm', confirmBatch: 'confirm', reject: 'confirm', unreject: 'confirm', dismissStall: 'confirm', void: 'void', amend: ['confirm', 'void'], issueQr: ['confirm', 'desk'], resetToken: 'members', unclaim: 'members', qrCheck: 'style' };
+    // issueQr（打印小票时取小程序码）：能打印小票的人都可以——「礼簿码与打印」（records.markPrinted 同一权限），或确认收礼 / 礼台记账后直接打印（v3.58.1）
+    const NEED = { cashEntry: 'desk', confirm: 'confirm', confirmBatch: 'confirm', reject: 'confirm', unreject: 'confirm', dismissStall: 'confirm', void: 'void', amend: ['confirm', 'void'], issueQr: ['show', 'confirm', 'desk'], resetToken: 'members', unclaim: 'members', qrCheck: 'style' };
     if (ctx && ![].concat(NEED[event.action]).some(p => can(ctx, p))) {
-      return err('你没有「' + (event.action === 'amend' ? '修改礼金' : { desk: '礼台记账', confirm: '确认收礼', void: '作废', members: '管理', style: '修改回执与打印样式' }[NEED[event.action]]) + '」权限');
+      const label = { amend: '修改礼金', issueQr: '礼簿码与打印' }[event.action] || { desk: '礼台记账', confirm: '确认收礼', void: '作废', members: '管理', style: '修改回执与打印样式' }[NEED[event.action]];
+      return err('你没有「' + label + '」权限');
     }
     switch (event.action) {
       // 付款方
@@ -532,7 +534,13 @@ async function notifyOwner(rid, envVersion) {
 
 /** 是否可查看该记录：宾客本人，或主家 / 其记账人 */
 async function canView(openid, rec) {
-  if (rec.payerOpenid === openid || rec.ownerOpenid === openid || (rec.claimedOpenid && rec.claimedOpenid === openid)) return true;
+  if (rec.payerOpenid === openid || (rec.claimedOpenid && rec.claimedOpenid === openid)) return true;
+  return isStaff(openid, rec);
+}
+
+/** 主家本人或其负责该礼簿的记账人 / 家人共享（不含认领人） */
+async function isStaff(openid, rec) {
+  if (rec.ownerOpenid === openid) return true;
   const ctx = await resolveCtx(db, openid);
   return ctx.ownerOpenid === rec.ownerOpenid && canBook(ctx, rec.bookId);
 }
@@ -560,7 +568,10 @@ async function receipt(openid, rid, batch) {
   if (!rec) return err('记录不存在');
   if (!(await canView(openid, rec))) return err('无权查看');
   if (rec.status !== REC.PAID) return err('主家确认收到后才能生成回执');
-  return ok(await receiptView(rec, batch));
+  // 合并批次回执（列出同批全部随礼人）：只给扫码登记这一批的宾客本人和主家 / 记账人；
+  // 认领人只认领了自己那张小票，不能借 batch 看到同批其他人的姓名和金额（v3.58.1）
+  const whole = batch && (rec.payerOpenid === openid || (await isStaff(openid, rec)));
+  return ok(await receiptView(rec, whole));
 }
 
 /** 回执内容：记录（可合并批次）+ 主家称呼 + 该礼簿的回执样式 */
@@ -894,21 +905,26 @@ async function issueQr(ctx, rid, envVersion) {
       if (!TOKEN_RE.test(String(token))) return err('二维码生成失败');
     }
   }
-  const key = token + ':' + RASTER_VER;
+  // 缓存键带版本（v3.58.1）：体验版 / 开发版生成的码只能在对应版本打开，正式版补打不能复用体验版的码
+  const env = ENVS.includes(envVersion) ? envVersion : 'release';
+  const key = token + ':' + RASTER_VER + ':' + env;
+  const oldFile = rec.rcptQrFileID || '';
   if (rec.rcptQrKey === key && rec.rcptQrFileID) { // 缓存命中：补打不重复生成
     try {
       const d = await cloud.downloadFile({ fileID: rec.rcptQrFileID });
       if (d.fileContent && d.fileContent.length > 100) return ok({ raster: Buffer.from(d.fileContent).toString('base64') });
     } catch (e) { /* 缓存丢失，重新生成 */ }
   }
-  const code = await makeCode({ scene: 't=' + token, page: 'pages/receipt/receipt', envVersion });
+  const code = await makeCode({ scene: 't=' + token, page: 'pages/receipt/receipt', envVersion: env });
   // reason 只放错误码 / 简短原因（不含 token、密钥），失败时便于在设置页「检测小程序码生成」或前端日志里定位
   if (!code.image) return ok({ raster: '', reason: code.reason });
   let r;
   try { r = toRaster(code.image); } catch (e) { return ok({ raster: '', reason: /^decode:/.test(e.message) ? e.message : 'decode:err' }); }
   try {
-    const up = await cloud.uploadFile({ cloudPath: `rcptqr/${rid}-${token}.bin`, fileContent: r.bytes });
+    const up = await cloud.uploadFile({ cloudPath: `rcptqr/${rid}-${token}-${env}.bin`, fileContent: r.bytes });
     await records.where({ _id: rid, rcptToken: token }).update({ data: { rcptQrKey: key, rcptQrFileID: up.fileID } });
+    // 每条记录只缓存一份：换了版本 / 规格时删掉旧文件
+    if (oldFile && oldFile !== up.fileID) { try { await cloud.deleteFile({ fileList: [oldFile] }); } catch (e2) { /* 删不掉不影响 */ } }
   } catch (e) { console.error('rcptqr cache failed', e && (e.errMsg || e.message)); } // 缓存失败不影响本次打印
   return ok({ raster: r.bytes.toString('base64') });
 }
@@ -923,18 +939,24 @@ const codeOf = e => String((e && (e.errCode !== undefined ? e.errCode : e.code !
  * width 280 为官方最小值；纯黑白（auto_color=false、黑色线条、不透明底），热敏机二值化后最清晰；check_path=false：未发布 / 体验版也能生成。
  * 返回 { image: Buffer, via } 或 { reason }
  */
-async function makeCode({ scene, page, envVersion }) {
+// 主通道缺权限（-604101：云函数没有 wxacode.getUnlimited 云调用权限，命令行部署常见）时实例内记住 10 分钟，
+// 这期间直接走备用通道，不再每张小票白白多一次失败调用（v3.58.1）；设置页检测（force）始终两路都试
+const OPENAPI_OFF_MS = 10 * 60 * 1000;
+let openapiOff = null; // { code, until }
+async function makeCode({ scene, page, envVersion, force }) {
   const env = ENVS.includes(envVersion) ? envVersion : 'release';
   let reason = '';
-  try {
+  if (!force && openapiOff && openapiOff.until > Date.now()) reason = 'openapi:' + openapiOff.code;
+  else try {
     const r = await cloud.openapi.wxacode.getUnlimited({
       scene, page, width: 280, checkPath: false, envVersion: env,
       autoColor: false, lineColor: { r: 0, g: 0, b: 0 }, isHyaline: false
     });
-    if (r && r.buffer && r.buffer.length > 100) return { image: Buffer.from(r.buffer), via: 'openapi' };
+    if (r && r.buffer && r.buffer.length > 100) { openapiOff = null; return { image: Buffer.from(r.buffer), via: 'openapi' }; }
     reason = 'openapi:' + (r && r.errCode ? r.errCode : 'empty');
   } catch (e) {
     reason = 'openapi:' + codeOf(e);
+    if (codeOf(e) === '-604101') openapiOff = { code: '-604101', until: Date.now() + OPENAPI_OFF_MS };
     console.error('wxacode.getUnlimited failed', e && (e.errMsg || e.message));
   }
   const nonce = 'urlnonce_' + require('crypto').randomBytes(12).toString('hex');
@@ -955,7 +977,7 @@ async function makeCode({ scene, page, envVersion }) {
 
 /** 设置页「检测小程序码生成 / 打印测试码」：生成指向首页的小程序码（scene test=1）；withRaster 时一并返回光栅供打印 */
 async function qrCheck(envVersion, withRaster) {
-  const code = await makeCode({ scene: 'test=1', page: 'pages/index/index', envVersion });
+  const code = await makeCode({ scene: 'test=1', page: 'pages/index/index', envVersion, force: true });
   if (!code.image) return ok({ ok: false, via: '', reason: code.reason });
   let r;
   try { r = toRaster(code.image); } catch (e) { return ok({ ok: false, via: code.via, reason: /^decode:/.test(e.message) ? e.message : 'decode:err' }); }
@@ -990,7 +1012,7 @@ async function receiptByToken(openid, token) {
   const { aid, bookId, batchId, ...record } = view.record; // 不外露内部 id
   let claim = 'taken';
   if (rec.payerOpenid === openid || (rec.claimedOpenid && rec.claimedOpenid === openid)) claim = 'mine';
-  else if (await canView(openid, rec)) claim = 'staff';
+  else if (await isStaff(openid, rec)) claim = 'staff';
   else if (!rec.payerOpenid && !rec.claimedOpenid) claim = 'open';
   return ok({ ...view, record, claim });
 }
@@ -1001,7 +1023,7 @@ async function claimReceipt(openid, token) {
   if (!rec) return err('二维码已失效');
   if (rec.status !== REC.PAID) return err('这笔礼金尚未入簿');
   if (rec.payerOpenid === openid || rec.claimedOpenid === openid) return ok({ claim: 'mine' });
-  if (await canView(openid, rec)) return err('这是你自己的礼簿，不需要放入');
+  if (await isStaff(openid, rec)) return err('这是你自己的礼簿，不需要放入');
   const empty = k => _.or([{ [k]: '' }, { [k]: _.exists(false) }]);
   const res = await records.where(_.and([
     { _id: rec._id, rcptToken: String(token), status: REC.PAID },

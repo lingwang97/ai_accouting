@@ -149,6 +149,7 @@ Page({
     this.setData({ qrTesting: true });
     try {
       await printer.printQrTest();
+      printer.resetQrBreaker();
       wx.showToast({ title: '已发送打印', icon: 'success' });
     } catch (e) {
       const why = e.reason ? `${qrReasonText(e.reason)}\n\n原因码：${e.reason}` : (e.message || '请先连接打印机');
@@ -163,7 +164,7 @@ Page({
     this.setData({ qrChecking: true });
     try {
       const r = await req.qrCheck();
-      if (r.ok) return wx.showToast({ title: '小程序码正常', icon: 'success' });
+      if (r.ok) { printer.resetQrBreaker(); return wx.showToast({ title: '小程序码正常', icon: 'success' }); } // 配置修好后立即恢复印码
       wx.showModal({ title: '小程序码生成失败', content: `${qrReasonText(r.reason)}\n\n原因码：${r.reason || '无'}`, showCancel: false });
     } catch (e) { /* toast 已提示 */ } finally {
       this.setData({ qrChecking: false });

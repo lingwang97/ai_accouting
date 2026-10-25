@@ -23,7 +23,8 @@ Page({
     try {
       // 扫小票二维码（?t=token）：按 token 取这一笔；否则按记录 id（付款人 / 主家 / 认领人）
       const { record, accountName, tpl, claim } = token ? await req.receiptByToken(token) : await req.receiptGet(options.rid);
-      if (token) this.setData({ token, claim });
+      // 扫码冷启动时 globalData.account 还没加载：主家 / 记账人以服务端判断（claim=staff）为准，不显示「我家也要办事」
+      if (token) this.setData({ token, claim, isHost: this.data.isHost || claim === 'staff' });
       const model = receipt.buildModel(record, tpl, accountName);
       this.setData({ model, bookType: record.bookType || 'other' });
       this.setData({ model: await receipt.withAppCode(model) }); // 小程序码后补，不拖慢回执显示

@@ -112,7 +112,7 @@ t('缓存：首次生成后写云存储并记录 rcptQrKey / FileID；补打命�
   assert.strictEqual(n, 1);
   assert.strictEqual(state.uploads.length, 1);
   assert.ok(/^rcptqr\/r1-/.test(state.uploads[0].cloudPath));
-  assert.ok(rec().rcptQrFileID && /^[0-9A-Za-z]{12}:w280v1$/.test(rec().rcptQrKey));
+  assert.ok(rec().rcptQrFileID && /^[0-9A-Za-z]{12}:w280v1:release$/.test(rec().rcptQrKey));
   const r2 = await pay(OWNER, { action: 'issueQr', rid: 'r1' });
   assert.strictEqual(n, 1); // 命中缓存
   assert.strictEqual(r2.data.raster, r1.data.raster);
