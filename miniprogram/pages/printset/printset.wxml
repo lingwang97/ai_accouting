@@ -14,7 +14,7 @@
   <!-- 实时预览 -->
   <view class="card center">
     <view class="section-title">小票预览</view>
-    <view class="paper">
+    <view class="paper {{paperWidth === 48 ? 'wide' : ''}}">
       <view wx:for="{{previewLines}}" wx:key="index"
             class="p-line {{item.big ? 'big' : ''}} {{item.tall ? 'tall' : ''}} {{item.bold ? 'bold' : ''}} {{item.right ? 'right' : ''}} {{item.center ? 'center' : ''}}">{{item.t}}</view>
     </view>
@@ -60,12 +60,12 @@
           <view class="chip disabled">原生指令（未启用）</view>
         </view></view>
       <view class="row"><text class="lbl"></text><text class="muted flex1">小程序码永久有效，任何人扫码都能打开；礼台登记的记录先认先得。原生指令仅适用于普通链接二维码（需备案域名配置），暂未启用。打印比文字稍慢。</text></view>
-      <view class="row"><text class="lbl"></text>
+      <view class="row wrap"><text class="lbl"></text>
         <view class="btn btn-outline btn-sm" bindtap="onQrTest">{{qrTesting ? "打印中…" : "打印测试码"}}</view>
-        <text class="muted flex1" style="margin-left:16rpx">打印一张指向首页的真实小程序码，用微信扫一扫测识别率</text></view>
-      <view class="row"><text class="lbl"></text>
+        <text class="muted qr-note">打印一张指向首页的真实小程序码，用微信扫一扫测识别率</text></view>
+      <view class="row wrap"><text class="lbl"></text>
         <view class="btn btn-outline btn-sm" bindtap="onQrCheck">{{qrChecking ? "检测中…" : "检测小程序码生成"}}</view>
-        <text class="muted flex1" style="margin-left:16rpx">真实小票没有二维码时先点这里看原因（只检测，不打印）</text></view>
+        <text class="muted qr-note">真实小票没有二维码时先点这里看原因（只检测，不打印）</text></view>
     </block>
     <view class="row"><text class="lbl">纸宽</text>
       <view class="chips">

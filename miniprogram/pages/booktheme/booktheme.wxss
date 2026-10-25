@@ -20,7 +20,7 @@
 .cust-lb { font-size: 26rpx; color: var(--text-2); margin: 20rpx 0 10rpx; }
 .cust-err { color: #d93025; font-size: 24rpx; margin-top: 10rpx; }
 .swatches { display: flex; flex-wrap: wrap; margin: 0 -8rpx 12rpx; }
-.sw { width: 56rpx; height: 56rpx; border-radius: 50%; margin: 8rpx; border: 2rpx solid #ddd; box-sizing: border-box; }
+.sw { width: 64rpx; height: 64rpx; border-radius: 50%; margin: 6rpx 8rpx; border: 2rpx solid #ddd; box-sizing: border-box; }
 .sw.on { box-shadow: 0 0 0 4rpx var(--primary); }
 /* 示意预览：封面 / 内页 / 封底，swiper 高度固定，页面不跳动 */
 .pv-swiper { height: 420rpx; }
@@ -55,7 +55,7 @@
 .pg-ca { font-size: 15rpx; line-height: 1.15; }
 .pg-yen { font-size: 13rpx; margin-top: auto; padding-bottom: 4rpx; white-space: nowrap; }
 .pv-tabs { display: flex; flex-direction: row; justify-content: center; margin: 12rpx 0 4rpx; }
-.pv-tab { padding: 4rpx 24rpx; margin: 0 8rpx; border-radius: 999rpx; background: var(--fill); color: var(--text-2); font-size: 24rpx; }
+.pv-tab { padding: 12rpx 28rpx; margin: 0 8rpx; border-radius: 999rpx; background: var(--fill); color: var(--text-2); font-size: 24rpx; }
 .pv-tab.on { background: var(--primary); color: #fff; }
 .btn-primary:not([size=mini]) { width: 100%; }
 

@@ -19,7 +19,7 @@
 .bc-meta { font-size: 22rpx; opacity: .85; margin-top: 6rpx; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 /* 切换礼簿：大一点的胶囊按钮，易点 */
 .bc-switch-btn {
-  flex-shrink: 0; height: 64rpx; line-height: 64rpx; padding: 0 26rpx; border-radius: 32rpx; margin-left: 16rpx; white-space: nowrap;
+  flex-shrink: 0; height: 72rpx; line-height: 72rpx; padding: 0 28rpx; border-radius: 36rpx; margin-left: 16rpx; white-space: nowrap;
   background: rgba(255, 255, 255, .22); border: 2rpx solid rgba(255, 255, 255, .6); font-size: 26rpx; font-weight: 600;
 }
 .bc-switch-hover { background: rgba(255, 255, 255, .35); }

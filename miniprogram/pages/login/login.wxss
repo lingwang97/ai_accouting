@@ -29,3 +29,6 @@
 .avatar { width: 140rpx; height: 140rpx; border-radius: 50%; background: #eee; }
 .avatar-tip { margin-bottom: 28rpx; }
 .input { margin-bottom: 32rpx; text-align: center; }
+
+/* 原生 button 默认 width:184px 的选择器权重更高，需同样写法才能让 140rpx 生效 */
+button.avatar-btn:not([size=mini]) { width: 140rpx; margin: 0 auto 8rpx; }

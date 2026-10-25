@@ -2,6 +2,7 @@
 const req = require('../../utils/request.js');
 const receipt = require('../../utils/receipt.js');
 const rcptscene = require('../../utils/rcptscene.js');
+const theme = require('../../utils/theme.js');
 
 Page({
   data: {
@@ -9,6 +10,7 @@ Page({
     bookType: '', // 白事不展示广告、不展示推广
     isHost: false, // 主家 / 记账人自己查看时不展示"我家也要办事"
     errMsg: '',
+    themeStyle: '', // 白事回执页用素灰主题；其余保持默认红（宾客端不套用自己的主家主题）
     saving: false,
     token: '',      // 小票二维码进入时的 token
     claim: '',      // open 可认领 / mine 已在我的记录 / taken 已被认领 / staff 主家或记账人
@@ -27,6 +29,11 @@ Page({
       if (token) this.setData({ token, claim, isHost: this.data.isHost || claim === 'staff' });
       const model = receipt.buildModel(record, tpl, accountName);
       this.setData({ model, bookType: record.bookType || 'other' });
+      if (record.bookType === 'funeral') {
+        const t = theme.forType('funeral');
+        this.setData({ themeStyle: theme.styleOf(t) });
+        wx.setNavigationBarColor({ frontColor: '#ffffff', backgroundColor: t.primary, fail() {} });
+      }
       this.setData({ model: await receipt.withAppCode(model) }); // 小程序码后补，不拖慢回执显示
     } catch (e) {
       this.setData({ errMsg: e.message || '回执加载失败' });
