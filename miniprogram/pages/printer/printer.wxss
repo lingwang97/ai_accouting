@@ -7,3 +7,6 @@
 .dev-actions button:not(:last-child) { margin-right: 16rpx; }
 .scan-head { display: flex; justify-content: space-between; align-items: center; }
 .pad { padding: 24rpx 0; text-align: center; }
+
+.slow-row { display: flex; justify-content: space-between; align-items: center; margin-top: 24rpx; padding-top: 20rpx; border-top: 2rpx solid #f5f5f5; }
+.slow-text { flex: 1; min-width: 0; margin-right: 16rpx; }

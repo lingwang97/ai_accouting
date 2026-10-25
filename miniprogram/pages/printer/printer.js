@@ -10,12 +10,21 @@ Page({
     showAll: false,
     savedDevice: null,
     connected: false,
-    testing: false
+    testing: false,
+    slow: false // 稳定模式（本机）：打印机乱码 / 缺行时打开
   },
 
   onShow() {
-    theme.apply(this); // 主题色跟当前礼簿事由走
-    this.setData({ savedDevice: ble.loadDevice(), connected: printer.isConnected() });
+    const t = theme.apply(this); // 主题色跟当前礼簿事由走
+    this.setData({ primary: t.primary, savedDevice: ble.loadDevice(), connected: printer.isConnected(), slow: ble.isSlow() });
+  },
+
+  /** 稳定模式：每包 20 字节、按原速度发送；切换后断开，下次打印重新连接按新设置协商 */
+  onSlow(e) {
+    const on = !!e.detail.value;
+    ble.setSlow(on);
+    if (printer.isConnected()) ble.disconnect();
+    this.setData({ slow: on, connected: false });
   },
 
   onHide() {

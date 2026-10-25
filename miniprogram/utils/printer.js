@@ -25,8 +25,8 @@ async function getTemplate(force, bookId) {
   try {
     const r = await request.bookGetTpl(bookId);
     const t = r.printTpl || defaultTemplate(r.book.type, r.paperWidth);
-    // 二维码开关：模板没设置过时按事由类型默认（白事关）
-    tplCache[key] = typeof t.qr === 'boolean' ? t : { ...t, qr: escpos.qrOn(t, r.book.type) };
+    // 二维码开关：模板没设置过时默认关（v3.59.0）
+    tplCache[key] = typeof t.qr === 'boolean' ? t : { ...t, qr: escpos.qrOn(t) };
   } catch (e) {
     // 拉取失败只本次用默认模板，不写缓存，下次打印再重试，避免一次网络抖动后一直用错样式
     return defaultTemplate('other', 32);
@@ -94,7 +94,7 @@ async function _printRecord(record) {
     accountName: record.hostName || record.accountName || (app.globalData.account && app.globalData.account.accountName) || '',
     handlerName: record.handlerName || (app.globalData.user && app.globalData.user.nickname) || ''
   };
-  const qr = escpos.qrOn(tpl, record.bookType) && record._id ? await _qrBytes(record) : null;
+  const qr = escpos.qrOn(tpl) && record._id ? await _qrBytes(record) : null;
   await _writeRetry(escpos.buildReceipt(record, tpl, qr ? { qr } : undefined));
   try {
     await request.markPrinted([record._id]);

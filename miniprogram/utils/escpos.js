@@ -165,8 +165,11 @@ function buildTestLine() {
   return new Uint8Array(bytes).buffer;
 }
 
-/** 是否打印二维码：模板明确设置了按模板；没设置时喜事等默认开，白事默认关 */
-const qrOn = (tpl, bookType) => (tpl && typeof tpl.qr === 'boolean' ? tpl.qr : bookType !== 'funeral');
+/**
+ * 是否打印二维码：只有模板里明确打开（qr === true）才打印；没设置过一律不打（v3.59.0 起默认关，
+ * 每张小票多约 10KB 码图，打印明显变慢，由主家在「打印设置」里自己打开）。bookType 参数保留兼容旧调用
+ */
+const qrOn = tpl => !!(tpl && tpl.qr === true);
 
 const DEFAULT_FIELDS = ['title', 'divider', 'theme', 'payDay', 'time', 'receiptNo', 'payerName', 'amount', 'amountUpper', 'remark', 'thanks'];
 

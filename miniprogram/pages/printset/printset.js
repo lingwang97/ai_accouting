@@ -48,7 +48,7 @@ Page({
     showHandler: true,
     amountSize: 'double',
     footer: '',
-    qr: true,
+    qr: false,
     qrMode: 'image',
     qrTesting: false,
     qrChecking: false,
@@ -110,7 +110,7 @@ Page({
       footer: tpl.footer,
       feedTop: tpl.feedTop,
       feedBottom: tpl.feedBottom,
-      qr: tpl.qr !== false,
+      qr: tpl.qr === true, // 默认关（v3.59.0）
       qrMode: 'image', // 小程序码只能图片方式
       fields: (tpl.fields || escpos.DEFAULT_FIELDS).filter(f => FIELD_LABELS[f]) // 去掉已下线的字段（如旧版的「代随礼」）
     }, () => this.refresh());

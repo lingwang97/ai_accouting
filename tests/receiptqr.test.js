@@ -159,11 +159,15 @@ test('qrprint：图片方式输出 GS v 0 光栅，尺寸放得进 58mm（384 �
   assert.ok(a.length > 1000 && c.length < 200);
 });
 
-test('escpos：二维码默认开关（喜事开、白事关，模板明确设置优先）与提示文字', () => {
-  assert.strictEqual(escpos.qrOn({}, 'wedding'), true);
+test('escpos：二维码默认关（v3.59.0，任何事由未设置都不打），模板明确打开才打；提示文字', () => {
+  assert.strictEqual(escpos.qrOn({}, 'wedding'), false);
   assert.strictEqual(escpos.qrOn({}, 'funeral'), false);
+  assert.strictEqual(escpos.qrOn(null), false);
   assert.strictEqual(escpos.qrOn({ qr: true }, 'funeral'), true);
+  assert.strictEqual(escpos.qrOn({ qr: true }), true);
   assert.strictEqual(escpos.qrOn({ qr: false }, 'wedding'), false);
+  const ps = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/printset/printset.js'), 'utf8');
+  assert.ok(ps.includes('qr: tpl.qr === true')); // 设置页开关同样默认关
   const gbk = require('../miniprogram/utils/gbk.js');
   const has = (buf, str) => Buffer.from(buf).toString('latin1').includes(Buffer.from(gbk.encode(str)).toString('latin1'));
   const qr = qrprint.nativeBytes(URL, 6);

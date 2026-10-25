@@ -51,7 +51,7 @@
         <view class="chip {{amountSize === 'normal' ? 'on' : ''}}" data-v="normal" bindtap="onAmountSize">正常</view>
       </view></view>
     <view class="row"><text class="lbl">二维码</text>
-      <text class="muted flex1">致谢语下打印二维码，扫码可查看电子回执（白事默认关）</text>
+      <text class="muted flex1">致谢语下打印小程序码，扫码可查看电子回执（默认关；开启后每张小票多打几秒）</text>
       <switch checked="{{qr}}" bindchange="onQr" color="{{primary}}" /></view>
     <block wx:if="{{qr}}">
       <view class="row"><text class="lbl">打印方式</text>

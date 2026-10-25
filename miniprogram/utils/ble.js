@@ -9,10 +9,20 @@ const state = {
   deviceId: '',
   serviceId: '',
   charId: '',    // 可写特征值 UUID
-  chunk: 20      // 单包字节数：默认 20；安卓协商 MTU 成功后为 MTU-3（v3.58.0）
+  writeType: '', // 'write' | 'writeNoResponse'：所选特征值支持的写入方式（iOS 读取 MTU 时要传）
+  chunk: 20      // 单包字节数：默认 20；协商 MTU 成功后为 MTU-3（安卓 v3.58.0，iOS v3.59.0）
 };
 
 const MTU_REQUEST = 185; // 请求的 MTU；打印机实际支持的由 setBLEMTU 的返回值决定
+const SLOW_KEY = 'printerSlow'; // 「稳定模式」（本机设置）：打印机乱码 / 缺行时打开，回到每包 20 字节、每包间隔 20ms（v3.58.0 之前的速度）
+// 限速（v3.59.0）：大包按每秒字节数发送，避免打印机串口缓冲溢出（便宜的蓝牙打印机串口常见 9600～115200 波特率）。
+// 20 字节小包仍是每包至少 20ms（约 1KB/s，原来的速度）；182 字节包间隔约 46ms，一张小程序码（约 9.8KB）约 2.5 秒
+const RATE_BPS = 4000;
+const MIN_GAP_MS = 20;
+const gapOf = len => Math.max(MIN_GAP_MS, Math.ceil(len * 1000 / RATE_BPS));
+
+function isSlow() { try { return !!wx.getStorageSync(SLOW_KEY); } catch (e) { return false; } }
+function setSlow(on) { try { wx.setStorageSync(SLOW_KEY, !!on); } catch (e) { /* 忽略 */ } if (on) state.chunk = 20; }
 
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -129,11 +139,15 @@ function _watchState() {
 }
 
 /**
- * 安卓：请求更大的 MTU，成功后单包按 MTU-3 发送（二维码光栅约 10KB，20 字节一包要多等十几秒）；失败或超时保持 20。
- * iOS 不调用（系统自动协商，且 setBLEMTU 在 iOS 上无效）。任何情况都不抛错，不影响连接。
+ * 提升单包大小（二维码光栅约 10KB，20 字节一包要多等十几秒）；失败或超时保持 20。任何情况都不抛错，不影响连接。
+ *  - 安卓：wx.setBLEMTU 请求 185，成功后按返回的 MTU-3 发送；
+ *  - iOS：系统连接时已自动协商（setBLEMTU 在 iOS 上无效），用 wx.getBLEMTU（基础库 2.20.1+）读取协商结果（v3.59.0）；
+ *  - 「稳定模式」不提升，保持 20。
  */
 function _negotiateMtu(deviceId) {
-  if (!device.isAndroid() || typeof wx.setBLEMTU !== 'function') return Promise.resolve();
+  if (isSlow()) return Promise.resolve();
+  if (!device.isAndroid()) return _readMtu(deviceId);
+  if (typeof wx.setBLEMTU !== 'function') return Promise.resolve();
   return new Promise(resolve => {
     let done = false;
     const finish = () => { if (!done) { done = true; resolve(); } };
@@ -144,6 +158,28 @@ function _negotiateMtu(deviceId) {
         mtu: MTU_REQUEST,
         success: res => {
           const mtu = Number(res && res.mtu) || MTU_REQUEST;
+          if (!done && mtu > 23) state.chunk = Math.min(mtu, 512) - 3;
+          finish();
+        },
+        fail: finish
+      });
+    } catch (e) { finish(); }
+  });
+}
+
+/** iOS：读取系统已协商的 MTU（writeType 与所选特征值一致）；不支持或失败保持 20 */
+function _readMtu(deviceId) {
+  if (typeof wx.getBLEMTU !== 'function') return Promise.resolve();
+  return new Promise(resolve => {
+    let done = false;
+    const finish = () => { if (!done) { done = true; resolve(); } };
+    setTimeout(finish, 3000);
+    try {
+      wx.getBLEMTU({
+        deviceId,
+        writeType: state.writeType || 'write',
+        success: res => {
+          const mtu = Number(res && res.mtu) || 0;
           if (!done && mtu > 23) state.chunk = Math.min(mtu, 512) - 3;
           finish();
         },
@@ -175,6 +211,7 @@ function _resolveWritable(deviceId) {
               if (ch) {
                 state.serviceId = sid;
                 state.charId = ch.uuid;
+                state.writeType = ch.properties.write ? 'write' : 'writeNoResponse';
                 resolve({ serviceId: sid, charId: ch.uuid });
               } else {
                 tryService(i + 1);
@@ -214,7 +251,7 @@ function writeBuffer(buffer, chunkSize) {
         serviceId: state.serviceId,
         characteristicId: state.charId,
         value: slice.buffer,
-        success: () => { written += slice.length; setTimeout(resolve, 20); }, // 打印机写缓冲需要间隔
+        success: () => { written += slice.length; setTimeout(resolve, gapOf(slice.length)); }, // 打印机写缓冲需要间隔：按字节数限速
         fail: err => {
           const e = new Error(errMsg(err, '写入打印机失败'));
           e.errCode = err && err.errCode;
@@ -246,6 +283,6 @@ async function reconnectSaved() {
 module.exports = {
   PRINTER_PREFIX, state,
   openAdapter, startDiscovery, stopDiscovery, onFound, offFound, getDevices, isPrinterLike,
-  connect, disconnect, writeBuffer, errMsg,
+  connect, disconnect, writeBuffer, errMsg, isSlow, setSlow, gapOf, RATE_BPS,
   saveDevice, loadDevice, reconnectSaved, sleep
 };

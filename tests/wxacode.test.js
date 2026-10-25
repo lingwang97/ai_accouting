@@ -348,10 +348,14 @@ test('rcptscene：scene 构造 ≤32 位；解析 options.scene（URL 编码 / �
 const device = require('../miniprogram/utils/device.js');
 const ble = require('../miniprogram/utils/ble.js');
 
-function fakeWx({ platform, mtu, mtuFail, failAtPacket }) {
+function fakeWx({ platform, mtu, mtuFail, failAtPacket, iosMtu, slow, gaps }) {
   const writes = [];
-  const log = { mtuCalls: 0 };
+  const log = { mtuCalls: 0, getMtu: [] };
+  const store = { printerSlow: !!slow };
   global.wx = {
+    getStorageSync: k => store[k],
+    setStorageSync: (k, v) => { store[k] = v; },
+    ...(iosMtu !== undefined ? { getBLEMTU: o => { log.getMtu.push(o.writeType); if (iosMtu) o.success({ mtu: iosMtu }); else o.fail({ errCode: 10007 }); } } : {}),
     getDeviceInfo: () => ({ platform }),
     createBLEConnection: o => o.success(),
     onBLEConnectionStateChange: () => {},
@@ -418,4 +422,43 @@ test('打印耗时估算：一张小程序码 9808 字节，182 字节/包比 20
   const bytes = 8 + 35 * 280;
   const est = size => Math.ceil(bytes / size) * 0.02; // 只算 20ms 间隔，不含蓝牙往返
   assert.ok(est(182) < est(20) / 8);
+});
+
+test('BLE（v3.59.0）：iOS 用 getBLEMTU 读取协商值（writeType 与特征值一致）；读不到保持 20；稳定模式两端都不提升', async () => {
+  let f = fakeWx({ platform: 'ios', iosMtu: 185 });
+  await ble.connect('dev1');
+  assert.deepStrictEqual(f.log.getMtu, ['write']);
+  assert.strictEqual(f.log.mtuCalls, 0);
+  assert.strictEqual(ble.state.chunk, 182);
+  f = fakeWx({ platform: 'ios', iosMtu: 0 });
+  await ble.connect('dev1');
+  assert.strictEqual(ble.state.chunk, 20);
+  f = fakeWx({ platform: 'ios', iosMtu: 185, slow: true });
+  await ble.connect('dev1');
+  assert.strictEqual(f.log.getMtu.length, 0);
+  assert.strictEqual(ble.state.chunk, 20);
+  f = fakeWx({ platform: 'android', mtu: 185, slow: true });
+  await ble.connect('dev1');
+  assert.strictEqual(f.log.mtuCalls, 0);
+  assert.strictEqual(ble.state.chunk, 20);
+  // 打开稳定模式立即回到 20，isSlow 读本机设置
+  f = fakeWx({ platform: 'android', mtu: 185 });
+  await ble.connect('dev1');
+  assert.strictEqual(ble.state.chunk, 182);
+  ble.setSlow(true);
+  assert.strictEqual(ble.isSlow(), true);
+  assert.strictEqual(ble.state.chunk, 20);
+  ble.state.deviceId = '';
+  delete global.wx;
+  device.reset();
+});
+
+test('BLE 限速（v3.59.0）：20 字节包间隔 20ms 不变；大包按 4KB/s，一张小程序码约 2.5 秒，不超过 1KB/s 旧速度的 4 倍', () => {
+  assert.strictEqual(ble.gapOf(20), 20);
+  assert.strictEqual(ble.gapOf(182), 46);
+  const bytes = 8 + 35 * 280;
+  const time = size => { let t = 0; for (let i = 0; i < bytes; i += size) t += ble.gapOf(Math.min(size, bytes - i)); return t; };
+  assert.ok(time(182) >= bytes * 1000 / ble.RATE_BPS); // 不超过限速
+  assert.ok(time(182) < 3000);
+  assert.ok(time(20) / time(182) <= 4.1);
 });
