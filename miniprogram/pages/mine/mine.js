@@ -25,7 +25,6 @@ Page({
     themeStyle: '',
     isAdmin: false,
     planText: '',       // 当前套餐（专业版显示到期日）
-    orgAllowed: false,  // 已开通机构版（或已在使用机构模式）
     loading: true
   },
 
@@ -90,7 +89,6 @@ Page({
       app.refreshTabBar();
       plan.load(true).then(p => this.setData({
         isAdmin: !!p.isAdmin,
-        orgAllowed: !!(p.features && p.features.org) || !!(account && account.orgMode),
         planText: p.plan && p.plan !== 'free' ? `${p.name}${p.expiresAt ? ' · 到期 ' + require('../../utils/format.js').day(p.expiresAt) : ''}` : ''
       }));
       fresh.mark(this, at);
@@ -101,51 +99,6 @@ Page({
 
   goMembers() { wx.navigateTo({ url: '/pages/members/members' }); },
   goAdmin() { wx.navigateTo({ url: '/pages/admin/admin' }); },
-  noop() {},
-
-  // —— 机构模式：婚庆公司、宴会厅等一个账号办多场 ——
-  async onOrgSwitch(e) {
-    const on = e.detail.value;
-    const a = this.data.account;
-    // 开关会改变记账人的负责范围：先说明
-    const ok = await new Promise(resolve => wx.showModal({
-      title: on ? '开启机构模式' : '关闭机构模式',
-      content: on
-        ? '开启后：记账人按「礼台人员」设置可负责多个场次，各自出示本场礼簿码；底部「往来」隐藏。记账人负责的场次恢复为机构模式下的设置。'
-        : '关闭后：每位记账人只负责一本礼簿（按你在非机构模式下给他选的那本，没选过的跟随当前礼簿）；底部「往来」恢复显示。',
-      confirmText: on ? '开启' : '关闭',
-      success: r => resolve(r.confirm),
-      fail: () => resolve(false)
-    }));
-    if (!ok) return this.setData({ 'account.orgMode': !on }); // 取消：开关复位
-    if (!on) return this.saveOrg(false, a.orgName);
-    // 打开时填写机构名称（默认沿用已填的或主家称呼）
-    const name = await askOrgName(a.orgName || a.accountName);
-    if (name === null) return this.setData({ 'account.orgMode': false }); // 取消：开关复位
-    this.saveOrg(true, name);
-  },
-
-  /** 点「机构模式」这一行：修改机构名称 */
-  async onOrgName() {
-    const a = this.data.account;
-    if (!a || !a.orgMode) return;
-    const name = await askOrgName(a.orgName || a.accountName);
-    if (name !== null) this.saveOrg(true, name);
-  },
-
-  async saveOrg(on, orgName) {
-    try {
-      const r = await req.setOrgMode(on, orgName);
-      const account = { ...this.data.account, orgMode: r.orgMode, orgName: r.orgName };
-      getApp().globalData.account = account;
-      this.setData({ account });
-      cache.clear(); // 工作台入口随模式变化
-      if (typeof this.getTabBar === 'function' && this.getTabBar()) this.getTabBar().refresh(); // 机构模式不显示「往来」
-      wx.showToast({ title: on ? '已开启机构模式' : '已关闭机构模式', icon: 'none' });
-    } catch (err) {
-      this.setData({ 'account.orgMode': !on }); // 失败复位（request.js 已提示原因）
-    }
-  },
 
   /** 长按版本号：显示本人 openid（配置管理员、排查问题用） */
   async onShowOpenid() {
@@ -247,19 +200,4 @@ function versionText() {
   try { env = wx.getAccountInfoSync().miniProgram.envVersion; } catch (e) { /* 默认正式版 */ }
   const tag = { develop: ' 开发版', trial: ' 体验版' }[env] || '';
   return `慧礼记 v${VERSION}${tag}`;
-}
-
-/** 输入机构名称；取消返回 null */
-function askOrgName(def) {
-  return new Promise(resolve => {
-    wx.showModal({
-      title: '机构名称',
-      editable: true,
-      content: def || '',
-      placeholderText: '如：喜来登宴会厅',
-      confirmText: '确定',
-      success: res => resolve(res.confirm ? String(res.content || '').trim() : null),
-      fail: () => resolve(null)
-    });
-  });
 }

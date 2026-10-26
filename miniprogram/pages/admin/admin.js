@@ -394,7 +394,7 @@ Page({
       const host = this.data.hosts[this.data.hostIdx];
       wx.showModal({
         title: '已生效',
-        content: `${host ? '「' + host.accountName + '」' : ''}当前套餐：${r.planName || r.plan}${r.expiresAt ? '，到期 ' + fmt.dateTime(r.expiresAt) : ''}。对方重新进入「我的」即可看到；开通机构版后在「主家信息」底部打开机构模式。`,
+        content: `${host ? '「' + host.accountName + '」' : ''}当前套餐：${r.planName || r.plan}${r.expiresAt ? '，到期 ' + fmt.dateTime(r.expiresAt) : ''}。对方重新进入「我的」即可看到；开通机构版后在「我的 → 高级功能」打开机构模式。`,
         showCancel: false
       });
       if (host) this.onFindHosts(); // 刷新列表里的套餐显示

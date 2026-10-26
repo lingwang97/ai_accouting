@@ -46,7 +46,7 @@
 
   <view class="card" wx:if="{{canManage}}">
     <view class="section-title">邀请{{orgMode ? '礼台人员 · 负责的场次' : '记账人 · 负责的礼簿'}}与权限</view>
-    <view class="muted small" wx:if="{{!orgMode}}">每位记账人负责一本礼簿；同时办多场、分别安排人员请开启机构模式</view>
+    <view class="muted small" wx:if="{{!orgMode}}">每位记账人负责一本礼簿；同时办多场、分别安排人员请在「我的 → 高级功能」开启机构模式</view>
     <view class="book-row {{item.on && !inviteAll ? 'on' : ''}}" wx:for="{{inviteBooks}}" wx:key="_id" data-i="{{index}}" bindtap="onInviteBook">
       <view class="check {{item.on && !inviteAll ? 'on' : ''}}">{{item.on && !inviteAll ? '✓' : ''}}</view>
       <view class="b-info">{{item.name}}</view>

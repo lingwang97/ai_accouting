@@ -36,14 +36,6 @@
       <view class="menu-item" bindtap="goMembers" wx:if="{{account}}">
         <image class="mi-icon" src="/assets/icons/people-m.svg" /><text class="mi-text">{{account.orgMode ? '礼台人员' : '记账人'}}</text><text class="arrow"><text class="muted">邀请 / 移交主家</text> ›</text>
       </view>
-      <view class="menu-item" wx:if="{{account && orgAllowed && role === 'owner'}}" bindtap="onOrgName">
-        <image class="mi-icon" src="/assets/icons/layers-m.svg" />
-        <view class="mi-text">
-          <view>机构模式</view>
-          <view class="muted">{{account.orgMode ? (account.orgName || '点此填写机构名称') : '一个账号办多场，每场单独设主家与收款码'}}</view>
-        </view>
-        <switch checked="{{account.orgMode}}" catchtap="noop" bindchange="onOrgSwitch" color="{{primary}}" />
-      </view>
     </view>
 
     </block>
@@ -60,8 +52,8 @@
       <view class="menu-item" bindtap="goAppearance" wx:if="{{account && role === 'owner'}}">
         <image class="mi-icon" src="/assets/icons/palette-m.svg" /><text class="mi-text">主题色</text><text class="arrow">›</text>
       </view>
-      <!-- 高级功能：待确认刷新频率等；主家与有确认权限的记账人 -->
-      <view class="menu-item" bindtap="goAdvanced" wx:if="{{account && role !== 'viewer' && pm.confirm}}">
+      <!-- 高级功能：机构模式、待确认刷新频率等；所有有账户身份的角色都显示，无权限的项目在页内置灰并说明 -->
+      <view class="menu-item" bindtap="goAdvanced" wx:if="{{account}}">
         <image class="mi-icon" src="/assets/icons/settings-m.svg" /><text class="mi-text">高级功能</text><text class="arrow">›</text>
       </view>
     </view>
