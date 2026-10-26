@@ -27,9 +27,10 @@
     <view class="section-title">样式</view>
     <view class="row"><text class="lbl">版式</text>
       <view class="chips">
-        <view class="chip {{tpl.style === item.v ? 'on' : ''}}" wx:for="{{styles}}" wx:key="v" data-v="{{item.v}}" bindtap="onStyle">{{item.label}}</view>
+        <view class="chip {{tpl.style === item.v ? 'on' : ''}}" style="{{item.locked ? 'opacity:.55' : ''}}" wx:for="{{styles}}" wx:key="v" data-v="{{item.v}}" bindtap="onStyle">{{item.label}}{{item.premium ? ' · 会员' : ''}}</view>
       </view>
     </view>
+    <view class="muted" wx:if="{{styleLockTip}}">{{styleLockTip}}</view>
     <view class="row"><text class="lbl">主色</text>
       <view class="colors">
         <view class="color {{tpl.color === item ? 'on' : ''}}" wx:for="{{colors}}" wx:key="*this" style="background:{{item}}" data-c="{{item}}" bindtap="onColor"></view>

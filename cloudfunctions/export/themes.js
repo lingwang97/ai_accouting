@@ -140,4 +140,39 @@ function resolveDefault(bookType) {
   return p.mark === d.mark ? p : Object.assign({}, p, { mark: d.mark });
 }
 
-module.exports = { PRESETS, DEFAULT_KEY, TYPE_DEFAULTS, typeDefault, resolveDefault, resolve, isPresetKey, sanitizeCustom, sanitizeFuneral, sanitizeBack, sanitizeBind, DEFAULT_BACK };
+// v3.62.0 会员预留：免费版只能用这几套预设（黑体）；其余预设、自定义配色、宋体 / 毛笔、尾页设置属 features.pdfThemePremium
+// 现阶段套餐全部开放，只有该项被明确设为 false 才限制（前端 pages/booktheme/pdftheme.js 的 FREE_KEYS 须一致，tests 有比对）
+const FREE_KEYS = ['red_gold', 'peach', 'sky', 'grey'];
+const isDefaultBack = b => { const s = sanitizeBack(b); return s.on && s.footer === '' && s.sign && s.brand; };
+
+/**
+ * 本次选择里用到的会员项（空数组 = 全是免费项）
+ * @param {{funeral:boolean, key:string, custom:object, back:object}} s key 为空表示没选（按礼簿类型默认）
+ */
+function premiumUsed(s) {
+  const used = [];
+  if (s.funeral) {
+    if (s.key === 'custom' && ['serif', 'brush'].includes(sanitizeFuneral(s.custom).font)) used.push('宋体 / 毛笔字体');
+  } else if (s.key === 'custom') used.push('自定义配色');
+  else if (s.key && !FREE_KEYS.includes(s.key)) used.push('该主题');
+  if (s.back && !isDefaultBack(s.back)) used.push('尾页设置');
+  return used;
+}
+
+/**
+ * 套餐不含会员项时的降级（只用于生成，不改库）：非白事换成红金（保留礼簿类型默认水印），白事字体改黑体
+ * @param {object} bt resolve / resolveDefault 的结果
+ */
+function freeOnly(bt, funeral, bookType) {
+  if (funeral) return bt.font === 'sans' ? bt : Object.assign({}, bt, { font: 'sans' });
+  if (FREE_KEYS.includes(bt.key)) return bt;
+  return Object.assign({}, PRESETS.find(p => p.key === DEFAULT_KEY), { mark: typeDefault(bookType).mark });
+}
+
+/** 最终主题：key 为空按礼簿类型默认；premiumOk 为 false 时降级为免费项 */
+function pick(premiumOk, funeral, bookType, key, custom) {
+  const bt = key ? resolve(funeral, key, custom) : resolveDefault(bookType);
+  return premiumOk ? bt : freeOnly(bt, funeral, bookType);
+}
+
+module.exports = { pick, FREE_KEYS, premiumUsed, freeOnly, isDefaultBack, PRESETS, DEFAULT_KEY, TYPE_DEFAULTS, typeDefault, resolveDefault, resolve, isPresetKey, sanitizeCustom, sanitizeFuneral, sanitizeBack, sanitizeBind, DEFAULT_BACK };

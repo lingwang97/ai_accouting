@@ -33,3 +33,19 @@
 .app-code { margin-top: 28rpx; }
 .app-code-img { width: 180rpx; height: 180rpx; display: block; margin: 0 auto; }
 .app-code-tip { font-size: 22rpx; color: #999; margin-top: 8rpx; }
+/* v3.62.0 新版式：素雅（免费）、喜庆 / 寿宴 / 国风 / 商务（会员） */
+.wrap.elegant .paper { border: 2rpx solid #bbb; border-radius: 0; }
+.dbl { width: 120rpx; margin: 14rpx auto 0; }
+.dbl view { height: 2rpx; background: #999; margin-top: 6rpx; }
+.wrap.festive { padding: 20rpx; }
+.wrap.festive .paper { background: #FFFDF5; }
+.gold { position: absolute; left: 12rpx; right: 12rpx; top: 12rpx; bottom: 12rpx; border: 4rpx solid #D4AF37; border-radius: 10rpx; pointer-events: none; }
+.wrap.longevity .paper { background: #FFF8E1; border-radius: 0; padding-top: 60rpx; padding-bottom: 60rpx; }
+.band { position: absolute; left: 0; right: 0; height: 12rpx; }
+.band.top { top: 0; }
+.band.bottom { bottom: 0; }
+.wm { position: absolute; left: 0; right: 0; top: 30%; font-size: 420rpx; line-height: 1; font-weight: 700; opacity: .07; pointer-events: none; font-family: serif; }
+.wrap.guofeng .paper { background: #F6EFDD; border-radius: 0; border: 6rpx solid var(--rc, #8B4513); box-shadow: inset 0 0 0 10rpx #F6EFDD, inset 0 0 0 12rpx var(--rc, #8B4513); padding-top: 64rpx; padding-bottom: 56rpx; }
+.wrap.guofeng .title { font-family: serif; }
+.wrap.business .paper { border-radius: 0; border: 2rpx solid #e5e5e5; padding-top: 0; }
+.title.hd { margin: 0 -40rpx; padding: 44rpx 40rpx 36rpx; }

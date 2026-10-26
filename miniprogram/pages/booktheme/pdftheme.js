@@ -12,6 +12,8 @@ const LIST = [
   { key: 'ink_gold', name: '墨黑金', scene: '商务·开业', main: '#222222', accent: '#D4AF37', cover: '#F0DFA0', pattern: 'line', mark: '', font: 'sans', footer: '' }
 ];
 const DEFAULT_KEY = 'red_gold';
+// v3.62.0 会员预留：免费版可用的预设（与云函数 export/themes.js 的 FREE_KEYS 一致）；其余预设、自定义、宋体 / 毛笔、尾页设置属会员功能
+const FREE_KEYS = ['red_gold', 'peach', 'sky', 'grey'];
 
 // v3.55.0 没保存过主题的礼簿，按礼簿类型取默认预设和水印（与云函数 export/themes.js 的 TYPE_DEFAULTS 一致，tests 有比对）
 const TYPE_DEFAULTS = {
@@ -153,7 +155,7 @@ function amountUpper(n) {
 module.exports = {
   SAMPLE, BACK_FOOTER, CORNER_CHARS, amountUpper,
   TYPE_DEFAULTS, TYPE_LABELS, typeDefault, defaultSelection,
-  LIST, DEFAULT_KEY, FONTS, PATTERNS, MARKS, MAIN_COLORS, ACCENT_COLORS, DEFAULT_CUSTOM,
+  LIST, DEFAULT_KEY, FREE_KEYS, FONTS, PATTERNS, MARKS, MAIN_COLORS, ACCENT_COLORS, DEFAULT_CUSTOM,
   FUNERAL_PATTERNS, FUNERAL_MARKS, FUNERAL_FOOTERS, DEFAULT_FUNERAL, GREY, DEFAULT_BACK, BINDS, BIND_TIPS,
   checkCustom, previewOf, expand, funeralPreview
 };

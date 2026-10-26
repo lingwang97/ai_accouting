@@ -66,6 +66,7 @@
       <view class="pv-tab {{cur === 1 ? 'on' : ''}}" data-i="1" bindtap="onTab">内页</view>
       <view class="pv-tab {{cur === 2 ? 'on' : ''}}" data-i="2" bindtap="onTab">封底</view>
     </view>
+    <view class="lock-tip" wx:if="{{lockTip}}">{{lockTip}}</view>
     <view class="muted tip">示意图，字体和细节以「预览」或导出为准；内页为本礼簿前几位宾客{{pvSample ? '（暂无数据，用示例）' : ''}}</view>
 
     <!-- 喜事：预设 + 自定义 -->
@@ -77,14 +78,16 @@
           <view class="th-sw" style="background:{{item.main}};border-color:{{item.accent}}"><view class="th-in" style="background:{{item.accent}}"></view></view>
           <view class="th-name">{{item.name}}</view>
           <view class="th-scene">{{item.scene}}</view>
+          <view class="th-vip" wx:if="{{item.locked}}">会员</view>
         </view>
         <view class="th {{themeKey === 'custom' ? 'on' : ''}}" data-k="custom" bindtap="onPickTheme">
           <view class="th-sw th-custom">＋</view>
           <view class="th-name">自定义</view>
           <view class="th-scene">{{base ? '基于预设修改' : '自选配色字体'}}</view>
+          <view class="th-vip" wx:if="{{!premiumOk}}">会员</view>
         </view>
       </view>
-      <view wx:if="{{themeKey !== 'custom'}}" class="edit-link" bindtap="onEditPreset">在此主题基础上修改 ›</view>
+      <view wx:if="{{themeKey !== 'custom'}}" class="edit-link" bindtap="onEditPreset">在此主题基础上修改 ›{{premiumOk ? '' : '（会员）'}}</view>
     </view>
 
     <view class="card cust" wx:if="{{!isFuneral && themeKey === 'custom'}}">
@@ -101,7 +104,7 @@
       <input class="input" cursor-spacing="120" adjust-position="{{true}}" bindfocus="onKbOn" bindblur="onKbOff" value="{{cust.accent}}" maxlength="7" placeholder="#RRGGBB" data-f="accent" bindinput="onCustInput" />
       <view wx:if="{{custErr}}" class="cust-err">{{custErr}}</view>
       <view class="cust-lb">字体</view>
-      <view class="chips"><view wx:for="{{fonts}}" wx:key="k" class="chip {{cust.font === item.k ? 'on' : ''}}" data-f="font" data-v="{{item.k}}" bindtap="onCust">{{item.n}}</view></view>
+      <view class="chips"><view wx:for="{{fonts}}" wx:key="k" class="chip {{cust.font === item.k ? 'on' : ''}}" data-f="font" data-v="{{item.k}}" bindtap="onCust">{{item.n}}{{item.locked ? " · 会员" : ""}}</view></view>
       <view class="cust-lb">角饰</view>
       <view class="chips"><view wx:for="{{patterns}}" wx:key="k" class="chip {{cust.pattern === item.k ? 'on' : ''}}" data-f="pattern" data-v="{{item.k}}" bindtap="onCust">{{item.n}}</view></view>
       <view class="cust-lb">水印字</view>
@@ -118,7 +121,7 @@
       <view class="muted">颜色固定为素灰，不可更换；其余可按需设置</view>
       <view wx:if="{{defTip}}" class="def-tip">{{defTip}}</view>
       <view class="cust-lb">字体</view>
-      <view class="chips"><view wx:for="{{fonts}}" wx:key="k" class="chip {{fun.font === item.k ? 'on' : ''}}" data-f="font" data-v="{{item.k}}" bindtap="onFun">{{item.n}}</view></view>
+      <view class="chips"><view wx:for="{{fonts}}" wx:key="k" class="chip {{fun.font === item.k ? 'on' : ''}}" data-f="font" data-v="{{item.k}}" bindtap="onFun">{{item.n}}{{item.locked ? " · 会员" : ""}}</view></view>
       <view class="cust-lb">角饰</view>
       <view class="chips"><view wx:for="{{fPatterns}}" wx:key="k" class="chip {{fun.pattern === item.k ? 'on' : ''}}" data-f="pattern" data-v="{{item.k}}" bindtap="onFun">{{item.n}}</view></view>
       <view class="cust-lb">水印字</view>
@@ -135,8 +138,8 @@
 
     <!-- 尾页与装订 -->
     <view class="card cust">
-      <view class="section-title">尾页与装订</view>
-      <view class="opt"><text>封底尾页</text><switch checked="{{back.on}}" color="{{themePrimary || '#C8161D'}}" data-f="on" bindchange="onBackSwitch" /></view>
+      <view class="section-title">尾页与装订{{premiumOk ? "" : "（尾页设置为会员功能）"}}</view>
+      <view class="opt" bindtap="onBackLocked"><text>封底尾页</text><switch disabled="{{!premiumOk}}" checked="{{back.on}}" color="{{themePrimary || '#C8161D'}}" data-f="on" bindchange="onBackSwitch" /></view>
       <block wx:if="{{back.on}}">
         <view class="cust-lb">尾页落款</view>
         <view class="chips">
@@ -146,9 +149,9 @@
             <view wx:for="{{fFooters}}" wx:key="*this" class="chip {{back.footer === item ? 'on' : ''}}" data-v="{{item}}" bindtap="onBackFooter">{{item}}</view>
           </block>
         </view>
-        <input class="input" cursor-spacing="120" adjust-position="{{true}}" bindfocus="onKbOn" bindblur="onKbOff" value="{{back.footer === '-' ? '' : back.footer}}" maxlength="8" placeholder="自动：用封面落款，没有则按事由默认（白事无吉语）" data-f="footer" bindinput="onBackInput" />
-        <view class="opt"><text>记账人签名栏</text><switch checked="{{back.sign}}" color="{{themePrimary || '#C8161D'}}" data-f="sign" bindchange="onBackSwitch" /></view>
-        <view class="opt"><text>显示「慧礼记」小字</text><switch checked="{{back.brand}}" color="{{themePrimary || '#C8161D'}}" data-f="brand" bindchange="onBackSwitch" /></view>
+        <input class="input" cursor-spacing="120" adjust-position="{{true}}" bindfocus="onKbOn" bindblur="onKbOff" disabled="{{!premiumOk}}" value="{{back.footer === '-' ? '' : back.footer}}" maxlength="8" placeholder="自动：用封面落款，没有则按事由默认（白事无吉语）" data-f="footer" bindinput="onBackInput" />
+        <view class="opt" bindtap="onBackLocked"><text>记账人签名栏</text><switch disabled="{{!premiumOk}}" checked="{{back.sign}}" color="{{themePrimary || '#C8161D'}}" data-f="sign" bindchange="onBackSwitch" /></view>
+        <view class="opt" bindtap="onBackLocked"><text>显示「慧礼记」小字</text><switch disabled="{{!premiumOk}}" checked="{{back.brand}}" color="{{themePrimary || '#C8161D'}}" data-f="brand" bindchange="onBackSwitch" /></view>
       </block>
       <view class="cust-lb">装订</view>
       <view class="chips"><view wx:for="{{binds}}" wx:key="k" class="chip {{bind === item.k ? 'on' : ''}}" data-k="{{item.k}}" bindtap="onBind">{{item.n}}</view></view>

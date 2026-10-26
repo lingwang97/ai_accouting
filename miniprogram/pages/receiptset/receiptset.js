@@ -5,6 +5,8 @@ const scenes = require('../../utils/scenes.js');
 const printer = require('../../utils/printer.js');
 const theme = require('../../utils/theme.js');
 const perm = require('../../utils/perm.js');
+const plan = require('../../utils/plan.js');
+const vip = require('../../utils/vip.js');
 
 const COLORS = ['#C8161D', '#B8860B', '#C9A227', '#FF7A45', '#07C160', '#333333'];
 const ALL_FIELDS = Object.keys(receipt.FIELD_LABELS);
@@ -13,7 +15,8 @@ Page({
   data: {
     tpl: receipt.DEFAULT_TPL,
     colors: COLORS,
-    styles: receipt.STYLES,
+    styles: receipt.STYLES,   // 当前事由可选的版式（带 locked：会员版式且套餐未开放）
+    styleLockTip: '',        // 已选会员版式但套餐未开放时的说明
     scenes: scenes.SCENES.map(s => ({ type: s.type, label: s.label })),
     sceneType: '',      // 本次套用的场景（保存时同步到打印模板）
     fieldItems: [],     // 已启用 [{f,label}]
@@ -41,6 +44,7 @@ Page({
         books,
         bookIdx: Math.max(0, books.findIndex(b => b._id === want))
       });
+      await plan.load();
       await this.loadTpl();
     } catch (e) {
       this.update(receipt.normalizeTpl(null));
@@ -56,6 +60,18 @@ Page({
     const r = await req.bookGetTpl(book._id);
     this.setData({ sceneType: '', tpl: receipt.DEFAULT_TPL });
     this.update(receipt.normalizeTpl(r.receiptTpl, book.type));
+  },
+
+  /** 按所选礼簿事由与套餐重算版式列表（白事只有素雅 / 简约 / 票据；会员版式未开放时加锁） */
+  refreshStyles() {
+    const book = this.data.books[this.data.bookIdx];
+    const open = plan.has('receiptStylePremium');
+    const styles = receipt.stylesFor(book && book.type).map(s => ({ ...s, locked: !!s.premium && !open }));
+    const cur = styles.find(s => s.v === this.data.tpl.style);
+    this.setData({
+      styles,
+      styleLockTip: cur && cur.locked ? '当前版式为会员功能，宾客看到的回执会按「卡片」显示' : ''
+    });
   },
 
   /** 切到「打印小票」 */
@@ -79,6 +95,7 @@ Page({
       disabledItems: ALL_FIELDS.filter(f => !tpl.fields.includes(f)).map(f => ({ f, label: receipt.FIELD_LABELS[f] })),
       model: receipt.buildModel(this.sampleRecord(), tpl, this.data.accountName)
     });
+    this.refreshStyles();
   },
 
   /** 预览用示例：事由与类型取所选礼簿 */
@@ -90,7 +107,12 @@ Page({
   onTitle(e) { this.update({ title: e.detail.value }); },
   onFooter(e) { this.update({ footer: e.detail.value }); },
   onColor(e) { this.update({ color: e.currentTarget.dataset.c }); },
-  onStyle(e) { this.update({ style: e.currentTarget.dataset.v }); },
+  onStyle(e) {
+    const v = e.currentTarget.dataset.v;
+    const s = this.data.styles.find(x => x.v === v);
+    if (s && s.locked) return vip.explain('回执版式', '「' + s.label + '」为会员版式，开通后可使用');
+    this.update({ style: v });
+  },
   onStamp(e) { this.update({ showStamp: e.detail.value }); },
   onStampText(e) { this.update({ stamp: e.detail.value }); },
 
@@ -98,7 +120,11 @@ Page({
   onScene(e) {
     const type = e.currentTarget.dataset.t;
     this.setData({ sceneType: type });
-    this.update({ ...scenes.byType(type).receipt });
+    const patch = { ...scenes.byType(type).receipt };
+    const book = this.data.books[this.data.bookIdx];
+    // 白事礼簿只能用素雅 / 简约 / 票据：套用其他事由的场景时版式改为简约
+    if (book && book.type === 'funeral' && !receipt.FUNERAL_STYLES.includes(patch.style)) patch.style = 'simple';
+    this.update(patch);
   },
 
   onAddField(e) {

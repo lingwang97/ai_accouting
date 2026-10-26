@@ -44,5 +44,16 @@
       <view class="a-note">高刷新会增加云开发调用量。选了更快的档位后，连续 30 分钟没有新转账会自动退回标准；离开页面或切到后台时停止刷新。家人共享（只读）不受影响。</view>
       </block>
     </view>
+
+    <!-- 去广告（会员权益，纯展示） -->
+    <view class="card" wx:if="{{ad.show}}">
+      <view class="a-head" bindtap="onAdTap">
+        <view class="a-headtext">
+          <view class="a-line"><text class="a-title">去广告</text><text class="a-vip">会员</text></view>
+          <view class="muted a-sub">{{ad.text}}</view>
+        </view>
+        <text class="muted a-cur">{{ad.member ? '已开通' : '未开通'}}</text>
+      </view>
+    </view>
   </block>
 </view>

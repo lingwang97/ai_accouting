@@ -13,12 +13,13 @@ const accounts = db.collection('accounts');
 const records = db.collection('records');
 const { resolveCtx, canBook, restricted, readonly, can, workBook, soloBook } = require('./ctx.js');
 const trash = require('./trash.js');
+const P = require('./plans.js');
 
 const TYPES = ['wedding', 'birthday', 'baby', 'house', 'funeral', 'other'];
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 const RECEIPT_FIELDS = ['receiptNo', 'payee', 'payerName', 'relation', 'amountUpper', 'theme', 'remark', 'paidAt'];
-const RECEIPT_STYLES = ['card', 'ticket', 'simple'];
+const RECEIPT_STYLES = [...P.RECEIPT_STYLES_FREE, ...P.RECEIPT_STYLES_PREMIUM]; // v3.62.0：新增素雅（免费）与 4 种会员样式
 const PRINT_FIELDS = ['title', 'divider', 'theme', 'payDay', 'time', 'receiptNo', 'payerName', 'relation', 'payMethod', 'amount', 'amountUpper', 'remark', 'thanks'];
 const AMOUNT_SIZES = ['double', 'tall', 'normal'];
 const BORDER_VALUES = ['off', 'auto', 'hui', 'yun', 'xi', 'shou', 'fu', 'su']; // 小票花边（v3.60.0）：与前端 utils/bordertiles.js 一致
@@ -489,10 +490,20 @@ async function saveTpl(openid, bookId, receiptTpl, printTpl) {
   const data = {};
   if (receiptTpl) {
     const t = receiptTpl;
+    const style = RECEIPT_STYLES.includes(t.style) ? t.style : 'card';
+    const oldStyle = book.receiptTpl && book.receiptTpl.style;
+    if (style !== oldStyle) { // 与已存的一致时放行（只改别的项），宾客端按套餐降级显示
+      if (book.type === 'funeral' && !P.RECEIPT_STYLES_FUNERAL.includes(style)) return err('白事回执只能选素雅、简约、票据');
+      if (P.RECEIPT_STYLES_PREMIUM.includes(style)) {
+        let open = true;
+        try { open = P.featureOpen((await P.planOf(db, openid)).features, 'receiptStylePremium'); } catch (e) { /* 读套餐失败：按开放处理 */ }
+        if (!open) return err('该回执样式为会员功能');
+      }
+    }
     data.receiptTpl = _.set({
       title: String(t.title || '礼金回执').slice(0, 20),
       color: /^#[0-9a-fA-F]{6}$/.test(t.color || '') ? t.color : '#C8161D',
-      style: RECEIPT_STYLES.includes(t.style) ? t.style : 'card',
+      style,
       fields: Array.isArray(t.fields) ? t.fields.filter(f => RECEIPT_FIELDS.includes(f)).slice(0, 10) : RECEIPT_FIELDS,
       showStamp: t.showStamp !== false,
       stamp: String(t.stamp || '').slice(0, 4),

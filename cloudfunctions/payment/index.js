@@ -8,6 +8,7 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
 const notify = require('./notify.js');
+const P = require('./plans.js');
 const { MAX_AMOUNT, MAX_MSG } = require('./limits.js'); // 单笔礼金上限（tools/cloud-shared/limits.js）
 const { resolveCode, resolveCtx, handlerName, canBook, readonly, can, workBook, soloBook, trusted } = require('./ctx.js');
 const accounts = db.collection('accounts');
@@ -626,10 +627,17 @@ async function receiptView(rec, batch) {
   if (rec.bookId) {
     try { book = (await db.collection('books').doc(rec.bookId).get()).data; } catch (e) { /* 礼簿已删除 */ }
   }
+  let tpl = (book && book.receiptTpl) || null; // 为空时前端按事由类型套用场景默认样式
+  // v3.62.0 会员预留：套餐关闭 receiptStylePremium 后，已选的会员样式按「卡片」显示（不改库）
+  if (tpl && P.RECEIPT_STYLES_PREMIUM.includes(tpl.style)) {
+    let open = true;
+    try { open = P.featureOpen((await P.planOf(db, rec.ownerOpenid)).features, 'receiptStylePremium'); } catch (e) { /* 读套餐失败：按开放处理 */ }
+    if (!open) tpl = { ...tpl, style: 'card' };
+  }
   return {
     record: out,
     accountName: rec.hostName || (book && book.hostName) || account.accountName || '',
-    tpl: (book && book.receiptTpl) || null // 为空时前端按事由类型套用场景默认样式
+    tpl
   };
 }
 

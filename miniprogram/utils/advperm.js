@@ -35,4 +35,19 @@ function pollOptionEnabled(item, key) {
   return key === 'off' || !item.partial;
 }
 
-module.exports = { orgItem, pollItem, pollOptionEnabled };
+/**
+ * 去广告状态卡（v3.62.0，纯展示）：只在主家 / 记账人侧显示；会员（套餐不是 free）不展示广告，免费版展示广告位
+ * 宾客页面的广告不随主家，保持按免费显示（8B）
+ * @param {{role:string, plan:string}} s plan 为套餐 key（free / pro ...）
+ */
+function adItem(s) {
+  if (s.role !== 'owner' && s.role !== 'clerk') return { show: false };
+  const member = !!s.plan && s.plan !== 'free';
+  return {
+    show: true,
+    member,
+    text: member ? '已开通会员，小程序内不再显示广告' : '开通会员后，主家与记账人使用的页面不再显示广告'
+  };
+}
+
+module.exports = { orgItem, pollItem, pollOptionEnabled, adItem };

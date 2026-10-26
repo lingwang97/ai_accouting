@@ -10,7 +10,7 @@ ROOT = os.path.join(os.path.dirname(__file__), '..')
 SHARED = os.path.join(ROOT, 'tools', 'cloud-shared')
 TARGETS = {
     'ctx.js': ['account', 'books', 'records', 'payment', 'export', 'qrcode', 'system'],
-    'plans.js': ['system', 'warmer', 'account'],
+    'plans.js': ['system', 'warmer', 'account', 'books', 'export', 'payment'],
     'purge.js': ['account', 'system'],
     'trash.js': ['books', 'warmer'],
     'limits.js': ['payment', 'renqing', 'account'],

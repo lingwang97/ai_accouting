@@ -55,11 +55,13 @@ function normalizeAds(a) {
 const DEFAULT_PLANS = {
   free: {
     name: '免费版',
-    features: { warmup: true, maxBooks: 0, maxClerks: 0, exportPdf: true, receiptAppCode: true, org: false, fastRefresh: true } // 0 = 不限；org 机构版；fastRefresh 待确认高频刷新（现阶段免费）
+    features: { warmup: true, maxBooks: 0, maxClerks: 0, exportPdf: true, receiptAppCode: true, org: false, fastRefresh: true,
+      pdfThemePremium: true, receiptStylePremium: true } // 0 = 不限；org 机构版；fastRefresh 待确认高频刷新；pdfThemePremium 礼簿 PDF 会员主题 / 自定义 / 宋体毛笔 / 尾页设置；receiptStylePremium 电子回执会员样式（现阶段全部免费开放，只有 === false 才限制）
   },
   pro: {
     name: '专业版',
-    features: { warmup: true, maxBooks: 0, maxClerks: 0, exportPdf: true, receiptAppCode: false, org: true, fastRefresh: true }
+    features: { warmup: true, maxBooks: 0, maxClerks: 0, exportPdf: true, receiptAppCode: false, org: true, fastRefresh: true,
+      pdfThemePremium: true, receiptStylePremium: true }
   }
 };
 
@@ -73,6 +75,14 @@ function normalizePollLevel(v) { return POLL_LEVELS.includes(v) ? v : 'off'; }
 function fastRefreshAllowed(features) { return !features || features.fastRefresh !== false; }
 /** 实际生效的档位：非法值 / 套餐不含该功能 → off */
 function effectivePollLevel(v, features) { return fastRefreshAllowed(features) ? normalizePollLevel(v) : 'off'; }
+
+/** 会员功能开关：features 里没有该项视为开放，只有明确为 false 才限制（兼容管理员已保存的旧套餐文档） */
+function featureOpen(features, key) { return !features || features[key] !== false; }
+
+/** 电子回执版式：免费 / 会员；白事只能用素雅、简约、票据 */
+const RECEIPT_STYLES_FREE = ['card', 'ticket', 'simple', 'elegant'];
+const RECEIPT_STYLES_PREMIUM = ['festive', 'longevity', 'guofeng', 'business'];
+const RECEIPT_STYLES_FUNERAL = ['elegant', 'simple', 'ticket'];
 
 // 同一实例内缓存 30 秒（管理员、套餐、广告位几乎不变，省掉每次调用的读库）；本实例写入时立即失效
 const SETTING_TTL = 30 * 1000;
@@ -130,6 +140,7 @@ async function planOf(db, ownerOpenid) {
 
 module.exports = {
   WARMABLE, DEFAULT_WARMUP, DEFAULT_PLANS, AD_SLOTS, DEFAULT_ADS,
+  featureOpen, RECEIPT_STYLES_FREE, RECEIPT_STYLES_PREMIUM, RECEIPT_STYLES_FUNERAL,
   POLL_LEVELS, normalizePollLevel, fastRefreshAllowed, effectivePollLevel,
   readSetting, writeSetting, normalizeWarmup, normalizeAds, isAdmin, planOf
 };

@@ -379,3 +379,36 @@ t('默认主题：导出 / 预览不写库；喜事无主题导出成功（囍�
   assert.ok(names(calls).some(n => /Serif/i.test(n)), '囍水印需要宋体：' + names(calls));
   assert.ok(!('pdfTheme' in db.data.books[0]) && writes().length === 0, '没有把默认值写进 books');
 });
+
+// —— v3.62.0 会员预留：套餐关闭 pdfThemePremium ——
+const NOPREM = { _id: 'plans', free: { name: '免费版', features: { pdfThemePremium: false } }, pro: { name: '专业版', features: {} } };
+
+t('会员主题（v3.62.0）：套餐关闭时新选会员主题 / 自定义 / 尾页设置被拒，免费主题可导出', async () => {
+  seed();
+  db.seed('settings', [NOPREM]);
+  const { fn } = load();
+  for (const bad of [WINE, BRUSH, { format: 'book', bookId: 'b1', pdfTheme: 'peach', pdfBack: { on: true, footer: '百年好合' } }]) {
+    const r = await fn.main(bad);
+    assert.notStrictEqual(r.code, 0);
+    assert.ok(/会员/.test(r.msg), r.msg);
+  }
+  assert.strictEqual(state.uploads.length, 0, '被拒时不生成文件');
+  const ok = await fn.main({ format: 'book', bookId: 'b1', pdfTheme: 'peach' });
+  assert.strictEqual(ok.code, 0, ok.msg);
+});
+
+t('会员主题（v3.62.0）：礼簿已存会员主题，套餐关闭后导出按免费样式降级，库里不改', async () => {
+  seed();
+  db.seed('settings', [NOPREM]);
+  db.data.books[0].pdfTheme = { key: 'wine_gold' };
+  const { fn, calls } = load();
+  const r = await fn.main({ format: 'book', bookId: 'b1' });
+  assert.strictEqual(r.code, 0, r.msg);
+  // 降级为红金 + 婚礼默认水印「囍」：宋体只用来画囍字，正文黑体（酒红鎏金本身的宋体正文不再使用）
+  assert.ok(names(calls).includes('NotoSansSC-Subset.ttf'));
+  assert.ok(!names(calls).some(n => /Brush|Zheng/i.test(n)), names(calls).join());
+  assert.strictEqual(db.data.books[0].pdfTheme.key, 'wine_gold');
+  // 与已存完全一致的再次选择放行（只是重新导出）
+  const again = await fn.main({ format: 'book', bookId: 'b1', pdfTheme: 'wine_gold' });
+  assert.strictEqual(again.code, 0, again.msg);
+});

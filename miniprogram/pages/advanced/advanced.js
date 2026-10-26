@@ -25,6 +25,7 @@ Page({
     orgName: '',
     org: { enabled: false, reason: '', contact: false, vip: false },
     poll: { enabled: false, reason: '', contact: false, vip: false },
+    ad: { show: false },
     level: 'off',
     levelName: '标准',
     pollOpen: false,
@@ -52,10 +53,11 @@ Page({
     const orgMode = !!(g.account && g.account.orgMode);
     const org = adv.orgItem({ role: g.role, orgMode, features });
     const poll = adv.pollItem({ role: g.role, perms: g.perms, features });
+    const ad = adv.adItem({ role: g.role, plan: p && p.plan });
     const saved = pollcfg.level();
     const level = poll.enabled && adv.pollOptionEnabled(poll, saved) ? saved : 'off';
     this.setData({
-      org, poll, orgMode, levelName: SHORT[level],
+      org, poll, ad, orgMode, levelName: SHORT[level],
       orgName: (g.account && g.account.orgName) || '',
       level,
       options: OPTIONS.map(o => ({ ...o, enabled: adv.pollOptionEnabled(poll, o.key) }))
@@ -116,6 +118,11 @@ Page({
     } catch (err) {
       this.setData({ orgMode: !on }); // 失败复位（request.js 已提示原因）
     }
+  },
+
+  /** 去广告：未开通时点击说明如何开通 */
+  onAdTap() {
+    if (!this.data.ad.member) this.explain({ contact: true, reason: '开通会员后，主家与记账人使用的页面不再显示广告' }, '去广告');
   },
 
   // —— 工作台刷新屏幕 ——

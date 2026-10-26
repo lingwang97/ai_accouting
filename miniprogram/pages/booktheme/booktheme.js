@@ -5,6 +5,10 @@ const openfile = require('../../utils/openfile.js');
 const theme = require('../../utils/theme.js');
 const perm = require('../../utils/perm.js');
 const pt = require('./pdftheme.js');
+const plan = require('../../utils/plan.js');
+const vip = require('../../utils/vip.js');
+
+const VIP_TIP = '该功能为会员功能，开通后可使用';
 
 Page({
   data: {
@@ -26,6 +30,8 @@ Page({
     binds: pt.BINDS,
     bindTip: pt.BIND_TIPS.none,
     exporting: false,
+    premiumOk: true,         // 套餐是否开放会员主题（features.pdfThemePremium；缺项视为开放）
+    lockTip: '',             // 套餐未开放时的说明
     presets: pt.LIST,
     fonts: pt.FONTS, patterns: pt.PATTERNS, marks: pt.MARKS,
     fPatterns: pt.FUNERAL_PATTERNS, fMarks: pt.FUNERAL_MARKS, fFooters: pt.FUNERAL_FOOTERS,
@@ -54,7 +60,8 @@ Page({
 
   async load() {
     try {
-      const [{ list }] = await Promise.all([req.bookList(), getApp().ensureRole()]);
+      const [{ list }] = await Promise.all([req.bookList(), getApp().ensureRole(), plan.load()]);
+      const premiumOk = plan.has('pdfThemePremium');
       const book = list.find(b => b._id === this.data.id);
       if (!book) {
         wx.showToast({ title: '礼簿不存在', icon: 'none' });
@@ -64,7 +71,9 @@ Page({
       const saved = book.pdfCustom || null;
       // 没保存过主题：按礼簿类型预选默认主题和水印（v3.55.0）；保存过的原样显示
       const fresh = !book.pdfTheme;
-      const def = fresh && !isFuneral ? pt.defaultSelection(book.type) : null;
+      let def = fresh && !isFuneral ? pt.defaultSelection(book.type) : null;
+      // 会员主题未开放：默认主题是会员主题时，预选免费的「中国红金」（与云端降级一致）
+      if (def && !premiumOk && !pt.FREE_KEYS.includes(def.themeKey)) def = { ...def, themeKey: pt.DEFAULT_KEY, name: '中国红金', base: '', cust: null, mark: '' };
       let defTip = '';
       if (fresh) {
         const lb = pt.TYPE_LABELS[book.type] || pt.TYPE_LABELS.other;
@@ -73,6 +82,9 @@ Page({
           : `按「${lb}」默认选了「${def.name}」${def.mark ? '，水印「' + def.mark + '」' : '，无水印'}，可更换或修改`;
       }
       this.setData({
+        premiumOk,
+        presets: pt.LIST.map(p => ({ ...p, locked: !premiumOk && !pt.FREE_KEYS.includes(p.key) })),
+        fonts: pt.FONTS.map(f => ({ ...f, locked: !premiumOk && f.k !== 'sans' })),
         book, isFuneral, defTip,
         canSave: perm.can('books'),
         themeKey: isFuneral ? 'custom' : (def ? def.themeKey : (book.pdfTheme || pt.DEFAULT_KEY)),
@@ -124,7 +136,7 @@ Page({
       corners: this.cornersOf(e.pattern),
       info: [book.hostName ? `主家：${book.hostName}` : '', book.date ? `日期：${book.date}` : ''].filter(Boolean)
     }) : null;
-    const upd = { custErr: err, pv };
+    const upd = { custErr: err, pv, lockTip: this.lockTip() };
     if (pv) { upd.pg = this.pageOf(e, d.isFuneral ? pt.GREY.main : e.main); upd.bk = this.backOf(e, pv); }
     this.setData(upd);
   },
@@ -168,8 +180,22 @@ Page({
     return { foot, sign };
   },
 
+  /** 套餐未开放会员项时的说明：免费可用项 + 当前选择里有会员项则提示导出会降级 */
+  lockTip() {
+    const d = this.data;
+    if (d.premiumOk) return '';
+    const used = [];
+    if (d.isFuneral) { if (d.fun.font !== 'sans') used.push(1); }
+    else if (d.themeKey === 'custom' || !pt.FREE_KEYS.includes(d.themeKey)) used.push(1);
+    const b = d.back || {};
+    if (!(b.on && !b.footer && b.sign && b.brand)) used.push(1);
+    return '免费版可用「中国红金、桃粉、天蓝、素灰」，其余主题、自定义配色、宋体 / 毛笔字体、尾页设置需开通会员。'
+      + (used.length ? '当前选择含会员项，导出时将按免费样式生成。' : '');
+  },
+
   onPickTheme(e) {
     const k = e.currentTarget.dataset.k;
+    if (!this.data.premiumOk && (k === 'custom' || !pt.FREE_KEYS.includes(k))) return vip.explain('PDF 主题', VIP_TIP);
     this.setData({ themeKey: k, base: k === 'custom' ? this.data.base : '', defTip: '' });
     this.refresh();
   },
@@ -178,17 +204,20 @@ Page({
   onEditPreset() {
     const k = this.data.themeKey;
     if (k === 'custom') return;
+    if (!this.data.premiumOk) return vip.explain('PDF 主题', VIP_TIP);
     this.setData({ cust: pt.expand(k), base: k, themeKey: 'custom' });
     this.refresh();
   },
 
   onCust(e) {
+    if (!this.data.premiumOk) return vip.explain('PDF 主题', VIP_TIP);
     const { f, v } = e.currentTarget.dataset;
     this.setData({ ['cust.' + f]: v });
     this.refresh();
   },
 
   onCustInput(e) {
+    if (!this.data.premiumOk) return;
     const f = e.currentTarget.dataset.f;
     let v = String(e.detail.value || '');
     if (f === 'main' || f === 'accent') v = v.toUpperCase();
@@ -198,6 +227,7 @@ Page({
 
   onFun(e) {
     const { f, v } = e.currentTarget.dataset;
+    if (f === 'font' && v !== 'sans' && !this.data.premiumOk) return vip.explain('PDF 字体', VIP_TIP);
     this.setData({ ['fun.' + f]: v });
     this.refresh();
   },
@@ -207,14 +237,19 @@ Page({
     this.refresh();
   },
 
+  /** 尾页设置属会员功能：套餐未开放时，点击说明原因 */
+  onBackLocked() { if (!this.data.premiumOk) vip.explain('尾页设置', VIP_TIP); },
+
   onBackSwitch(e) {
+    if (!this.data.premiumOk) return this.onBackLocked();
     this.setData({ ['back.' + e.currentTarget.dataset.f]: !!e.detail.value });
     this.refresh();
   },
 
-  onBackFooter(e) { this.setData({ 'back.footer': e.currentTarget.dataset.v }); this.refresh(); },
+  onBackFooter(e) { if (!this.data.premiumOk) return this.onBackLocked(); this.setData({ 'back.footer': e.currentTarget.dataset.v }); this.refresh(); },
 
   onBackInput(e) {
+    if (!this.data.premiumOk) return;
     this.setData({ 'back.footer': String(e.detail.value || '').replace(/[\u0000-\u001f\u007f]/g, '') });
     this.refresh();
   },

@@ -50,6 +50,7 @@ const TYPE_LABEL = { wedding: '喜事', birthday: '寿宴', baby: '满月/周岁
 const NO_BOOK = '未归入礼簿';
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const themes = require('./themes.js');
+const P = require('./plans.js');
 
 // 配色：喜事用中国红，白事一律用灰色系（不出现任何红色元素）
 const THEME = {
@@ -128,6 +129,11 @@ exports.main = async (event) => {
       return err(`传统礼簿最多 ${BOOK_MAX} 笔（共 ${rows.length}），请按日期分段或用表格导出`);
     }
 
+    // v3.62.0 会员预留：套餐明确关闭 pdfThemePremium 时，会员主题 / 自定义 / 宋体毛笔 / 尾页设置不能新选，已存的按免费项降级生成（不改库）
+    let premiumOk = true;
+    if (format === 'book') {
+      try { premiumOk = P.featureOpen((await P.planOf(db, OWNER)).features, 'pdfThemePremium'); } catch (e) { console.warn('读取套餐失败，按开放处理', e.message); }
+    }
     // 传统礼簿主题：传入则采用并（有礼簿管理权限时）记到礼簿；未传用礼簿已存的；白事在 resolve 中强制素灰
     let pdfThemeKey = book && book.pdfTheme && typeof book.pdfTheme === 'object' ? String(book.pdfTheme.key || '') : '';
     let pdfCustom = book && book.pdfTheme && typeof book.pdfTheme === 'object' ? book.pdfTheme.custom : null;
@@ -154,6 +160,14 @@ exports.main = async (event) => {
         } else if (k && !themes.isPresetKey(k)) return err('主题不存在');
         pdfThemeKey = k;
       }
+      if (!premiumOk) {
+        // 与礼簿已存的选择完全一致时放行（只是重新导出，生成时降级）；否则不能新选会员项
+        const stored = book.pdfTheme && typeof book.pdfTheme === 'object' ? book.pdfTheme : {};
+        const sel = JSON.stringify([pdfThemeKey, pdfCustom || null, themes.sanitizeBack(event.pdfBack !== undefined ? event.pdfBack : storedBack)]);
+        const old = JSON.stringify([String(stored.key || ''), stored.custom || null, themes.sanitizeBack(storedBack)]);
+        const used = themes.premiumUsed({ funeral: book.type === 'funeral', key: pdfThemeKey, custom: pdfCustom, back: event.pdfBack !== undefined ? event.pdfBack : storedBack });
+        if (used.length && sel !== old) return err(`${used[0]}为会员功能，请改用免费主题`);
+      }
       // 尾页 / 装订：传了就采用，没传沿用礼簿已存的（切换预设 / 自定义时不丢）
       if (event.pdfBack !== undefined) pdfBack = themes.sanitizeBack(event.pdfBack);
       if (event.pdfBind !== undefined) pdfBind = themes.sanitizeBind(event.pdfBind);
@@ -166,7 +180,7 @@ exports.main = async (event) => {
         await db.collection('books').doc(book._id).update({ data: { pdfTheme: _.set(save) } });
       }
     }
-    const meta = buildMeta(rows, { account, book, startDay, endDay, themeName, pdfThemeKey, pdfCustom, pdfBack, pdfBind });
+    const meta = buildMeta(rows, { account, book, startDay, endDay, themeName, pdfThemeKey, pdfCustom, pdfBack, pdfBind, premiumOk });
 
     let buffer;
     let notice = '';
@@ -386,8 +400,10 @@ async function bookPreview(event, ctx, OWNER) {
   }
   const th = previewTheme(book, event);
   if (th.error) return err(th.error);
+  let premiumOk = true;
+  try { premiumOk = P.featureOpen((await P.planOf(db, OWNER)).features, 'pdfThemePremium'); } catch (e) { /* 读套餐失败：按开放处理 */ }
   const account = (await db.collection('accounts').where({ ownerOpenid: OWNER }).limit(1).get()).data[0] || { accountName: '' };
-  const meta = buildMeta(rows, { account, book, startDay: '', endDay: '', themeName: '', pdfThemeKey: th.key, pdfCustom: th.custom, pdfBack: th.back, pdfBind: th.bind });
+  const meta = buildMeta(rows, { account, book, startDay: '', endDay: '', themeName: '', pdfThemeKey: th.key, pdfCustom: th.custom, pdfBack: th.back, pdfBind: th.bind, premiumOk });
   meta.preview = true;
   meta.previewSample = sample;
   let stage = '准备字体';
@@ -411,7 +427,7 @@ async function bookPreview(event, ctx, OWNER) {
 }
 
 /** 汇总导出所需的元信息 */
-function buildMeta(rows, { account, book, startDay, endDay, themeName, pdfThemeKey, pdfCustom, pdfBack, pdfBind }) {
+function buildMeta(rows, { account, book, startDay, endDay, themeName, pdfThemeKey, pdfCustom, pdfBack, pdfBind, premiumOk = true }) {
   // 礼簿类型：按礼簿取；未指定礼簿时，仅当全部记录都是白事才按白事处理
   let bookType = book ? book.type : '';
   if (!bookType) bookType = rows.length && rows.every(r => r.bookType === 'funeral') ? 'funeral' : 'other';
@@ -424,8 +440,9 @@ function buildMeta(rows, { account, book, startDay, endDay, themeName, pdfThemeK
     title: book ? book.name || '礼簿' : (account.accountName || '礼簿'),
     bookType, funeral,
     theme: funeral ? THEME.grey : THEME.red,
-    bt: pdfThemeKey ? themes.resolve(funeral, pdfThemeKey, pdfCustom) : themes.resolveDefault(bookType), // 传统礼簿主题；没保存过（key 为空）按礼簿类型取默认主题 + 水印（v3.55.0，只在内存里用）
-    back: themes.sanitizeBack(pdfBack), // 尾页设置
+    // v3.62.0 套餐关闭会员项时按免费项降级（只影响生成，不改库）
+    bt: themes.pick(premiumOk, funeral, bookType, pdfThemeKey, pdfCustom), // 传统礼簿主题；没保存过（key 为空）按礼簿类型取默认主题 + 水印（v3.55.0，只在内存里用）
+    back: themes.sanitizeBack(premiumOk ? pdfBack : null), // 尾页设置（会员项关闭时用默认）
     bind: themes.sanitizeBind(pdfBind), // 装订：none | single | double
     startDay, endDay, themeName,
     signers: signersOf(rows), // 封底记账人（只含姓名）

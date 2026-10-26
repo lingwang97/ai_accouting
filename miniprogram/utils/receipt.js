@@ -20,8 +20,19 @@ const FIELD_LABELS = {
 const STYLES = [
   { v: 'card', label: '卡片' },
   { v: 'ticket', label: '票据' },
-  { v: 'simple', label: '简约' }
+  { v: 'simple', label: '简约' },
+  { v: 'elegant', label: '素雅' },                 // v3.62.0：灰白细边，白事也适用（免费）
+  { v: 'festive', label: '喜庆', premium: true },   // 红底金边
+  { v: 'longevity', label: '寿宴', premium: true }, // 暖黄底 + 寿字水印
+  { v: 'guofeng', label: '国风', premium: true },   // 宣纸底 + 双层细边
+  { v: 'business', label: '商务', premium: true }   // 深色顶栏
 ];
+/** 白事只能选这几种（与云函数 plans.js 的 RECEIPT_STYLES_FUNERAL 一致） */
+const FUNERAL_STYLES = ['elegant', 'simple', 'ticket'];
+/** 该事由可选的版式 */
+function stylesFor(bookType) {
+  return bookType === 'funeral' ? STYLES.filter(s => FUNERAL_STYLES.includes(s.v)) : STYLES;
+}
 
 const DEFAULT_TPL = {
   ...scenes.byType('other').receipt,
@@ -175,12 +186,50 @@ function draw(ctx, m, H) {
   const simple = m.style === 'simple';
 
   // 背景
-  ctx.fillStyle = m.style === 'card' ? color : '#FFFFFF';
+  const st = m.style;
+  const PAPER = { longevity: '#FFF8E1', guofeng: '#F6EFDD', festive: '#FFFDF5' };
+  ctx.fillStyle = st === 'card' || st === 'festive' ? color : (PAPER[st] || '#FFFFFF');
   ctx.fillRect(0, 0, W, H);
-  if (m.style === 'card') {
-    ctx.fillStyle = '#FFFFFF';
+  if (st === 'card' || st === 'festive') {
+    ctx.fillStyle = PAPER[st] || '#FFFFFF';
     roundRect(ctx, 24, 24, W - 48, H - 48, 24);
     ctx.fill();
+  }
+  if (st === 'festive') { // 金色双线内框
+    ctx.strokeStyle = '#D4AF37';
+    ctx.lineWidth = 4;
+    roundRect(ctx, 44, 44, W - 88, H - 88, 14); ctx.stroke();
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, 54, 54, W - 108, H - 108, 10); ctx.stroke();
+  }
+  if (st === 'longevity') { // 上下色带 + 寿字水印
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, W, 16);
+    ctx.fillRect(0, H - 16, W, 16);
+    ctx.save();
+    ctx.globalAlpha = 0.07;
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'bold 420px serif';
+    ctx.fillText('寿', W / 2, H / 2);
+    ctx.restore();
+  }
+  if (st === 'guofeng') { // 粗细双层边
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 5;
+    ctx.strokeRect(24, 24, W - 48, H - 48);
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(40, 40, W - 80, H - 80);
+  }
+  if (st === 'business') { // 深色顶栏
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, W, 170);
+  }
+  if (st === 'elegant') { // 灰色细边
+    ctx.strokeStyle = '#BBBBBB';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(24, 24, W - 48, H - 48);
   }
   if (m.style === 'ticket') {
     ctx.fillStyle = color;
@@ -197,12 +246,17 @@ function draw(ctx, m, H) {
   // 标题
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillStyle = simple ? '#333333' : color;
-  ctx.font = 'bold 44px sans-serif';
+  ctx.fillStyle = simple || st === 'elegant' ? '#333333' : st === 'business' ? '#FFFFFF' : color;
+  ctx.font = st === 'guofeng' ? 'bold 44px serif' : 'bold 44px sans-serif';
   ctx.fillText(m.title, W / 2, 110);
   if (simple) {
     ctx.fillStyle = color;
     ctx.fillRect(W / 2 - 40, 150, 80, 6);
+  }
+  if (st === 'elegant') { // 标题下的细双线
+    ctx.fillStyle = '#999999';
+    ctx.fillRect(W / 2 - 60, 150, 120, 2);
+    ctx.fillRect(W / 2 - 60, 158, 120, 2);
   }
 
   // 金额
@@ -314,6 +368,6 @@ function saveImage(filePath) {
 }
 
 module.exports = {
-  FIELD_LABELS, STYLES, DEFAULT_TPL, SAMPLE,
+  FIELD_LABELS, STYLES, FUNERAL_STYLES, stylesFor, DEFAULT_TPL, SAMPLE,
   normalizeTpl, amountUpper, receiptNo, buildModel, toImage, saveImage, withAppCode
 };
