@@ -11,6 +11,7 @@ const perm = require('../../utils/perm.js');
 const { REC } = require('../../utils/status.js');
 const samename = require('../../utils/samename.js');
 const poller = require('../../utils/poller.js');
+const pollcfg = require('../../utils/pollcfg.js');
 const fresh = require('../../utils/fresh.js');
 
 const PAGE_SIZE = 20;
@@ -115,7 +116,8 @@ Page({
     if (booksP) booksP.then(() => { if (this.selectedBookId() !== before) this.reload(); });
     this.clearTimer();
     if (this._hidden) return; // 加载期间已离开本页：不再启动轮询
-    if (!this._poller) this._poller = poller.create(() => this.silentRefresh(), { base: POLL_MS });
+    const fast = pollcfg.ms(); // 高级功能：待确认刷新频率；设置变了就重建轮询
+    if (!this._poller || this._pollFast !== fast) { this._pollFast = fast; this._poller = poller.create(() => this.silentRefresh(), { base: POLL_MS, fast }); }
     this._poller.start();
   },
 

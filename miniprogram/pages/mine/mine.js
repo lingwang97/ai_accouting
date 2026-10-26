@@ -71,11 +71,12 @@ Page({
         return;
       }
 
-      const { account, role, identities, restricted, readonly, perms } = await req.accountGet();
+      const { account, role, identities, restricted, readonly, perms, pollLevel } = await req.accountGet();
       app.globalData.account = account;
       app.globalData.role = role;
       app.refreshTabBar(); // 记账人身份隐藏「往来」
       app.globalData.perms = perms || [];
+      require('../../utils/pollcfg.js').set(pollLevel);
       theme.setAccount(account);
       this.setData({ primary: theme.apply(this).primary });
       app._accountChecked = true;
@@ -216,6 +217,7 @@ Page({
   goExport() { wx.navigateTo({ url: '/pages/export/export' }); },
   goTrash() { wx.navigateTo({ url: '/pages/trash/trash' }); }, // 回收站（主家本人）
   /** 使用教程：按身份打开对应分页（未完善主家信息的按宾客） */
+  goAdvanced() { wx.navigateTo({ url: '/pages/advanced/advanced' }); },
   goContact() { wx.navigateTo({ url: '/pages/contact/contact' }); },
 
   goGuide() {

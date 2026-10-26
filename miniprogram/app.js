@@ -99,6 +99,7 @@ App({
     return require('./utils/request.js').accountGet().then(r => {
       this.globalData.role = r.role || 'none';
       this.globalData.perms = r.perms || [];
+      require('./utils/pollcfg.js').set(r.pollLevel);
       this.globalData.account = r.account || null;
       this._accountChecked = true;
       this.refreshTabBar(); // 记账人身份隐藏「往来」

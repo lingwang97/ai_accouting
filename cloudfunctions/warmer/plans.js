@@ -55,13 +55,24 @@ function normalizeAds(a) {
 const DEFAULT_PLANS = {
   free: {
     name: '免费版',
-    features: { warmup: true, maxBooks: 0, maxClerks: 0, exportPdf: true, receiptAppCode: true, org: false } // 0 = 不限；org 机构版
+    features: { warmup: true, maxBooks: 0, maxClerks: 0, exportPdf: true, receiptAppCode: true, org: false, fastRefresh: true } // 0 = 不限；org 机构版；fastRefresh 待确认高频刷新（现阶段免费）
   },
   pro: {
     name: '专业版',
-    features: { warmup: true, maxBooks: 0, maxClerks: 0, exportPdf: true, receiptAppCode: false, org: true }
+    features: { warmup: true, maxBooks: 0, maxClerks: 0, exportPdf: true, receiptAppCode: false, org: true, fastRefresh: true }
   }
 };
+
+/**
+ * 待确认刷新频率（我的 → 高级功能）：存 users.pollLevel，取值只能是下面几档，其余一律按 off。
+ * 套餐 features.fastRefresh === false 时不能设置高档，读取时也按 off（features 里没有该项视为开放，兼容管理员已保存的旧套餐文档）。
+ * 毫秒数只有前端用（miniprogram/utils/pollcfg.js 同表）。
+ */
+const POLL_LEVELS = ['off', 'low', 'mid', 'high'];
+function normalizePollLevel(v) { return POLL_LEVELS.includes(v) ? v : 'off'; }
+function fastRefreshAllowed(features) { return !features || features.fastRefresh !== false; }
+/** 实际生效的档位：非法值 / 套餐不含该功能 → off */
+function effectivePollLevel(v, features) { return fastRefreshAllowed(features) ? normalizePollLevel(v) : 'off'; }
 
 // 同一实例内缓存 30 秒（管理员、套餐、广告位几乎不变，省掉每次调用的读库）；本实例写入时立即失效
 const SETTING_TTL = 30 * 1000;
@@ -119,5 +130,6 @@ async function planOf(db, ownerOpenid) {
 
 module.exports = {
   WARMABLE, DEFAULT_WARMUP, DEFAULT_PLANS, AD_SLOTS, DEFAULT_ADS,
+  POLL_LEVELS, normalizePollLevel, fastRefreshAllowed, effectivePollLevel,
   readSetting, writeSetting, normalizeWarmup, normalizeAds, isAdmin, planOf
 };

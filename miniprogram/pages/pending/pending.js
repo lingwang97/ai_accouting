@@ -8,6 +8,7 @@ const theme = require('../../utils/theme.js');
 const perm = require('../../utils/perm.js');
 const { countOf, groupRecords } = require('../../utils/group.js');
 const poller = require('../../utils/poller.js');
+const pollcfg = require('../../utils/pollcfg.js');
 
 const POLL_MS = 10000; // 轮询只查计数（pendingStat，含「宾客未点完成」「最近未收到」两组的条数），任一变化才拉完整列表；另每 30 次兜底拉一次
 const MODE_KEY = 'pending_mode'; // 记住上次使用的处理方式
@@ -404,7 +405,8 @@ Page({
   },
   resumeTimer() {
     this.clearTimer();
-    if (!this._poller) this._poller = poller.create(() => this.poll(), { base: POLL_MS });
+    const fast = pollcfg.ms(); // 高级功能：待确认刷新频率；设置变了就重建轮询
+    if (!this._poller || this._pollFast !== fast) { this._pollFast = fast; this._poller = poller.create(() => this.poll(), { base: POLL_MS, fast }); }
     this._poller.start();
   },
 

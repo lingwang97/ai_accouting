@@ -11,6 +11,7 @@ const perm = require('../../utils/perm.js');
 const device = require('../../utils/device.js');
 const setup = require('../../utils/setup.js');
 const poller = require('../../utils/poller.js');
+const pollcfg = require('../../utils/pollcfg.js');
 const fresh = require('../../utils/fresh.js');
 const ble = require('../../utils/ble.js');
 
@@ -105,7 +106,8 @@ Page({
   startTimer() {
     this.clearTimer();
     this._pollMs = this.data.readonly ? POLL_MS_READONLY : POLL_MS;
-    this._poller = poller.create(() => this.refreshPending(true), { base: this._pollMs, slow: !this.data.readonly });
+    this._pollFast = this.data.readonly ? 0 : pollcfg.ms(); // 高级功能：待确认刷新频率（只读家人不受影响）
+    this._poller = poller.create(() => this.refreshPending(true), { base: this._pollMs, slow: !this.data.readonly, fast: this._pollFast });
     this._poller.start();
   },
   onHide() { this.clearTimer(); this.unwatchPrinter(); },
@@ -169,6 +171,8 @@ Page({
       this.setData({ mode: 'host', ...view });
       // 身份变化（是否只读）后按对应间隔重新轮询；页面已隐藏时不重启
       if (this._poller && this._pollMs !== (view.readonly ? POLL_MS_READONLY : POLL_MS)) this.startTimer();
+      // 刷新频率设置：每次启动 / 切身份同步一次（可能在别的设备上改过），变了就按新间隔重启轮询
+      pollcfg.sync().then(changed => { if (changed && this._poller) this.startTimer(); });
       cache.set('dashboard', view);
       // 刚通过创建向导建好：提示下一步
       if (app.globalData.justSetup) {

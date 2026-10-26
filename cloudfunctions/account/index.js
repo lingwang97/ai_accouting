@@ -69,6 +69,8 @@ exports.main = async (event) => {
         return await memberUpdate(OPENID, event.memberId, event.title, event.bookIds, event.allBooks, event.perms);
       case 'setTheme':
         return await setTheme(OPENID, event.primary);
+      case 'setPollLevel':
+        return await setPollLevel(OPENID, event.level);
       case 'leave':
         return await leave(OPENID, event.aid);
       case 'switch':
@@ -116,6 +118,7 @@ async function getMine(openid, withPayCode) {
     // 主家：待处理的入伙申请数（工作台提醒）
     pendingMembers: ctx.role === 'owner' ? (await members.where({ aid: ctx.account._id, status: MEMBER.PENDING }).count()).total : 0,
     lastNotify: (ctx.user && ctx.user.lastNotify) || null, // 最近一次新礼金提醒的发送结果
+    pollLevel: await pollLevelOf(ctx),  // 待确认刷新频率（高级功能），已按权限与套餐校验
     identities: await identities(openid)
   });
 }
@@ -938,6 +941,32 @@ async function setTheme(openid, primary) {
   const theme = { ...(ctx.account.theme || { name: '默认主题', bg: '#F7F7F7' }), primary, chosen: true };
   await accounts.doc(ctx.account._id).update({ data: { theme: _.set(theme), updatedAt: db.serverDate() } });
   return ok({ account: safeAccount({ ...ctx.account, theme }, ctx) });
+}
+
+/** 能使用「待确认刷新频率」的身份：主家，或有「确认收礼」权限的记账人（家人只读不可用） */
+function canPollSetting(ctx) { return !!ctx.account && !readonly(ctx) && can(ctx, 'confirm'); }
+
+/** 当前生效的刷新频率：按人保存（users.pollLevel）；无权限 / 套餐不含 fastRefresh / 值非法 → off */
+async function pollLevelOf(ctx) {
+  const saved = P.normalizePollLevel(ctx.user && ctx.user.pollLevel);
+  if (saved === 'off' || !canPollSetting(ctx)) return 'off';
+  let features = {};
+  try { features = (await P.planOf(db, ctx.ownerOpenid)).features; } catch (e) { /* 读套餐失败：按开放处理 */ }
+  return P.effectivePollLevel(saved, features);
+}
+
+/** 高级功能：待确认刷新频率（跟人走，换设备 / 换身份都沿用；只影响自己这部手机的轮询间隔） */
+async function setPollLevel(openid, level) {
+  if (!P.POLL_LEVELS.includes(level)) return err('选项不正确');
+  const ctx = await resolveCtx(db, openid);
+  if (!canPollSetting(ctx)) return err('无权设置');
+  if (level !== 'off') {
+    const plan = await P.planOf(db, ctx.ownerOpenid);
+    if (!P.fastRefreshAllowed(plan.features)) return err('高频刷新属于会员功能');
+  }
+  if (!ctx.user) return err('请先登录');
+  await db.collection('users').where({ openid, _openid: _.exists(false) }).update({ data: { pollLevel: level } });
+  return ok({ pollLevel: level });
 }
 
 /** 礼簿共享：已共享的家人及其可查看的礼簿 */

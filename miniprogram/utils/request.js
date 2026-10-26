@@ -60,6 +60,8 @@ module.exports = {
   accountGet: withPayCode => call('account', { action: 'get', withPayCode: !!withPayCode }),
   // 主家称呼等改动：工作台、我的、礼簿下拉的缓存都已过期
   accountSave: d => call('account', { action: 'save', ...d }).then(r => { ['books', 'dashboard', 'mine'].forEach(k => require('./cache.js').set(k, null)); return r; }),
+  pollLevelGet: () => call('account', { action: 'get' }, { silent: true }),
+  setPollLevel: level => call('account', { action: 'setPollLevel', level }),
   accountGetByAid: aid => call('account', { action: 'getByAid', aid }),
   receiptGet: (rid, batch) => call('payment', { action: 'receipt', rid, batch: !!batch }),
   myReceipts: () => call('payment', { action: 'myReceipts' }),
