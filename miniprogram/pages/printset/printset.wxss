@@ -10,6 +10,13 @@
 .p-line.big { font-size: 34rpx; font-weight: 700; }
 .p-line.tall { font-size: 28rpx; font-weight: 700; }
 .p-line.bold { font-weight: 700; }
+.p-line.sided { display: flex; }
+.p-line .p-body { flex: 1; min-width: 0; }
+.p-line.right .p-body { text-align: right; }
+.p-line.center .p-body { text-align: center; }
+.p-line .p-side { flex-shrink: 0; color: #888; }
+.p-line.band { white-space: nowrap; overflow: hidden; text-align: center; color: #666; font-weight: 400; font-size: 22rpx; border-top: 2rpx dotted #ddd; border-bottom: 2rpx dotted #ddd; }
+.p-note { margin-top: 12rpx; font-size: 22rpx; }
 .p-line.right { text-align: right; }
 .p-line.center { text-align: center; }
 .row { display: flex; align-items: center; margin-bottom: 20rpx; }

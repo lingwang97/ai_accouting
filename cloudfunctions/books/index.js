@@ -21,6 +21,7 @@ const RECEIPT_FIELDS = ['receiptNo', 'payee', 'payerName', 'relation', 'amountUp
 const RECEIPT_STYLES = ['card', 'ticket', 'simple'];
 const PRINT_FIELDS = ['title', 'divider', 'theme', 'payDay', 'time', 'receiptNo', 'payerName', 'relation', 'payMethod', 'amount', 'amountUpper', 'remark', 'thanks'];
 const AMOUNT_SIZES = ['double', 'tall', 'normal'];
+const BORDER_VALUES = ['off', 'auto', 'hui', 'yun', 'xi', 'shou', 'fu', 'su']; // 小票花边（v3.60.0）：与前端 utils/bordertiles.js 一致
 const clampInt = (v, lo, hi, d) => { const n = Math.round(Number(v)); return isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
 
 /** 幂等建集合（init 未跑完时自愈；同一实例只尝试一次） */
@@ -519,7 +520,10 @@ async function saveTpl(openid, bookId, receiptTpl, printTpl) {
       ...(typeof t.qr === 'boolean' ? { qr: t.qr } : {}),
       qrMode: t.qrMode === 'native' ? 'native' : 'image',
       feedTop: clampInt(t.feedTop, 0, 4, 1),
-      feedBottom: clampInt(t.feedBottom, 2, 8, 5)
+      feedBottom: clampInt(t.feedBottom, 2, 8, 5),
+      // v3.60.0 小票花边：缺字段 / 非法值一律视为 off；borderSide = 左右装饰字符，false 为仅上下花纹带
+      border: BORDER_VALUES.includes(t.border) ? t.border : 'off',
+      borderSide: t.borderSide !== false
     });
   }
   if (!Object.keys(data).length) return err('参数错误');

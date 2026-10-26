@@ -163,6 +163,21 @@ function printTest() {
   });
 }
 
+/** 打印花边测试（v3.60.0）：按设置页当前（未必已保存）的样式印一张示例小票，用来在真机上确认花纹、侧边字符和排版 */
+function printBorderSample(tpl, bookType) {
+  return enqueue(async () => {
+    if (!(await _ensure())) throw new Error('打印机未连接');
+    const now = new Date();
+    const rec = {
+      _id: 'sample0000000', payerName: '张三', amount: 888, payMethod: 'wechat', paidAt: now, createdAt: now,
+      accountName: '示例主家', handlerName: '示例记账', themeName: '花边测试', relation: '朋友', remark: '示例备注：花边测试',
+      bookType: bookType || 'other'
+    };
+    await _writeRetry(escpos.buildReceipt(rec, tpl));
+    return true;
+  });
+}
+
 const PARTIAL_MSG = '打印中途中断，请检查小票后补打';
 
 /** 中途中断的错误：已有部分内容出纸，不自动重打整张，避免出两张 */
@@ -191,4 +206,4 @@ async function _writeRetry(buffer) {
   }
 }
 
-module.exports = { getTemplate, defaultTemplate, clearTemplateCache, isConnected, ensureConnected, printRecord, printTest, printQrTest, resetQrBreaker, _qrBytes };
+module.exports = { getTemplate, defaultTemplate, clearTemplateCache, isConnected, ensureConnected, printRecord, printTest, printQrTest, printBorderSample, resetQrBreaker, _qrBytes };

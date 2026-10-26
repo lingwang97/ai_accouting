@@ -16,8 +16,12 @@
     <view class="section-title">小票预览</view>
     <view class="paper {{paperWidth === 48 ? 'wide' : ''}}">
       <view wx:for="{{previewLines}}" wx:key="index"
-            class="p-line {{item.big ? 'big' : ''}} {{item.tall ? 'tall' : ''}} {{item.bold ? 'bold' : ''}} {{item.right ? 'right' : ''}} {{item.center ? 'center' : ''}}">{{item.t}}</view>
+            class="p-line {{item.big ? 'big' : ''}} {{item.tall ? 'tall' : ''}} {{item.bold ? 'bold' : ''}} {{item.right ? 'right' : ''}} {{item.center ? 'center' : ''}} {{item.band ? 'band' : ''}} {{item.s ? 'sided' : ''}}">
+        <block wx:if="{{item.s}}"><text class="p-side">{{item.s}}</text><text class="p-body">{{item.t}}</text><text class="p-side">{{item.s}}</text></block>
+        <block wx:else>{{item.t}}</block>
+      </view>
     </view>
+    <view wx:if="{{border !== 'off'}}" class="muted p-note">花边为示意，实际花纹和排版以打印出来的为准</view>
   </view>
 
   <!-- 内容设置 -->
@@ -66,6 +70,24 @@
       <view class="row wrap"><text class="lbl"></text>
         <view class="btn btn-outline btn-sm" bindtap="onQrCheck">{{qrChecking ? "检测中…" : "检测小程序码生成"}}</view>
         <text class="muted qr-note">真实小票没有二维码时先点这里看原因（只检测，不打印）</text></view>
+    </block>
+    <view class="row"><text class="lbl">花边</text>
+      <view class="chips">
+        <view class="chip {{border === 'off' ? 'on' : ''}}" data-v="off" bindtap="onBorder">关闭</view>
+        <view class="chip {{border === 'auto' ? 'on' : ''}}" data-v="auto" bindtap="onBorder">跟随礼簿类型</view>
+      </view></view>
+    <view class="row" wx:if="{{bookType !== 'funeral'}}"><text class="lbl"></text>
+      <view class="chips">
+        <view wx:for="{{borderStyles}}" wx:key="key" class="chip {{border === item.key ? 'on' : ''}}" data-v="{{item.key}}" bindtap="onBorder">{{item.name}}</view>
+      </view></view>
+    <block wx:if="{{border !== 'off'}}">
+      <view class="row"><text class="lbl">左右字符</text>
+        <text class="muted flex1">每行首尾各印一个小符号；关闭则只印上下花纹带，正文宽度不变</text>
+        <switch checked="{{borderSide}}" bindchange="onBorderSide" color="{{primary}}" /></view>
+      <view class="row"><text class="lbl"></text><text class="muted flex1">花边是图案，每张小票多打约半秒到一秒，批量打印会累加；开启左右字符后每行少 2 个汉字。白事一律用素雅线。{{qr ? '二维码两侧没有字符。' : ''}}</text></view>
+      <view class="row wrap"><text class="lbl"></text>
+        <view class="btn btn-outline btn-sm" bindtap="onBorderTest">{{borderTesting ? "打印中…" : "打印花边测试"}}</view>
+        <text class="muted qr-note">按当前设置印一张示例小票（不入簿），用来确认花纹和符号能否打出</text></view>
     </block>
     <view class="row"><text class="lbl">纸宽</text>
       <view class="chips">

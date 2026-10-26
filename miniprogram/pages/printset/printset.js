@@ -1,6 +1,7 @@
 // pages/printset/printset.js — 打印排版与格式自定义（UC7，文档 §6.6）
 const req = require('../../utils/request.js');
 const escpos = require('../../utils/escpos.js');
+const bordertiles = require('../../utils/bordertiles.js');
 const printer = require('../../utils/printer.js');
 const theme = require('../../utils/theme.js');
 const perm = require('../../utils/perm.js');
@@ -52,6 +53,11 @@ Page({
     qrMode: 'image',
     qrTesting: false,
     qrChecking: false,
+    border: 'off',        // 花边：off | auto | 款式键
+    borderSide: true,
+    borderStyles: bordertiles.styleList(),
+    borderTesting: false,
+    bookType: 'other',
     feedTop: 1,
     feedBottom: 5,
     topOpts: [0, 1, 2, 3, 4],
@@ -108,6 +114,9 @@ Page({
       showHandler: tpl.showHandler,
       amountSize: tpl.amountSize,
       footer: tpl.footer,
+      border: tpl.border,
+      borderSide: tpl.borderSide,
+      bookType: (book && book.type) || 'other',
       feedTop: tpl.feedTop,
       feedBottom: tpl.feedBottom,
       qr: tpl.qr === true, // 默认关（v3.59.0）
@@ -170,6 +179,31 @@ Page({
       this.setData({ qrChecking: false });
     }
   },
+  /** 花边：关闭 / 跟随礼簿类型 / 手动选一款 */
+  onBorder(e) { this.setData({ border: e.currentTarget.dataset.v }, () => this.buildPreview()); },
+  onBorderSide(e) { this.setData({ borderSide: e.detail.value }, () => this.buildPreview()); },
+  /** 当前设置页的打印样式（未保存也能试打） */
+  _curTpl() {
+    const d = this.data;
+    return escpos.withDefaults({
+      paperWidth: d.paperWidth, fields: d.fields, title: d.title, showDivider: d.showDivider, promo: d.promo, thanks: d.thanks,
+      footer: d.footer, amountSize: d.amountSize, titleAlign: d.titleAlign, titleBold: d.titleBold, showHandler: d.showHandler,
+      feedTop: d.feedTop, feedBottom: d.feedBottom, border: d.border, borderSide: d.borderSide, qr: false
+    });
+  },
+  /** 打印花边测试：按当前样式印一张示例小票（不带二维码、不入簿） */
+  async onBorderTest() {
+    if (this.data.borderTesting) return;
+    this.setData({ borderTesting: true });
+    try {
+      await printer.printBorderSample(this._curTpl(), this.data.bookType);
+      wx.showToast({ title: '已发送打印', icon: 'success' });
+    } catch (e) {
+      wx.showModal({ title: '打印失败', content: e.message || '请先连接打印机', showCancel: false });
+    } finally {
+      this.setData({ borderTesting: false });
+    }
+  },
   onFeedTop(e) { this.setData({ feedTop: Number(e.currentTarget.dataset.n) }, () => this.buildPreview()); },
   onFeedBottom(e) { this.setData({ feedBottom: Number(e.currentTarget.dataset.n) }, () => this.buildPreview()); },
   onWidth(e) {
@@ -208,8 +242,15 @@ Page({
     const d = this.data;
     const w = d.paperWidth;
     const lines = [];
-    const add = (t, o) => escpos.wrap(t, w).forEach(x => lines.push({ t: x, ...(o || {}) }));
+    // 花边（v3.60.0）：上下花纹带用示意字符，左右装饰字符逐行交替；预览只是示意，以实际打印为准
+    const bd = bordertiles.resolve(d.border, d.borderSide, d.bookType);
+    const sideOn = !!(bd && bd.side);
+    const cw = sideOn ? w - 4 : w;
+    let ln = 0;
+    const push = o => lines.push(sideOn ? { ...o, s: bd.side[ln++ % 2] } : o);
+    const add = (t, o) => (sideOn ? escpos.wrapCols : escpos.wrap)(t, cw).forEach(x => push({ t: x, ...(o || {}) }));
     for (let i = 0; i < d.feedTop; i++) lines.push({ t: ' ', blank: true });
+    if (bd) lines.push({ t: bordertiles.previewBand(bd.key, w), band: true });
     const who = '主家：张三  ' + (d.showHandler ? '记账：李四' : '');
     const tAl = d.titleAlign === 'left' ? {} : { center: true };
     for (const f of d.fields) {
@@ -217,13 +258,13 @@ Page({
         case 'title': add(d.title || '礼金回执', { ...tAl, bold: d.titleBold }); add(who.trim(), tAl); break;
         case 'theme': add('事由：张三&李四 新婚之喜'); break;
         case 'relation': add('关系：同学'); break;
-        case 'divider': if (d.showDivider) lines.push({ t: '-'.repeat(w) }); break;
+        case 'divider': if (d.showDivider) push({ t: '-'.repeat(cw) }); break;
         case 'payDay': add('日期：2026-10-10'); break;
         case 'time': add('时间：12:30'); break;
         case 'receiptNo': add('编号：R20261010A1B2C3'); break;
         case 'payerName': add('随礼人：张三'); break;
         case 'payMethod': add('方式：微信'); break;
-        case 'amount': lines.push({ big: d.amountSize === 'double', tall: d.amountSize === 'tall', bold: true, right: true, t: '￥88.50' }); break;
+        case 'amount': push({ big: d.amountSize === 'double', tall: d.amountSize === 'tall', bold: true, right: true, t: '￥88.50' }); break;
         case 'amountUpper': add('大写：捌拾捌元伍角整', { right: true }); break;
         case 'remark': add('礼品/备注：另送花篮一对'); break;
         case 'thanks': if (d.thanks) add(d.thanks, { center: true }); break;
@@ -236,6 +277,7 @@ Page({
     }
     if (d.footer) add(d.footer, { center: true });
     if (d.promo) add('微信搜索「慧礼记」记礼金·查往来', { center: true });
+    if (bd) lines.push({ t: bordertiles.previewBand(bd.key, w), band: true });
     for (let i = 0; i < d.feedBottom; i++) lines.push({ t: ' ', blank: true });
     this.setData({ previewLines: lines });
   },
@@ -264,6 +306,8 @@ Page({
           showHandler: this.data.showHandler,
           feedTop: this.data.feedTop,
           feedBottom: this.data.feedBottom,
+          border: this.data.border,
+          borderSide: this.data.borderSide,
           qr: this.data.qr,
           qrMode: this.data.qrMode
         }
