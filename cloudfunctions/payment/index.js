@@ -449,9 +449,11 @@ async function incBookStat(bookId, count, fen, paidAt) {
 
 /** 付款方已转账：pending（或超时被自动取消的）→ transferred，并通知收款方 */
 async function transferred(openid, rid, envVersion) {
+  const out = {};
   const res = await payerUpdate(openid, rid,
-    [{ status: REC.PENDING }, { status: REC.CANCELLED, autoCancelled: true }], REC.TRANSFERRED);
-  if (res.code === 0 && res.data.changed) await notifyOwner(rid, envVersion);
+    [{ status: REC.PENDING }, { status: REC.CANCELLED, autoCancelled: true }], REC.TRANSFERRED, out);
+  // 复用 payerUpdate 已读到的记录，不再重复读库（v3.60.3）
+  if (res.code === 0 && res.data.changed) await notifyOwner(out.rec || rid, envVersion);
   return res;
 }
 
@@ -459,7 +461,7 @@ async function transferred(openid, rid, envVersion) {
  * 付款方推进自己的记录状态。
  * 带状态条件原子更新，避免与收款方确认并发时互相覆盖。
  */
-async function payerUpdate(openid, rid, fromConds, to) {
+async function payerUpdate(openid, rid, fromConds, to, out) {
   if (!validId(rid)) return err('记录不存在');
   const cur = await getRecord(rid);
   if (!cur) return err('记录不存在');
@@ -470,25 +472,36 @@ async function payerUpdate(openid, rid, fromConds, to) {
   const key = cur.batchId ? { batchId: cur.batchId } : { _id: rid };
   const res = await records.where(_.or(fromConds.map(c => ({ ...key, payerOpenid: openid, ...c }))))
     .update({ data });
-  if (res.stats.updated >= 1) return ok({ status: to, changed: true });
+  if (res.stats.updated >= 1) {
+    // out.rec：更新后的记录快照（仅供云函数内部用，不返回前端）
+    if (out) out.rec = { ...cur, ...data, status: to, autoCancelled: undefined };
+    return ok({ status: to, changed: true });
+  }
 
   // 未更新：已推进过（幂等返回当前状态）
   const rec = await getRecord(rid);
   return ok({ status: rec ? rec.status : cur.status, changed: false });
 }
 
-/** 订阅消息提醒收款方（未配置模板或店主未订阅时静默跳过） */
-async function notifyOwner(rid, envVersion) {
-  if (!notify.TMPL_ID) return;
-  const rec = await getRecord(rid);
-  if (!rec) return;
+/**
+ * 收件人名单缓存：同一礼簿（aid + bookId）在实例内存里缓存 60 秒，省掉每笔转账都查 members / accounts。
+ * 代价：成员权限、负责礼簿变化最多延迟 60 秒生效（可接受）。
+ */
+const RECIPIENT_TTL = 60 * 1000;
+const recipientCache = new Map();
+async function recipientsOf(rec) {
+  const key = `${rec.aid}|${rec.bookId || ''}`;
+  const hit = recipientCache.get(key);
+  if (hit && hit.exp > Date.now() && hit.owner === rec.ownerOpenid) return hit.to;
   // 主家和全部记账人都提醒（各自订阅过才会收到）
   let to = [rec.ownerOpenid];
   try {
-    const ms = await db.collection('members').where({ aid: rec.aid }).limit(100).get();
+    // members 与 accounts 并行查询
+    const [ms, acc] = await Promise.all([
+      db.collection('members').where({ aid: rec.aid }).limit(100).get(),
+      accounts.doc(rec.aid).get().then(r => r.data, () => null)
+    ]);
     // 家人共享、待主家同意、没有「确认收礼」权限的不提醒；只提醒负责这本礼簿的人（口径同 ctx.resolveCtx）
-    let acc = null;
-    try { acc = (await accounts.doc(rec.aid).get()).data; } catch (e) { /* 忽略 */ }
     to = to.concat(ms.data
       .filter(m => m.role !== 'viewer' && m.status !== MEMBER.PENDING && !m._openid)
       .filter(m => (Array.isArray(m.perms) ? m.perms.includes('confirm') : true))
@@ -496,10 +509,25 @@ async function notifyOwner(rid, envVersion) {
         ? soloBook(m, acc) === rec.bookId
         : m.allBooks || (Array.isArray(m.bookIds) && m.bookIds.includes(rec.bookId))))
       .map(m => m.memberOpenid));
-  } catch (e) { /* 尚无记账人 */ }
+  } catch (e) { return to; /* 尚无记账人：不缓存，下次重查 */ }
+  to = [...new Set(to)];
+  if (recipientCache.size > 200) recipientCache.clear();
+  recipientCache.set(key, { exp: Date.now() + RECIPIENT_TTL, owner: rec.ownerOpenid, to });
+  return to;
+}
+
+/** 订阅消息提醒收款方（未配置模板或店主未订阅时静默跳过）。recOrId：已读到的记录（省一次读库）或记录 id */
+async function notifyOwner(recOrId, envVersion) {
+  if (!notify.TMPL_ID) return;
+  const rec = typeof recOrId === 'object' && recOrId ? recOrId : await getRecord(recOrId);
+  if (!rec) return;
+  // 收件人名单与批次合计并行取
+  const [to, all] = await Promise.all([
+    recipientsOf(rec),
+    rec.batchId ? batchRecords(rec.batchId, { ownerOpenid: rec.ownerOpenid }) : Promise.resolve(null)
+  ]);
   let show = rec;
-  if (rec.batchId) {
-    const all = await batchRecords(rec.batchId, { ownerOpenid: rec.ownerOpenid });
+  if (all) {
     show = {
       ...rec,
       payerName: rec.payerName,
@@ -510,7 +538,7 @@ async function notifyOwner(rid, envVersion) {
     };
   }
   const data = notify.build(show, bjTime(rec.transferredAt || new Date()));
-  await Promise.all([...new Set(to)].map(async touser => {
+  await Promise.all(to.map(async touser => {
     let result;
     try {
       await cloud.openapi.subscribeMessage.send({
