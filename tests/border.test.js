@@ -62,7 +62,10 @@ for (const [pw, dots] of [[32, 384], [48, 576]]) {
     // 居中 / 右对齐（大写行）
     const upper = texts.find(l => l.text.includes('大写：'));
     assert.ok(/ +大写：[^ ]+◆$|◇$/.test(upper.text) && !/ $/.test(upper.text.slice(0, -1)), upper.text);
-    const title = texts[0].text.slice(1, -1);
+    // 花纹带与正文各空一行（v3.60.2）：第一行和最后一行文字行只有两侧字符
+    assert.strictEqual(texts[0].text.slice(1, -1).trim(), '');
+    assert.strictEqual(texts[texts.length - 1].text.slice(1, -1).trim(), '');
+    const title = texts[1].text.slice(1, -1);
     assert.ok(title.trim() === '礼金回执' && Math.abs(title.search(/\S/) - (title.length - title.trimEnd().length)) <= 1, title);
     // 顶部、底部各一条花纹带，且宽度为纸宽
     const rasters = lines.filter(l => l.type === 'raster');
@@ -115,10 +118,10 @@ test('花边：花纹带字节数 = 8 字节头 + 每行字节 x 24 行', () => 
   const row0 = bt.bandBytes('xi', 384).slice(8, 8 + 48);
   assert.strictEqual(row0[0], 0);
   assert.strictEqual(row0[1] & 0xf0, 0);
-  // 整张小票多出：两条带 + 两个 ESC J
+  // 整张小票多出：两条带 + 两个 ESC J + 带与正文之间各一个空行（LF）
   const off = build({ paperWidth: 32, fields: ['amount'], promo: false }).byteLength;
   const on = build({ paperWidth: 32, fields: ['amount'], promo: false, border: 'xi', borderSide: false }).byteLength;
-  assert.strictEqual(on - off, 2 * (8 + 48 * 24) + 6);
+  assert.strictEqual(on - off, 2 * (8 + 48 * 24) + 6 + 2);
 });
 
 test('花边：款式解析 —— 跟随类型、白事强制素雅、off 不打', () => {

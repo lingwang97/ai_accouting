@@ -250,7 +250,8 @@ Page({
     const push = o => lines.push(sideOn ? { ...o, s: bd.side[ln++ % 2] } : o);
     const add = (t, o) => (sideOn ? escpos.wrapCols : escpos.wrap)(t, cw).forEach(x => push({ t: x, ...(o || {}) }));
     for (let i = 0; i < d.feedTop; i++) lines.push({ t: ' ', blank: true });
-    if (bd) lines.push({ t: bordertiles.previewBand(bd.key, w), band: true });
+    const bandGap = () => (sideOn ? push({ t: ' ' }) : lines.push({ t: ' ', blank: true })); // 花纹带与正文空一行（v3.60.2）
+    if (bd) { lines.push({ t: bordertiles.previewBand(bd.key, w), band: true }); bandGap(); }
     const who = '主家：张三  ' + (d.showHandler ? '记账：李四' : '');
     const tAl = d.titleAlign === 'left' ? {} : { center: true };
     for (const f of d.fields) {
@@ -277,7 +278,7 @@ Page({
     }
     if (d.footer) add(d.footer, { center: true });
     if (d.promo) add('微信搜索「慧礼记」记礼金·查往来', { center: true });
-    if (bd) lines.push({ t: bordertiles.previewBand(bd.key, w), band: true });
+    if (bd) { bandGap(); lines.push({ t: bordertiles.previewBand(bd.key, w), band: true }); }
     for (let i = 0; i < d.feedBottom; i++) lines.push({ t: ' ', blank: true });
     this.setData({ previewLines: lines });
   },

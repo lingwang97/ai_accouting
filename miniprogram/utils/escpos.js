@@ -104,7 +104,9 @@ function buildReceipt(record, rawTpl, opts) {
   const lines = sideOn
     ? (s, align) => wrapCols(s, cw).forEach(l => sideLine(l, align))
     : (s, align) => wrap(s, width).forEach(l => put(align || CMD.alignLeft, text(l), CMD.feed));
-  if (bd) put(bordertiles.bandBytes(bd.key, dots), [ESC, 0x4a, bordertiles.GAP_DOTS]); // 顶部花纹带（在上留白之后）
+  // 花纹带与正文之间空一整行（v3.60.2），避免标题紧贴花边；开左右字符时空行两侧照印字符，边不断开
+  const bandGap = () => (sideOn ? sideLine('', CMD.alignLeft) : put(CMD.feed));
+  if (bd) { put(bordertiles.bandBytes(bd.key, dots), [ESC, 0x4a, bordertiles.GAP_DOTS]); bandGap(); } // 顶部花纹带（在上留白之后）
 
   // 主家与记账人：紧跟标题；模板去掉了标题时放在最前。主家称呼不提供开关（回执的身份凭据）
   const who = [record.accountName ? `主家：${record.accountName}` : '',
@@ -195,7 +197,7 @@ function buildReceipt(record, rawTpl, opts) {
   // 底部推广语：白事不打印；「回执样式 → 打印小票」里可关闭
   if (tpl.promo !== false && record.bookType !== 'funeral') lines('微信搜索「慧礼记」记礼金·查往来', CMD.alignCenter);
   // 下方留白，便于撕纸；ESC d 对有无切刀的机器都有效
-  if (bd) put([ESC, 0x4a, bordertiles.GAP_DOTS], bordertiles.bandBytes(bd.key, dots)); // 底部花纹带（在下留白之前）
+  if (bd) { bandGap(); put([ESC, 0x4a, bordertiles.GAP_DOTS], bordertiles.bandBytes(bd.key, dots)); } // 底部花纹带（在下留白之前）
   put(feedLines(tpl.feedBottom), CMD.cut);
   return new Uint8Array(bytes).buffer;
 }
