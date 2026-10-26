@@ -8,7 +8,7 @@ const envVersion = () => {
 const READ_ACTIONS = ['get', 'list', 'query', 'people', 'outList', 'remindList', 'pending', 'pendingStat', 'dashboard',
   'status', 'receipt', 'myReceipts', 'receiptByToken', 'issueQr', 'qrCheck', 'themes', 'check', 'getByAid', 'gen', 'app', 'plan', 'adminGet', 'detail',
   'nameCheck', 'reconcile', 'orgSummary', 'removePreview', 'members', 'pendingMembers', 'getTpl', 'stats', 'trashList',
-  'viewers', 'payCodeReviews', 'inviteInfo',
+  'viewers', 'payCodeReviews', 'inviteInfo', 'advGet',
   // export 预览：只生成临时文件，不改礼簿 / 礼金数据（与导出不同，不触发页面强制刷新）
   'bookPreview', 'bookPreviewData',
   // system 只读：ads 读设置；admin*Preview / adminFindHosts / adminLogs / adminPreflight(不带 Fix) 只查不写（adminIndexes 会建索引，不列入）
@@ -61,6 +61,8 @@ module.exports = {
   // 主家称呼等改动：工作台、我的、礼簿下拉的缓存都已过期
   accountSave: d => call('account', { action: 'save', ...d }).then(r => { ['books', 'dashboard', 'mine'].forEach(k => require('./cache.js').set(k, null)); return r; }),
   pollLevelGet: () => call('account', { action: 'get' }, { silent: true }),
+  advGet: () => call('account', { action: 'advGet' }, { silent: true }),
+  setTrashDays: days => call('account', { action: 'setTrashDays', days }),
   setPollLevel: level => call('account', { action: 'setPollLevel', level }),
   accountGetByAid: aid => call('account', { action: 'getByAid', aid }),
   receiptGet: (rid, batch) => call('payment', { action: 'receipt', rid, batch: !!batch }),

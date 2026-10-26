@@ -9,6 +9,11 @@ const adv = require('../../utils/advperm.js');
 const cache = require('../../utils/cache.js');
 
 const SHORT = { off: '标准', low: '8 秒', mid: '5 秒', high: '3 秒' };
+const TRASH_OPTIONS = [
+  { days: 15, name: '15 天（默认）' },
+  { days: 30, name: '30 天' },
+  { days: 60, name: '60 天' }
+];
 const OPTIONS = [
   { key: 'off', name: '标准（默认）', desc: '10 秒起，长时间没有新转账会自动放慢，最慢 1 分钟一次，最省流量' },
   { key: 'low', name: '较快 · 8 秒', desc: '固定每 8 秒刷新一次' },
@@ -26,6 +31,12 @@ Page({
     org: { enabled: false, reason: '', contact: false, vip: false },
     poll: { enabled: false, reason: '', contact: false, vip: false },
     ad: { show: false },
+    trash: { enabled: false, reason: '', contact: false, vip: false, max: 15 },
+    trashDays: 15,
+    trashOpen: false,
+    trashOptions: TRASH_OPTIONS.map(o => ({ ...o, enabled: false })),
+    adv: null,               // account.advGet：数量与额度、回收站天数（只有主家）
+    quota: { show: false },
     level: 'off',
     levelName: '标准',
     pollOpen: false,
@@ -41,8 +52,12 @@ Page({
     this.build();
     if (!g.account) return;
     // 套餐（记账人 / 家人跟随所服务的主家）与最新刷新设置（可能在别的设备上改过）
-    const [, r] = await Promise.all([plan.load(true), req.pollLevelGet().catch(() => null)]);
+    const [, r, adv2] = await Promise.all([
+      plan.load(true), req.pollLevelGet().catch(() => null),
+      g.role === 'owner' ? req.advGet().catch(() => null) : Promise.resolve(null)
+    ]);
     if (r) pollcfg.set(r.pollLevel);
+    this.setData({ adv: adv2 });
     this.build();
   },
   /** 按当前身份与套餐重算各项可用性 */
@@ -54,13 +69,18 @@ Page({
     const org = adv.orgItem({ role: g.role, orgMode, features });
     const poll = adv.pollItem({ role: g.role, perms: g.perms, features });
     const ad = adv.adItem({ role: g.role, plan: p && p.plan });
+    const trash = adv.trashItem({ role: g.role, features });
+    const a2 = this.data.adv;
+    const trashDays = a2 && a2.trashDays ? a2.trashDays : 15;
+    const quota = adv.quotaItem({ role: g.role, orgMode, adv: a2 });
     const saved = pollcfg.level();
     const level = poll.enabled && adv.pollOptionEnabled(poll, saved) ? saved : 'off';
     this.setData({
-      org, poll, ad, orgMode, levelName: SHORT[level],
+      org, poll, ad, trash, trashDays, quota, orgMode, levelName: SHORT[level],
       orgName: (g.account && g.account.orgName) || '',
       level,
-      options: OPTIONS.map(o => ({ ...o, enabled: adv.pollOptionEnabled(poll, o.key) }))
+      options: OPTIONS.map(o => ({ ...o, enabled: adv.pollOptionEnabled(poll, o.key) })),
+      trashOptions: TRASH_OPTIONS.map(o => ({ ...o, enabled: adv.trashOptionEnabled(trash, o.days) }))
     });
   },
   /** 置灰项被点：弹窗说明原因；需要开通套餐的带「联系我们」，其余只有「知道了」 */
@@ -118,6 +138,34 @@ Page({
     } catch (err) {
       this.setData({ orgMode: !on }); // 失败复位（request.js 已提示原因）
     }
+  },
+
+  // —— 回收站保留时间 ——
+  onTrashHead() {
+    const { trash, trashOpen } = this.data;
+    if (!trash.enabled) return this.explain(trash, '回收站保留时间');
+    this.setData({ trashOpen: !trashOpen });
+  },
+  async onTrashPick(e) {
+    const days = Number(e.currentTarget.dataset.days);
+    const { trash, trashDays, saving } = this.data;
+    if (saving) return;
+    if (!adv.trashOptionEnabled(trash, days)) return this.explain(trash, '回收站保留时间');
+    if (days === trashDays) return;
+    this.setData({ saving: true });
+    try {
+      const r = await req.setTrashDays(days);
+      this.setData({ trashDays: r.trashDays, adv: { ...(this.data.adv || {}), trashDays: r.trashDays } });
+      wx.showToast({ title: '已保存', icon: 'success' });
+    } catch (err) { /* request 已提示 */ } finally {
+      this.setData({ saving: false });
+    }
+  },
+
+  /** 数量额度：达到上限时点击说明 */
+  onQuotaTap() {
+    const q = this.data.quota;
+    if (q.full) this.explain({ contact: true, reason: q.reason }, '数量额度');
   },
 
   /** 去广告：未开通时点击说明如何开通 */

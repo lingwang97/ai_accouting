@@ -50,4 +50,42 @@ function adItem(s) {
   };
 }
 
-module.exports = { orgItem, pollItem, pollOptionEnabled, adItem };
+/**
+ * 回收站保留时间（v3.63.0）：只有主家本人可设置；选项 15 / 30 / 60 天，套餐 features.trashDays 限制最长天数（缺项 / 0 = 60，全部开放）
+ * @param {{role:string, features:object}} s
+ */
+function trashItem(s) {
+  if (s.role !== 'owner') return { enabled: false, reason: '仅主家可设置', contact: false, vip: false, max: 15 };
+  const n = Number(s.features && s.features.trashDays);
+  const max = n > 0 ? n : 60;
+  const partial = max < 60;
+  return partial
+    ? { enabled: true, partial: true, max, reason: '会员功能，暂未开通更长的保留时间', contact: true, vip: true }
+    : { enabled: true, max, reason: '', contact: false, vip: false };
+}
+/** 某个天数能否选：15 天始终可选；其余要求权限且不超过套餐上限 */
+function trashOptionEnabled(item, days) {
+  if (!item.enabled) return false;
+  return days <= 15 || days <= item.max;
+}
+
+/**
+ * 数量额度卡（v3.63.0）：礼簿数 / 记账人数与上限（0 = 当前不限）；只在主家侧显示
+ * @param {{role:string, orgMode:boolean, adv:{books:number, clerks:number, maxBooks:number, maxClerks:number}|null}} s
+ */
+function quotaItem(s) {
+  if (s.role !== 'owner' || !s.adv) return { show: false };
+  const a = s.adv, org = !!s.orgMode;
+  const bw = org ? '场次' : '礼簿', cw = org ? '礼台人员' : '记账人';
+  const bu = org ? '个' : '本', cu = '位';
+  const limited = a.maxBooks > 0 || a.maxClerks > 0;
+  const full = (a.maxBooks > 0 && a.books >= a.maxBooks) || (a.maxClerks > 0 && a.clerks >= a.maxClerks);
+  return {
+    show: true, limited, full,
+    bookLine: `${bw} ${a.books} ${bu}` + (a.maxBooks > 0 ? `，上限 ${a.maxBooks} ${bu}` : '（当前不限）'),
+    clerkLine: `${cw} ${a.clerks} ${cu}` + (a.maxClerks > 0 ? `，上限 ${a.maxClerks} ${cu}` : '（当前不限）'),
+    reason: '已达到当前套餐的上限，开通会员可添加更多；已有的数据不受影响'
+  };
+}
+
+module.exports = { orgItem, pollItem, pollOptionEnabled, adItem, trashItem, trashOptionEnabled, quotaItem };

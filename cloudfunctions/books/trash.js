@@ -32,8 +32,9 @@ async function ensure(db, name) {
 /**
  * 删除（移入回收站）。book 为礼簿文档（首次调用）；续跑时 book 为 null，按 trash_books 里的进度继续
  * files：彻底删除时要一并删掉的文件（存档 PDF、本场收款码、各版本礼簿码）
+ * days：保留天数（v3.63.0 用户可选 15 / 30 / 60，到期时间 purgeAt 在这里固化；没传按 TRASH_DAYS）
  */
-async function moveToTrash(db, owner, bookId, book, extra) {
+async function moveToTrash(db, owner, bookId, book, extra, days) {
   await ensure(db, 'trash_books');
   await ensure(db, 'trash_records');
   const deadline = Date.now() + BUDGET_MS;
@@ -42,7 +43,7 @@ async function moveToTrash(db, owner, bookId, book, extra) {
     const { _id, ...doc } = book;
     const now = new Date();
     await tb.doc(bookId).set({
-      data: { ...doc, ...extra, trashStatus: 'moving', deletedAt: now, purgeAt: new Date(now.getTime() + TRASH_DAYS * 24 * 3600 * 1000) }
+      data: { ...doc, ...extra, trashStatus: 'moving', deletedAt: now, purgeAt: new Date(now.getTime() + (days > 0 ? days : TRASH_DAYS) * 24 * 3600 * 1000) }
     });
     await db.collection('books').doc(bookId).remove();
   }

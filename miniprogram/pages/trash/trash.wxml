@@ -1,5 +1,5 @@
 <view class="container" style="{{themeStyle}}">
-  <view class="card muted intro">删除的礼簿和它的全部礼金记录会在这里保留 {{days}} 天，期间可以恢复；超过 {{days}} 天自动永久删除。</view>
+  <view class="card muted intro">删除的礼簿和它的全部礼金记录会在这里保留一段时间，期间可以恢复，到期自动永久删除。之后删除的礼簿保留 {{days}} 天（可在「我的 → 高级功能」修改），已经在这里的按各自剩余天数到期。</view>
 
   <view class="card item" wx:for="{{list}}" wx:key="_id">
     <view class="i-top">

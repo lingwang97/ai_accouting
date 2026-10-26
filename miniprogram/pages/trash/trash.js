@@ -1,4 +1,4 @@
-// pages/trash/trash.js — 回收站：删除的礼簿保留 15 天，期间可恢复（仍为已归档）或彻底删除；到期自动永久删除
+// pages/trash/trash.js — 回收站：删除的礼簿默认保留 15 天（高级功能可选 30 / 60 天），期间可恢复（仍为已归档）或彻底删除；到期自动永久删除
 const req = require('../../utils/request.js');
 const fmt = require('../../utils/format.js');
 const scenes = require('../../utils/scenes.js');

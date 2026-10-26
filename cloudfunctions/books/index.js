@@ -66,7 +66,7 @@ exports.main = async (event) => {
       case 'removePreview': return ctx.role === 'owner' ? await removeBook(OWNER, account, String(event.bookId || ''), false) : err('只有主家本人可以删除礼簿');
       case 'remove': return ctx.role === 'owner' ? await removeBook(OWNER, account, String(event.bookId || ''), true) : err('只有主家本人可以删除礼簿');
       // 回收站（只限主家本人）
-      case 'trashList': return ctx.role === 'owner' ? await trashList(OWNER) : err('只有主家本人可以查看回收站');
+      case 'trashList': return ctx.role === 'owner' ? await trashList(OWNER, account) : err('只有主家本人可以查看回收站');
       case 'trashRestore': return ctx.role === 'owner' ? await trashOp(OWNER, String(event.bookId || ''), 'restore') : err('只有主家本人可以恢复');
       case 'trashPurge': return ctx.role === 'owner' ? await trashOp(OWNER, String(event.bookId || ''), 'purge', event.confirmName) : err('只有主家本人可以删除');
       case 'stats': return await stats(OWNER, event.bookId, ctx);
@@ -255,6 +255,13 @@ async function save(openid, account, input, ctx, caller) {
     const { pendingPayCode, ...shown } = b;
     return ok({ book: { _id: input._id, ...shown }, pendingPayCode: pendingCode });
   }
+  // v3.63.0 礼簿数额度（features.maxBooks，0 / 缺项不限；含已归档、不含回收站）：只限制新增
+  {
+    let plan = null;
+    try { plan = await P.planOf(db, openid); } catch (e) { /* 读套餐失败：按不限处理 */ }
+    const lim = P.limitOf(plan && plan.features, 'maxBooks');
+    if (isFinite(lim) && (await books.where({ ownerOpenid: openid }).count()).total >= lim) return err(P.quotaMsg(plan.name, 'books', lim, account.orgMode));
+  }
   const book = await create(openid, b);
   let active = account.activeBookId || '';
   if (ctx.role === 'clerk' && account.orgMode) {
@@ -343,23 +350,31 @@ async function removeBook(openid, account, bookId, confirm) {
   ]);
   const st = (paid.list && paid.list[0]) || { count: 0, fen: 0 };
   const summary = { name: book.name, count: st.count, sum: Math.round(st.fen) / 100, total: all.total, affected };
-  if (!confirm) return ok({ ...summary, days: trash.TRASH_DAYS });
+  const days = await trashDaysOf(openid, account);
+  if (!confirm) return ok({ ...summary, days });
   const done = await trash.moveToTrash(db, openid, book._id, book, {
     aid: account._id, count: summary.count, sum: summary.sum, files: trash.filesOf(book, account, ownPayCode)
-  });
+  }, days);
   // 自己选了这一场的机构记账人：清掉选择
   await members.where({ aid: account._id, curBookId: book._id }).update({ data: { curBookId: '' } });
   return ok({ done, affected });
 }
 
+/** 当前设置的回收站保留天数（accounts.trashDays，受套餐 features.trashDays 限制；之后删除的礼簿按它计算到期时间） */
+async function trashDaysOf(openid, account) {
+  let features = {};
+  try { features = (await P.planOf(db, openid)).features; } catch (e) { /* 读套餐失败：按开放处理 */ }
+  return P.effectiveTrashDays(account && account.trashDays, features);
+}
+
 /** 回收站列表（含删除中 / 恢复中的） */
-async function trashList(openid) {
+async function trashList(openid, account) {
   let res = { data: [] };
   try {
     res = await db.collection('trash_books').where({ ownerOpenid: openid, _openid: _.exists(false) }).orderBy('deletedAt', 'desc').limit(100)
       .field({ name: true, type: true, hostName: true, count: true, sum: true, deletedAt: true, purgeAt: true, trashStatus: true }).get();
   } catch (e) { /* 集合还不存在 */ }
-  return ok({ list: res.data, days: trash.TRASH_DAYS });
+  return ok({ list: res.data, days: await trashDaysOf(openid, account) });
 }
 
 /** 回收站里的一本：恢复 / 彻底删除（须输入礼簿名称） */

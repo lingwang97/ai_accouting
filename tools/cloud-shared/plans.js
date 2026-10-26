@@ -56,12 +56,12 @@ const DEFAULT_PLANS = {
   free: {
     name: '免费版',
     features: { warmup: true, maxBooks: 0, maxClerks: 0, exportPdf: true, receiptAppCode: true, org: false, fastRefresh: true,
-      pdfThemePremium: true, receiptStylePremium: true } // 0 = 不限；org 机构版；fastRefresh 待确认高频刷新；pdfThemePremium 礼簿 PDF 会员主题 / 自定义 / 宋体毛笔 / 尾页设置；receiptStylePremium 电子回执会员样式（现阶段全部免费开放，只有 === false 才限制）
+      pdfThemePremium: true, receiptStylePremium: true, trashDays: 60 } // 0 = 不限；trashDays 回收站可选的最长保留天数（缺项 / 0 视为 60，即全部开放）；org 机构版；fastRefresh 待确认高频刷新；pdfThemePremium 礼簿 PDF 会员主题 / 自定义 / 宋体毛笔 / 尾页设置；receiptStylePremium 电子回执会员样式（现阶段全部免费开放，只有 === false 才限制）
   },
   pro: {
     name: '专业版',
     features: { warmup: true, maxBooks: 0, maxClerks: 0, exportPdf: true, receiptAppCode: false, org: true, fastRefresh: true,
-      pdfThemePremium: true, receiptStylePremium: true }
+      pdfThemePremium: true, receiptStylePremium: true, trashDays: 60 }
   }
 };
 
@@ -78,6 +78,31 @@ function effectivePollLevel(v, features) { return fastRefreshAllowed(features) ?
 
 /** 会员功能开关：features 里没有该项视为开放，只有明确为 false 才限制（兼容管理员已保存的旧套餐文档） */
 function featureOpen(features, key) { return !features || features[key] !== false; }
+
+/**
+ * v3.63.0 额度：features.maxBooks / maxClerks 为礼簿数（含已归档，不含回收站）/ 记账人数上限，0 或缺项为不限。
+ * 现阶段 free 的值保持 0（不限）；将来收费时的建议值：免费 3 本礼簿、2 位记账人（家人共享只读不计），在 settings/plans 里改即可。
+ * 只限制新增，已超额的老用户保留全部数据，不删不冻结。
+ */
+function limitOf(features, key) { const n = Number(features && features[key]); return n > 0 ? n : Infinity; }
+/** 额度已满时的提示（机构模式称场次 / 礼台人员） */
+function quotaMsg(planName, kind, lim, orgMode) {
+  const what = kind === 'books' ? (orgMode ? '个场次' : '本礼簿') : (orgMode ? '位礼台人员' : '位记账人');
+  return `${planName || '免费版'}最多 ${lim} ${what}，开通会员可添加更多`;
+}
+
+/**
+ * 回收站保留天数：用户可选 15 / 30 / 60 天（存 accounts.trashDays，默认 15）；套餐 features.trashDays 限制最长可选天数。
+ * 只影响之后删除的礼簿（到期时间 purgeAt 在删除时固化），回收站里已有的按各自 purgeAt 到期
+ */
+const TRASH_DAYS_OPTIONS = [15, 30, 60];
+const TRASH_DAYS_DEFAULT = 15;
+function trashDaysMax(features) { const n = Number(features && features.trashDays); return n > 0 ? n : 60; }
+function effectiveTrashDays(saved, features) {
+  const want = TRASH_DAYS_OPTIONS.includes(Number(saved)) ? Number(saved) : TRASH_DAYS_DEFAULT;
+  const cap = TRASH_DAYS_OPTIONS.filter(o => o <= trashDaysMax(features)).pop() || TRASH_DAYS_DEFAULT;
+  return Math.max(TRASH_DAYS_DEFAULT, Math.min(want, cap));
+}
 
 /** 电子回执版式：免费 / 会员；白事只能用素雅、简约、票据 */
 const RECEIPT_STYLES_FREE = ['card', 'ticket', 'simple', 'elegant'];
@@ -140,6 +165,7 @@ async function planOf(db, ownerOpenid) {
 
 module.exports = {
   WARMABLE, DEFAULT_WARMUP, DEFAULT_PLANS, AD_SLOTS, DEFAULT_ADS,
+  limitOf, quotaMsg, TRASH_DAYS_OPTIONS, TRASH_DAYS_DEFAULT, trashDaysMax, effectiveTrashDays,
   featureOpen, RECEIPT_STYLES_FREE, RECEIPT_STYLES_PREMIUM, RECEIPT_STYLES_FUNERAL,
   POLL_LEVELS, normalizePollLevel, fastRefreshAllowed, effectivePollLevel,
   readSetting, writeSetting, normalizeWarmup, normalizeAds, isAdmin, planOf

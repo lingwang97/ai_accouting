@@ -78,7 +78,7 @@ class Agg {
 
 class FakeDb {
   constructor() { this.command = command; this.RegExp = o => ({ __op: 'regexp', v: o }); this.serverDate = () => new Date(); this.reset(); }
-  reset() { this.data = {}; this.log = []; this.applyUpdates = false; return this; }
+  reset() { this.data = {}; this.log = []; this.applyUpdates = false; this.persist = false; return this; }
   seed(col, docs) { this.data[col] = (this.data[col] || []).concat(docs); return this; }
   async createCollection() { return {}; }
   collection(name) {
@@ -90,7 +90,12 @@ class FakeDb {
       limit: n => new Query(db, name, {}).limit(n),
       orderBy: (k, d) => new Query(db, name, {}).orderBy(k, d),
       count: () => new Query(db, name, {}).count(),
-      add: async () => ({ _id: 'new' }),
+      // db.persist = true 时 add / doc.set 真的写入 data（默认只返回，不落数据，保持旧测试行为）
+      add: async o => {
+        const id = 'new' + (db.data[name] || []).length;
+        if (db.persist) db.data[name] = (db.data[name] || []).concat([{ _id: id, ...(o && o.data) }]);
+        return { _id: db.persist ? id : 'new' };
+      },
       doc: id => ({
         async get() {
           const d = (db.data[name] || []).find(x => x._id === id);
@@ -98,7 +103,10 @@ class FakeDb {
           return { data: d };
         },
         async update() { return { stats: { updated: 1 } }; },
-        async set() { return {}; },
+        async set(o) {
+          if (db.persist) db.data[name] = (db.data[name] || []).filter(x => x._id !== id).concat([{ _id: id, ...(o && o.data) }]);
+          return {};
+        },
         async remove() { return { stats: { removed: 1 } }; }
       })
     };

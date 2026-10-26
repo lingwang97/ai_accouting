@@ -69,6 +69,10 @@ exports.main = async (event) => {
         return await memberUpdate(OPENID, event.memberId, event.title, event.bookIds, event.allBooks, event.perms);
       case 'setTheme':
         return await setTheme(OPENID, event.primary);
+      case 'advGet':
+        return await advGet(OPENID);
+      case 'setTrashDays':
+        return await setTrashDays(OPENID, event.days);
       case 'setPollLevel':
         return await setPollLevel(OPENID, event.level);
       case 'leave':
@@ -353,6 +357,8 @@ async function createInvite(openid, type, opts = {}) {
     data.uses = 0;
   }
   if (type === 'clerk') {
+    const q = await clerkQuota(ctx.account);
+    if (q.full) return err(q.msg);
     // 负责的礼簿 + 授予的权限；都不能超出邀请人自己拥有的
     // 非机构模式：只能选一本礼簿（solo），不能选全部礼簿
     const solo = !ctx.account.orgMode;
@@ -539,6 +545,11 @@ async function acceptInvite(openid, token, displayName) {
       }
       await setCurrent(openid, acc._id);
       return ok({ type: inv.type, aid: acc._id, accountName: acc.accountName });
+    }
+    // v3.63.0 记账人数额度：只限制新增（已是成员的合并 / 升级分支在上面已返回）
+    if (!viewer) {
+      const q = await clerkQuota(acc);
+      if (q.full) return err(q.msg);
     }
     // 新加入：占用一个名额。主家本人发的卡直接生效；记账人发（转发）的卡先记为待同意，主家同意后才能查看 / 记账
     if (!(await takeUse(inv))) return err('这张邀请卡的人数已满，请让对方重新邀请');
@@ -967,6 +978,50 @@ async function setPollLevel(openid, level) {
   if (!ctx.user) return err('请先登录');
   await db.collection('users').where({ openid, _openid: _.exists(false) }).update({ data: { pollLevel: level } });
   return ok({ pollLevel: level });
+}
+
+/**
+ * 记账人数额度（features.maxClerks，0 / 缺项不限）：数主家名下的记账人（含待同意的，家人共享只读不计）
+ * @returns {{full:boolean, msg:string}}
+ */
+async function clerkQuota(acc) {
+  let plan = null;
+  try { plan = await P.planOf(db, acc.ownerOpenid); } catch (e) { return { full: false, msg: '' }; }
+  const lim = P.limitOf(plan.features, 'maxClerks');
+  if (!isFinite(lim)) return { full: false, msg: '' };
+  const n = (await members.where({ aid: acc._id, role: 'clerk', _openid: _.exists(false) }).count()).total;
+  return n >= lim ? { full: true, msg: P.quotaMsg(plan.name, 'clerks', lim, acc.orgMode) } : { full: false, msg: '' };
+}
+
+/** 高级功能页：套餐、礼簿 / 记账人数量与额度（0 = 不限）、回收站保留天数设置。只有主家本人 */
+async function advGet(openid) {
+  const ctx = await resolveCtx(db, openid);
+  if (!ctx.account || ctx.role !== 'owner') return err('仅主家可查看');
+  const plan = await P.planOf(db, ctx.ownerOpenid);
+  const [bk, ck] = await Promise.all([
+    db.collection('books').where({ ownerOpenid: ctx.ownerOpenid }).count(),
+    members.where({ aid: ctx.account._id, role: 'clerk', _openid: _.exists(false) }).count()
+  ]);
+  const lb = P.limitOf(plan.features, 'maxBooks'), lc = P.limitOf(plan.features, 'maxClerks');
+  return ok({
+    planName: plan.name,
+    books: bk.total, clerks: ck.total,
+    maxBooks: isFinite(lb) ? lb : 0, maxClerks: isFinite(lc) ? lc : 0,
+    trashDays: P.effectiveTrashDays(ctx.account.trashDays, plan.features),
+    trashMax: Math.max(P.TRASH_DAYS_DEFAULT, P.TRASH_DAYS_OPTIONS.filter(o => o <= P.trashDaysMax(plan.features)).pop() || 0)
+  });
+}
+
+/** 回收站保留天数（15 / 30 / 60）：只影响之后删除的礼簿；受套餐限制；只有主家本人 */
+async function setTrashDays(openid, days) {
+  days = Number(days);
+  if (!P.TRASH_DAYS_OPTIONS.includes(days)) return err('选项不正确');
+  const ctx = await resolveCtx(db, openid);
+  if (!ctx.account || ctx.role !== 'owner') return err('仅主家可设置');
+  const plan = await P.planOf(db, ctx.ownerOpenid);
+  if (days > P.effectiveTrashDays(days, plan.features)) return err('更长的保留时间属于会员功能');
+  await accounts.doc(ctx.account._id).update({ data: { trashDays: days } });
+  return ok({ trashDays: days });
 }
 
 /** 礼簿共享：已共享的家人及其可查看的礼簿 */

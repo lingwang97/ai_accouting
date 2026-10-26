@@ -45,6 +45,35 @@
       </block>
     </view>
 
+    <!-- 回收站保留时间（默认收起） -->
+    <view class="card">
+      <view class="a-head" bindtap="onTrashHead">
+        <view class="a-headtext">
+          <view class="a-line"><text class="a-title">回收站保留时间</text><text class="a-vip" wx:if="{{trash.vip}}">会员</text></view>
+        </view>
+        <text class="muted a-cur">{{trashDays}} 天</text>
+        <text class="a-arrow {{trashOpen ? 'open' : ''}}">›</text>
+      </view>
+      <view class="a-reason" wx:if="{{trash.reason}}">{{trash.reason}}</view>
+      <block wx:if="{{trashOpen}}">
+        <view class="muted a-desc">删除的礼簿在回收站保留多久，期间可以恢复，到期自动永久删除。</view>
+        <view class="a-opt {{trashDays === item.days ? 'on' : ''}} {{item.enabled ? '' : 'dis'}}"
+              wx:for="{{trashOptions}}" wx:key="days" data-days="{{item.days}}" bindtap="onTrashPick">
+          <view class="a-radio"><view class="a-dot" wx:if="{{trashDays === item.days}}" /></view>
+          <view class="a-text"><view class="a-name">{{item.name}}</view></view>
+        </view>
+        <view class="a-note">只影响之后删除的礼簿；已经在回收站里的，仍按删除时定下的到期日处理，不会因为改了这里而变长或变短。</view>
+      </block>
+    </view>
+
+    <!-- 数量额度（只显示，主家侧） -->
+    <view class="card" wx:if="{{quota.show}}" bindtap="onQuotaTap">
+      <view class="a-line"><text class="a-title">数量额度</text><text class="a-vip" wx:if="{{quota.limited}}">会员</text></view>
+      <view class="muted a-sub">{{quota.bookLine}}</view>
+      <view class="muted a-sub">{{quota.clerkLine}}</view>
+      <view class="a-reason" wx:if="{{quota.full}}">{{quota.reason}}</view>
+    </view>
+
     <!-- 去广告（会员权益，纯展示） -->
     <view class="card" wx:if="{{ad.show}}">
       <view class="a-head" bindtap="onAdTap">
