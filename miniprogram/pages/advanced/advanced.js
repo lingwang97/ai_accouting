@@ -1,6 +1,6 @@
-// pages/advanced/advanced.js — 高级功能（列表，可继续扩展）：机构模式、待确认刷新频率
+// pages/advanced/advanced.js — 高级功能（列表，可继续扩展）：机构模式、工作台刷新屏幕（频率）
 // 所有有账户身份的角色都能进入；无权限的项目仍显示并置灰，写明原因（可用性见 utils/advperm.js，云端另有校验）
-// 刷新频率按人保存在服务端（account.setPollLevel → users.pollLevel），本机缓存见 utils/pollcfg.js
+// 工作台刷新屏幕默认收起（pollOpen）；刷新频率按人保存在服务端（account.setPollLevel → users.pollLevel），本机缓存见 utils/pollcfg.js
 const req = require('../../utils/request.js');
 const theme = require('../../utils/theme.js');
 const plan = require('../../utils/plan.js');
@@ -8,6 +8,7 @@ const pollcfg = require('../../utils/pollcfg.js');
 const adv = require('../../utils/advperm.js');
 const cache = require('../../utils/cache.js');
 
+const SHORT = { off: '标准', low: '8 秒', mid: '5 秒', high: '3 秒' };
 const OPTIONS = [
   { key: 'off', name: '标准（默认）', desc: '10 秒起，长时间没有新转账会自动放慢，最慢 1 分钟一次，最省流量' },
   { key: 'low', name: '较快 · 8 秒', desc: '固定每 8 秒刷新一次' },
@@ -25,6 +26,8 @@ Page({
     org: { enabled: false, reason: '', contact: false, vip: false },
     poll: { enabled: false, reason: '', contact: false, vip: false },
     level: 'off',
+    levelName: '标准',
+    pollOpen: false,
     options: OPTIONS.map(o => ({ ...o, enabled: false })),
     saving: false
   },
@@ -50,10 +53,11 @@ Page({
     const org = adv.orgItem({ role: g.role, orgMode, features });
     const poll = adv.pollItem({ role: g.role, perms: g.perms, features });
     const saved = pollcfg.level();
+    const level = poll.enabled && adv.pollOptionEnabled(poll, saved) ? saved : 'off';
     this.setData({
-      org, poll, orgMode,
+      org, poll, orgMode, levelName: SHORT[level],
       orgName: (g.account && g.account.orgName) || '',
-      level: poll.enabled && adv.pollOptionEnabled(poll, saved) ? saved : 'off',
+      level,
       options: OPTIONS.map(o => ({ ...o, enabled: adv.pollOptionEnabled(poll, o.key) }))
     });
   },
@@ -114,18 +118,24 @@ Page({
     }
   },
 
-  // —— 待确认刷新频率 ——
+  // —— 工作台刷新屏幕 ——
+  /** 标题行：无权限弹原因；否则展开 / 收起档位 */
+  onPollHead() {
+    const { poll, pollOpen } = this.data;
+    if (!poll.enabled) return this.explain(poll, '工作台刷新屏幕');
+    this.setData({ pollOpen: !pollOpen });
+  },
   async onPick(e) {
     const key = e.currentTarget.dataset.key;
     const { poll, level, saving } = this.data;
     if (saving) return;
-    if (!adv.pollOptionEnabled(poll, key)) return this.explain(poll, '待确认刷新频率');
+    if (!adv.pollOptionEnabled(poll, key)) return this.explain(poll, '工作台刷新屏幕');
     if (key === level) return;
     this.setData({ saving: true });
     try {
       const r = await req.setPollLevel(key);
       pollcfg.set(r.pollLevel);
-      this.setData({ level: r.pollLevel });
+      this.setData({ level: r.pollLevel, levelName: SHORT[r.pollLevel] || '标准' });
       wx.showToast({ title: '已保存', icon: 'success' });
     } catch (err) { /* request 已提示 */ } finally {
       this.setData({ saving: false });

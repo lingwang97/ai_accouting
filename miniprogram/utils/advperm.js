@@ -17,7 +17,7 @@ function orgItem(s) {
 }
 
 /**
- * 待确认刷新频率：主家与有「确认收礼」权限的记账人可设置；家人共享只读；套餐关闭 fastRefresh 时高档不可选（标准档始终可选）
+ * 工作台刷新屏幕（刷新频率）：主家与有「确认收礼」权限的记账人可设置；家人共享只读；套餐关闭 fastRefresh 时高档不可选（标准档始终可选）
  * @param {{role:string, perms:string[]|null, features:object}} s
  */
 function pollItem(s) {
