@@ -15,7 +15,7 @@ Page({
     colors: theme.PRESET_COLORS,
     primary: theme.DEFAULT,
     saved: theme.DEFAULT,  // 已保存的主题色，未改动时不可保存
-    pv: null,              // 预览主题 { primary, soft, icon }
+    pv: theme.make(theme.DEFAULT), // 预览主题 { primary, soft, icon }；先给默认值，首帧图标路径不为空
     pvStyle: '',           // 预览区域的 CSS 变量
     tabs: TABS,
     saving: false,
