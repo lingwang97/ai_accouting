@@ -71,6 +71,8 @@ exports.main = async (event) => {
         return await setTheme(OPENID, event.primary);
       case 'advGet':
         return await advGet(OPENID);
+      case 'setPeak':
+        return await setPeak(OPENID, event.on === true);
       case 'setTrashDays':
         return await setTrashDays(OPENID, event.days);
       case 'setPollLevel':
@@ -123,6 +125,7 @@ async function getMine(openid, withPayCode) {
     pendingMembers: ctx.role === 'owner' ? (await members.where({ aid: ctx.account._id, status: MEMBER.PENDING }).count()).total : 0,
     lastNotify: (ctx.user && ctx.user.lastNotify) || null, // 最近一次新礼金提醒的发送结果
     pollLevel: await pollLevelOf(ctx),  // 待确认刷新频率（高级功能），已按权限与套餐校验
+    peakUntil: await peakOf(ctx),       // 办事日高峰模式到期时间（毫秒；0 = 未开启 / 已到期 / 无权限）
     identities: await identities(openid)
   });
 }
@@ -1010,6 +1013,35 @@ async function advGet(openid) {
     trashDays: P.effectiveTrashDays(ctx.account.trashDays, plan.features),
     trashMax: Math.max(P.TRASH_DAYS_DEFAULT, P.TRASH_DAYS_OPTIONS.filter(o => o <= P.trashDaysMax(plan.features)).pop() || 0)
   });
+}
+
+/**
+ * 办事日高峰模式（v3.64.0）：主家开启后 PEAK_HOURS 小时内，主家与有「确认收礼」权限的记账人刷新固定 3 秒，warmer 预热云函数。
+ * 到期时间存 accounts.peakUntil；生效与否在读取时按时间计算（不改用户保存的 pollLevel，到点自然回到原档位，不依赖定时任务）。
+ * 家人共享只读不生效；套餐 features.peakMode === false 时不生效。返回到期时间（毫秒），无效为 0
+ */
+async function peakOf(ctx) {
+  const until = ctx.account && ctx.account.peakUntil ? new Date(ctx.account.peakUntil).getTime() : 0;
+  if (!(until > Date.now()) || !canPollSetting(ctx)) return 0;
+  try {
+    if (!P.featureOpen((await P.planOf(db, ctx.ownerOpenid)).features, 'peakMode')) return 0;
+  } catch (e) { /* 读套餐失败：按开放处理 */ }
+  return until;
+}
+
+/** 开启 / 关闭办事日高峰模式：只有主家本人；开启需套餐含 peakMode。重复开启会重新计时 */
+async function setPeak(openid, on) {
+  const ctx = await resolveCtx(db, openid);
+  if (!ctx.account || ctx.role !== 'owner') return err('仅主家可设置');
+  if (on) {
+    const plan = await P.planOf(db, ctx.ownerOpenid);
+    if (!P.featureOpen(plan.features, 'peakMode')) return err('办事日高峰模式属于会员功能');
+    const until = new Date(Date.now() + P.PEAK_HOURS * 3600 * 1000);
+    await accounts.doc(ctx.account._id).update({ data: { peakUntil: until } });
+    return ok({ peakUntil: until.getTime() });
+  }
+  await accounts.doc(ctx.account._id).update({ data: { peakUntil: _.remove() } });
+  return ok({ peakUntil: 0 });
 }
 
 /** 回收站保留天数（15 / 30 / 60）：只影响之后删除的礼簿；受套餐限制；只有主家本人 */

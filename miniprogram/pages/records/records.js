@@ -117,7 +117,7 @@ Page({
     this.clearTimer();
     if (this._hidden) return; // 加载期间已离开本页：不再启动轮询
     const fast = pollcfg.ms(); // 高级功能：待确认刷新频率；设置变了就重建轮询
-    if (!this._poller || this._pollFast !== fast) { this._pollFast = fast; this._poller = poller.create(() => this.silentRefresh(), { base: POLL_MS, fast }); }
+    if (!this._poller || this._pollFast !== fast) { this._pollFast = fast; this._poller = poller.create(() => this.silentRefresh(), { base: POLL_MS, fast, hold: pollcfg.peakOn }); }
     this._poller.start();
   },
 

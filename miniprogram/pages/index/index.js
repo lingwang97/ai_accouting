@@ -107,7 +107,7 @@ Page({
     this.clearTimer();
     this._pollMs = this.data.readonly ? POLL_MS_READONLY : POLL_MS;
     this._pollFast = this.data.readonly ? 0 : pollcfg.ms(); // 高级功能：待确认刷新频率（只读家人不受影响）
-    this._poller = poller.create(() => this.refreshPending(true), { base: this._pollMs, slow: !this.data.readonly, fast: this._pollFast });
+    this._poller = poller.create(() => this.refreshPending(true), { base: this._pollMs, slow: !this.data.readonly, fast: this._pollFast, hold: pollcfg.peakOn });
     this._poller.start();
   },
   onHide() { this.clearTimer(); this.unwatchPrinter(); },

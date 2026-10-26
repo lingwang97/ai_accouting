@@ -31,6 +31,8 @@ Page({
     org: { enabled: false, reason: '', contact: false, vip: false },
     poll: { enabled: false, reason: '', contact: false, vip: false },
     ad: { show: false },
+    peak: { enabled: false, on: false, reason: '', contact: false, vip: false, leftText: '' },
+    peakHours: 8,
     trash: { enabled: false, reason: '', contact: false, vip: false, max: 15 },
     trashDays: 15,
     trashOpen: false,
@@ -56,7 +58,7 @@ Page({
       plan.load(true), req.pollLevelGet().catch(() => null),
       g.role === 'owner' ? req.advGet().catch(() => null) : Promise.resolve(null)
     ]);
-    if (r) pollcfg.set(r.pollLevel);
+    if (r) pollcfg.set(r.pollLevel, r.peakUntil || 0);
     this.setData({ adv: adv2 });
     this.build();
   },
@@ -69,6 +71,7 @@ Page({
     const org = adv.orgItem({ role: g.role, orgMode, features });
     const poll = adv.pollItem({ role: g.role, perms: g.perms, features });
     const ad = adv.adItem({ role: g.role, plan: p && p.plan });
+    const peak = adv.peakItem({ role: g.role, features, peakUntil: pollcfg.peakUntil() });
     const trash = adv.trashItem({ role: g.role, features });
     const a2 = this.data.adv;
     const trashDays = a2 && a2.trashDays ? a2.trashDays : 15;
@@ -76,7 +79,7 @@ Page({
     const saved = pollcfg.level();
     const level = poll.enabled && adv.pollOptionEnabled(poll, saved) ? saved : 'off';
     this.setData({
-      org, poll, ad, trash, trashDays, quota, orgMode, levelName: SHORT[level],
+      org, poll, ad, peak, trash, trashDays, quota, orgMode, levelName: SHORT[level],
       orgName: (g.account && g.account.orgName) || '',
       level,
       options: OPTIONS.map(o => ({ ...o, enabled: adv.pollOptionEnabled(poll, o.key) })),
@@ -137,6 +140,24 @@ Page({
       wx.showToast({ title: on ? '已开启机构模式' : '已关闭机构模式', icon: 'none' });
     } catch (err) {
       this.setData({ orgMode: !on }); // 失败复位（request.js 已提示原因）
+    }
+  },
+
+  // —— 办事日高峰模式 ——
+  onPeakTap() {
+    const { peak } = this.data;
+    if (!peak.enabled) this.explain(peak, '办事日高峰模式');
+  },
+  async onPeakSwitch(e) {
+    const on = e.detail.value;
+    if (!this.data.peak.enabled) return this.build();
+    try {
+      const r = await req.setPeak(on);
+      pollcfg.set(pollcfg.level(), r.peakUntil || 0);
+      this.build();
+      wx.showToast({ title: on ? '已开启高峰模式' : '已关闭', icon: 'none' });
+    } catch (err) {
+      this.build(); // 失败：开关复位（request 已提示原因）
     }
   },
 

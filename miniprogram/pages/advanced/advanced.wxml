@@ -45,6 +45,19 @@
       </block>
     </view>
 
+    <!-- 办事日高峰模式 -->
+    <view class="card">
+      <view class="a-head" bindtap="onPeakTap">
+        <view class="a-headtext">
+          <view class="a-line"><text class="a-title">办事日高峰模式</text><text class="a-vip" wx:if="{{peak.vip}}">会员</text></view>
+          <view class="muted a-sub">办事当天一键开启：{{peakHours}} 小时内工作台、待确认、礼簿页每 3 秒刷新，并提前唤醒云端，响应更快；时间到自动恢复，你原来的刷新设置不变。</view>
+        </view>
+        <view catchtap="onPeakTap"><switch checked="{{peak.on}}" disabled="{{!peak.enabled}}" bindchange="onPeakSwitch" color="{{primary}}" /></view>
+      </view>
+      <view class="a-reason" wx:if="{{peak.reason}}">{{peak.reason}}</view>
+      <view class="a-note" wx:if="{{peak.on}}">已开启，还剩 {{peak.leftText}}。礼台人员（有「确认收礼」权限）也会自动按 3 秒刷新。刷新更频繁会增加云开发调用量，办事结束后可手动关闭。</view>
+    </view>
+
     <!-- 回收站保留时间（默认收起） -->
     <view class="card">
       <view class="a-head" bindtap="onTrashHead">

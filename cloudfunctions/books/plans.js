@@ -15,7 +15,7 @@ const WARMABLE = ['login', 'account', 'records', 'payment', 'books', 'renqing'];
 
 const DEFAULT_WARMUP = {
   enabled: true,
-  mode: 'paid',       // always 始终预热 | paid 仅存在有效付费订阅时预热（默认，免费阶段不产生预热调用）
+  mode: 'paid',       // always 始终预热 | paid 仅存在有效付费订阅（或有人开着高峰模式）时预热（默认）| peak 仅有人开着办事日高峰模式时预热
   intervalMin: 5,     // 5 / 10 / 15 / 30（调度器每 5 分钟触发一次，按间隔跳过）
   functions: ['login', 'account', 'records', 'payment', 'books']
 };
@@ -56,12 +56,12 @@ const DEFAULT_PLANS = {
   free: {
     name: '免费版',
     features: { warmup: true, maxBooks: 0, maxClerks: 0, exportPdf: true, receiptAppCode: true, org: false, fastRefresh: true,
-      pdfThemePremium: true, receiptStylePremium: true, trashDays: 60 } // 0 = 不限；trashDays 回收站可选的最长保留天数（缺项 / 0 视为 60，即全部开放）；org 机构版；fastRefresh 待确认高频刷新；pdfThemePremium 礼簿 PDF 会员主题 / 自定义 / 宋体毛笔 / 尾页设置；receiptStylePremium 电子回执会员样式（现阶段全部免费开放，只有 === false 才限制）
+      pdfThemePremium: true, receiptStylePremium: true, trashDays: 60, peakMode: true, bookMax: 3000 } // 0 = 不限；peakMode 办事日高峰模式；bookMax 传统礼簿 PDF 单次最多笔数（免费 3000，专业版 6000；缺项 = 3000）；trashDays 回收站可选的最长保留天数（缺项 / 0 视为 60，即全部开放）；org 机构版；fastRefresh 待确认高频刷新；pdfThemePremium 礼簿 PDF 会员主题 / 自定义 / 宋体毛笔 / 尾页设置；receiptStylePremium 电子回执会员样式（现阶段全部免费开放，只有 === false 才限制）
   },
   pro: {
     name: '专业版',
     features: { warmup: true, maxBooks: 0, maxClerks: 0, exportPdf: true, receiptAppCode: false, org: true, fastRefresh: true,
-      pdfThemePremium: true, receiptStylePremium: true, trashDays: 60 }
+      pdfThemePremium: true, receiptStylePremium: true, trashDays: 60, peakMode: true, bookMax: 6000 }
   }
 };
 
@@ -104,6 +104,19 @@ function effectiveTrashDays(saved, features) {
   return Math.max(TRASH_DAYS_DEFAULT, Math.min(want, cap));
 }
 
+/**
+ * v3.64.0 传统礼簿 PDF 单次最多笔数：缺项 / 非正数 = 3000（原上限）；最高不超过 BOOK_MAX_CEIL（压测：6000 笔本地 17 秒、峰值内存约 610MB，见文档 §175）
+ */
+const BOOK_MAX_DEFAULT = 3000;
+const BOOK_MAX_CEIL = 10000;
+function bookMaxOf(features) {
+  const n = Math.floor(Number(features && features.bookMax));
+  return n > 0 ? Math.min(n, BOOK_MAX_CEIL) : BOOK_MAX_DEFAULT;
+}
+
+/** 办事日高峰模式：开启后 PEAK_HOURS 小时内刷新固定 3 秒、预热云函数，到点自动恢复（生效值读取时按时间计算，不改用户保存的档位） */
+const PEAK_HOURS = 8;
+
 /** 电子回执版式：免费 / 会员；白事只能用素雅、简约、票据 */
 const RECEIPT_STYLES_FREE = ['card', 'ticket', 'simple', 'elegant'];
 const RECEIPT_STYLES_PREMIUM = ['festive', 'longevity', 'guofeng', 'business'];
@@ -136,7 +149,7 @@ function normalizeWarmup(w) {
   const intervals = [5, 10, 15, 30];
   return {
     enabled: w.enabled !== false,
-    mode: w.mode === 'always' ? 'always' : 'paid',
+    mode: w.mode === 'always' ? 'always' : w.mode === 'peak' ? 'peak' : 'paid', // paid：有付费订阅或有人开着高峰模式；peak：只有人开着高峰模式时
     intervalMin: intervals.includes(Number(w.intervalMin)) ? Number(w.intervalMin) : 5,
     functions: (Array.isArray(w.functions) ? w.functions : DEFAULT_WARMUP.functions).filter(f => WARMABLE.includes(f))
   };
@@ -165,6 +178,7 @@ async function planOf(db, ownerOpenid) {
 
 module.exports = {
   WARMABLE, DEFAULT_WARMUP, DEFAULT_PLANS, AD_SLOTS, DEFAULT_ADS,
+  bookMaxOf, BOOK_MAX_DEFAULT, PEAK_HOURS,
   limitOf, quotaMsg, TRASH_DAYS_OPTIONS, TRASH_DAYS_DEFAULT, trashDaysMax, effectiveTrashDays,
   featureOpen, RECEIPT_STYLES_FREE, RECEIPT_STYLES_PREMIUM, RECEIPT_STYLES_FUNERAL,
   POLL_LEVELS, normalizePollLevel, fastRefreshAllowed, effectivePollLevel,

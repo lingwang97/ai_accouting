@@ -48,10 +48,10 @@ exports.main = async (event) => {
     } else if (Math.floor(Date.now() / 60000 / 5) % (cfg.intervalMin / 5) !== 0) {
       // 触发器固定每 5 分钟，间隔 10/15/30 分钟时按轮次跳过
       return { code: 0, msg: 'skip interval', data: null };
-    } else if (cfg.mode === 'paid' && !(await hasPaidSubscription())) {
+    } else if ((cfg.mode === 'paid' && !(await hasPaidSubscription()) && !(await hasPeak())) || (cfg.mode === 'peak' && !(await hasPeak()))) {
       // 跳过时每小时只记一次状态，减少写库
       if (new Date().getMinutes() >= 5) return { code: 0, msg: 'skip no paid', data: null };
-      status.skipped = '暂无有效付费订阅';
+      status.skipped = cfg.mode === 'peak' ? '暂无人开启高峰模式' : '暂无有效付费订阅或高峰模式';
     } else if (left() < 8 * 1000) {
       status.skipped = '本轮时间不足，留到下一轮';
     } else {
@@ -126,6 +126,17 @@ async function cleanNonces() {
 }
 
 /** 是否存在未过期的非免费订阅 */
+/** 是否有人正开着办事日高峰模式（accounts.peakUntil 未到期）；v3.64.0 */
+async function hasPeak() {
+  try {
+    const _ = db.command;
+    const res = await db.collection('accounts').where({ peakUntil: _.gt(new Date()), _openid: _.exists(false) }).count();
+    return res.total > 0;
+  } catch (e) {
+    return false;
+  }
+}
+
 async function hasPaidSubscription() {
   try {
     const _ = db.command;
@@ -138,4 +149,4 @@ async function hasPaidSubscription() {
 }
 
 // 仅供本地测试
-exports._test = { cleanNonces };
+exports._test = { cleanNonces, hasPeak };

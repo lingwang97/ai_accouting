@@ -88,4 +88,21 @@ function quotaItem(s) {
   };
 }
 
-module.exports = { orgItem, pollItem, pollOptionEnabled, adItem, trashItem, trashOptionEnabled, quotaItem };
+/**
+ * 办事日高峰模式（v3.64.0）：只有主家本人能开关；记账人（有确认收礼权限）自动跟随主家，不单独设置；套餐 features.peakMode === false 时不能开启
+ * @param {{role:string, features:object, peakUntil:number, now:number}} s peakUntil 毫秒，0 = 未开启
+ */
+function peakItem(s) {
+  const now = s.now || Date.now();
+  const on = s.peakUntil > now;
+  const left = on ? s.peakUntil - now : 0;
+  const hh = Math.floor(left / 3600000), mm = Math.ceil((left % 3600000) / 60000);
+  const leftText = on ? (hh > 0 ? `${hh} 小时 ${mm >= 60 ? 0 : mm} 分钟` : `${Math.max(1, mm)} 分钟`) : '';
+  const closed = !!(s.features && s.features.peakMode === false);
+  if (s.role !== 'owner') return { enabled: false, on, leftText, reason: s.role === 'clerk' ? '仅主家可开关，主家开启后礼台人员自动变快' : '仅主家可设置', contact: false, vip: false };
+  // 已开启的可以随时关闭（套餐到期也能关）
+  if (closed && !on) return { enabled: false, on, leftText, reason: '会员功能，开通后可使用', contact: true, vip: true };
+  return { enabled: true, on, leftText, reason: '', contact: false, vip: closed };
+}
+
+module.exports = { peakItem, orgItem, pollItem, pollOptionEnabled, adItem, trashItem, trashOptionEnabled, quotaItem };

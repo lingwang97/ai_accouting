@@ -61,6 +61,7 @@ module.exports = {
   // 主家称呼等改动：工作台、我的、礼簿下拉的缓存都已过期
   accountSave: d => call('account', { action: 'save', ...d }).then(r => { ['books', 'dashboard', 'mine'].forEach(k => require('./cache.js').set(k, null)); return r; }),
   pollLevelGet: () => call('account', { action: 'get' }, { silent: true }),
+  setPeak: on => call('account', { action: 'setPeak', on: !!on }),
   advGet: () => call('account', { action: 'advGet' }, { silent: true }),
   setTrashDays: days => call('account', { action: 'setTrashDays', days }),
   setPollLevel: level => call('account', { action: 'setPollLevel', level }),

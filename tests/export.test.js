@@ -412,3 +412,22 @@ t('会员主题（v3.62.0）：礼簿已存会员主题，套餐关闭后导出�
   const again = await fn.main({ format: 'book', bookId: 'b1', pdfTheme: 'wine_gold' });
   assert.strictEqual(again.code, 0, again.msg);
 });
+
+// —— v3.64.0 传统礼簿笔数上限随套餐（features.bookMax，缺项 3000） ——
+t('传统礼簿笔数上限（v3.64.0）：套餐 bookMax 小于笔数时拒绝并提示；足够时放行；缺项按 3000', async () => {
+  seed();
+  db.seed('settings', [{ _id: 'plans', free: { name: '免费版', features: { bookMax: 5 } }, pro: { name: '专业版', features: {} } }]);
+  const { fn } = load();
+  const r = await fn.main({ format: 'book', bookId: 'b1' });
+  assert.notStrictEqual(r.code, 0);
+  assert.ok(/最多 5 笔（共 8）/.test(r.msg), r.msg);
+  assert.strictEqual(state.uploads.length, 0);
+  seed();
+  db.seed('settings', [{ _id: 'plans', free: { name: '免费版', features: { bookMax: 8 } }, pro: { name: '专业版', features: {} } }]);
+  assert.strictEqual((await load().fn.main({ format: 'book', bookId: 'b1' })).code, 0);
+  seed(); // 没有套餐文档：默认免费版 3000
+  assert.strictEqual((await load().fn.main({ format: 'book', bookId: 'b1' })).code, 0);
+  seed();
+  db.seed('settings', [{ _id: 'plans', free: { name: '免费版', features: {} }, pro: { name: '专业版', features: {} } }]);
+  assert.strictEqual((await load().fn.main({ format: 'book', bookId: 'b1' })).code, 0, 'features 缺 bookMax 时按 3000');
+});

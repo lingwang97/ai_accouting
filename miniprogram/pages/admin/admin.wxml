@@ -16,7 +16,8 @@
         <view class="label">模式</view>
         <view class="chips">
           <view class="chip {{warmup.mode === 'always' ? 'on' : ''}}" data-v="always" bindtap="onMode">始终预热</view>
-          <view class="chip {{warmup.mode === 'paid' ? 'on' : ''}}" data-v="paid" bindtap="onMode">仅有付费用户时</view>
+          <view class="chip {{warmup.mode === 'paid' ? 'on' : ''}}" data-v="paid" bindtap="onMode">有付费用户或高峰模式时</view>
+          <view class="chip {{warmup.mode === 'peak' ? 'on' : ''}}" data-v="peak" bindtap="onMode">仅有人开高峰模式时</view>
         </view>
 
         <view class="label">间隔</view>

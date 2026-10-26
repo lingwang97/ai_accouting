@@ -62,6 +62,7 @@ exports.main = async (event) => {
   // 预热：warmer 云函数按「系统设置」定时唤醒，保持实例常驻、减少冷启动；直接返回，不做任何读写
   if (event && event.action === '__warm') return { code: 0, msg: 'warm', data: null };
   let stage = '初始化';
+  let bigBook = false; // 超过原 3000 笔上限的传统礼簿：失败时给出分段导出的提示
   event = event || {};
   try {
     await ensureCollection();
@@ -120,20 +121,25 @@ exports.main = async (event) => {
     const account = (await db.collection('accounts').where({ ownerOpenid: OWNER }).limit(1).get()).data[0];
     if (!account) return err('请先绑定收款账户');
 
+    // 套餐（传统礼簿笔数上限、会员主题）：只在传统礼簿时读取，读失败按开放 / 默认处理
+    let features = {};
+    if (format === 'book') {
+      try { features = (await P.planOf(db, OWNER)).features; } catch (e) { console.warn('读取套餐失败，按默认处理', e.message); }
+    }
     stage = '读取礼金';
     const rows = await fetchRows(OWNER, { bookId, startDay, endDay, themeName });
     if (rows.tooMany) return err(`礼金超过 ${MAX_ROWS} 笔，请按日期范围分段导出`);
     if (rows.length === 0) return err('该范围内没有已入簿的礼金');
     // 传统礼簿 PDF 逐页绘制 + bufferPages 占内存，单独限制笔数；表格 PDF / Excel 不受此限
-    if (format === 'book' && rows.length > BOOK_MAX) {
-      return err(`传统礼簿最多 ${BOOK_MAX} 笔（共 ${rows.length}），请按日期分段或用表格导出`);
+    // v3.64.0：上限随套餐（features.bookMax，缺项 3000；压测见开发文档 §175）
+    const bookMax = P.bookMaxOf(features);
+    if (format === 'book' && rows.length > bookMax) {
+      return err(`传统礼簿最多 ${bookMax} 笔（共 ${rows.length}），请按日期分段或用表格导出`);
     }
+    bigBook = format === 'book' && rows.length > BOOK_MAX;
 
     // v3.62.0 会员预留：套餐明确关闭 pdfThemePremium 时，会员主题 / 自定义 / 宋体毛笔 / 尾页设置不能新选，已存的按免费项降级生成（不改库）
-    let premiumOk = true;
-    if (format === 'book') {
-      try { premiumOk = P.featureOpen((await P.planOf(db, OWNER)).features, 'pdfThemePremium'); } catch (e) { console.warn('读取套餐失败，按开放处理', e.message); }
-    }
+    const premiumOk = P.featureOpen(features, 'pdfThemePremium');
     // 传统礼簿主题：传入则采用并（有礼簿管理权限时）记到礼簿；未传用礼簿已存的；白事在 resolve 中强制素灰
     let pdfThemeKey = book && book.pdfTheme && typeof book.pdfTheme === 'object' ? String(book.pdfTheme.key || '') : '';
     let pdfCustom = book && book.pdfTheme && typeof book.pdfTheme === 'object' ? book.pdfTheme.custom : null;
@@ -220,6 +226,7 @@ exports.main = async (event) => {
   } catch (e) {
     // 详细堆栈只写日志（含服务器文件路径），前端只提示阶段
     console.error('export failed', stage, e && e.stack);
+    if (bigBook) return err('礼金笔数较多，生成失败，请按日期分段导出后再试');
     return err(`导出失败（${stage}），请稍后重试`);
   }
 };
