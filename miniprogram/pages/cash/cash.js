@@ -59,7 +59,12 @@ Page({
       return setTimeout(() => wx.navigateBack({ fail: () => wx.switchTab({ url: '/pages/index/index' }) }), 800);
     }
     try {
-      const [{ account }, { list, activeBookId }] = await Promise.all([req.accountGet(), req.bookList()]);
+      // 冷启动时 ensureRole 刚读过主家信息：直接用，不再重复调用（v3.66.2）
+      const fresh = getApp().takeFreshAccount();
+      const [account, { list, activeBookId }] = await Promise.all([
+        fresh !== undefined ? fresh : req.accountGet().then(r => r.account),
+        req.bookList()
+      ]);
       if (!account) {
         wx.showToast({ title: '请先完善主家信息', icon: 'none' });
         return setTimeout(() => wx.navigateBack({ fail: () => wx.switchTab({ url: '/pages/index/index' }) }), 800);

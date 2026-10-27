@@ -15,7 +15,8 @@
     <view class="muted s-tip">转账后回到小程序点「我已完成转账」</view>
   </view>
   <!-- 网络不佳时显示的是本机保存的礼簿码（v3.66.0）；点一下重新加载 -->
-  <view class="s-offline" wx:if="{{offline}}" bindtap="onRetry">网络不佳，显示的是本机保存的礼簿码（{{offlineAt}}）。宾客手机有网络即可扫码随礼 · 点此重新加载</view>
+  <view class="s-offline" wx:if="{{offline && offChecking}}">正在更新，先显示本机保存的礼簿码（{{offlineAt}}）</view>
+  <view class="s-offline" wx:elif="{{offline}}" bindtap="onRetry">网络不佳，显示的是本机保存的礼簿码（{{offlineAt}}）。宾客手机有网络即可扫码随礼 · 点此重新加载</view>
   <view class="s-ops" wx:if="{{!offline}}">
     <view class="s-op" bindtap="onMakeCard">生成礼簿台卡</view>
     <view class="s-op" bindtap="onSave">保存礼簿码</view>
@@ -30,6 +31,8 @@
   <view class="warn">{{errMsg}}</view>
   <view class="muted">点击重试</view>
 </view>
+
+<loading show="{{loading && !account}}" type="overlay" />
 
 <!-- 台卡离屏画布 -->
 <canvas type="2d" id="card" class="card-canvas"></canvas>

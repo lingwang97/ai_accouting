@@ -103,17 +103,25 @@ App({
   },
 
   /** 当前身份角色：globalData.role 只在工作台 / 我的页刷新时写入，冷启动时向云函数读取一次 */
-  ensureRole() {
+  ensureRole(silent) {
     if (this.globalData.role) return Promise.resolve(this.globalData.role);
-    return require('./utils/request.js').accountGet().then(r => {
+    return require('./utils/request.js').accountGet(false, silent ? { silent: true } : undefined).then(r => {
       this.globalData.role = r.role || 'none';
       this.globalData.perms = r.perms || [];
       require('./utils/pollcfg.js').set(r.pollLevel, r.peakUntil || 0);
       this.globalData.account = r.account || null;
       this._accountChecked = true;
+      this._fresh = { account: r.account || null, at: Date.now() }; // 刚取到的完整主家信息，页面 15 秒内可直接用一次，省一次重复调用（v3.66.2）
       this.refreshTabBar(); // 记账人身份隐藏「往来」
       return this.globalData.role;
     }).catch(() => '');
+  },
+
+  /** 取走 ensureRole 刚读到的主家信息（15 秒内、只能取一次；没有或已过期返回 undefined，调用方自己请求） */
+  takeFreshAccount() {
+    const f = this._fresh;
+    this._fresh = null;
+    return f && Date.now() - f.at < 15000 ? f.account : undefined;
   },
 
   setBadge(n) {

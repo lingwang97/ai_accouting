@@ -115,18 +115,24 @@ async function getMine(openid, withPayCode) {
       account = { ...account, payCodeUrl: (f && f.status === 0 && f.tempFileURL) || '' };
     } catch (e) { /* 预览失败不影响使用 */ }
   }
+  // 三项互不依赖，并行读取（v3.66.2：原先逐项 await，套餐还会读两次）
+  // 主家：待处理的入伙申请数（工作台提醒）；刷新档位与高峰到期共用一次套餐读取（P.refreshOf，口径同工作台 dashboard）
+  const [pendingMembers, refresh, ids] = await Promise.all([
+    ctx.role === 'owner' ? members.where({ aid: ctx.account._id, status: MEMBER.PENDING }).count().then(r => r.total) : 0,
+    P.refreshOf(db, ctx, canPollSetting(ctx)),
+    identities(openid)
+  ]);
   return ok({
     account,
     role: ctx.role,                  // owner 主家本人 | clerk 记账人 | viewer 家人共享 | none 尚未完善
     restricted: restricted(ctx),     // 只负责部分礼簿（数据范围受限）/ 家人共享
     readonly: readonly(ctx),         // 家人共享：只读
     perms: ctx.perms || [],          // 拥有的权限（主家为全部，见 ctx.PERMS）
-    // 主家：待处理的入伙申请数（工作台提醒）
-    pendingMembers: ctx.role === 'owner' ? (await members.where({ aid: ctx.account._id, status: MEMBER.PENDING }).count()).total : 0,
+    pendingMembers,
     lastNotify: (ctx.user && ctx.user.lastNotify) || null, // 最近一次新礼金提醒的发送结果
-    pollLevel: await pollLevelOf(ctx),  // 待确认刷新频率（高级功能），已按权限与套餐校验
-    peakUntil: await peakOf(ctx),       // 办事日高峰模式到期时间（毫秒；0 = 未开启 / 已到期 / 无权限）
-    identities: await identities(openid)
+    pollLevel: refresh.pollLevel,       // 待确认刷新频率（高级功能），已按权限与套餐校验
+    peakUntil: refresh.peakUntil,       // 办事日高峰模式到期时间（毫秒；0 = 未开启 / 已到期 / 无权限）
+    identities: ids
   });
 }
 
@@ -960,15 +966,6 @@ async function setTheme(openid, primary) {
 /** 能使用「待确认刷新频率」的身份：主家，或有「确认收礼」权限的记账人（家人只读不可用） */
 function canPollSetting(ctx) { return !!ctx.account && !readonly(ctx) && can(ctx, 'confirm'); }
 
-/** 当前生效的刷新频率：按人保存（users.pollLevel）；无权限 / 套餐不含 fastRefresh / 值非法 → off */
-async function pollLevelOf(ctx) {
-  const saved = P.normalizePollLevel(ctx.user && ctx.user.pollLevel);
-  if (saved === 'off' || !canPollSetting(ctx)) return 'off';
-  let features = {};
-  try { features = (await P.planOf(db, ctx.ownerOpenid)).features; } catch (e) { /* 读套餐失败：按开放处理 */ }
-  return P.effectivePollLevel(saved, features);
-}
-
 /** 高级功能：待确认刷新频率（跟人走，换设备 / 换身份都沿用；只影响自己这部手机的轮询间隔） */
 async function setPollLevel(openid, level) {
   if (!P.POLL_LEVELS.includes(level)) return err('选项不正确');
@@ -1015,20 +1012,7 @@ async function advGet(openid) {
   });
 }
 
-/**
- * 办事日高峰模式（v3.64.0）：主家开启后 PEAK_HOURS 小时内，主家与有「确认收礼」权限的记账人刷新固定 3 秒，warmer 预热云函数。
- * 到期时间存 accounts.peakUntil；生效与否在读取时按时间计算（不改用户保存的 pollLevel，到点自然回到原档位，不依赖定时任务）。
- * 家人共享只读不生效；套餐 features.peakMode === false 时不生效。返回到期时间（毫秒），无效为 0
- */
-async function peakOf(ctx) {
-  const until = ctx.account && ctx.account.peakUntil ? new Date(ctx.account.peakUntil).getTime() : 0;
-  if (!(until > Date.now()) || !canPollSetting(ctx)) return 0;
-  try {
-    if (!P.featureOpen((await P.planOf(db, ctx.ownerOpenid)).features, 'peakMode')) return 0;
-  } catch (e) { /* 读套餐失败：按开放处理 */ }
-  return until;
-}
-
+// 办事日高峰模式（v3.64.0）：到期时间存 accounts.peakUntil，生效与否在读取时按时间计算（P.refreshOf），到点自然回到原档位
 /** 开启 / 关闭办事日高峰模式：只有主家本人；开启需套餐含 peakMode。重复开启会重新计时 */
 async function setPeak(openid, on) {
   const ctx = await resolveCtx(db, openid);
