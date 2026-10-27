@@ -6,6 +6,17 @@ const { NOTIFY_TMPL_ID } = require('../config.js');
 const enabled = () => !!NOTIFY_TMPL_ID;
 let always = false; // 已勾选"总是保持"并同意：可在点击中静默续订
 const ON_KEY = 'notify_on_at'; // 本机最近一次同意订阅的时间
+// 新礼金提醒默认关闭（v3.66.3）：是否开启存在服务端 users.giftNotify（按人），这里缓存一份给 renewSilently 同步判断
+const GIFT_KEY = 'gift_notify';
+let gift = false;
+try { gift = wx.getStorageSync(GIFT_KEY) === true; } catch (e) { /* 忽略 */ }
+/** 同步服务端的开关值（account.get / dashboard 返回的 giftNotify）；undefined（旧云函数）时不改 */
+function setGift(v) {
+  if (v === undefined) return;
+  gift = v === true;
+  try { wx.setStorageSync(GIFT_KEY, gift); } catch (e) { /* 忽略 */ }
+}
+const giftOn = () => gift;
 
 /** 读取订阅设置（异步，结果缓存给 renewSilently 用） */
 function refresh() {
@@ -20,12 +31,16 @@ function refresh() {
 }
 refresh();
 
+let failShown = false; // 最近一次 subscribe 失败时已弹过原因（调用方不再重复弹）
+const subscribeFailShown = () => failShown;
+
 /** 主动订阅（必须在点击事件中直接调用）；返回是否同意 */
 function subscribe() {
   if (!enabled()) {
     wx.showModal({ title: '提醒暂未开通', content: '新礼金微信提醒尚未配置消息模板，暂时无法开启。', showCancel: false });
     return Promise.resolve(false);
   }
+  failShown = false;
   return new Promise(resolve => {
     wx.requestSubscribeMessage({
       tmplIds: [NOTIFY_TMPL_ID],
@@ -36,6 +51,7 @@ function subscribe() {
         resolve(ok);
       },
       fail: e => {
+        failShown = true;
         wx.showModal({ title: '没能开启提醒', content: subscribeFailText(e), showCancel: false, confirmText: '知道了' });
         resolve(false);
       }
@@ -57,16 +73,16 @@ function subscribeFailText(e) {
  * 仅当已勾选"总是保持以上选择"时调用，此时不弹窗，每确认一笔补一次提醒额度
  */
 function renewSilently() {
-  if (!enabled() || !always) return;
+  if (!enabled() || !gift || !always) return; // 没开启新礼金提醒的人不续订、不弹授权
   wx.requestSubscribeMessage({ tmplIds: [NOTIFY_TMPL_ID], fail() {} });
 }
 
 /**
  * 工作台 / 待确认页的提示文字；不需要提示时返回 ''
- * lastNotify 为云函数记录的最近一次发送结果（account.get 返回）
+ * lastNotify 为云函数记录的最近一次发送结果（account.get 返回）；giftOn 为服务端的开关，没开启的人不提示（v3.66.3）
  */
-function tipText(lastNotify) {
-  if (!enabled()) return '';
+function tipText(lastNotify, giftOn) {
+  if (!enabled() || giftOn !== true) return '';
   let onAt = 0;
   try { onAt = Number(wx.getStorageSync(ON_KEY)) || 0; } catch (e) { /* 忽略 */ }
   const at = lastNotify && lastNotify.at ? new Date(lastNotify.at).getTime() : 0;
@@ -78,4 +94,4 @@ function tipText(lastNotify) {
   return `新礼金提醒上次发送失败（${lastNotify.code}），点此重新开启`;
 }
 
-module.exports = { enabled, subscribe, renewSilently, refresh, tipText, subscribeFailText };
+module.exports = { enabled, subscribe, renewSilently, refresh, tipText, subscribeFailText, setGift, giftOn, subscribeFailShown };

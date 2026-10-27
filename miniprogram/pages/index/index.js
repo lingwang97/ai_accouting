@@ -168,6 +168,7 @@ Page({
         b = list.find(x => x._id === activeBookId) || null;
       }
       this._lastNotify = d.lastNotify || null;
+      notify.setGift(d.giftNotify); // 新礼金提醒开关（默认关）：关闭的人不提示、不续订
       const view = {
         account: d.account,
         role: d.role,
@@ -178,9 +179,9 @@ Page({
         mySwitch: !!d.mySwitch,
         noBook: d.noBook || '', // ended 记账人负责的礼簿已结束；none 主家还没有当前礼簿
         canSwitch: !!d.mySwitch || (d.role !== 'clerk' || !(d.account && d.account.orgMode)) && perm.map(d.perms, d.role).books && !d.restricted,
-        notifyTip: notify.tipText(d.lastNotify),
+        notifyTip: notify.tipText(d.lastNotify, d.giftNotify),
         // 提示是否已被关闭：文案未变、且没有新的发送失败或距关闭不到 30 分钟
-        notifyOff: notifyOff(this.data.dismissed.notify, notify.tipText(d.lastNotify), d.lastNotify),
+        notifyOff: notifyOff(this.data.dismissed.notify, notify.tipText(d.lastNotify, d.giftNotify), d.lastNotify),
         book: b ? { ...b, typeLabel: scenes.label(b.type), sumStr: fmt.money(b.sum), sumCls: sumCls(fmt.money(b.sum)) } : null,
         todaySum: fmt.money(d.today.sum),
         todayCount: d.today.count,

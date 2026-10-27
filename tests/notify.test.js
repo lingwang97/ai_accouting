@@ -12,6 +12,8 @@ function seed(members, extra) {
   sent.length = 0;
   db.seed('accounts', [{ _id: 'acc1', ownerOpenid: OWNER, activeBookId: 'b1', orgMode: false, ...(extra || {}) }])
     .seed('members', members)
+    // v3.66.3：新礼金提醒默认关闭，只发给 users.giftNotify 为 true 的人（这里让主家与所有测试成员都开启）
+    .seed('users', [OWNER, ...members.map(x => x.memberOpenid)].map(o => ({ openid: o, giftNotify: true })))
     .seed('records', [{ _id: 'r1', aid: 'acc1', ownerOpenid: OWNER, bookId: 'b1', payerOpenid: 'g1', payerName: '张三', amount: 100, status: 'pending', createdAt: new Date() }]);
   state.openid = 'g1';
 }

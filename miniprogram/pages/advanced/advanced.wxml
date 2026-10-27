@@ -46,6 +46,18 @@
       </block>
     </view>
 
+    <!-- 新礼金微信提醒（默认关闭，按人开启；不是会员功能） -->
+    <view class="card">
+      <view class="a-head" bindtap="onGiftTap">
+        <view class="a-headtext">
+          <view class="a-line"><text class="a-title">新礼金微信提醒</text></view>
+          <view class="muted a-sub">宾客点完成转账后，通过微信服务通知提醒你；关闭时请开着工作台或待确认页查看</view>
+        </view>
+        <view catchtap="onGiftTap"><switch checked="{{giftOn}}" disabled="{{!gift.enabled}}" bindchange="onGiftSwitch" color="{{primary}}" /></view>
+      </view>
+      <view class="a-reason" wx:if="{{gift.reason}}">{{gift.reason}}</view>
+    </view>
+
     <!-- 办事日高峰模式 -->
     <view class="card">
       <view class="a-head" bindtap="onPeakTap">

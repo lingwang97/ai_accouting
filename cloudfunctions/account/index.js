@@ -77,6 +77,8 @@ exports.main = async (event) => {
         return await setTrashDays(OPENID, event.days);
       case 'setPollLevel':
         return await setPollLevel(OPENID, event.level);
+      case 'setGiftNotify':
+        return await setGiftNotify(OPENID, event.on);
       case 'leave':
         return await leave(OPENID, event.aid);
       case 'switch':
@@ -130,6 +132,7 @@ async function getMine(openid, withPayCode) {
     perms: ctx.perms || [],          // 拥有的权限（主家为全部，见 ctx.PERMS）
     pendingMembers,
     lastNotify: (ctx.user && ctx.user.lastNotify) || null, // 最近一次新礼金提醒的发送结果
+    giftNotify: giftNotifyOf(ctx),      // 新礼金微信提醒是否开启（v3.66.3，默认关；无权限的身份恒为 false）
     pollLevel: refresh.pollLevel,       // 待确认刷新频率（高级功能），已按权限与套餐校验
     peakUntil: refresh.peakUntil,       // 办事日高峰模式到期时间（毫秒；0 = 未开启 / 已到期 / 无权限）
     identities: ids
@@ -965,6 +968,19 @@ async function setTheme(openid, primary) {
 
 /** 能使用「待确认刷新频率」的身份：主家，或有「确认收礼」权限的记账人（家人只读不可用） */
 function canPollSetting(ctx) { return !!ctx.account && !readonly(ctx) && can(ctx, 'confirm'); }
+
+/** 新礼金微信提醒是否开启：users.giftNotify === true 且当前身份有确认收礼权限（缺省 = 关闭，不读额外集合） */
+function giftNotifyOf(ctx) { return canPollSetting(ctx) && !!ctx.user && ctx.user.giftNotify === true; }
+
+/** 高级功能：新礼金微信提醒开关（按人保存，v3.66.3）。打开需要主家 / 有「确认收礼」权限的记账人（非只读）；关闭任何人都可以 */
+async function setGiftNotify(openid, on) {
+  if (typeof on !== 'boolean') return err('选项不正确');
+  const ctx = await resolveCtx(db, openid);
+  if (on && !canPollSetting(ctx)) return err('无权设置');
+  if (!ctx.user) return err('请先登录');
+  await db.collection('users').where({ openid, _openid: _.exists(false) }).update({ data: { giftNotify: on } });
+  return ok({ giftNotify: on });
+}
 
 /** 高级功能：待确认刷新频率（跟人走，换设备 / 换身份都沿用；只影响自己这部手机的轮询间隔） */
 async function setPollLevel(openid, level) {

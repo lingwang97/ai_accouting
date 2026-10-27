@@ -29,6 +29,17 @@ function pollItem(s) {
   return { enabled: true, reason: '', contact: false, vip: false };
 }
 
+/**
+ * 新礼金微信提醒（v3.66.3，默认关闭，不是会员功能）：主家与有「确认收礼」权限的记账人可开启；家人共享只读、没有确认权限的记账人置灰
+ * @param {{role:string, perms:string[]|null}} s
+ */
+function giftItem(s) {
+  if (s.role === 'viewer') return { enabled: false, reason: '家人共享为只读，无需设置', contact: false, vip: false };
+  const can = s.role === 'owner' || (s.role === 'clerk' && !!s.perms && s.perms.indexOf('confirm') >= 0);
+  if (!can) return { enabled: false, reason: '需要「确认收礼」权限', contact: false, vip: false };
+  return { enabled: true, reason: '', contact: false, vip: false };
+}
+
 /** 某一档是否可选：标准档（off）在有权限时始终可选；其余档要求权限且套餐含该功能 */
 function pollOptionEnabled(item, key) {
   if (!item.enabled) return false;
@@ -113,4 +124,4 @@ function peakItem(s) {
   return { enabled: true, on, leftText, reason: '', contact: false, vip: closed };
 }
 
-module.exports = { peakLeftText, peakItem, orgItem, pollItem, pollOptionEnabled, adItem, trashItem, trashOptionEnabled, quotaItem };
+module.exports = { peakLeftText, peakItem, orgItem, pollItem, giftItem, pollOptionEnabled, adItem, trashItem, trashOptionEnabled, quotaItem };

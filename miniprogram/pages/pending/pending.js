@@ -160,8 +160,9 @@ Page({
   async checkNotify() {
     if (!notify.enabled()) return;
     try {
-      const { lastNotify } = await req.accountGet();
-      this.setData({ notifyTip: notify.tipText(lastNotify) });
+      const { lastNotify, giftNotify } = await req.accountGet();
+      notify.setGift(giftNotify);
+      this.setData({ notifyTip: notify.tipText(lastNotify, giftNotify) });
     } catch (e) { /* 静默 */ }
   },
 

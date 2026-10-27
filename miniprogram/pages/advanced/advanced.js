@@ -7,6 +7,7 @@ const plan = require('../../utils/plan.js');
 const pollcfg = require('../../utils/pollcfg.js');
 const adv = require('../../utils/advperm.js');
 const cache = require('../../utils/cache.js');
+const notify = require('../../utils/notify.js');
 
 const SHORT = { off: '标准', low: '8 秒', mid: '5 秒', high: '3 秒' };
 const TRASH_OPTIONS = [
@@ -31,6 +32,8 @@ Page({
     orgName: '',
     org: { enabled: false, reason: '', contact: false, vip: false },
     poll: { enabled: false, reason: '', contact: false, vip: false },
+    gift: { enabled: false, reason: '', contact: false, vip: false },
+    giftOn: false,           // 新礼金微信提醒（服务端 users.giftNotify，默认关）
     ad: { show: false },
     peak: { enabled: false, on: false, reason: '', contact: false, vip: false, leftText: '' },
     peakHours: 8,
@@ -61,7 +64,11 @@ Page({
         plan.load(true), req.pollLevelGet().catch(() => null),
         g.role === 'owner' ? req.advGet().catch(() => null) : Promise.resolve(null)
       ]);
-      if (r) pollcfg.set(r.pollLevel, r.peakUntil || 0);
+      if (r) {
+        pollcfg.set(r.pollLevel, r.peakUntil || 0);
+        notify.setGift(r.giftNotify);
+        if (r.giftNotify !== undefined) this.setData({ giftOn: r.giftNotify === true });
+      }
       this.setData({ adv: adv2 });
     } catch (e) { /* 忽略：按已有数据显示 */ }
     this.setData({ planReady: true });
@@ -95,6 +102,7 @@ Page({
     const orgMode = !!(g.account && g.account.orgMode);
     const org = adv.orgItem({ role: g.role, orgMode, features });
     const poll = adv.pollItem({ role: g.role, perms: g.perms, features });
+    const gift = adv.giftItem({ role: g.role, perms: g.perms });
     const ad = adv.adItem({ role: g.role, plan: p && p.plan });
     const peak = adv.peakItem({ role: g.role, features, peakUntil: pollcfg.peakUntil() });
     const trash = adv.trashItem({ role: g.role, features });
@@ -104,7 +112,7 @@ Page({
     const saved = pollcfg.level();
     const level = poll.enabled && adv.pollOptionEnabled(poll, saved) ? saved : 'off';
     this.setData({
-      org, poll, ad, peak, trash, trashDays, quota, orgMode, levelName: SHORT[level],
+      org, poll, gift, ad, peak, trash, trashDays, quota, orgMode, levelName: SHORT[level],
       orgName: (g.account && g.account.orgName) || '',
       level,
       options: OPTIONS.map(o => ({ ...o, enabled: adv.pollOptionEnabled(poll, o.key) })),
@@ -165,6 +173,44 @@ Page({
       wx.showToast({ title: on ? '已开启机构模式' : '已关闭机构模式', icon: 'none' });
     } catch (err) {
       this.resetSwitch('orgMode', !on); // 失败复位（request.js 已提示原因）
+    }
+  },
+
+  // —— 新礼金微信提醒（默认关闭，按人保存） ——
+  onGiftTap() {
+    const { gift } = this.data;
+    if (!gift.enabled) this.explain(gift, '新礼金微信提醒');
+  },
+  /** 开关：打开时必须在点击回调里先弹订阅授权（第一个 await 之前），同意后才保存为开 */
+  onGiftSwitch(e) {
+    const on = e.detail.value;
+    if (!this.data.gift.enabled || this.data.saving) return this.resetSwitch('giftOn', !on);
+    if (!on) return this.saveGift(false);
+    // 注意：requestSubscribeMessage 必须由点击直接触发，前面不能有 await
+    notify.subscribe().then(ok => {
+      if (ok) return this.saveGift(true);
+      this.resetSwitch('giftOn', false);
+      // subscribe 调用失败时已弹过原因；用户在授权框点了拒绝（含「总是保持以上选择」被拒）时在这里引导
+      if (notify.enabled() && !notify.subscribeFailShown()) {
+        wx.showModal({
+          title: '未开启提醒',
+          content: '没有同意订阅，提醒没有开启。如果没有弹出授权窗口，或之前勾选过「总是保持以上选择」并选了拒绝，请点右上角「···」→ 设置 → 通知管理，打开「接收通知」，并把本提醒设为允许，然后再试。',
+          showCancel: false, confirmText: '知道了'
+        });
+      }
+    });
+  },
+  async saveGift(on) {
+    this.setData({ saving: true });
+    try {
+      const r = await req.setGiftNotify(on);
+      notify.setGift(r.giftNotify);
+      this.setData({ giftOn: r.giftNotify === true });
+      wx.showToast({ title: on ? '已开启提醒' : '已关闭提醒', icon: 'none' });
+    } catch (err) {
+      this.resetSwitch('giftOn', !on); // 失败复位（request 已提示原因）
+    } finally {
+      this.setData({ saving: false });
     }
   },
 

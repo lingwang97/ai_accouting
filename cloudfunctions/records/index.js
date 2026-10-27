@@ -146,6 +146,7 @@ async function dashboard(ctx) {
     // 机构模式下负责多场（或全部场次）的记账人：可切换自己正在记的一场，不影响别人
     mySwitch: ctx.role === 'clerk' && !!account.orgMode && (!ctx.bookIds || ctx.bookIds.length > 1),
     lastNotify,
+    giftNotify: !readonly(ctx) && can(ctx, 'confirm') && !!ctx.user && ctx.user.giftNotify === true, // v3.66.3：新礼金提醒是否开启
     book,
     needBooks: !book,
     today: { count: t.count, sum: Math.round(t.fen) / 100, book: todayBookRes ? todayBookRes.total : 0 },

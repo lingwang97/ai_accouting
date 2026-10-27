@@ -84,6 +84,7 @@ module.exports = {
   advGet: () => call('account', { action: 'advGet' }, { silent: true }),
   setTrashDays: days => call('account', { action: 'setTrashDays', days }),
   setPollLevel: level => call('account', { action: 'setPollLevel', level }),
+  setGiftNotify: on => call('account', { action: 'setGiftNotify', on: !!on }),
   accountGetByAid: (aid, opts) => call('account', { action: 'getByAid', aid }, opts),
   receiptGet: (rid, batch, opts) => call('payment', { action: 'receipt', rid, batch: !!batch }, opts),
   myReceipts: opts => call('payment', { action: 'myReceipts' }, opts),

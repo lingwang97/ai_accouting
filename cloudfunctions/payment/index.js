@@ -508,6 +508,8 @@ async function payerUpdate(openid, rid, fromConds, to, out, extra) {
 /**
  * 收件人名单缓存：同一礼簿（aid + bookId）在实例内存里缓存 60 秒，省掉每笔转账都查 members / accounts。
  * 代价：成员权限、负责礼簿变化最多延迟 60 秒生效（可接受）。
+ * v3.66.3：新礼金提醒默认关闭，只发给在「高级功能」里打开（users.giftNotify === true）的人；
+ * 开关状态与名单一起缓存，所以开 / 关最多延迟 60 秒生效（可接受，省掉每笔转账再查一次 users）。
  */
 const RECIPIENT_TTL = 60 * 1000;
 const recipientCache = new Map();
@@ -531,11 +533,21 @@ async function recipientsOf(rec) {
         ? soloBook(m, acc) === rec.bookId
         : m.allBooks || (Array.isArray(m.bookIds) && m.bookIds.includes(rec.bookId))))
       .map(m => m.memberOpenid));
-  } catch (e) { return to; /* 尚无记账人：不缓存，下次重查 */ }
-  to = [...new Set(to)];
+  } catch (e) { return giftOnly(to); /* 尚无记账人：不缓存，下次重查 */ }
+  to = await giftOnly([...new Set(to)]);
   if (recipientCache.size > 200) recipientCache.clear();
   recipientCache.set(key, { exp: Date.now() + RECIPIENT_TTL, owner: rec.ownerOpenid, to });
   return to;
+}
+
+/** 只留下打开了「新礼金微信提醒」的人（users.giftNotify === true；没有该字段 = 关闭；带 _openid 的是伪造文档，忽略） */
+async function giftOnly(list) {
+  const on = new Set();
+  for (let i = 0; i < list.length; i += 100) {
+    const r = await db.collection('users').where({ openid: _.in(list.slice(i, i + 100)), giftNotify: true }).limit(100).get();
+    r.data.forEach(u => { if (!u._openid) on.add(u.openid); });
+  }
+  return list.filter(x => on.has(x));
 }
 
 /** 订阅消息提醒收款方（未配置模板或店主未订阅时静默跳过）。recOrId：已读到的记录（省一次读库）或记录 id */
@@ -543,11 +555,10 @@ async function notifyOwner(recOrId, envVersion) {
   if (!notify.TMPL_ID) return;
   const rec = typeof recOrId === 'object' && recOrId ? recOrId : await getRecord(recOrId);
   if (!rec) return;
-  // 收件人名单与批次合计并行取
-  const [to, all] = await Promise.all([
-    recipientsOf(rec),
-    rec.batchId ? batchRecords(rec.batchId, { ownerOpenid: rec.ownerOpenid }) : Promise.resolve(null)
-  ]);
+  // 默认没人开启提醒：先取名单，空就直接返回，不再读批次、不构造模板（让宾客「完成转账」更快返回）
+  const to = await recipientsOf(rec);
+  if (!to.length) return;
+  const all = rec.batchId ? await batchRecords(rec.batchId, { ownerOpenid: rec.ownerOpenid }) : null;
   let show = rec;
   if (all) {
     show = {
