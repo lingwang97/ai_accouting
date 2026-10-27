@@ -21,7 +21,7 @@
     <view class="share-desc">{{shareDesc}}</view>
     <button class="btn-primary" open-type="share">发给家人（微信好友 / 家庭群）</button>
   </block>
-  <view class="muted hint">7 天内有效，最多 5 人；对方接受后需你同意</view>
+  <view class="muted hint">7 天内有效，只能 1 人使用，对方接受后即失效；需你同意后才生效</view>
 
   <view class="section-title" style="margin-top:36rpx">已共享的家人（{{viewers.length}}）</view>
   <view class="card">

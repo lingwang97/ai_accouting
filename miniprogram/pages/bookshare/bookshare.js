@@ -57,9 +57,11 @@ Page({
     if (!res || res.from !== 'button') return { title: '慧礼记｜扫码随礼、自动记账、人情往来一本清', path: '/pages/index/index' };
     const acc = getApp().globalData.account;
     const names = this._names || [];
+    const path = `/pages/invite/invite?token=${this.data.token}`;
+    setTimeout(() => this.setData({ token: '' }), 300); // 共享卡只能 1 人使用：发出后回到「生成共享卡片」，给下一位重新生成（v3.66.7）
     return {
       title: `「${(acc && acc.accountName) || ''}」${names.length === 1 ? '的礼簿「' + names[0] + '」' : '的 ' + names.length + ' 本礼簿'}共享给你查看`,
-      path: `/pages/invite/invite?token=${this.data.token}`
+      path
     };
   },
 

@@ -68,11 +68,12 @@
       </view>
     </view>
     <view class="muted small invite-desc" wx:if="{{inviteDesc}}">{{inviteDesc}}</view>
+    <view class="risk-tip" wx:if="{{quotaMsg}}">{{quotaMsg}}。已有的{{orgMode ? '礼台人员' : '记账人'}}不受影响。<text class="link" bindtap="goContact">联系我们</text></view>
   </view>
   <button wx:if="{{canManage}}" class="btn-primary" open-type="share" data-type="clerk" disabled="{{!clerkToken}}">邀请{{orgMode ? '礼台人员' : '记账人'}}（发给微信好友）</button>
   <!-- 主家本人发的卡点开即生效（记账人转发出去的卡才需主家同意，见 account.acceptInvite） -->
-  <view class="risk-tip" wx:if="{{canManage && role === 'owner'}}">拿到此卡的人（最多 5 人）点开即成为{{orgMode ? '礼台人员' : '记账人'}}并获得所选权限，请只发给信任的人，不要转发到群里。7 天内有效</view>
-  <view class="muted hint" wx:else>7 天内有效，最多 5 人；对方接受后需主家同意</view>
+  <view class="risk-tip" wx:if="{{canManage && role === 'owner'}}">拿到此卡的人点开即成为{{orgMode ? '礼台人员' : '记账人'}}并获得所选权限，请只发给信任的人，不要转发到群里。7 天内有效，只能 1 人使用，对方接受后即失效</view>
+  <view class="muted hint" wx:else>7 天内有效，只能 1 人使用，对方接受后即失效；需主家同意后才生效</view>
 
   <block wx:if="{{role === 'owner'}}">
     <view class="card transfer">

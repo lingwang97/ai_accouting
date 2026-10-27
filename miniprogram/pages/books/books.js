@@ -7,6 +7,7 @@ const printer = require('../../utils/printer.js');
 const theme = require('../../utils/theme.js');
 const openfile = require('../../utils/openfile.js');
 const perm = require('../../utils/perm.js');
+const plan = require('../../utils/plan.js');
 
 const EXPORTS = [
   { format: 'book', label: '传统礼簿 PDF（竖排，整本）' },
@@ -65,7 +66,17 @@ Page({
     }
   },
 
-  onAdd() { wx.navigateTo({ url: '/pages/bookedit/bookedit' }); },
+  /** 新建：免费版礼簿数已满（含已归档，不含回收站）时先说明并带「联系我们」；云端另有校验（books.save） */
+  async onAdd() {
+    try { await plan.load(); } catch (e) { /* 读不到按不限处理，云端仍会校验 */ }
+    const lim = plan.limit('maxBooks');
+    const n = (this.data.current ? 1 : 0) + this.data.list.length + this.data.archived.length;
+    if (this.data.isOwner && isFinite(lim) && n >= lim) {
+      const p = plan.get();
+      return req.quotaModal(`${(p && p.name) || '免费版'}最多 ${lim} ${this.data.orgMode ? '个场次' : '本礼簿'}，开通会员可添加更多`);
+    }
+    wx.navigateTo({ url: '/pages/bookedit/bookedit' });
+  },
 
   onEdit(e) {
     wx.navigateTo({ url: `/pages/bookedit/bookedit?id=${e.currentTarget.dataset.id}` });

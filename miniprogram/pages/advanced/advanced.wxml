@@ -86,7 +86,7 @@
         <view class="a-opt {{trashDays === item.days ? 'on' : ''}} {{item.enabled ? '' : 'dis'}}"
               wx:for="{{trashOptions}}" wx:key="days" data-days="{{item.days}}" bindtap="onTrashPick">
           <view class="a-radio"><view class="a-dot" wx:if="{{trashDays === item.days}}" /></view>
-          <view class="a-text"><view class="a-name">{{item.name}}</view></view>
+          <view class="a-text"><view class="a-name">{{item.name}}<text class="a-vip" wx:if="{{!item.enabled && trash.vip}}">会员</text></view></view>
         </view>
         <view class="a-note">只影响之后删除的礼簿；已经在回收站里的，仍按删除时定下的到期日处理，不会因为改了这里而变长或变短。</view>
       </block>

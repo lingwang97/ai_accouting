@@ -60,7 +60,10 @@ class Query {
     this.db.log.push({ op: 'update', col: this.name, cond: this.cond, data: o && o.data });
     if (!this.db.applyUpdates) return { stats: { updated: 0 } };
     const rows = this._rows();
-    rows.forEach(d => Object.assign(d, o.data));
+    rows.forEach(d => Object.keys(o.data || {}).forEach(k => {
+      const v = o.data[k]; // _.inc(n) 按增量写入（邀请卡名额等）；其余原样赋值
+      d[k] = v && v.__op === 'inc' ? (Number(d[k]) || 0) + v.v : v;
+    }));
     return { stats: { updated: rows.length } };
   }
   async remove() { this.db.log.push({ op: 'remove', col: this.name, cond: this.cond }); return { stats: { removed: 0 } }; }

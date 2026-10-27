@@ -33,7 +33,7 @@ Page({
       if (app.globalData.user && !this.data.displayName && info.type !== 'clerk') this.setData({ displayName: app.globalData.user.nickname || '' });
       if (info.voided) this.setData({ errMsg: '该移交邀请已作废，请让对方重新发起' });
       else if (info.used && info.type === 'transfer') this.setData({ errMsg: '该邀请已被使用，请让对方重新邀请' });
-      else if (info.type !== 'transfer' && info.left === 0) this.setData({ errMsg: '这张邀请卡的人数已满，请让对方重新邀请' });
+      else if (info.type !== 'transfer' && info.left === 0) this.setData({ errMsg: '邀请已被使用，请联系主家重新生成' });
       else if (info.expired) this.setData({ errMsg: '邀请已过期，请让对方重新邀请' });
     } catch (e) {
       if (req.isNetErr(e)) this.setData({ errMsg: req.errText(e) + '，没能读取邀请', errNet: true });

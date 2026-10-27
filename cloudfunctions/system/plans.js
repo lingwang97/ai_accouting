@@ -55,8 +55,8 @@ function normalizeAds(a) {
 const DEFAULT_PLANS = {
   free: {
     name: '免费版',
-    features: { warmup: true, maxBooks: 0, maxClerks: 0, exportPdf: true, receiptAppCode: true, org: false, fastRefresh: true,
-      pdfThemePremium: true, receiptStylePremium: true, trashDays: 60, peakMode: false, bookMax: 3000 } // 0 = 不限；peakMode 办事日高峰模式（v3.65.1 起仅会员：free 为 false，pro 为 true）；bookMax 传统礼簿 PDF 单次最多笔数（免费 3000，专业版 6000；缺项 = 3000）；trashDays 回收站可选的最长保留天数（缺项 / 0 视为 60，即全部开放）；org 机构版；fastRefresh 待确认高频刷新；pdfThemePremium 礼簿 PDF 会员主题 / 自定义 / 宋体毛笔 / 尾页设置；receiptStylePremium 电子回执会员样式（现阶段全部免费开放，只有 === false 才限制）
+    features: { warmup: true, maxBooks: 3, maxClerks: 3, exportPdf: true, receiptAppCode: true, org: false, fastRefresh: true,
+      pdfThemePremium: true, receiptStylePremium: true, trashDays: 15, peakMode: false, bookMax: 3000 } // v3.66.7 免费版：最多 3 本礼簿、3 位记账人，回收站最长 15 天（30 / 60 天仅会员）；0 = 不限；peakMode 办事日高峰模式（v3.65.1 起仅会员：free 为 false，pro 为 true）；bookMax 传统礼簿 PDF 单次最多笔数（免费 3000，专业版 6000；缺项 = 3000）；trashDays 回收站可选的最长保留天数（缺项 / 0 视为 60，即全部开放——兼容 settings/plans 里没有该项的旧文档）；org 机构版；fastRefresh 待确认高频刷新；pdfThemePremium 礼簿 PDF 会员主题 / 自定义 / 宋体毛笔 / 尾页设置；receiptStylePremium 电子回执会员样式（现阶段全部免费开放，只有 === false 才限制）
   },
   pro: {
     name: '专业版',
@@ -81,7 +81,7 @@ function featureOpen(features, key) { return !features || features[key] !== fals
 
 /**
  * v3.63.0 额度：features.maxBooks / maxClerks 为礼簿数（含已归档，不含回收站）/ 记账人数上限，0 或缺项为不限。
- * 现阶段 free 的值保持 0（不限）；将来收费时的建议值：免费 3 本礼簿、2 位记账人（家人共享只读不计），在 settings/plans 里改即可。
+ * v3.66.7 起默认 free 为 3 本礼簿、3 位记账人（家人共享只读不计），pro 为 0（不限）；settings/plans 文档若存在会整体覆盖默认值，需在里面写全。
  * 只限制新增，已超额的老用户保留全部数据，不删不冻结。
  */
 function limitOf(features, key) { const n = Number(features && features[key]); return n > 0 ? n : Infinity; }

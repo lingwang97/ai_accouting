@@ -71,7 +71,7 @@ function trashItem(s) {
   const max = n > 0 ? n : 60;
   const partial = max < 60;
   return partial
-    ? { enabled: true, partial: true, max, reason: '会员功能，暂未开通更长的保留时间', contact: true, vip: true }
+    ? { enabled: true, partial: true, max, reason: '免费版回收站保留 15 天，30 / 60 天为会员功能，开通会员后可选', contact: true, vip: true }
     : { enabled: true, max, reason: '', contact: false, vip: false };
 }
 /** 某个天数能否选：15 天始终可选；其余要求权限且不超过套餐上限 */
@@ -93,9 +93,9 @@ function quotaItem(s) {
   const full = (a.maxBooks > 0 && a.books >= a.maxBooks) || (a.maxClerks > 0 && a.clerks >= a.maxClerks);
   return {
     show: true, limited, full,
-    bookLine: `${bw} ${a.books} ${bu}` + (a.maxBooks > 0 ? `，上限 ${a.maxBooks} ${bu}` : '（当前不限）'),
-    clerkLine: `${cw} ${a.clerks} ${cu}` + (a.maxClerks > 0 ? `，上限 ${a.maxClerks} ${cu}` : '（当前不限）'),
-    reason: '已达到当前套餐的上限，开通会员可添加更多；已有的数据不受影响'
+    bookLine: a.maxBooks > 0 ? `${bw} ${a.books}/${a.maxBooks} ${bu}` : `${bw} ${a.books} ${bu}，不限`,
+    clerkLine: a.maxClerks > 0 ? `${cw} ${a.clerks}/${a.maxClerks} ${cu}` : `${cw} ${a.clerks} ${cu}，不限`,
+    reason: '已达到当前套餐的上限，开通会员可添加更多；已有的数据不受影响，只是不能再新增'
   };
 }
 

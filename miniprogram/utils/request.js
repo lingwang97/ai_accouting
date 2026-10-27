@@ -21,6 +21,15 @@ function markWrite(data) {
 
 const isTimeout = e => /timeout|timed out|超时/i.test(String((e && (e.errMsg || e.message)) || ''));
 
+/** 额度已满的提示（服务端 plans.quotaMsg 的统一后缀）；弹窗带「联系我们」，页面自己处理时用 silent */
+const isQuotaMsg = m => /开通会员可添加更多/.test(String(m || ''));
+function quotaModal(msg) {
+  wx.showModal({
+    title: '已达免费版上限', content: msg + '。已有的数据不受影响。', confirmText: '联系我们', cancelText: '知道了',
+    success: r => { if (r.confirm) wx.navigateTo({ url: '/pages/contact/contact' }); }
+  });
+}
+
 // opts.silent：失败不弹提示（非关键的附加内容，如回执上的小程序码）
 const call = (name, data = {}, opts = {}) =>
   new Promise((resolve, reject) => {
@@ -31,7 +40,10 @@ const call = (name, data = {}, opts = {}) =>
         const r = res.result || {};
         if (r.code === 0) { markWrite(data); resolve(r.data); }
         else {
-          if (!opts.silent) wx.showToast({ title: r.msg || '请求失败', icon: 'none' });
+          if (!opts.silent) {
+            if (isQuotaMsg(r.msg)) quotaModal(r.msg); // 免费版额度已满：弹窗说明并带「联系我们」（v3.66.7）
+            else wx.showToast({ title: r.msg || '请求失败', icon: 'none' });
+          }
           const e = new Error(r.msg || 'biz error');
           e.biz = true; // 业务错误（服务端明确拒绝）：与网络失败区分，见 isNetErr()
           reject(e);
@@ -71,6 +83,8 @@ function errText(e, fallback) {
 }
 
 module.exports = {
+  isQuotaMsg,
+  quotaModal,
   isNetErr,
   errText,
   login: userInfo => call('login', { action: 'login', userInfo }),
@@ -121,7 +135,7 @@ module.exports = {
   bookGetTpl: bookId => call('books', { action: 'getTpl', bookId }),
   bookSaveTpl: (bookId, tpls) => call('books', { action: 'saveTpl', bookId, ...tpls }),
   purgeAccount: () => call('account', { action: 'purge', confirm: 'DELETE' }),
-  inviteCreate: (type, opts) => call('account', { action: 'createInvite', type, ...(opts || {}) }),
+  inviteCreate: (type, opts, callOpts) => call('account', { action: 'createInvite', type, ...(opts || {}) }, callOpts),
   inviteInfo: (token, opts) => call('account', { action: 'inviteInfo', token }, opts),
   inviteAccept: (token, displayName) => call('account', { action: 'acceptInvite', token, displayName }),
   setHandlerName: (name, memberId) => call('account', { action: 'setHandlerName', name, memberId }),

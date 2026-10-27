@@ -22,6 +22,7 @@ Page({
     myPerms: [],       // 我的权限（主家为全部）
     myAllBooks: false, // 我负责全部礼簿：才能邀请 / 设置「全部礼簿」
     inviteDesc: '',
+    quotaMsg: '',      // 记账人名额已满的提示（免费版）
     transferToken: '', // 移交：选好礼簿后生成
     showPicker: false, // 选择要移交的礼簿
     books: [],         // [{ _id, name, typeLabel, count, sumStr, on }]
@@ -130,14 +131,21 @@ Page({
     const seq = (this._inviteSeq || 0) + 1;
     this._inviteSeq = seq;
     try {
-      const r = await req.inviteCreate('clerk', this.data.inviteAll ? { allBooks: true, perms } : { bookIds: ids, perms });
+      const r = await req.inviteCreate('clerk', this.data.inviteAll ? { allBooks: true, perms } : { bookIds: ids, perms }, { silent: true });
       if (seq !== this._inviteSeq) return; // 已有更新的选择
       const n = (r.perms || perms).length;
       this.setData({
+        quotaMsg: '',
         clerkToken: r.token,
         inviteDesc: (r.allBooks ? '负责全部礼簿（含以后新建的）' : `只负责：${r.books.map(b => b.name).join('、')}`) + ` · ${n} 项权限`
       });
-    } catch (e) { this.setData({ clerkToken: '' }); }
+    } catch (e) {
+      if (seq !== this._inviteSeq) return;
+      // 记账人名额已满（免费版 3 位）：页面里说明并带「联系我们」，分享按钮保持置灰；其他业务错误弹提示
+      const msg = (e && e.biz && e.message) || '';
+      if (req.isQuotaMsg(msg)) this.setData({ clerkToken: '', quotaMsg: msg, inviteDesc: '' });
+      else { this.setData({ clerkToken: '', quotaMsg: '' }); if (msg) wx.showToast({ title: msg, icon: 'none' }); }
+    }
   },
   onInvitePerm(e) {
     const i = e.currentTarget.dataset.i;
@@ -367,9 +375,15 @@ Page({
         path: `/pages/invite/invite?token=${this.data.transferToken}`
       };
     }
+    const path = `/pages/invite/invite?token=${this.data.clerkToken}`;
+    // 邀请卡只能 1 人使用：发出后马上换一张新的，避免下次又发出同一张（v3.66.7）
+    this.setData({ clerkToken: '' });
+    setTimeout(() => this.makeClerkInvite(), 300);
     return {
       title: `邀请你为「${name}」记账`,
-      path: `/pages/invite/invite?token=${this.data.clerkToken}`
+      path
     };
-  }
+  },
+
+  goContact() { wx.navigateTo({ url: '/pages/contact/contact' }); }
 });

@@ -15,8 +15,8 @@ const Purge = require('./purge.js');
 const { MAX_AMOUNT } = require('./limits.js'); // 单笔金额上限（tools/cloud-shared/limits.js）
 const TITLES = ['', '礼台', '收银', '主管']; // 机构版礼台人员岗位
 const INVITE_TTL = 7 * 24 * 3600 * 1000; // 邀请 7 天内有效
-const INVITE_USES = 5;  // 记账人 / 家人共享邀请卡：每张最多几人使用（默认）
-const INVITE_USES_MAX = 10;
+const INVITE_USES = 1;  // 记账人 / 家人共享邀请卡：每张只能 1 人接受（v3.66.7，旧的多人卡也一律按 1 人处理）
+const INVITE_USED_MSG = '邀请已被使用，请联系主家重新生成';
 const PAY_MODES = ['longpress', 'screen'];
 
 /** 幂等建集合（init 未跑完时自愈；同一实例每个集合只尝试一次） */
@@ -347,7 +347,7 @@ async function payCodeDecide(openid, target, approve, ver) {
 
 /**
  * 生成邀请：type=clerk 邀请记账人（主家或记账人均可邀请）；type=viewer 家人共享
- *   每张卡最多 maxUses 人使用，加入的人需主家同意后才生效
+ *   每张卡只能 1 人接受（接受成功才算用掉，只打开查看不消耗），记账人转发的卡加入后需主家同意才生效
  * type=transfer 移交（只有主家本人可发起）：
  *   opts.bookIds 选择要移交的礼簿；全选（或不传）为整体移交——主家信息、收款码、礼簿码一起转
  *   opts.stayClerk 移交后发起人是否继续为对方记账（默认是）
@@ -365,7 +365,7 @@ async function createInvite(openid, type, opts = {}) {
     used: false, createdAt: now, expiresAt: new Date(now.getTime() + INVITE_TTL)
   };
   if (type !== 'transfer') {
-    data.maxUses = Math.max(1, Math.min(INVITE_USES_MAX, Math.floor(Number(opts.maxUses)) || INVITE_USES));
+    data.maxUses = INVITE_USES; // 不接受前端传入的人数
     data.uses = 0;
   }
   if (type === 'clerk') {
@@ -443,9 +443,10 @@ function grantable(ctx, perms) {
 async function inviteInfo(token) {
   const inv = await getInvite(token);
   if (!inv) return err('邀请不存在或已失效');
-  const max = inv.maxUses || INVITE_USES;
+  const max = INVITE_USES;
+  const spent = inv.type !== 'transfer' && (inv.uses || 0) >= max;
   return ok({
-    type: inv.type, accountName: inv.accountName, fromName: inv.fromName, used: inv.used, expired: inv.expiresAt < new Date(),
+    type: inv.type, accountName: inv.accountName, fromName: inv.fromName, used: inv.used || spent, expired: inv.expiresAt < new Date(),
     full: inv.type === 'transfer' ? inv.full !== false : undefined, // 旧版移交邀请没有 full 字段，视为整体移交（家人共享无此字段）
     // 邀请卡可能被转发给还没加入的人：记账人 / 家人共享的卡只给礼簿名，不透露份数与合计（移交卡需接收人核对内容，保留）
     books: inv.type === 'transfer' ? (inv.books || []) : (inv.books || []).map(b => ({ name: b.name })),
@@ -464,7 +465,7 @@ async function takeUse(inv) {
     // 旧版邀请卡没有名额字段：按默认名额补上
     await invites.where({ _id: inv._id, uses: _.exists(false) }).update({ data: { uses: 0, maxUses: INVITE_USES } });
   }
-  const max = inv.maxUses || INVITE_USES;
+  const max = INVITE_USES; // 旧版多人卡（maxUses > 1）也只算 1 人，避免已发出去的卡被转发后多人加入
   const res = await invites.where({ _id: inv._id, uses: _.lt(max) }).update({ data: { uses: _.inc(1) } });
   return res.stats.updated === 1;
 }
@@ -518,10 +519,11 @@ async function acceptInvite(openid, token, displayName) {
         };
         if (!fromOwner) {
           // 记账人发的卡：另记一条升级申请（addTo），主家同意前仍保留只读共享
-          if (!(await takeUse(inv))) return err('这张邀请卡的人数已满，请让对方重新邀请');
+          if (!(await takeUse(inv))) return err(INVITE_USED_MSG);
           await members.add({ data: { aid: acc._id, ownerOpenid: acc.ownerOpenid, memberOpenid: openid, ...upgrade, upgrade: true, addTo: exist._id, status: MEMBER.PENDING, inviteId: inv._id, inviteFrom: inv.fromName || '', createdAt: new Date() } });
           return ok({ type: inv.type, pending: true, aid: acc._id, accountName: acc.accountName });
         }
+        if (!(await takeUse(inv))) return err(INVITE_USED_MSG);
         await members.doc(exist._id).update({ data: upgrade });
         await setCurrent(openid, acc._id);
         return ok({ type: inv.type, aid: acc._id, accountName: acc.accountName });
@@ -531,7 +533,7 @@ async function acceptInvite(openid, token, displayName) {
         const add = (grant.bookIds || []).filter(id => !(exist.bookIds || []).includes(id));
         if (!add.length) return ok({ type: inv.type, aid: acc._id, accountName: acc.accountName });
         if (inv.fromOpenid !== acc.ownerOpenid) {
-          if (!(await takeUse(inv))) return err('这张邀请卡的人数已满，请让对方重新邀请');
+          if (!(await takeUse(inv))) return err(INVITE_USED_MSG);
           await members.add({
             data: {
               aid: acc._id, ownerOpenid: acc.ownerOpenid, memberOpenid: openid, role: 'viewer', bookIds: add, addTo: exist._id,
@@ -540,11 +542,13 @@ async function acceptInvite(openid, token, displayName) {
           });
           return ok({ type: inv.type, pending: true, aid: acc._id, accountName: acc.accountName });
         }
+        if (!(await takeUse(inv))) return err(INVITE_USED_MSG);
         await members.doc(exist._id).update({ data: { bookIds: (exist.bookIds || []).concat(add) } });
       } else {
         // 已是记账人：只有主家本人发的卡才合并新的礼簿与权限（记账人发的卡不能给别的记账人扩权）
         const upd = dn ? { displayName: dn } : {};
         if (inv.fromOpenid === acc.ownerOpenid) {
+          if (!(await takeUse(inv))) return err(INVITE_USED_MSG);
           // 非机构模式的邀请：改为负责这一本（原来的负责范围保留，切回机构模式后恢复）
           if (inv.solo && grant.bookIds.length) upd.soloBookId = grant.bookIds[0];
           else if (grant.allBooks) upd.allBooks = true;
@@ -561,10 +565,10 @@ async function acceptInvite(openid, token, displayName) {
     // v3.63.0 记账人数额度：只限制新增（已是成员的合并 / 升级分支在上面已返回）
     if (!viewer) {
       const q = await clerkQuota(acc);
-      if (q.full) return err(q.msg);
+      if (q.full) return err(q.acceptMsg); // 接受人看到的是「主家名额已满」，不提示他开通会员
     }
     // 新加入：占用一个名额。主家本人发的卡直接生效；记账人发（转发）的卡先记为待同意，主家同意后才能查看 / 记账
-    if (!(await takeUse(inv))) return err('这张邀请卡的人数已满，请让对方重新邀请');
+    if (!(await takeUse(inv))) return err(INVITE_USED_MSG);
     const direct = inv.fromOpenid === acc.ownerOpenid;
     await members.add({
       data: {
@@ -1006,7 +1010,7 @@ async function clerkQuota(acc) {
   const lim = P.limitOf(plan.features, 'maxClerks');
   if (!isFinite(lim)) return { full: false, msg: '' };
   const n = (await members.where({ aid: acc._id, role: 'clerk', _openid: _.exists(false) }).count()).total;
-  return n >= lim ? { full: true, msg: P.quotaMsg(plan.name, 'clerks', lim, acc.orgMode) } : { full: false, msg: '' };
+  return n >= lim ? { full: true, msg: P.quotaMsg(plan.name, 'clerks', lim, acc.orgMode), acceptMsg: `主家的${acc.orgMode ? '礼台人员' : '记账人'}已满（最多 ${lim} ${acc.orgMode ? '位礼台人员' : '位记账人'}），请联系主家` } : { full: false, msg: '' };
 }
 
 /** 高级功能页：套餐、礼簿 / 记账人数量与额度（0 = 不限）、回收站保留天数设置。只有主家本人 */
