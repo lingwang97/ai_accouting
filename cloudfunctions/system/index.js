@@ -534,6 +534,7 @@ const INDEXES = [
   ['records', 'owner_book_amount', [['ownerOpenid', 1], ['bookId', 1], ['amount', -1]]], // 礼簿页按礼簿 + 金额排序
   ['records', 'payer_status_paid', [['payerOpenid', 1], ['status', 1], ['paidAt', -1]]],
   ['records', 'payer_time', [['payerOpenid', 1], ['createdAt', -1]]],
+  ['records', 'payer_status_time', [['payerOpenid', 1], ['status', 1], ['createdAt', -1]]], // 我的随礼记录「等待主家确认」（v3.66.0）
   ['records', 'claimed_status_paid', [['claimedOpenid', 1], ['status', 1], ['paidAt', -1]]], // 我的随礼记录（小票二维码认领）
   ['records', 'rcpt_token', [['rcptToken', 1]]], // 扫小票二维码按 token 查回执
   ['records', 'batch', [['batchId', 1]]],
