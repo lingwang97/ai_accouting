@@ -57,3 +57,19 @@ v3.41.0 提交 f6f417a/c98ab79/1b9e322/3b907fc。第 18 条 _openid 过滤被跳
 
 ## 2026-10-23 v3.45.0 已实施（未上传）
 提交 57adbd0(amend 后端+撤销未收到)、后续 UI/守卫/提醒撤回/归档清理/邀请提示、版本与文档 §137。amend 用 amendN 乐观锁；personKey 改名：有 openid 且无 personKey 时固定为 o:openid:原名。rejected 无旧 rejectedAt，旧记录不可撤销。
+
+## 2026-10-23 v3.46.0 已实施（HEAD d3c03 11d3c03，未上传）
+提交 86d2a2e..11d3c03（11 条，文档 §138）。要点：pendingStat withExtra 返回 stall/rej 条数；outList 手动 top-N + 自动内存合并（outpage.js）；records 行「更多」ActionSheet 收区分备注/作废；poller 5 分钟无变化放慢 60 秒。待用户：一键建索引、最低基础库 2.21.2、booktheme 键盘真机验证。
+
+## 2026-10-23 v3.47.0 已实施（HEAD 7624667，未上传）
+提交 3e3c81b..7624667（4 个，文档 §139）。status.js/common.js/collections.js 入 sync_shared（status.js 还同步到 miniprogram/utils）；tests/ 用 `node tests/run.js`（export.test 需 NODE_PATH 指向装了 pdfkit/exceljs 的目录，否则跳过）。导出字体已外置云存储，export 包 7.9MB→72KB；**用户必须在管理员页点一次「上传导出字体」**（fontsetup 云函数，上传后可删），此前 PDF 提示「字体准备中」。测试里禁止对 Buffer 用 assert.strictEqual（失败时 diff 几 MB 会卡死）。
+
+## 2026-10-25 全项目审查（HEAD 1f5c872 v3.58.0，已上传）只审查，未修
+重点看 7624667..1f5c872（小票二维码/认领/_wxaCode/BLE MTU/PDF 预览/重名排序）。sync --check OK，tests 115 过。无严重。
+条目：高1 rcptQr 缓存 key 不含 envVersion（体验版码被正式版补打复用，payment:897）；中2 二维码默认开+iOS 20 字节包每张≥10s、安卓 182B/20ms 廉价机溢出待验证（需用户决定默认开关）；中3 issueQr NEED 缺 show（只有打印权限的记账人无码）；中4 生成失败无熔断每张重试；中5 claim 人传 batch:true 可看整批回执（payment:558）；低6 回收站彻底删/purgeBook/trash_records 不删 rcptqr 文件；低7 urlnonce_* 超时残留；低8 qrcode-lib 56KB 主包死代码；低9 printtpl/tplGet 遗留；低10 receipt 页 isHost 冷启动不准；低11 personRef 未校验 canBook。
+下次从 1f5c872 增量。
+
+## 2026-10-25 上述 11 条已全修（未上传）
+提交 3bb1388(v3.58.1: 1/3/4/5/10) 7bdfdd2(v3.59.0: 2 方案 C + FAQ 61 条) 8ea11d2(v3.59.1: 6/7/8/9/11)，文档 §159~161。下次从 8ea11d2 增量。
+要点：rcptQrKey = token:w280v1:<env>；前端熔断 printer._qrBytes/resetQrBreaker；payment openapi -604101 实例跳过 10 分钟；qrOn 只认 qr===true；ble 限速 gapOf=max(20ms,len/4000B/s)、iOS getBLEMTU、稳定模式 storage printerSlow；qrcode-lib 与 printtpl 已删（控制台待删 printtpl 函数）。
+测试注意：fakedb doc().get 返回同一对象引用，update 会原地改，需要旧值时先拷出来；loadFunction 每次重载模块（实例内状态要用同一个 m 测）。

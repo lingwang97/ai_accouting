@@ -1,2 +1,8 @@
 - [加载提示 v3.25.0](project_loading_indicator_eval.md) — components/loading 组件（骨架/转圈/遮罩，300ms 延迟）已实现，接入页面与踩坑
 - [传统礼簿PDF主题 v3.32/3.33](project_pdf_theme.md) — 10预设+自定义+宋体/毛笔(OFL)，books.pdfTheme，本地pdfkit测试法
+- [联系我们 v3.48.0](project_contact_us.md) — 客服+微信反馈已做，自建反馈 C 待后续
+- [教程与常见问题 评估](project_faq_guide.md) — guide 页加第4分页 FAQ，约50条草稿，待用户确认
+- [小票花边评估 v3.60.0 待定](project_receipt_border.md) — 上下光栅带+左右字符的混合方案，待用户选
+- [小票自定义+二维码 v3.56/3.57](project_receipt_print_qr.md) — URL Link 30天/首位独占限制，字段与 action 清单
+- [提速与高级功能 v3.60.3/3.61.0](project_poll_advanced.md) — 提醒缓存、pollLevel 刷新频率、plans.fastRefresh
+- [会员预留 v3.62-3.64](project_membership_reserve.md) — 全部先免费开放；features 缺项开放；压测与控制台待办（export 内存）

@@ -24,3 +24,21 @@ catchtap="" 空绑定（index.wxml:31 !canSwitch 时）是否仍阻断冒泡；�
 
 ## 已修复 v3.24.2（U1-U11 全部）
 records r-op margin、r-actions 换行；books b-foot 换行；trash 彻底删除两步弹窗；pay sr-item 可断行；.container/qrcode 安全区；qrcode s-op nowrap；guide m-tile 可断行；index guide-close 80rpx；pending stall 间距；members 弹层按钮固定底栏。别再报。
+
+## 2026-10-25 检查 v3.59.2（只读，未改代码）
+已核实无问题（别再报）：modal 按钮字数、success toast 字数、actionSheet 项数均合规；无 flex gap；wx.getBLEMTU/setBLEMTU 有 typeof 兜底；printer/index 打印机三态 + onStateChange 订阅与 off 正常；canvas 2d 离屏 1:1 无 dpr 放大；资产文件无缺失。
+本次问题（编号 V1-V12，详见报告）：
+- V1 P1 records.wxml:91 amend 弹层 `.mask` 没用 renqing 的 tab-mask 方案，底部「取消/保存」被自定义 tabBar 盖住（tabBar 无 z-index 但在页面之上）。
+- V2 P2 receipt 页无加载态（空白）；reconcile .row 右侧金额可换行；printer dev-row/mine 蓝牙行设备名过长挤压；renqing 弹层小屏嵌套滚动；printset 长文案行窄。
+- P3：硬编码色（#FF9F1C/#FA9D3B/#D46B08/#f5222d/#d93025，bell-r.svg 红色图标，booktheme switch #07C160，loading 组件 #C8161D），点击区小（bc-switch-btn 64rpx、pv-tab、色块 56rpx）。
+
+## 已修复 v3.59.3 - v3.59.5（V1-V12 全部，iPad/PC 最大宽度主动跳过）
+v3.59.3：records 修改弹层改 tab-mask；receipt 加载态；reconcile/printer/mine 长文字。v3.59.4：renqing 弹层收缩、printset 排版与 80mm 预览、点击区放大、白事回执素灰、avatar-btn 选择器。v3.59.5：app.wxss 加 --warn 系列统一橙色；theme.apply 写 themeIcon/themePrimary；bell-{d,n,y,b,k}.svg。别再报。
+提交注意：commit 署名用系统提醒给的 Sonnet 5.5。
+
+## 2026-10-27 检查 v3.64.1 并修复 v3.64.2 - v3.65.0（别再报）
+v3.64.2：advanced 开关复位改 resetSwitch（先写翻转值再写回，否则 switch 视图不刷新）；canvas 标题 fitTitle；advanced planReady 加载态；trash days 初值 0。
+v3.64.3：receipt.fixForBook 白事校正版式/主色；buildModel premiumOpen 降级；寿字水印居中、商务顶栏 150；会员标签只在锁定显示；--line 变量（其余页面仍写 #f5f5f5）。
+v3.65.0：index 高峰模式提示条 + 每分钟刷新；advperm.peakLeftText。
+新坑：switch 取消/失败复位必须强制刷新；白事红色印章未处理（用户可自行关）；待真机：switch 复位、canvas 5 种版式、鸿蒙 NEXT。
+提交署名用系统提醒的 Sonnet 5.5（主会话曾写 Opus 5.5，以系统提醒为准）。
