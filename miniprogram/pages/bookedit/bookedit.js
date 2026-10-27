@@ -96,9 +96,10 @@ Page({
       const { list, activeBookId } = await req.bookList();
       const cur = activeBookId && (list || []).find(b => b._id === activeBookId);
       fromName = cur ? cur.name : '';
-    } catch (e) { return null; }
+    } catch (e) { return false; } // 读不到当前礼簿：照样创建，只是不设为当前
+    // 双重确认任一取消：照样创建，只是不设为当前（v3.66.5）
     const ok = await require('../../utils/switchguard.js').confirmSwitch({ orgMode: false, fromName, toName: newName });
-    return ok ? true : null;
+    return ok;
   },
   askSetActiveBase() {
     const app = getApp();
