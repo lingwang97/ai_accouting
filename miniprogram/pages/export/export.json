@@ -1,6 +1,7 @@
 {
   "navigationBarTitleText": "导出礼簿",
   "usingComponents": {
-    "loading": "/components/loading/loading"
+    "loading": "/components/loading/loading",
+    "ad-slot": "/components/ad-slot/index"
   }
 }

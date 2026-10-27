@@ -2,6 +2,7 @@
   "navigationBarTitleText": "扫码随礼",
   "usingComponents": {
     "receipt-view": "/components/receipt-view/index",
-    "batch-list": "/components/batch-list/index"
+    "batch-list": "/components/batch-list/index",
+    "ad-slot": "/components/ad-slot/index"
   }
 }
