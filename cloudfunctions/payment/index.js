@@ -45,7 +45,7 @@ exports.main = async (event) => {
       // 付款方
       case 'create': return await create(OPENID, event);
       case 'cashEntry': return await cashEntry(OPENID, ctx, event);
-      case 'transferred': return await transferred(OPENID, event.rid, event.envVersion);
+      case 'transferred': return await transferred(OPENID, event.rid, event.envVersion, event.guestNotify === true);
       case 'cancel': return await payerUpdate(OPENID, event.rid, [{ status: REC.PENDING }], REC.CANCELLED);
       case 'status': return await status(OPENID, event.rid);
       case 'receipt': return await receipt(OPENID, event.rid, event.batch === true);
@@ -62,8 +62,9 @@ exports.main = async (event) => {
       // 主家或其记账人（权限相同）
       // 批次录入的记录：确认 / 拒绝整批（amounts 为逐人实际金额 {rid: 金额}）
       // 宾客没点「我已完成转账」的（pending，或已被自动取消）主家核对到账后也可直接入簿
-      case 'confirm': return await groupUpdate(ctx, event.rid, [REC.TRANSFERRED, REC.PENDING, REC.CANCELLED], REC.PAID, event.amount, event.amounts);
-      case 'confirmBatch': return await confirmBatch(ctx, event.rids);
+      // 入簿成功后给订阅了「入簿通知」的宾客发服务通知（v3.66.1；只有这两处会把宾客扫码的记录改成已入簿）
+      case 'confirm': return await afterPaid(await groupUpdate(ctx, event.rid, [REC.TRANSFERRED, REC.PENDING, REC.CANCELLED], REC.PAID, event.amount, event.amounts));
+      case 'confirmBatch': return await afterPaid(await confirmBatch(ctx, event.rids));
       case 'reject': return await groupUpdate(ctx, event.rid, [REC.TRANSFERRED, REC.PENDING], REC.REJECTED);
       // 撤销「未收到」：24 小时内回到标记前的状态
       case 'unreject': return await unreject(ctx, String(event.rid || ''));
@@ -161,6 +162,8 @@ async function create(openid, event) {
     hostName,
     ownerOpenid: account.ownerOpenid,
     payerOpenid: openid,
+    // 现金随礼没有「我已完成转账」这一步：在「确认随礼（现金）」时订阅入簿通知（v3.66.1）
+    ...(payMethod === 'cash' && event.guestNotify === true ? guestFlag(event.envVersion) : {}),
     bookId: book ? book._id : '',
     bookType: book ? book.type : 'other',
     themeName: book ? book.name : ((account.theme && account.theme.name) || ''),
@@ -462,10 +465,12 @@ async function incBookStat(bookId, count, fen, paidAt) {
 }
 
 /** 付款方已转账：pending（或超时被自动取消的）→ transferred，并通知收款方 */
-async function transferred(openid, rid, envVersion) {
+async function transferred(openid, rid, envVersion, guestNotify) {
   const out = {};
+  // 宾客点「我已完成转账」时同意了入簿通知：记在这条（批次为整批）记录上，主家确认后据此发送（v3.66.1）
+  const extra = guestNotify ? guestFlag(envVersion) : null;
   const res = await payerUpdate(openid, rid,
-    [{ status: REC.PENDING }, { status: REC.CANCELLED, autoCancelled: true }], REC.TRANSFERRED, out);
+    [{ status: REC.PENDING }, { status: REC.CANCELLED, autoCancelled: true }], REC.TRANSFERRED, out, extra);
   // 复用 payerUpdate 已读到的记录，不再重复读库（v3.60.3）
   if (res.code === 0 && res.data.changed) await notifyOwner(out.rec || rid, envVersion);
   return res;
@@ -475,12 +480,12 @@ async function transferred(openid, rid, envVersion) {
  * 付款方推进自己的记录状态。
  * 带状态条件原子更新，避免与收款方确认并发时互相覆盖。
  */
-async function payerUpdate(openid, rid, fromConds, to, out) {
+async function payerUpdate(openid, rid, fromConds, to, out, extra) {
   if (!validId(rid)) return err('记录不存在');
   const cur = await getRecord(rid);
   if (!cur) return err('记录不存在');
   if (cur.payerOpenid !== openid) return err('无权操作');
-  const data = { status: to };
+  const data = { status: to, ...(extra || {}) };
   if (to === REC.TRANSFERRED) { data.transferredAt = new Date(); data.autoCancelled = _.remove(); }
   // 批次录入：同一批次一起推进
   const key = cur.batchId ? { batchId: cur.batchId } : { _id: rid };
@@ -492,7 +497,10 @@ async function payerUpdate(openid, rid, fromConds, to, out) {
     return ok({ status: to, changed: true });
   }
 
-  // 未更新：已推进过（幂等返回当前状态）
+  // 未更新：已推进过（幂等返回当前状态）；重复点「我已完成转账」时补记入簿通知订阅（尚未入簿的）
+  if (extra) {
+    try { await records.where({ ...key, payerOpenid: openid, status: _.in([REC.PENDING, REC.TRANSFERRED]) }).update({ data: extra }); } catch (e) { /* 忽略 */ }
+  }
   const rec = await getRecord(rid);
   return ok({ status: rec ? rec.status : cur.status, changed: false });
 }
@@ -573,6 +581,80 @@ async function notifyOwner(recOrId, envVersion) {
       await db.collection('users').where({ openid: touser }).update({ data: { lastNotify: { ...result, at: new Date() } } });
     } catch (e) { /* 忽略 */ }
   }));
+}
+
+// —— 宾客入簿通知（v3.66.1）——
+/** 记在记录上的订阅标记：guestEnv 决定通知打开哪个版本（体验版 / 正式版），与主家通知一致 */
+function guestFlag(envVersion) {
+  return { guestNotify: true, guestEnv: ['develop', 'trial'].includes(envVersion) ? envVersion : 'release' };
+}
+
+/** 确认入簿成功后发宾客通知；最多等 3 秒，失败只记日志，不影响确认结果 */
+async function afterPaid(res) {
+  if (!res || res.code !== 0) return res;
+  const d = res.data || {};
+  const ids = (d.list || (d.record ? [d.record] : [])).map(r => r && r._id).filter(Boolean);
+  if (ids.length) {
+    const wait = new Promise(r => setTimeout(r, 3000));
+    try { await Promise.race([notifyGuests(ids), wait]); } catch (e) { console.warn('入簿通知失败', e.message); }
+  }
+  return res;
+}
+
+/**
+ * 给刚入簿的记录的宾客发通知：只发订阅过（guestNotify）、宾客本人扫码登记（有 payerOpenid，不是礼台代记 / 经办人自己）、还没发过的；
+ * 批次合成一条（整批都已处理完才发，金额为已入簿合计），点通知打开宾客自己那条记录的回执
+ */
+async function notifyGuests(ids) {
+  if (!notify.GUEST_TMPL_ID) return 0;
+  const res = await records.where({ _id: _.in(ids.slice(0, 100)), status: REC.PAID, guestNotify: true }).get();
+  const pick = new Map();
+  res.data.forEach(r => {
+    if (r.guestNotifiedAt || !r.payerOpenid || r.deskEntry || r.payerOpenid === r.handlerOpenid) return;
+    const k = r.batchId || r._id;
+    const cur = pick.get(k);
+    if (!cur || (r.batchIdx || 0) < (cur.batchIdx || 0)) pick.set(k, r);
+  });
+  let sent = 0;
+  await Promise.all([...pick.values()].map(async r => { if (await sendGuest(r)) sent++; }));
+  return sent;
+}
+
+async function sendGuest(rec) {
+  let all = [rec];
+  if (rec.batchId) {
+    all = await batchRecords(rec.batchId, { ownerOpenid: rec.ownerOpenid });
+    if (all.some(r => r.status === REC.TRANSFERRED || r.status === REC.PENDING)) return false; // 批次还有没处理的：等最后一次确认再发
+  }
+  const paid = all.filter(r => r.status === REC.PAID);
+  if (!paid.length) return false;
+  // 先原子占位，保证同一笔（批）只发一次（并发确认、重复调用都不会重复发）
+  const key = rec.batchId ? { batchId: rec.batchId, ownerOpenid: rec.ownerOpenid } : { _id: rec._id };
+  const mark = await records.where({ ...key, guestNotifiedAt: _.exists(false) }).update({ data: { guestNotifiedAt: new Date() } });
+  if (!mark.stats || !mark.stats.updated) return false;
+  let hostName = rec.hostName || '';
+  if (!hostName && rec.aid) {
+    try { hostName = ((await accounts.doc(rec.aid).get()).data || {}).accountName || ''; } catch (e) { /* 主家信息读不到：只写礼簿名 */ }
+  }
+  const method = rec.batchPay === 'mixed' ? 'mixed' : (rec.payMethod === 'cash' ? 'cash' : 'wechat');
+  const data = notify.buildGuest({
+    hostName, themeName: rec.themeName || '', funeral: rec.bookType === 'funeral', method,
+    count: paid.length, amount: paid.reduce((t, r) => t + Math.round(r.amount * 100), 0) / 100
+  }, bjTime(rec.paidAt || new Date()));
+  try {
+    await cloud.openapi.subscribeMessage.send({
+      touser: rec.payerOpenid,
+      templateId: notify.GUEST_TMPL_ID,
+      page: `pages/receipt/receipt?rid=${rec._id}`, // 回执页参数 rid；批次为宾客自己那条
+      miniprogramState: { develop: 'developer', trial: 'trial' }[rec.guestEnv] || 'formal',
+      data
+    });
+    return true;
+  } catch (e) {
+    // 43101=宾客没订阅或次数已用；47003=模板参数不符
+    console.warn('入簿通知发送失败', e.errCode, e.errMsg || e.message);
+    return false;
+  }
 }
 
 /** 是否可查看该记录：宾客本人，或主家 / 其记账人 */
@@ -944,7 +1026,7 @@ const RELATIONS = ['亲戚', '朋友', '同事', '同学', '邻里', '其他'];
 const centStr = rs => String(rs.reduce((t, r) => t + Math.round(r.amount * 100), 0) / 100);
 const validId = s => /^[a-zA-Z0-9_-]{1,64}$/.test(String(s || ''));
 /** 返回给主家 / 记账人前端的记录：去掉各方 openid 与往来人标识（含宾客 openid） */
-const shown = ({ payerOpenid, handlerOpenid, enteredBy, ownerOpenid, personKey, rcptToken, rcptQrKey, rcptQrFileID, claimedOpenid, claimedAt, _openid, ...r }) => (claimedOpenid ? { ...r, claimed: true } : r);
+const shown = ({ payerOpenid, handlerOpenid, enteredBy, ownerOpenid, personKey, rcptToken, rcptQrKey, rcptQrFileID, claimedOpenid, claimedAt, _openid, guestEnv, ...r }) => (claimedOpenid ? { ...r, claimed: true } : r);
 
 // —— 小票二维码（v3.57.0 起；v3.58.0 改为小程序码）——
 // token：12 位随机（base62），存 records.rcptToken，任何列表 / 详情接口都不返回；知道 token 的人（持有小票的人）可看这一笔回执。

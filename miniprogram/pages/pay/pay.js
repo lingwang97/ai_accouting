@@ -8,6 +8,7 @@ const scenes = require('../../utils/scenes.js');
 const batch = require('../../utils/batch.js');
 const samename = require('../../utils/samename.js');
 const theme = require('../../utils/theme.js');
+const { GUEST_NOTIFY_TMPL_ID } = require('../../config.js');
 
 const POLL_MS = 3000;
 const POLL_MAX = 200; // 约 10 分钟
@@ -190,10 +191,13 @@ Page({
       payload = { payerName: name, amount, remark: this.data.remark, relation: this.data.relation };
     }
 
+    // 转账+现金只填了一位：按这一位的方式提交，不算混合
+    const pm = this.data.payMethod === 'mixed' && payload.items && payload.items.length === 1 ? payload.items[0].method : this.data.payMethod;
+    // 现金随礼没有「我已完成转账」这一步：在这里订阅入簿通知（必须在第一个 await 之前）
+    const subP = pm === 'cash' ? this.askGuestNotify() : null;
     this.setData({ submitting: true });
     try {
-      // 转账+现金只填了一位：按这一位的方式提交，不算混合
-      const pm = this.data.payMethod === 'mixed' && payload.items && payload.items.length === 1 ? payload.items[0].method : this.data.payMethod;
+      const guestNotify = subP ? await subP : false;
       // 幂等键：弱网重试、连点都带同一个 reqId，服务端只记一条；表单内容变了换新的，提交成功后换新的
       const sig = JSON.stringify([payload, pm]);
       if (!this._reqId || this._reqSig !== sig) {
@@ -201,7 +205,7 @@ Page({
         this._reqSig = sig;
       }
       const reqId = this._reqId;
-      let res = await req.payCreate({ aid: this.data.aid, ...payload, payMethod: pm, reqId });
+      let res = await req.payCreate({ aid: this.data.aid, ...payload, payMethod: pm, reqId, ...(guestNotify ? { guestNotify: true } : {}) });
       // 同名提醒：主家礼簿里已有别的宾客叫这个名字，请填区分信息后重新提交（取消则不提交）
       if (res.needTag) {
         for (const name of res.needTag) {
@@ -210,7 +214,7 @@ Page({
           if (payload.items) payload.items.forEach(x => { if (x.name === name) x.tag = tag; });
           else payload.tag = tag;
         }
-        res = await req.payCreate({ aid: this.data.aid, ...payload, payMethod: pm, reqId });
+        res = await req.payCreate({ aid: this.data.aid, ...payload, payMethod: pm, reqId, ...(guestNotify ? { guestNotify: true } : {}) });
         if (res.needTag) return wx.showToast({ title: '仍有同名，请修改姓名或区分信息', icon: 'none' });
       }
       const { record } = res;
@@ -260,18 +264,30 @@ Page({
   },
 
   /**
-   * 宾客「入簿通知」订阅的接入点（预留，v3.66.0）：wx.requestSubscribeMessage 必须在点击的同步调用链里调用，
-   * 所以放在 onTransferred 的第一行、任何 await 之前。模板 ID 确定后在这里调用，并把结果随 payTransferred 传给云端
+   * 宾客「入簿通知」订阅（v3.66.1）：wx.requestSubscribeMessage 必须在点击的同步调用链里调用，
+   * 所以在 onTransferred / 现金「确认随礼」的第一个 await 之前调用；返回是否同意（拒绝 / 失败都按不同意，照常继续）
    */
-  askGuestNotify() { return null; },
+  askGuestNotify() {
+    if (!GUEST_NOTIFY_TMPL_ID || typeof wx.requestSubscribeMessage !== 'function') return Promise.resolve(false);
+    return new Promise(resolve => {
+      try {
+        wx.requestSubscribeMessage({
+          tmplIds: [GUEST_NOTIFY_TMPL_ID],
+          success: r => resolve(r[GUEST_NOTIFY_TMPL_ID] === 'accept'),
+          fail: () => resolve(false)
+        });
+      } catch (e) { resolve(false); }
+    });
+  },
 
   /** 第 2 步：付款方转账完成 → 等待收款方确认 */
   async onTransferred() {
     if (this.data.submitting) return;
-    this.askGuestNotify(); // 必须在第一个 await 之前（见上）
+    const subP = this.askGuestNotify(); // 必须在第一个 await 之前（见上）
     this.setData({ submitting: true });
     try {
-      await req.payTransferred(this.data.record._id);
+      const guestNotify = await subP;
+      await req.payTransferred(this.data.record._id, guestNotify);
       this.clearOpen();
       this.setData({ step: 'waiting' });
       this.startPoll();

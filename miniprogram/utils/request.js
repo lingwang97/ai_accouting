@@ -163,7 +163,8 @@ module.exports = {
   rqQuery: key => call('renqing', { action: 'query', key }),
   rqPeople: () => call('renqing', { action: 'people' }),
   payCreate: d => call('payment', { action: 'create', envVersion: envVersion(), ...d }),
-  payTransferred: rid => call('payment', { action: 'transferred', rid, envVersion: envVersion() }),
+  // guestNotify：宾客同意了「入簿通知」订阅（v3.66.1），主家确认后发服务通知
+  payTransferred: (rid, guestNotify) => call('payment', { action: 'transferred', rid, envVersion: envVersion(), ...(guestNotify ? { guestNotify: true } : {}) }),
   payCancel: rid => call('payment', { action: 'cancel', rid }),
   payStatus: rid => call('payment', { action: 'status', rid }),
   payConfirm: (rid, amount, amounts) => call('payment', { action: 'confirm', rid, amount, amounts }).then(dropDash),
