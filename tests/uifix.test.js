@@ -60,3 +60,17 @@ test('buildModel：套餐关闭会员版式（premiumOpen=false）预览降成 c
   assert.strictEqual(receipt.buildModel(rec, tpl, '张府').style, 'guofeng');
   assert.strictEqual(receipt.buildModel(rec, { ...tpl, style: 'elegant' }, '张府', { premiumOpen: false }).style, 'elegant');
 });
+
+// ---- v3.65.0 高峰模式提示条的剩余时间文案
+test('advperm.peakLeftText：未开启 / 已到期为空；小时分钟；不足 1 分钟按 1 分钟；整点不出「60 分钟」', () => {
+  const A = require('../miniprogram/utils/advperm.js');
+  const now = 1e12, HOUR = 3600000;
+  assert.strictEqual(A.peakLeftText(0, now), '');
+  assert.strictEqual(A.peakLeftText(now, now), '');
+  assert.strictEqual(A.peakLeftText(now - 5, now), '');
+  assert.strictEqual(A.peakLeftText(now + 7 * HOUR + 30 * 60000, now), '7 小时 30 分钟');
+  assert.strictEqual(A.peakLeftText(now + 20 * 60000, now), '20 分钟');
+  assert.strictEqual(A.peakLeftText(now + 5000, now), '1 分钟');
+  assert.strictEqual(A.peakLeftText(now + 2 * HOUR, now), '2 小时 0 分钟');
+  assert.strictEqual(A.peakLeftText(now + HOUR + 59 * 60000 + 30000, now), '2 小时 0 分钟');
+});

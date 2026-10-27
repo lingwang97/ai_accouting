@@ -48,6 +48,7 @@ Page({
   },
   async onShow() {
     theme.apply(this);
+    this.startTick();
     const app = getApp();
     try { await app.ensureRole(); } catch (e) { /* 忽略 */ }
     const g = app.globalData;
@@ -66,6 +67,19 @@ Page({
     this.setData({ planReady: true });
     this.build();
   },
+  onHide() { this.stopTick(); },
+  onUnload() { this.stopTick(); },
+  /** 高峰模式剩余时间：页面可见时每分钟重算，到期开关自动变回关 */
+  startTick() {
+    this.stopTick();
+    this._tick = setInterval(() => {
+      const g = getApp().globalData;
+      if (!g.account || !this.data.planReady) return;
+      const p = plan.get();
+      this.setData({ peak: adv.peakItem({ role: g.role, features: (p && p.features) || {}, peakUntil: pollcfg.peakUntil() }) });
+    }, 60000);
+  },
+  stopTick() { if (this._tick) { clearInterval(this._tick); this._tick = null; } },
   /**
    * 开关复位：用户点开关时原生 switch 自己先翻转，直接 setData 成「原来的值」与页面数据相同，视图层不会刷新，开关会停在翻转后的状态。
    * 所以先写成翻转后的值，回调里再写回原值，强制视图层刷新（v3.64.2）

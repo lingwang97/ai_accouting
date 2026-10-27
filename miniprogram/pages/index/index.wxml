@@ -5,6 +5,9 @@
     <view class="role-line" wx:elif="{{account.orgMode}}">机构 · {{account.orgName || account.accountName}}<text wx:if="{{role === 'clerk'}}"> · 礼台人员</text></view>
     <view class="role-line" wx:elif="{{role === 'clerk'}}">记账人 · 为「{{account.accountName}}」记账</view>
 
+    <!-- 高峰模式进行中：点击进高级功能（可提前关闭），到期自动消失 -->
+    <view class="peak-bar" wx:if="{{peakText}}" bindtap="goAdvanced">高峰模式进行中 · 剩 {{peakText}} ›</view>
+
     <!-- 主家待办（不可忽略，处理后才消失）：收成一行小红点，不占首屏 -->
     <view class="todo-line" wx:if="{{role === 'owner' && (account.payCodeCheck || joinCount)}}">
       <view class="todo-item" wx:if="{{account.payCodeCheck}}" bindtap="goAccount"><text class="todo-dot"></text>{{account.payCodeBy ? '新收款码待确认' : '请确认收款码'}} ›</view>

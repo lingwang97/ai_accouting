@@ -12,6 +12,7 @@ const device = require('../../utils/device.js');
 const setup = require('../../utils/setup.js');
 const poller = require('../../utils/poller.js');
 const pollcfg = require('../../utils/pollcfg.js');
+const advperm = require('../../utils/advperm.js');
 const fresh = require('../../utils/fresh.js');
 const ble = require('../../utils/ble.js');
 
@@ -57,7 +58,8 @@ Page({
     joins: [],         // 申请加入的进度 [{ aid, name, role, pending, dk }]
     dismissed: {},     // 本地已读签名：notify=提示文案；j_<aid>=已同意的身份。签名变化（文案 / 身份不同）再提醒
     setupCard: null,   // 已登录、选了办事收礼但还没建好主家信息：「开始办事 · 3 步」进度 { name, code, book }
-    themeStyle: ''
+    themeStyle: '',
+    peakText: ''   // 高峰模式剩余时间（空 = 未开启）：工作台顶部提示条
   },
 
   onShow() {
@@ -88,6 +90,7 @@ Page({
     // 切回页面：45 秒内且期间没有写操作时不重复拉整页（轮询仍会更新待确认数）；首次 / 下拉等强制刷新走 refresh()
     if (fresh.needs(this) || this.data.mode === 'loading') this.refresh();
     this.startTimer();
+    this.startPeakTip();
     this.watchPrinter();
   },
   /** 打印机状态：重新判断，并订阅连接变化（页面停留时实时跟随） */
@@ -110,8 +113,22 @@ Page({
     this._poller = poller.create(() => this.refreshPending(true), { base: this._pollMs, slow: !this.data.readonly, fast: this._pollFast, hold: pollcfg.peakOn });
     this._poller.start();
   },
-  onHide() { this.clearTimer(); this.unwatchPrinter(); },
-  onUnload() { this.clearTimer(); this.unwatchPrinter(); },
+  onHide() { this.clearTimer(); this.stopPeakTip(); this.unwatchPrinter(); },
+  onUnload() { this.clearTimer(); this.stopPeakTip(); this.unwatchPrinter(); },
+  /** 高峰模式提示条（v3.65.0）：页面可见时每分钟刷新剩余时间，到期自动消失，并把轮询降回用户自己的档位 */
+  updatePeakTip() {
+    const text = pollcfg.peakOn() ? advperm.peakLeftText(pollcfg.peakUntil()) : '';
+    const was = !!this.data.peakText;
+    if (text !== this.data.peakText) this.setData({ peakText: text });
+    if (was && !text && this._poller) this.startTimer(); // 刚到期：fast 间隔按新状态重建
+  },
+  startPeakTip() {
+    this.stopPeakTip();
+    this.updatePeakTip();
+    this._peakTimer = setInterval(() => this.updatePeakTip(), 60000);
+  },
+  stopPeakTip() { if (this._peakTimer) { clearInterval(this._peakTimer); this._peakTimer = null; } },
+  goAdvanced() { wx.navigateTo({ url: '/pages/advanced/advanced' }); },
   clearTimer() {
     if (this._poller) { this._poller.stop(); this._poller = null; }
   },
@@ -172,7 +189,7 @@ Page({
       // 身份变化（是否只读）后按对应间隔重新轮询；页面已隐藏时不重启
       if (this._poller && this._pollMs !== (view.readonly ? POLL_MS_READONLY : POLL_MS)) this.startTimer();
       // 刷新频率设置：每次启动 / 切身份同步一次（可能在别的设备上改过），变了就按新间隔重启轮询
-      pollcfg.sync().then(changed => { if (changed && this._poller) this.startTimer(); });
+      pollcfg.sync().then(changed => { this.updatePeakTip(); if (changed && this._poller) this.startTimer(); });
       cache.set('dashboard', view);
       // 刚通过创建向导建好：提示下一步
       if (app.globalData.justSetup) {

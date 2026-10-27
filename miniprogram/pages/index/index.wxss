@@ -33,6 +33,8 @@
 .bc-foot text:last-child { margin-left: auto; }
 .bc-foot { display: flex; justify-content: space-between; align-items: center; font-size: 24rpx; opacity: .9; }
 
+/* 高峰模式提示条 */
+.peak-bar { font-size: 24rpx; line-height: 1.5; color: var(--warn); background: var(--warn-bg); border: 2rpx solid var(--warn-border); border-radius: 12rpx; padding: 10rpx 20rpx; margin-bottom: 12rpx; }
 /* 主家待办：一行小红点 */
 .todo-line { display: flex; flex-wrap: wrap; margin-bottom: 12rpx; }
 .todo-item { font-size: 24rpx; color: var(--warn); background: var(--warn-bg); border: 2rpx solid var(--warn-border); border-radius: 999rpx; padding: 6rpx 20rpx; margin: 0 12rpx 8rpx 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

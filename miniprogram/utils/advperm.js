@@ -88,6 +88,16 @@ function quotaItem(s) {
   };
 }
 
+/** 高峰模式剩余时间文案：「7 小时 30 分钟」「20 分钟」；已到期或未开启返回空串（工作台提示条与高级功能页共用） */
+function peakLeftText(peakUntil, now) {
+  const t = now || Date.now();
+  if (!(peakUntil > t)) return '';
+  const left = peakUntil - t;
+  let hh = Math.floor(left / 3600000), mm = Math.ceil((left % 3600000) / 60000);
+  if (mm >= 60) { hh += 1; mm = 0; } // 59 分钟多进位，不显示「60 分钟」
+  return hh > 0 ? `${hh} 小时 ${mm} 分钟` : `${Math.max(1, mm)} 分钟`;
+}
+
 /**
  * 办事日高峰模式（v3.64.0）：只有主家本人能开关；记账人（有确认收礼权限）自动跟随主家，不单独设置；套餐 features.peakMode === false 时不能开启
  * @param {{role:string, features:object, peakUntil:number, now:number}} s peakUntil 毫秒，0 = 未开启
@@ -95,9 +105,7 @@ function quotaItem(s) {
 function peakItem(s) {
   const now = s.now || Date.now();
   const on = s.peakUntil > now;
-  const left = on ? s.peakUntil - now : 0;
-  const hh = Math.floor(left / 3600000), mm = Math.ceil((left % 3600000) / 60000);
-  const leftText = on ? (hh > 0 ? `${hh} 小时 ${mm >= 60 ? 0 : mm} 分钟` : `${Math.max(1, mm)} 分钟`) : '';
+  const leftText = peakLeftText(s.peakUntil, now);
   const closed = !!(s.features && s.features.peakMode === false);
   if (s.role !== 'owner') return { enabled: false, on, leftText, reason: s.role === 'clerk' ? '仅主家可开关，主家开启后礼台人员自动变快' : '仅主家可设置', contact: false, vip: false };
   // 已开启的可以随时关闭（套餐到期也能关）
@@ -105,4 +113,4 @@ function peakItem(s) {
   return { enabled: true, on, leftText, reason: '', contact: false, vip: closed };
 }
 
-module.exports = { peakItem, orgItem, pollItem, pollOptionEnabled, adItem, trashItem, trashOptionEnabled, quotaItem };
+module.exports = { peakLeftText, peakItem, orgItem, pollItem, pollOptionEnabled, adItem, trashItem, trashOptionEnabled, quotaItem };
