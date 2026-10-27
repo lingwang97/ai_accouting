@@ -7,7 +7,7 @@ const theme = require('../../utils/theme.js');
 Page({
   data: {
     list: [],
-    days: 15,
+    days: 0,              // 0 = 接口未返回前不显示天数，避免先闪「15 天」
     loading: true,
     busy: false,
     themeStyle: ''

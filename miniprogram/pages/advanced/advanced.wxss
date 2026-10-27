@@ -1,6 +1,7 @@
 .a-head { display: flex; align-items: center; justify-content: space-between; }
 .a-headtext { flex: 1; min-width: 0; margin-right: 20rpx; }
-.a-line { display: flex; align-items: center; }
+.a-line { display: flex; align-items: center; flex-wrap: wrap; }
+.a-loading { text-align: center; padding: 80rpx 0; font-size: 26rpx; }
 .a-title { font-size: 32rpx; font-weight: 600; }
 .a-vip { margin-left: 12rpx; font-size: 22rpx; color: var(--warn); background: var(--warn-bg); border: 2rpx solid var(--warn-border); border-radius: 999rpx; padding: 0 14rpx; line-height: 36rpx; }
 .a-desc { font-size: 26rpx; line-height: 1.6; margin: 8rpx 0 12rpx; }

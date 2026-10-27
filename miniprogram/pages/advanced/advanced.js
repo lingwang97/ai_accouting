@@ -25,6 +25,7 @@ Page({
   data: {
     themeStyle: '',
     ready: false,
+    planReady: false,        // 套餐已加载：未加载前不渲染各卡片，避免先按「免费」渲染再跳变
     hasAccount: false,
     orgMode: false,
     orgName: '',
@@ -50,17 +51,27 @@ Page({
     const app = getApp();
     try { await app.ensureRole(); } catch (e) { /* 忽略 */ }
     const g = app.globalData;
-    this.setData({ hasAccount: !!g.account, ready: true });
+    this.setData({ hasAccount: !!g.account, ready: true, planReady: !!plan.get() });
     this.build();
     if (!g.account) return;
     // 套餐（记账人 / 家人跟随所服务的主家）与最新刷新设置（可能在别的设备上改过）
-    const [, r, adv2] = await Promise.all([
-      plan.load(true), req.pollLevelGet().catch(() => null),
-      g.role === 'owner' ? req.advGet().catch(() => null) : Promise.resolve(null)
-    ]);
-    if (r) pollcfg.set(r.pollLevel, r.peakUntil || 0);
-    this.setData({ adv: adv2 });
+    try {
+      const [, r, adv2] = await Promise.all([
+        plan.load(true), req.pollLevelGet().catch(() => null),
+        g.role === 'owner' ? req.advGet().catch(() => null) : Promise.resolve(null)
+      ]);
+      if (r) pollcfg.set(r.pollLevel, r.peakUntil || 0);
+      this.setData({ adv: adv2 });
+    } catch (e) { /* 忽略：按已有数据显示 */ }
+    this.setData({ planReady: true });
     this.build();
+  },
+  /**
+   * 开关复位：用户点开关时原生 switch 自己先翻转，直接 setData 成「原来的值」与页面数据相同，视图层不会刷新，开关会停在翻转后的状态。
+   * 所以先写成翻转后的值，回调里再写回原值，强制视图层刷新（v3.64.2）
+   */
+  resetSwitch(key, back) {
+    this.setData({ [key]: !back }, () => this.setData({ [key]: back }));
   },
   /** 按当前身份与套餐重算各项可用性 */
   build() {
@@ -104,7 +115,7 @@ Page({
   async onOrgSwitch(e) {
     const on = e.detail.value;
     const a = getApp().globalData.account || {};
-    if (!this.data.org.enabled) return this.setData({ orgMode: !on });
+    if (!this.data.org.enabled) return this.resetSwitch('orgMode', !on);
     // 开关会改变记账人的负责范围：先说明
     const ok = await new Promise(resolve => wx.showModal({
       title: on ? '开启机构模式' : '关闭机构模式',
@@ -115,11 +126,11 @@ Page({
       success: r => resolve(r.confirm),
       fail: () => resolve(false)
     }));
-    if (!ok) return this.setData({ orgMode: !on }); // 取消：开关复位
+    if (!ok) return this.resetSwitch('orgMode', !on); // 取消：开关复位
     if (!on) return this.saveOrg(false, a.orgName);
     // 打开时填写机构名称（默认沿用已填的或主家称呼）
     const name = await askOrgName(a.orgName || a.accountName);
-    if (name === null) return this.setData({ orgMode: false }); // 取消：开关复位
+    if (name === null) return this.resetSwitch('orgMode', false); // 取消：开关复位
     this.saveOrg(true, name);
   },
   /** 修改机构名称（仅已开启时显示） */
@@ -139,7 +150,7 @@ Page({
       this.build();
       wx.showToast({ title: on ? '已开启机构模式' : '已关闭机构模式', icon: 'none' });
     } catch (err) {
-      this.setData({ orgMode: !on }); // 失败复位（request.js 已提示原因）
+      this.resetSwitch('orgMode', !on); // 失败复位（request.js 已提示原因）
     }
   },
 
@@ -150,14 +161,14 @@ Page({
   },
   async onPeakSwitch(e) {
     const on = e.detail.value;
-    if (!this.data.peak.enabled) return this.build();
+    if (!this.data.peak.enabled) return this.resetSwitch('peak.on', !on);
     try {
       const r = await req.setPeak(on);
       pollcfg.set(pollcfg.level(), r.peakUntil || 0);
       this.build();
       wx.showToast({ title: on ? '已开启高峰模式' : '已关闭', icon: 'none' });
     } catch (err) {
-      this.build(); // 失败：开关复位（request 已提示原因）
+      this.resetSwitch('peak.on', !on); // 失败：开关复位（request 已提示原因）
     }
   },
 

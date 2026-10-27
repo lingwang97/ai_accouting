@@ -247,8 +247,9 @@ function draw(ctx, m, H) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = simple || st === 'elegant' ? '#333333' : st === 'business' ? '#FFFFFF' : color;
-  ctx.font = st === 'guofeng' ? 'bold 44px serif' : 'bold 44px sans-serif';
-  ctx.fillText(m.title, W / 2, 110);
+  const tf = fitTitle(ctx, m.title, TITLE_MAX_W, st === 'guofeng' ? 'serif' : 'sans-serif');
+  ctx.font = tf.font;
+  ctx.fillText(tf.text, W / 2, 110);
   if (simple) {
     ctx.fillStyle = color;
     ctx.fillRect(W / 2 - 40, 150, 80, 6);
@@ -333,6 +334,20 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
+const TITLE_MAX_W = W - 120; // 标题最大宽度：留出边框 / 色带的位置
+/**
+ * 标题超宽：先把字号从 44 缩到最小 30，仍放不下再截断加省略号（标题最长 20 字，44px 约 880 宽，超出画布；商务顶栏的白字也不会被切）
+ * 返回 { font, text }，调用方设置 ctx.font 后绘制
+ */
+function fitTitle(ctx, text, maxW, family) {
+  for (let size = 44; size >= 30; size -= 2) {
+    ctx.font = `bold ${size}px ${family}`;
+    if (ctx.measureText(String(text)).width <= maxW) return { font: ctx.font, text: String(text) };
+  }
+  ctx.font = `bold 30px ${family}`;
+  return { font: ctx.font, text: fit(ctx, text, maxW) };
+}
+
 /** 超宽文字截断加省略号 */
 function fit(ctx, text, maxW) {
   let s = String(text);
@@ -369,5 +384,5 @@ function saveImage(filePath) {
 
 module.exports = {
   FIELD_LABELS, STYLES, FUNERAL_STYLES, stylesFor, DEFAULT_TPL, SAMPLE,
-  normalizeTpl, amountUpper, receiptNo, buildModel, toImage, saveImage, withAppCode
+  normalizeTpl, amountUpper, receiptNo, buildModel, toImage, saveImage, withAppCode, fitTitle
 };
