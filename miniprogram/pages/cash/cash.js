@@ -241,7 +241,7 @@ Page({
   async print(list) {
     const st = await printer.autoConnect();
     this.syncPrinter();
-    if (st === 'failed') return wx.showToast({ title: '打印机未连上，10 分钟内不再自动打印，可点顶部「连接」', icon: 'none', duration: 3000 });
+    if (st === 'failed') return wx.showToast({ title: '打印机没连上，暂停自动打印', icon: 'none', duration: 3000 });
     if (st !== 'ok') return;
     try {
       for (const r of list) await printer.printRecord(r);

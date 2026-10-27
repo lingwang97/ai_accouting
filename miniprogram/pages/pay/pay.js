@@ -104,7 +104,7 @@ Page({
     if (status !== REC.PENDING && status !== REC.CANCELLED) return this.clearOpen();
     const v = viewRecord(o.record);
     wx.showModal({
-      title: '有一笔未完成的随礼',
+      title: `有一笔未完成的${this.data.act}`,
       content: `${v.payerName} ￥${v.payStr}：已经转账了吗？转了请点「继续」，再点「我已完成转账」。`,
       confirmText: '继续',
       cancelText: '不用了',
@@ -184,9 +184,9 @@ Page({
     } else {
       const name = (this.data.payerName || '').trim();
       const amount = Number(this.data.amount);
-      if (!name) return wx.showToast({ title: '请填写随礼人姓名', icon: 'none' });
+      if (!name) return wx.showToast({ title: `请填写${this.data.who}姓名`, icon: 'none' });
       if (!Number.isFinite(amount) || amount <= 0) {
-        return wx.showToast({ title: '请选择或填写礼金', icon: 'none' });
+        return wx.showToast({ title: `请选择或填写${this.data.isFuneral ? '奠仪' : '礼金'}`, icon: 'none' });
       }
       payload = { payerName: name, amount, remark: this.data.remark, relation: this.data.relation };
     }
@@ -302,8 +302,8 @@ Page({
   /** 取消本次转账（尚未转账时） */
   onCancel() {
     wx.showModal({
-      title: '取消随礼',
-      content: '确定取消本次随礼吗？',
+      title: `取消${this.data.act}`,
+      content: `确定取消本次${this.data.act}吗？`,
       success: async res => {
         if (!res.confirm) return;
         try {

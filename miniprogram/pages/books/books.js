@@ -133,9 +133,10 @@ Page({
     let pv;
     try { pv = await req.bookRemovePreview(id); } catch (err) { return; }
     const more = pv.total > pv.count ? `（另有 ${pv.total - pv.count} 条未入簿的登记）` : '';
-    const who = pv.affected && pv.affected.length ? `记账人「${pv.affected.join('、')}」只负责这本，删除后需重新安排。` : '';
+    const org = this.data.orgMode; // 机构模式称「场次」「礼台人员」
+    const who = pv.affected && pv.affected.length ? `${org ? '礼台人员' : '记账人'}「${pv.affected.join('、')}」只负责这${org ? '场' : '本'}，删除后需重新安排。` : '';
     wx.showModal({
-      title: '删除礼簿',
+      title: org ? '删除场次' : '删除礼簿',
       content: `「${pv.name}」共 ${pv.count} 份已入簿礼金，合计 ￥${fmt.money(pv.sum)}${more}。删除后移入「我的 → 回收站」，${pv.days} 天内可以恢复，之后永久删除。${who}`,
       confirmText: '删除',
       confirmColor: '#FA5151',
@@ -161,8 +162,10 @@ Page({
       const names = (r && r.affected) || [];
       if (names.length) {
         setTimeout(() => wx.showModal({
-          title: '记账人需要重新安排',
-          content: `「${names.join('、')}」只负责被删除的礼簿，现在不能登记。可在「我的 → 记账人」里给他们换一本。`,
+          title: this.data.orgMode ? '礼台人员需重新安排' : '记账人需要重新安排',
+          content: this.data.orgMode
+            ? `「${names.join('、')}」只负责被删除的场次，现在不能登记。可在「我的 → 礼台人员」里给他们换一场。`
+            : `「${names.join('、')}」只负责被删除的礼簿，现在不能登记。可在「我的 → 记账人」里给他们换一本。`,
           confirmText: '去设置',
           success: m2 => { if (m2.confirm) wx.navigateTo({ url: '/pages/members/members' }); }
         }), 1500);
@@ -202,8 +205,10 @@ Page({
             if (names.length) {
               await new Promise(resolve => setTimeout(resolve, 1200));
               wx.showModal({
-                title: '记账人需要重新安排',
-                content: `「${names.join('、')}」只负责这本礼簿，归档后不能再登记。可在「我的 → 记账人」里给他们换一本。`,
+                title: this.data.orgMode ? '礼台人员需重新安排' : '记账人需要重新安排',
+                content: this.data.orgMode
+                  ? `「${names.join('、')}」只负责这个场次，归档后不能再登记。可在「我的 → 礼台人员」里给他们换一场。`
+                  : `「${names.join('、')}」只负责这本礼簿，归档后不能再登记。可在「我的 → 记账人」里给他们换一本。`,
                 confirmText: '去设置',
                 success: m2 => { if (m2.confirm) wx.navigateTo({ url: '/pages/members/members' }); }
               });

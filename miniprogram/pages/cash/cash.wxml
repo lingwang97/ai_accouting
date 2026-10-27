@@ -9,6 +9,8 @@
     <text class="pr-go" wx:if="{{printerStatus !== 'connected'}}">{{printerStatus === 'paired' ? '连接' : '去配对'}} ›</text>
   </view>
 
+  <!-- 已登记摘要放在表单上方：登记后键盘自动弹起，也能看到刚记了几笔（v3.66.6） -->
+  <view class="done-sum" wx:if="{{doneCount > 0}}">本次已登记 {{doneCount}} 份 · 合计 ￥{{doneSum}}</view>
   <view class="card batch-switch">
     <view>
       <view>批次录入</view>
@@ -56,7 +58,7 @@
   <button class="btn-primary" loading="{{saving}}" bindtap="onSave">{{batchMode ? '全部入簿，登记下一批' : '入簿，登记下一位'}}</button>
 
   <view class="done" wx:if="{{done.length}}">
-    <view class="section-title">本次已登记 {{doneCount}} 份 · 合计 ￥{{doneSum}}</view>
+    <view class="section-title">本次登记明细（点一笔看回执）</view>
     <view class="done-item" wx:for="{{done}}" wx:key="_id" data-id="{{item._id}}" bindtap="onReceipt">
       <text>{{item.nameStr}}<text class="muted"> · {{item.methodStr}}</text></text>
       <text class="money">￥{{item.amountStr}}</text>

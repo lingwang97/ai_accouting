@@ -155,6 +155,6 @@ button.btn-plain:not(.btn):not([size=mini]), button.btn-danger:not(.btn):not([si
 .net-bar { font-size: 24rpx; line-height: 1.5; color: var(--warn); background: var(--warn-bg); border: 2rpx solid var(--warn-border); border-radius: 12rpx; padding: 10rpx 20rpx; margin-bottom: 12rpx; text-align: center; }
 /* 网络失败（v3.66.0）：替代空状态 / 「无效」提示，点击重试 */
 .net-err { text-align: center; padding: 60rpx 24rpx; }
-.net-err .ne-title { font-size: 30rpx; color: #333; margin-bottom: 12rpx; }
-.net-err .ne-sub { font-size: 26rpx; color: #999; line-height: 1.6; }
+.net-err .ne-title { font-size: 30rpx; color: var(--text); margin-bottom: 12rpx; }
+.net-err .ne-sub { font-size: 26rpx; color: var(--text-3); line-height: 1.6; }
 .net-err .ne-btn { display: inline-block; margin-top: 24rpx; padding: 12rpx 48rpx; border-radius: 40rpx; border: 2rpx solid var(--primary, #C8161D); color: var(--primary, #C8161D); font-size: 28rpx; }

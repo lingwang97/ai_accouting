@@ -12,6 +12,7 @@
 
     <view class="s-step"><text class="s-no" style="background:{{primary}}">2</text>微信「扫一扫」转账随礼</view>
     <image wx:if="{{payCodeUrl}}" class="s-qr" src="{{payCodeUrl}}" mode="aspectFit" data-url="{{payCodeUrl}}" bindtap="onPreview" />
+    <view class="muted s-tip" wx:elif="{{offline}}">收款码没保存到本机，联网后可显示</view>
     <view class="muted s-tip">转账后回到小程序点「我已完成转账」</view>
   </view>
   <!-- 网络不佳时显示的是本机保存的礼簿码（v3.66.0）；点一下重新加载 -->

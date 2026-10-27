@@ -1,5 +1,5 @@
 <view class="page" style="{{themeStyle}}">
-  <view class="net-bar" wx:if="{{netBad}}">网络不稳定，正在自动重试…</view>
+  <view class="net-bar" wx:if="{{netBad && !loadErr}}">网络不稳定，正在自动重试…</view>
   <!-- 汇总 + 模式切换 -->
   <view class="head">
     <view class="sum">

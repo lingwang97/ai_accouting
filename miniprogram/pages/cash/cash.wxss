@@ -5,6 +5,7 @@
 .pr-text { flex: 1; min-width: 0; margin-right: 16rpx; }
 .pr-go { flex-shrink: 0; white-space: nowrap; font-weight: 600; }
 .done { margin-top: 36rpx; }
+.done-sum { margin: 0 0 20rpx; padding: 14rpx 20rpx; border-radius: 12rpx; background: var(--primary-soft); color: var(--primary); font-size: 26rpx; font-weight: 600; line-height: 1.5; }
 .done-item {
   display: flex; justify-content: space-between; align-items: center; background: #fff; border-radius: var(--r-s);
   padding: 22rpx 24rpx; margin-bottom: 12rpx; font-size: 30rpx;

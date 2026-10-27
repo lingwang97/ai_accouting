@@ -55,7 +55,7 @@ Page({
     const app = getApp();
     try { await app.ensureRole(); } catch (e) { /* 忽略 */ }
     const g = app.globalData;
-    this.setData({ hasAccount: !!g.account, ready: true, planReady: !!plan.get() });
+    this.setData({ hasAccount: !!g.account, ready: true, planReady: !!plan.get(), giftOn: notify.giftOn() }); // 提醒开关先按本机缓存显示，服务端返回后再校正
     this.build();
     if (!g.account) return;
     // 套餐（记账人 / 家人跟随所服务的主家）与最新刷新设置（可能在别的设备上改过）
