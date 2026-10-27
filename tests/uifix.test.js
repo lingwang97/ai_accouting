@@ -29,3 +29,34 @@ test('fitTitle：缩到 30px 仍放不下才截断并加省略号', () => {
   const r2 = receipt.fitTitle(fakeCtx(), 'x'.repeat(40).replace(/x/g, '字'), 630, 'sans-serif'); // 40 字
   assert.ok(r2.text.endsWith('…') && r2.text.length * 30 <= 630 + 30);
 });
+
+// ---- v3.64.3 白事校正与会员版式降级
+test('白事：旧模板的红色卡片 / 喜庆版式读取时校正为简约 + 灰黑主色；合规的原样保留', () => {
+  const t = receipt.normalizeTpl({ style: 'card', color: '#C8161D', fields: ['payerName'] }, 'funeral');
+  assert.strictEqual(t.style, 'simple');
+  assert.strictEqual(t.color, '#333333');
+  const f = receipt.normalizeTpl({ style: 'festive', color: '#555555', fields: ['payerName'] }, 'funeral');
+  assert.strictEqual(f.style, 'simple');
+  assert.strictEqual(f.color, '#555555');
+  const ok = receipt.normalizeTpl({ style: 'elegant', color: '#777777', fields: ['payerName'] }, 'funeral');
+  assert.strictEqual(ok.style, 'elegant');
+  assert.strictEqual(ok.color, '#777777');
+});
+test('非白事不被校正；未保存模板的白事默认值本来就合规', () => {
+  const w = receipt.normalizeTpl({ style: 'festive', color: '#C8161D', fields: ['payerName'] }, 'wedding');
+  assert.strictEqual(w.style, 'festive');
+  const d = receipt.normalizeTpl(null, 'funeral');
+  assert.ok(receipt.FUNERAL_STYLES.includes(d.style) && receipt.isGrey(d.color));
+});
+test('isGrey 与白事色板', () => {
+  assert.ok(receipt.FUNERAL_COLORS.every(receipt.isGrey));
+  assert.ok(!receipt.isGrey('#C8161D') && !receipt.isGrey('') && !receipt.isGrey(undefined));
+});
+test('buildModel：套餐关闭会员版式（premiumOpen=false）预览降成 card；免费版式与开放时不变', () => {
+  const rec = { ...receipt.SAMPLE.record };
+  const tpl = { ...receipt.DEFAULT_TPL, style: 'guofeng' };
+  assert.strictEqual(receipt.buildModel(rec, tpl, '张府', { premiumOpen: false }).style, 'card');
+  assert.strictEqual(receipt.buildModel(rec, tpl, '张府', { premiumOpen: true }).style, 'guofeng');
+  assert.strictEqual(receipt.buildModel(rec, tpl, '张府').style, 'guofeng');
+  assert.strictEqual(receipt.buildModel(rec, { ...tpl, style: 'elegant' }, '张府', { premiumOpen: false }).style, 'elegant');
+});

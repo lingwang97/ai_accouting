@@ -82,7 +82,7 @@
 
     <!-- 数量额度（只显示，主家侧） -->
     <view class="card" wx:if="{{quota.show}}" bindtap="onQuotaTap">
-      <view class="a-line"><text class="a-title">数量额度</text><text class="a-vip" wx:if="{{quota.limited}}">会员</text></view>
+      <view class="a-line"><text class="a-title">数量额度</text><text class="a-vip" wx:if="{{quota.limited && !ad.member}}">会员可提升</text></view>
       <view class="muted a-sub">{{quota.bookLine}}</view>
       <view class="muted a-sub">{{quota.clerkLine}}</view>
       <view class="a-reason" wx:if="{{quota.full}}">{{quota.reason}}</view>

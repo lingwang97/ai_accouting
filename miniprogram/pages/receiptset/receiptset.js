@@ -70,6 +70,7 @@ Page({
     const cur = styles.find(s => s.v === this.data.tpl.style);
     this.setData({
       styles,
+      colors: book && book.type === 'funeral' ? receipt.FUNERAL_COLORS : COLORS, // 白事色板只有灰黑色系
       styleLockTip: cur && cur.locked ? '当前版式为会员功能，宾客看到的回执会按「卡片」显示' : ''
     });
   },
@@ -88,12 +89,13 @@ Page({
 
   /** 改模板并刷新字段列表与预览 */
   update(patch) {
-    const tpl = { ...this.data.tpl, ...patch };
+    const book = this.data.books[this.data.bookIdx];
+    const tpl = receipt.fixForBook({ ...this.data.tpl, ...patch }, book && book.type); // 白事：版式 / 主色校正
     this.setData({
       tpl,
       fieldItems: tpl.fields.map(f => ({ f, label: receipt.FIELD_LABELS[f] })),
       disabledItems: ALL_FIELDS.filter(f => !tpl.fields.includes(f)).map(f => ({ f, label: receipt.FIELD_LABELS[f] })),
-      model: receipt.buildModel(this.sampleRecord(), tpl, this.data.accountName)
+      model: receipt.buildModel(this.sampleRecord(), tpl, this.data.accountName, { premiumOpen: plan.has('receiptStylePremium') })
     });
     this.refreshStyles();
   },

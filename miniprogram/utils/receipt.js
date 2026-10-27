@@ -52,16 +52,40 @@ const SAMPLE = {
 /** 礼簿未自定义样式时，按事由类型套用场景默认（白事自动素色无红章） */
 function normalizeTpl(tpl, bookType) {
   // 已保存的样式里可能有已下线的字段（如旧版的「代随礼」）：只保留现有字段
-  if (tpl) return { ...DEFAULT_TPL, ...tpl, fields: (tpl.fields || DEFAULT_TPL.fields).filter(k => FIELD_LABELS[k]) };
-  return { ...DEFAULT_TPL, ...scenes.byType(bookType || 'other').receipt };
+  if (tpl) return fixForBook({ ...DEFAULT_TPL, ...tpl, fields: (tpl.fields || DEFAULT_TPL.fields).filter(k => FIELD_LABELS[k]) }, bookType);
+  return fixForBook({ ...DEFAULT_TPL, ...scenes.byType(bookType || 'other').receipt }, bookType);
+}
+
+/** 白事回执用的主色：素灰 / 黑色系（回执色板与校正共用） */
+const FUNERAL_COLORS = ['#333333', '#555555', '#777777', '#999999'];
+/** 是否灰黑色系（三个色值相差不超过 16） */
+function isGrey(hex) {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(hex || ''));
+  if (!m) return false;
+  const v = [1, 2, 3].map(i => parseInt(m[i], 16));
+  return Math.max(...v) - Math.min(...v) <= 16;
+}
+/**
+ * 白事礼簿的样式校正（v3.64.3）：版式只能是素雅 / 简约 / 票据，不是则改简约；主色不是灰黑色系则改 #333333。
+ * 旧模板（红色卡片、喜庆等）读取时即校正，不改库；非白事原样返回
+ */
+function fixForBook(t, bookType) {
+  if (bookType !== 'funeral') return t;
+  return {
+    ...t,
+    style: FUNERAL_STYLES.includes(t.style) ? t.style : 'simple',
+    color: isGrey(t.color) ? t.color : FUNERAL_COLORS[0]
+  };
 }
 
 // 收据编号与金额大写放在 format.js（小票打印也要用，避免引入 request）
 const { receiptNo, amountUpper } = fmt;
 
 /** 生成展示模型（组件渲染与画图共用） */
-function buildModel(record, tpl, accountName) {
+function buildModel(record, tpl, accountName, opts) {
   const t = normalizeTpl(tpl, record.bookType);
+  // 套餐关闭会员版式后按「卡片」显示（opts.premiumOpen === false；宾客端由云函数同样降级，这里供设置页预览）
+  if (opts && opts.premiumOpen === false && STYLES.some(s => s.premium && s.v === t.style)) t.style = 'card';
   const values = {
     receiptNo: receiptNo(record),
     payee: accountName || '',
@@ -224,7 +248,7 @@ function draw(ctx, m, H) {
   }
   if (st === 'business') { // 深色顶栏
     ctx.fillStyle = color;
-    ctx.fillRect(0, 0, W, 170);
+    ctx.fillRect(0, 0, W, BUSINESS_HEAD);
   }
   if (st === 'elegant') { // 灰色细边
     ctx.strokeStyle = '#BBBBBB';
@@ -249,7 +273,7 @@ function draw(ctx, m, H) {
   ctx.fillStyle = simple || st === 'elegant' ? '#333333' : st === 'business' ? '#FFFFFF' : color;
   const tf = fitTitle(ctx, m.title, TITLE_MAX_W, st === 'guofeng' ? 'serif' : 'sans-serif');
   ctx.font = tf.font;
-  ctx.fillText(tf.text, W / 2, 110);
+  ctx.fillText(tf.text, W / 2, st === 'business' ? BUSINESS_HEAD / 2 : 110); // 商务：标题在顶栏正中
   if (simple) {
     ctx.fillStyle = color;
     ctx.fillRect(W / 2 - 40, 150, 80, 6);
@@ -334,6 +358,7 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
+const BUSINESS_HEAD = 150; // 商务版顶栏高度（页面版 .title.hd 同为 150rpx，印章下移到顶栏之下）
 const TITLE_MAX_W = W - 120; // 标题最大宽度：留出边框 / 色带的位置
 /**
  * 标题超宽：先把字号从 44 缩到最小 30，仍放不下再截断加省略号（标题最长 20 字，44px 约 880 宽，超出画布；商务顶栏的白字也不会被切）
@@ -384,5 +409,5 @@ function saveImage(filePath) {
 
 module.exports = {
   FIELD_LABELS, STYLES, FUNERAL_STYLES, stylesFor, DEFAULT_TPL, SAMPLE,
-  normalizeTpl, amountUpper, receiptNo, buildModel, toImage, saveImage, withAppCode, fitTitle
+  normalizeTpl, amountUpper, receiptNo, buildModel, toImage, saveImage, withAppCode, fitTitle, fixForBook, isGrey, FUNERAL_COLORS
 };

@@ -27,7 +27,7 @@
     <view class="section-title">样式</view>
     <view class="row"><text class="lbl">版式</text>
       <view class="chips">
-        <view class="chip {{tpl.style === item.v ? 'on' : ''}}" style="{{item.locked ? 'opacity:.55' : ''}}" wx:for="{{styles}}" wx:key="v" data-v="{{item.v}}" bindtap="onStyle">{{item.label}}{{item.premium ? ' · 会员' : ''}}</view>
+        <view class="chip {{tpl.style === item.v ? 'on' : ''}}" style="{{item.locked ? 'opacity:.55' : ''}}" wx:for="{{styles}}" wx:key="v" data-v="{{item.v}}" bindtap="onStyle">{{item.label}}{{item.locked ? ' · 会员' : ''}}</view>
       </view>
     </view>
     <view class="muted" wx:if="{{styleLockTip}}">{{styleLockTip}}</view>

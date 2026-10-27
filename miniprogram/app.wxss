@@ -13,6 +13,7 @@ page {
   --warn-border: #FFC069;
   --link: #576B95;
   --border: #e5e5e5;
+  --line: #f5f5f5;       /* 列表行之间的浅分隔线 */
   --fill: #f2f3f5;
   --text: #333;
   --text-2: #666;

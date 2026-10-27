@@ -44,8 +44,9 @@
 .band { position: absolute; left: 0; right: 0; height: 12rpx; }
 .band.top { top: 0; }
 .band.bottom { bottom: 0; }
-.wm { position: absolute; left: 0; right: 0; top: 30%; font-size: 420rpx; line-height: 1; font-weight: 700; opacity: .07; pointer-events: none; font-family: serif; }
+.wm { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); font-size: 420rpx; line-height: 1; font-weight: 700; opacity: .07; pointer-events: none; font-family: serif; }
 .wrap.guofeng .paper { background: #F6EFDD; border-radius: 0; border: 6rpx solid var(--rc, #8B4513); box-shadow: inset 0 0 0 10rpx #F6EFDD, inset 0 0 0 12rpx var(--rc, #8B4513); padding-top: 64rpx; padding-bottom: 56rpx; }
 .wrap.guofeng .title { font-family: serif; }
 .wrap.business .paper { border-radius: 0; border: 2rpx solid #e5e5e5; padding-top: 0; }
-.title.hd { margin: 0 -40rpx; padding: 44rpx 40rpx 36rpx; }
+.title.hd { margin: 0 -40rpx; padding: 24rpx 40rpx; min-height: 150rpx; box-sizing: border-box; display: flex; align-items: center; justify-content: center; }
+.wrap.business .stamp { top: 190rpx; }
