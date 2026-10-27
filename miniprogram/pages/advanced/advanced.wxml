@@ -2,7 +2,7 @@
   <view class="muted a-loading" wx:if="{{!ready || (hasAccount && !planReady)}}">加载中…</view>
   <view class="card" wx:if="{{ready && !hasAccount}}">
     <view class="a-title">高级功能</view>
-    <view class="muted a-desc">还没有礼簿，创建礼簿后可在这里设置机构模式、工作台刷新屏幕等</view>
+    <view class="muted a-desc">还没有礼簿，创建礼簿后可在这里设置机构模式、工作台刷新频率等</view>
   </view>
 
   <block wx:if="{{hasAccount && planReady}}">
@@ -22,11 +22,11 @@
       </view>
     </view>
 
-    <!-- 工作台刷新屏幕（默认收起，点标题行展开） -->
+    <!-- 工作台刷新频率（默认收起，点标题行展开） -->
     <view class="card">
       <view class="a-head" bindtap="onPollHead">
         <view class="a-headtext">
-          <view class="a-line"><text class="a-title">工作台刷新屏幕</text><text class="a-vip" wx:if="{{poll.vip}}">会员</text></view>
+          <view class="a-line"><text class="a-title">工作台刷新频率</text><text class="a-vip" wx:if="{{poll.vip}}">会员</text></view>
         </view>
         <text class="muted a-cur">{{levelName}}</text>
         <text class="a-arrow {{pollOpen ? 'open' : ''}}">›</text>

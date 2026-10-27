@@ -48,7 +48,7 @@ test('poller hold：高峰期间超过 30 分钟没有变化仍固定间隔；ho
 });
 
 // ---- plans
-test('plans：bookMaxOf 缺项 3000，设了取值，最高 10000；默认 free 3000 / pro 6000；peakMode 默认开放', () => {
+test('plans：bookMaxOf 缺项 3000，设了取值，最高 10000；默认 free 3000 / pro 6000；peakMode 仅 pro', () => {
   assert.strictEqual(P.bookMaxOf({}), 3000);
   assert.strictEqual(P.bookMaxOf(undefined), 3000);
   assert.strictEqual(P.bookMaxOf({ bookMax: 0 }), 3000);
@@ -57,7 +57,8 @@ test('plans：bookMaxOf 缺项 3000，设了取值，最高 10000；默认 free 
   assert.strictEqual(P.bookMaxOf({ bookMax: 99999 }), 10000);
   assert.strictEqual(P.bookMaxOf(P.DEFAULT_PLANS.free.features), 3000);
   assert.strictEqual(P.bookMaxOf(P.DEFAULT_PLANS.pro.features), 6000);
-  assert.strictEqual(P.DEFAULT_PLANS.free.features.peakMode, true);
+  assert.strictEqual(P.DEFAULT_PLANS.free.features.peakMode, false, 'v3.65.1 起高峰模式仅会员');
+  assert.strictEqual(P.DEFAULT_PLANS.pro.features.peakMode, true);
   assert.strictEqual(P.PEAK_HOURS, 8);
   assert.strictEqual(P.normalizeWarmup({ mode: 'peak' }).mode, 'peak');
   assert.strictEqual(P.normalizeWarmup({ mode: 'always' }).mode, 'always');
@@ -86,8 +87,10 @@ const plansDoc = f => [{ _id: 'plans', free: { name: '免费版', features: f },
 const CLERK_CONFIRM = { _id: 'm1', aid: 'acc1', memberOpenid: 'c1', role: 'clerk', soloBookId: 'b1', perms: ['confirm'] };
 const CLERK_DESK = { _id: 'm2', aid: 'acc1', memberOpenid: 'c2', role: 'clerk', soloBookId: 'b1', perms: ['desk'] };
 const VIEWER = { _id: 'm3', aid: 'acc1', memberOpenid: 'v1', role: 'viewer', bookIds: ['b1'] };
-function seed(features, peakUntil) {
+// 默认主家是会员（有效 pro 订阅）；free = true 时是免费版（没有订阅）
+function seed(features, peakUntil, free) {
   db.reset().applyUpdates = true;
+  db.seed('subscriptions', free ? [] : [{ _id: OWNER, plan: 'pro', expiresAt: new Date(Date.now() + 30 * 24 * HOUR) }]);
   db.seed('users', [{ openid: OWNER, pollLevel: 'low' }, { openid: 'c1' }, { openid: 'c2' }, { openid: 'v1' }])
     .seed('accounts', [{ _id: 'acc1', ownerOpenid: OWNER, activeBookId: 'b1', accountName: '张府', ...(peakUntil ? { peakUntil } : {}) }])
     .seed('books', [{ _id: 'b1', ownerOpenid: OWNER, name: '礼簿' }])
@@ -110,7 +113,7 @@ test('account.setPeak：主家开启写入 8 小时后到期；关闭清除；�
 });
 
 test('account.setPeak：套餐关闭 peakMode 时不能开启，但可以关闭', async () => {
-  seed({ peakMode: false });
+  seed({ peakMode: false }, 0, true);
   const r = await call(OWNER, { action: 'setPeak', on: true });
   assert.notStrictEqual(r.code, 0);
   assert.ok(/会员/.test(r.msg));
@@ -128,10 +131,41 @@ test('account.get：peakUntil 只给主家与有确认权限的记账人；到�
   assert.strictEqual((await call('v1', { action: 'get' })).data.peakUntil, 0);
   seed(null, new Date(Date.now() - 1000));
   assert.strictEqual((await call(OWNER, { action: 'get' })).data.peakUntil, 0, '已到期');
-  seed({ peakMode: false }, new Date(until));
+  seed({ peakMode: false }, new Date(until), true);
   assert.strictEqual((await call(OWNER, { action: 'get' })).data.peakUntil, 0, '套餐关闭后不再生效');
   seed();
   assert.strictEqual((await call(OWNER, { action: 'get' })).data.peakUntil, 0);
+});
+
+test('免费版（默认套餐）：setPeak 被拒并提示「高峰模式属于会员功能」，不写库；会员正常；免费版能关闭', async () => {
+  seed(null, 0, true);
+  const r = await call(OWNER, { action: 'setPeak', on: true });
+  assert.notStrictEqual(r.code, 0);
+  assert.strictEqual(r.msg, '高峰模式属于会员功能');
+  assert.ok(!db.data.accounts[0].peakUntil);
+  assert.strictEqual((await call(OWNER, { action: 'setPeak', on: false })).code, 0, '关闭始终可以');
+  seed(null, 0, false);
+  assert.strictEqual((await call(OWNER, { action: 'setPeak', on: true })).code, 0, '会员可开启');
+});
+
+test('免费版：遗留的 peakUntil 读取时无效（account.get 为 0），刷新档位回到自选档；会员有效', async () => {
+  const until = Date.now() + 3 * HOUR;
+  seed(null, new Date(until), true);
+  let r = await call(OWNER, { action: 'get' });
+  assert.strictEqual(r.data.peakUntil, 0);
+  assert.strictEqual(r.data.pollLevel, 'low');
+  assert.strictEqual((await call('c1', { action: 'get' })).data.peakUntil, 0, '记账人跟随主家的免费状态');
+  seed(null, new Date(until), false);
+  r = await call(OWNER, { action: 'get' });
+  assert.strictEqual(r.data.peakUntil, until);
+  assert.strictEqual((await call('c1', { action: 'get' })).data.peakUntil, until);
+});
+
+test('advperm.peakItem：免费版（peakMode false）开关置灰 + 会员标签 + 联系我们', () => {
+  const r = A.peakItem({ role: 'owner', features: P.DEFAULT_PLANS.free.features, peakUntil: 0, now: 1e12 });
+  assert.ok(!r.enabled && r.vip && r.contact);
+  const pro = A.peakItem({ role: 'owner', features: P.DEFAULT_PLANS.pro.features, peakUntil: 0, now: 1e12 });
+  assert.ok(pro.enabled && !pro.vip);
 });
 
 // ---- warmer：有人开高峰才预热
@@ -139,8 +173,11 @@ test('warmer.hasPeak：只数未到期的 accounts.peakUntil', async () => {
   db.reset().seed('accounts', [{ _id: 'a1', ownerOpenid: 'x' }]);
   const W = loadFunction('warmer')._test;
   assert.strictEqual(await W.hasPeak(), false);
-  db.reset().seed('accounts', [{ _id: 'a1', ownerOpenid: 'x', peakUntil: new Date(Date.now() - 1000) }, { _id: 'a2', ownerOpenid: 'y', peakUntil: new Date(Date.now() + HOUR) }]);
+  const member = o => ({ _id: o, plan: 'pro', expiresAt: new Date(Date.now() + 30 * 24 * HOUR) });
+  db.reset().seed('subscriptions', [member('y')]).seed('accounts', [{ _id: 'a1', ownerOpenid: 'x', peakUntil: new Date(Date.now() - 1000) }, { _id: 'a2', ownerOpenid: 'y', peakUntil: new Date(Date.now() + HOUR) }]);
   assert.strictEqual(await W.hasPeak(), true);
+  db.reset().seed('accounts', [{ _id: 'a2', ownerOpenid: 'free1', peakUntil: new Date(Date.now() + HOUR) }]);
+  assert.strictEqual(await W.hasPeak(), false, '免费版遗留的 peakUntil 不触发预热');
   db.reset().seed('accounts', [{ _id: 'a1', ownerOpenid: 'x', peakUntil: new Date(Date.now() - 1000) }]);
   assert.strictEqual(await W.hasPeak(), false);
 });
@@ -148,7 +185,7 @@ test('warmer.hasPeak：只数未到期的 accounts.peakUntil', async () => {
 async function warmRun(mode, opts) {
   db.reset();
   db.seed('settings', [{ _id: 'warmup', enabled: true, mode, intervalMin: 5, functions: ['account'] }])
-    .seed('subscriptions', opts.paid ? [{ _id: 'o1', plan: 'pro', expiresAt: new Date(Date.now() + HOUR) }] : [])
+    .seed('subscriptions', (opts.paid ? [{ _id: 'o1', plan: 'pro', expiresAt: new Date(Date.now() + HOUR) }] : []).concat(opts.peak ? [{ _id: 'x', plan: 'pro', expiresAt: new Date(Date.now() + HOUR) }] : []))
     .seed('accounts', opts.peak ? [{ _id: 'a1', ownerOpenid: 'x', peakUntil: new Date(Date.now() + HOUR) }] : []);
   state.calls.length = 0;
   state.openid = ''; // 定时触发没有用户身份

@@ -1,6 +1,6 @@
-// pages/advanced/advanced.js — 高级功能（列表，可继续扩展）：机构模式、工作台刷新屏幕（频率）
+// pages/advanced/advanced.js — 高级功能（列表，可继续扩展）：机构模式、工作台刷新频率（频率）
 // 所有有账户身份的角色都能进入；无权限的项目仍显示并置灰，写明原因（可用性见 utils/advperm.js，云端另有校验）
-// 工作台刷新屏幕默认收起（pollOpen）；刷新频率按人保存在服务端（account.setPollLevel → users.pollLevel），本机缓存见 utils/pollcfg.js
+// 工作台刷新频率默认收起（pollOpen）；刷新频率按人保存在服务端（account.setPollLevel → users.pollLevel），本机缓存见 utils/pollcfg.js
 const req = require('../../utils/request.js');
 const theme = require('../../utils/theme.js');
 const plan = require('../../utils/plan.js');
@@ -219,18 +219,18 @@ Page({
     if (!this.data.ad.member) this.explain({ contact: true, reason: '开通会员后，主家与记账人使用的页面不再显示广告' }, '去广告');
   },
 
-  // —— 工作台刷新屏幕 ——
+  // —— 工作台刷新频率 ——
   /** 标题行：无权限弹原因；否则展开 / 收起档位 */
   onPollHead() {
     const { poll, pollOpen } = this.data;
-    if (!poll.enabled) return this.explain(poll, '工作台刷新屏幕');
+    if (!poll.enabled) return this.explain(poll, '工作台刷新频率');
     this.setData({ pollOpen: !pollOpen });
   },
   async onPick(e) {
     const key = e.currentTarget.dataset.key;
     const { poll, level, saving } = this.data;
     if (saving) return;
-    if (!adv.pollOptionEnabled(poll, key)) return this.explain(poll, '工作台刷新屏幕');
+    if (!adv.pollOptionEnabled(poll, key)) return this.explain(poll, '工作台刷新频率');
     if (key === level) return;
     this.setData({ saving: true });
     try {

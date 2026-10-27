@@ -56,7 +56,7 @@ const DEFAULT_PLANS = {
   free: {
     name: '免费版',
     features: { warmup: true, maxBooks: 0, maxClerks: 0, exportPdf: true, receiptAppCode: true, org: false, fastRefresh: true,
-      pdfThemePremium: true, receiptStylePremium: true, trashDays: 60, peakMode: true, bookMax: 3000 } // 0 = 不限；peakMode 办事日高峰模式；bookMax 传统礼簿 PDF 单次最多笔数（免费 3000，专业版 6000；缺项 = 3000）；trashDays 回收站可选的最长保留天数（缺项 / 0 视为 60，即全部开放）；org 机构版；fastRefresh 待确认高频刷新；pdfThemePremium 礼簿 PDF 会员主题 / 自定义 / 宋体毛笔 / 尾页设置；receiptStylePremium 电子回执会员样式（现阶段全部免费开放，只有 === false 才限制）
+      pdfThemePremium: true, receiptStylePremium: true, trashDays: 60, peakMode: false, bookMax: 3000 } // 0 = 不限；peakMode 办事日高峰模式（v3.65.1 起仅会员：free 为 false，pro 为 true）；bookMax 传统礼簿 PDF 单次最多笔数（免费 3000，专业版 6000；缺项 = 3000）；trashDays 回收站可选的最长保留天数（缺项 / 0 视为 60，即全部开放）；org 机构版；fastRefresh 待确认高频刷新；pdfThemePremium 礼簿 PDF 会员主题 / 自定义 / 宋体毛笔 / 尾页设置；receiptStylePremium 电子回执会员样式（现阶段全部免费开放，只有 === false 才限制）
   },
   pro: {
     name: '专业版',

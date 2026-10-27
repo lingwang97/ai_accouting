@@ -5,7 +5,7 @@ const cloud = require('wx-server-sdk');
 const { bjDay, bjHour } = require('./common.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
-const { DEFAULT_WARMUP, readSetting, writeSetting, normalizeWarmup } = require('./plans.js');
+const { DEFAULT_WARMUP, readSetting, writeSetting, normalizeWarmup, planOf, featureOpen } = require('./plans.js');
 
 // 超时 60 秒：各阶段按时间预算执行，剩余时间不足就跳过，留到下一轮（5 分钟后）
 const TOTAL_MS = 50 * 1000;
@@ -130,8 +130,14 @@ async function cleanNonces() {
 async function hasPeak() {
   try {
     const _ = db.command;
-    const res = await db.collection('accounts').where({ peakUntil: _.gt(new Date()), _openid: _.exists(false) }).count();
-    return res.total > 0;
+    // v3.65.1 高峰模式仅会员：只算套餐含 peakMode 的主家（免费版遗留的 peakUntil 不触发预热）
+    const rows = (await db.collection('accounts').where({ peakUntil: _.gt(new Date()), _openid: _.exists(false) }).limit(100).get()).data;
+    for (const a of rows) {
+      let features = {};
+      try { features = (await planOf(db, a.ownerOpenid)).features; } catch (e) { /* 读套餐失败：按开放处理 */ }
+      if (featureOpen(features, 'peakMode')) return true;
+    }
+    return false;
   } catch (e) {
     return false;
   }

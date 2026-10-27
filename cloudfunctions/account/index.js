@@ -1035,7 +1035,7 @@ async function setPeak(openid, on) {
   if (!ctx.account || ctx.role !== 'owner') return err('仅主家可设置');
   if (on) {
     const plan = await P.planOf(db, ctx.ownerOpenid);
-    if (!P.featureOpen(plan.features, 'peakMode')) return err('办事日高峰模式属于会员功能');
+    if (!P.featureOpen(plan.features, 'peakMode')) return err('高峰模式属于会员功能');
     const until = new Date(Date.now() + P.PEAK_HOURS * 3600 * 1000);
     await accounts.doc(ctx.account._id).update({ data: { peakUntil: until } });
     return ok({ peakUntil: until.getTime() });
