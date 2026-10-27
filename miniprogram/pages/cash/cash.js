@@ -8,6 +8,7 @@ const batch = require('../../utils/batch.js');
 const theme = require('../../utils/theme.js');
 const perm = require('../../utils/perm.js');
 const samename = require('../../utils/samename.js');
+const ble = require('../../utils/ble.js');
 
 const DEFAULT_QUICK = [100, 200, 300, 500, 600, 800, 1000, 1500, 2000];
 const DONE_MAX = 20; // 本次已登记列表最多显示的份数
@@ -33,11 +34,17 @@ Page({
     pageLoading: true, // 首次读取礼簿期间：转圈 + 不可操作
     done: [],          // 本次已登记（只显示最近 DONE_MAX 份）
     doneCount: 0,      // 本次已登记份数、合计：单独累加，不受显示条数限制
-    doneSum: '0.00'
+    doneSum: '0.00',
+    printerStatus: 'none', // connected 已连接 / paired 已配对未连接 / none 未配对（顶部状态条）
+    nameFocus: false,      // 入簿后自动聚焦姓名，接着登记下一位
+    amountFocus: false
   },
 
   onShow() {
     this.setData({ primary: theme.apply(this).primary }); // 主题色跟当前礼簿事由走
+    this.syncPrinter();
+    if (!this._onPrinter) this._onPrinter = () => this.syncPrinter();
+    ble.onStateChange(this._onPrinter);
   },
 
   async onLoad() {
@@ -71,6 +78,41 @@ Page({
     } catch (e) { /* toast 已提示 */ }
   },
 
+  onHide() { if (this._onPrinter) ble.offStateChange(this._onPrinter); },
+  onUnload() { if (this._onPrinter) ble.offStateChange(this._onPrinter); },
+  syncPrinter() {
+    const status = ble.printerStatus(ble.loadDevice(), !!ble.state.deviceId);
+    if (status !== this.data.printerStatus) this.setData({ printerStatus: status });
+  },
+  /** 打印机状态条：已配对未连接 → 立即重连（并结束自动打印的 10 分钟暂停）；未配对 → 去配对 */
+  async onPrinterTap() {
+    const st = this.data.printerStatus;
+    if (st === 'connected') return;
+    if (st === 'none') return wx.navigateTo({ url: '/pages/printer/printer' });
+    if (this._linking) return;
+    this._linking = true;
+    wx.showLoading({ title: '正在连接', mask: true });
+    printer.resumeAuto();
+    let ok = false;
+    try { ok = await printer.ensureConnected(); } catch (e) { ok = false; }
+    wx.hideLoading();
+    this._linking = false;
+    this.syncPrinter();
+    if (ok) wx.showToast({ title: '已连接', icon: 'success' });
+    else {
+      wx.showModal({
+        title: '没连上打印机',
+        content: '请确认打印机已开机、手机蓝牙已打开，并靠近打印机后再试；也可以去「打印机」页重新配对。',
+        confirmText: '去配对',
+        cancelText: '知道了',
+        success: r => { if (r.confirm) wx.navigateTo({ url: '/pages/printer/printer' }); }
+      });
+    }
+  },
+  onNameBlur() { this.setData({ nameFocus: false }); },
+  onAmountBlur() { this.setData({ amountFocus: false }); },
+  /** 姓名键盘点「下一项」：跳到金额 */
+  onNameNext() { this.setData({ nameFocus: false, amountFocus: true }); },
   onInput(e) { this.setData({ [e.currentTarget.dataset.k]: e.detail.value }); },
   onQuick(e) { this.setData({ amount: String(e.currentTarget.dataset.v) }); },
   onRelation(e) {
@@ -127,8 +169,9 @@ Page({
       const done = added.slice().reverse().concat(this.data.done).slice(0, DONE_MAX);
       this._doneFen = (this._doneFen || 0) + added.reduce((s, r) => s + Math.round(r.amount * 100), 0);
       added.forEach(r => { r.methodStr = r.payMethod === 'cash' ? '现金' : '微信'; });
-      this.setData({ ...emptyForm(), done, doneCount: this.data.doneCount + added.length, doneSum: fmt.money(this._doneFen / 100) });
+      this.setData({ ...emptyForm(), done, doneCount: this.data.doneCount + added.length, doneSum: fmt.money(this._doneFen / 100), nameFocus: false, amountFocus: false });
       if (this.data.batchMode) this.selectComponent('#batch').reset();
+      else setTimeout(() => this.setData({ nameFocus: true }), 50); // 光标回到姓名，直接登记下一位
       const addFen = added.reduce((s, r) => s + Math.round(r.amount * 100), 0);
       // 自动归到以前随过礼的人时不再弹窗说明（第二场起老亲戚几乎每位都会触发，太打扰）；归错了到往来页区分
       wx.showToast({
@@ -177,9 +220,12 @@ Page({
     return { notes };
   },
 
-  /** 自动打印回执（批次每人一张）；打印机未连接只提示，不影响登记 */
+  /** 自动打印回执（批次每人一张）；没配过打印机不打印；连不上时暂停自动打印 10 分钟，只提示这一次（v3.65.2） */
   async print(list) {
-    if (!(await printer.ensureConnected())) return;
+    const st = await printer.autoConnect();
+    this.syncPrinter();
+    if (st === 'failed') return wx.showToast({ title: '打印机未连上，10 分钟内不再自动打印，可点顶部「连接」', icon: 'none', duration: 3000 });
+    if (st !== 'ok') return;
     try {
       for (const r of list) await printer.printRecord(r);
     } catch (e) {

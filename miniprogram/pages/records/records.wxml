@@ -4,6 +4,7 @@
     <button class="btn-primary" style="margin-top:24rpx" bindtap="goLogin">去登录</button>
   </view>
   <block wx:else>
+  <view class="net-bar" wx:if="{{netBad}}">网络不稳定，正在自动重试…</view>
   <view class="card sum-card">
     <view class="sum-row">
       <view class="sum-left">

@@ -104,7 +104,7 @@ Page({
   async doExport(format, bookId) {
     if (this.data.exporting) return;
     this.setData({ exporting: true });
-    wx.showLoading({ title: '正在生成…', mask: true });
+    wx.showLoading({ title: '约需半分钟…', mask: true }); // 导出一般 10～30 秒，礼金多时接近 1 分钟（v3.65.2 提示预计时间）
     try {
       const res = await req.exportFile({ format, bookId });
       const filePath = await openfile.download(res.fileID, res.fileName);

@@ -60,31 +60,38 @@ function askActual(record) {
 }
 
 async function doConfirm(record, actual) {
+  let r;
   try {
-    const r = await req.payConfirm(record._id, actual);
-    wx.showToast({ title: '已记入礼簿', icon: 'success' }); // 成功图标最多显示 7 个字
-    const note = await autoPrint(r.list || [r.record || { ...record, amount: actual || record.amount }]);
-    // 打印异常时合并成一条提示，避免后一条 toast 把「已记入礼簿」顶掉
-    if (note) wx.showToast({ title: `已记入礼簿（${note}）`, icon: 'none', duration: 2500 });
-    getApp().refreshBadge();
-    return true;
+    r = await req.payConfirm(record._id, actual);
   } catch (e) {
     return false; // request.js 已 toast
   }
+  wx.showToast({ title: '已记入礼簿', icon: 'success' }); // 成功图标最多显示 7 个字
+  getApp().refreshBadge();
+  // 打印放到后台（v3.65.2）：不等打印 / 重连，马上可以确认下一笔；打印异常时合并成一条提示
+  printLater(r.list || [r.record || { ...record, amount: actual || record.amount }], '已记入礼簿');
+  return true;
+}
+
+/** 后台自动打印，有异常时提示（不抛错） */
+function printLater(list, head) {
+  autoPrint(list).then(note => {
+    if (note) wx.showToast({ title: `${head}（${note}）`, icon: 'none', duration: 2500 });
+  }).catch(() => {});
 }
 
 /** 批次按逐人实际金额入簿：amounts 为 {rid: 金额}，只需列出与登记不一致的 */
 async function confirmGroupAmounts(group, amounts) {
+  let r;
   try {
-    const r = await req.payConfirm(group._id, undefined, amounts);
-    wx.showToast({ title: '已按实收入簿', icon: 'success' });
-    const note = await autoPrint(r.list || [r.record]);
-    if (note) wx.showToast({ title: `已按实收入簿（${note}）`, icon: 'none', duration: 2500 });
-    getApp().refreshBadge();
-    return true;
+    r = await req.payConfirm(group._id, undefined, amounts);
   } catch (e) {
     return false;
   }
+  wx.showToast({ title: '已按实收入簿', icon: 'success' });
+  getApp().refreshBadge();
+  printLater(r.list || [r.record], '已按实收入簿');
+  return true;
 }
 
 const isGroup = r => !!(r && r.records && r.records.length > 1);
@@ -114,9 +121,10 @@ function confirmBatch(records) {
         } catch (e) { /* 网络或超时：已提交的批次已入簿，下面按实际结果提示 */ }
         wx.hideLoading();
 
-        // 逐张打印；打印机未连接时不打印，结果统一在最后弹窗说明
+        // 逐张打印；没配过打印机不打印也不提示；连不上时暂停自动打印 10 分钟，结果统一在最后弹窗说明
         let printNote = '';
-        if (done.length && (await printer.ensureConnected())) {
+        const st = done.length ? await printer.autoConnect() : 'none';
+        if (st === 'ok') {
           let printed = 0;
           let partial = false;
           for (let i = 0; i < done.length; i++) {
@@ -134,8 +142,10 @@ function confirmBatch(records) {
           if (failedPrint) {
             printNote = `\n${failedPrint} 张未打印成功，可在礼簿页补打。` + (partial ? '其中一张可能只打了一半，请检查小票。' : '');
           }
-        } else if (done.length) {
-          printNote = '\n打印机未连接，可在礼簿页补打。';
+        } else if (st === 'failed') {
+          printNote = '\n打印机未连上，10 分钟内不再自动打印，可在礼簿页补打。';
+        } else if (st === 'paused') {
+          printNote = '\n自动打印已暂停（打印机未连上），可在礼簿页补打。';
         }
         getApp().refreshBadge();
         const notDone = records.length - done.length;
@@ -181,7 +191,9 @@ function rejectTransfer(record) {
 
 /** 确认后自动打印（批次每人一张）；返回给调用方合并提示用的说明，打印正常返回空串。打印异常不阻断确认流程 */
 async function autoPrint(list) {
-  if (!(await printer.ensureConnected())) return '打印机未连接，未打印';
+  const st = await printer.autoConnect();
+  if (st === 'none' || st === 'paused') return ''; // 没配过打印机 / 暂停期内：不打扰
+  if (st === 'failed') return '打印机未连上，10 分钟内不再自动打印';
   try {
     for (const record of list) await printer.printRecord({ ...record, status: REC.PAID });
     return '';

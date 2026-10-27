@@ -11,6 +11,7 @@ const theme = require('../../utils/theme.js');
 
 const POLL_MS = 3000;
 const POLL_MAX = 200; // 约 10 分钟
+const NAME_KEY = 'pay_last_name'; // 本机上次随礼用的姓名（宾客常去多家随礼，免得每次重填）
 const OPEN_KEY = 'pay_open'; // 本机最近一笔未点「我已完成转账」的随礼（{ aid, rid, record, payCodeUrl, at }）
 
 /** 页面展示用：金额文本、批次名单 */
@@ -52,7 +53,10 @@ Page({
     showFallback: false, // 在现场时：在本机显示收款码（备用）
     codeSaved: false,    // 宾客手机付款：收款码是否已存入相册
     receiptModel: null,  // 到账后的留存收据
-    savingReceipt: false
+    savingReceipt: false,
+    who: '随礼人',       // 白事称「致奠人」、动作称「登记」（v3.65.2，与礼簿码页「奠仪」一致）
+    act: '随礼',
+    amountFocus: false
   },
 
   onLoad(options) {
@@ -71,7 +75,9 @@ Page({
     // 收款码图片默认收起，看不到 / 扫不到时点开，再存相册转账。
     // 不再按进入场景自动展开：wx.getEnterOptionsSync 取的是小程序启动时的场景，之前从聊天卡片打开过小程序后，
     // 再扫码或从礼簿码页进入随礼页也会被误判为「不在现场」而展开收款码
-    this.setData({ aid, onsite: true });
+    let last = '';
+    try { last = wx.getStorageSync(NAME_KEY) || ''; } catch (e) { /* 忽略 */ }
+    this.setData({ aid, onsite: true, payerName: typeof last === 'string' ? last : '' });
     this.loadAccount(aid).then(() => this.resumeOpen(aid));
   },
 
@@ -126,9 +132,10 @@ Page({
     try {
       const { account } = await req.accountGetByAid(aid);
       const t = theme.forType(account.book && account.book.type, account.theme && account.theme.chosen ? account.theme.primary : '');
-      this.setData({ account, isFuneral: !!(account.book && account.book.type === 'funeral'), themeStyle: theme.styleOf(t), primary: t.primary });
+      const funeral = !!(account.book && account.book.type === 'funeral');
+      this.setData({ account, isFuneral: funeral, themeStyle: theme.styleOf(t), primary: t.primary, who: funeral ? '致奠人' : '随礼人', act: funeral ? '登记' : '随礼' });
       wx.setNavigationBarColor({ frontColor: '#ffffff', backgroundColor: t.primary, fail() {} });
-      wx.setNavigationBarTitle({ title: `向「${account.accountName}」随礼` });
+      wx.setNavigationBarTitle({ title: funeral ? `向「${account.accountName}」致奠` : `向「${account.accountName}」随礼` });
     } catch (e) {
       this.setData({ loadErr: '礼簿码无效或主家已停用' });
     }
@@ -136,6 +143,9 @@ Page({
 
   onName(e) { this.setData({ payerName: e.detail.value }); },
   onAmount(e) { this.setData({ amount: e.detail.value }); },
+  /** 姓名键盘点「下一项」：跳到金额 */
+  onNameNext() { this.setData({ amountFocus: true }); },
+  onAmountBlur() { this.setData({ amountFocus: false }); },
   onRemark(e) { this.setData({ remark: e.detail.value }); },
   onBatchMode(e) {
     const on = e.detail.value;
@@ -193,6 +203,7 @@ Page({
       }
       const { record } = res;
       this._reqId = ''; // 已创建，下一次提交换新 reqId
+      if (!payload.items) { try { wx.setStorageSync(NAME_KEY, payload.payerName); } catch (e) { /* 忽略 */ } } // 下次随礼自动填好姓名
       // 现金：不经收款码与转账，直接等待主家确认收到
       if (record.payMethod === 'cash') {
         this.setData({ record: viewRecord(record), step: 'waiting' });

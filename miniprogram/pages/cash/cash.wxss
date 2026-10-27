@@ -1,5 +1,9 @@
 .book-tip { margin: 0 8rpx 20rpx; line-height: 1.6; }
 .book-name { color: var(--text); font-weight: 600; }
+.pr-row { display: flex; align-items: center; justify-content: space-between; margin: 0 0 20rpx; padding: 14rpx 20rpx; border-radius: 12rpx; font-size: 26rpx; line-height: 1.5; color: var(--warn); background: var(--warn-bg); border: 2rpx solid var(--warn-border); }
+.pr-row.connected { color: #389E0D; background: #F6FFED; border-color: #B7EB8F; }
+.pr-text { flex: 1; min-width: 0; margin-right: 16rpx; }
+.pr-go { flex-shrink: 0; white-space: nowrap; font-weight: 600; }
 .done { margin-top: 36rpx; }
 .done-item {
   display: flex; justify-content: space-between; align-items: center; background: #fff; border-radius: var(--r-s);

@@ -45,7 +45,7 @@
       </view></view>
     <view class="row"><text class="lbl">标题加粗</text>
       <switch checked="{{titleBold}}" bindchange="onTitleBold" color="{{primary}}" /></view>
-    <view class="row"><text class="lbl">记账人</text>
+    <view class="row"><text class="lbl">{{staffWord || '记账人'}}</text>
       <text class="muted flex1">标题下打印"记账：某某"（主家称呼始终打印）</text>
       <switch checked="{{showHandler}}" bindchange="onHandler" color="{{primary}}" /></view>
     <view class="row"><text class="lbl">金额字号</text>

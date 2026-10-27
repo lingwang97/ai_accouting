@@ -36,11 +36,20 @@ function subscribe() {
         resolve(ok);
       },
       fail: e => {
-        wx.showToast({ title: '开启失败：' + ((e && e.errMsg) || ''), icon: 'none' });
+        wx.showModal({ title: '没能开启提醒', content: subscribeFailText(e), showCancel: false, confirmText: '知道了' });
         resolve(false);
       }
     });
   });
+}
+
+/** 订阅失败的中文说明（v3.65.2，不再直接显示微信的英文错误） */
+function subscribeFailText(e) {
+  const code = Number(e && e.errCode);
+  if (code === 20004) return '你关闭了本小程序的通知总开关。请点右上角「···」→ 设置 → 通知管理，打开「接收通知」后再试。';
+  if (code === 10005) return '当前页面暂时无法弹出授权窗口，请稍后在工作台再点一次「开启提醒」。';
+  if (code === 20001 || code === 20002 || code === 20003) return '提醒模板暂时不可用，请稍后再试；如一直失败请联系客服。';
+  return '请稍后再试；如果没有弹出授权窗口，请点右上角「···」→ 设置 → 通知管理，打开通知。';
 }
 
 /**
@@ -69,4 +78,4 @@ function tipText(lastNotify) {
   return `新礼金提醒上次发送失败（${lastNotify.code}），点此重新开启`;
 }
 
-module.exports = { enabled, subscribe, renewSilently, refresh, tipText };
+module.exports = { enabled, subscribe, renewSilently, refresh, tipText, subscribeFailText };

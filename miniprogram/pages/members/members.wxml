@@ -1,6 +1,6 @@
 <view class="container" style="{{themeStyle}}">
   <view class="card intro muted">
-    为每位记账人设置负责的礼簿和可做的事；回执、小票上显示记账人姓名。
+    为每位{{orgMode ? '礼台人员设置负责的场次' : '记账人设置负责的礼簿'}}和可做的事；回执、小票上显示{{orgMode ? '礼台人员' : '记账人'}}姓名。
   </view>
 
   <view class="card join" wx:if="{{joins.length}}">
@@ -95,7 +95,7 @@
         <view class="stay-row">
           <view>
             <view>移交后继续为对方记账</view>
-            <view class="muted small">你会成为对方的记账人，可随时退出</view>
+            <view class="muted small">你会成为对方的{{orgMode ? '礼台人员' : '记账人'}}，可随时退出</view>
           </view>
           <switch checked="{{stayClerk}}" bindchange="onStayClerk" color="{{primary}}" />
         </view>
@@ -147,7 +147,7 @@
           <text class="perm-name">{{item.name}}</text>
         </view>
       </view>
-      <view class="muted small">记账人只能看到、操作负责的礼簿；能做哪些事由上面的权限决定，只能授予你自己拥有的权限</view>
+      <view class="muted small">{{orgMode ? '礼台人员只能看到、操作负责的场次' : '记账人只能看到、操作负责的礼簿'}}；能做哪些事由上面的权限决定，只能授予你自己拥有的权限</view>
       </view>
       <view class="sheet-btns ed-btns">
         <button class="btn btn-lg btn-plain" bindtap="onEdCancel">取消</button>

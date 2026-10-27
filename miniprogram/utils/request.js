@@ -30,12 +30,16 @@ const call = (name, data = {}, opts = {}) =>
         if (r.code === 0) { markWrite(data); resolve(r.data); }
         else {
           if (!opts.silent) wx.showToast({ title: r.msg || '请求失败', icon: 'none' });
-          reject(new Error(r.msg || 'biz error'));
+          const e = new Error(r.msg || 'biz error');
+          e.biz = true; // 业务错误（服务端明确拒绝）：与网络失败区分，见 isNetErr()
+          reject(e);
         }
       },
       fail: err => {
-        if (!opts.silent) wx.showToast({ title: '网络异常', icon: 'none' });
-        reject(err);
+        if (!opts.silent) wx.showToast({ title: '网络不佳，请稍后重试', icon: 'none' });
+        const e = err || {};
+        try { e.net = true; } catch (x) { /* 忽略 */ }
+        reject(e);
       }
     });
   });
@@ -53,7 +57,11 @@ function dropDash(r) {
   return r;
 }
 
+/** 是否为网络失败（超时 / 断网 / 云函数未响应）：页面据此显示「网络不佳，点此重试」，而不是「没有数据」 */
+const isNetErr = e => !!(e && !e.biz && (e.net || e.errMsg));
+
 module.exports = {
+  isNetErr,
   login: userInfo => call('login', { action: 'login', userInfo }),
   loginCheck: () => call('login', { action: 'check' }),
   // withPayCode：需要预览收款码时才让云函数生成临时链接（主家信息页、礼簿码页）
@@ -155,9 +163,9 @@ module.exports = {
   payVoid: rid => call('payment', { action: 'void', rid }).then(dropDash),
   payUnreject: rid => call('payment', { action: 'unreject', rid }).then(dropDash),
   payAmend: (rid, fields) => call('payment', { action: 'amend', rid, ...fields }).then(dropDash),
-  recordList: d => call('records', { action: 'list', ...d }),
+  recordList: (d, opts) => call('records', { action: 'list', ...d }, opts),
   markPrinted: rids => call('records', { action: 'markPrinted', rids }),
-  recordPending: withRejected => call('records', withRejected ? { action: 'pending', withRejected: true } : { action: 'pending' }),
+  recordPending: (withRejected, opts) => call('records', withRejected ? { action: 'pending', withRejected: true } : { action: 'pending' }, opts),
   dashboard: () => call('records', { action: 'dashboard' }),
   pendingStat: () => call('records', { action: 'pendingStat' }, { silent: true }),
   // 待确认页轮询：带 withExtra 另返回 stall / rej 两个分组的条数

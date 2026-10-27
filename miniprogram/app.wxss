@@ -150,3 +150,6 @@ button.btn-plain:not(.btn):not([size=mini]), button.btn-danger:not(.btn):not([si
 .tip-go { font-size: 26rpx; color: var(--primary); white-space: nowrap; }
 .tip-text.hot { color: var(--primary); font-weight: 600; }
 .tip-text.ell { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+/* 网络提示条（v3.65.2）：轮询失败时显示一条，恢复后自动消失；不弹 toast 打扰 */
+.net-bar { font-size: 24rpx; line-height: 1.5; color: var(--warn); background: var(--warn-bg); border: 2rpx solid var(--warn-border); border-radius: 12rpx; padding: 10rpx 20rpx; margin-bottom: 12rpx; text-align: center; }

@@ -6,6 +6,7 @@
     <view class="role-line" wx:elif="{{role === 'clerk'}}">记账人 · 为「{{account.accountName}}」记账</view>
 
     <!-- 高峰模式进行中：点击进高级功能（可提前关闭），到期自动消失 -->
+    <view class="net-bar" wx:if="{{netBad}}">网络不稳定，正在自动重试…</view>
     <view class="peak-bar" wx:if="{{peakText}}" bindtap="goAdvanced">高峰模式进行中 · 剩 {{peakText}} ›</view>
 
     <!-- 主家待办（不可忽略，处理后才消失）：收成一行小红点，不占首屏 -->
@@ -116,7 +117,7 @@
       <view class="g-item" hover-class="g-hover" wx:if="{{pm.export}}" bindtap="goReconcile">
         <view class="g-icon"><image src="/assets/icons/receipt-w.svg" /></view>
         <view class="g-title">一键对账</view>
-        <view class="g-sub">按方式、记账人汇总</view>
+        <view class="g-sub">按方式、{{account.orgMode ? '礼台人员' : '记账人'}}汇总</view>
       </view>
       <view class="g-item" hover-class="g-hover" bindtap="goBooks">
         <view class="g-icon"><image src="/assets/icons/book-w.svg" /></view>

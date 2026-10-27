@@ -37,7 +37,8 @@ Page({
     bookName: '',     // 当前礼簿名：待确认只处理当前礼簿
     hiddenCount: 0,   // 待确认超过单次显示上限（100 笔）时，未显示的笔数
     otherCount: 0,    // 其他礼簿的待确认份数（提示回工作台切换）
-    unit: '礼簿'       // 机构模式称「场次」
+    unit: '礼簿',      // 机构模式称「场次」
+    netBad: false     // 轮询网络失败：顶部提示条（不弹 toast）
   },
 
   onLoad() {
@@ -80,7 +81,14 @@ Page({
     if (this.data.busy || this.data.editor || this.data.sheet) return false;
     this._tick = (this._tick || 0) + 1;
     if (this._tick % 30 === 0) return this.load(true); // 兜底：条数没变但内容换了（如一组进、一组出）
-    const s = await req.recordStat({ withExtra: true });
+    let s;
+    try {
+      s = await req.recordStat({ withExtra: true });
+      if (this.data.netBad) this.setData({ netBad: false });
+    } catch (e) {
+      if (req.isNetErr(e) && !this.data.netBad) this.setData({ netBad: true });
+      return false;
+    }
     if (Math.min(s.count, 100) !== countOf(this._list) || (s.other || 0) !== this.data.otherCount) return this.load(true);
     // 两个分组靠条数变化触发刷新（宾客转账后超过 3 分钟未点完成会自己进入「未点完成」；未收到满 24 小时会自己移出）
     if (s.stall >= 0 && Math.min(s.stall, 100) !== (this._stallN || 0)) return this.load(true);
@@ -93,7 +101,9 @@ Page({
     if (this.data.busy) return false;
     if (!silent && this._poller) this._poller.kick(); // 用户操作后恢复轮询频率
     try {
-      const { list, stalled, rejected, bookName, otherCount, count } = await req.recordPending(true);
+      // 轮询（silent）失败不弹 toast，由顶部提示条说明
+      const { list, stalled, rejected, bookName, otherCount, count } = await req.recordPending(true, silent ? { silent: true } : undefined);
+      if (this.data.netBad) this.setData({ netBad: false });
       const hiddenCount = Math.max(0, (count || 0) - list.length); // 超过单次上限 100 笔的部分
       // 轮询取回的内容与上次相同：不动界面（返回 false 让轮询放慢）
       const sig = JSON.stringify([list.map(r => [r._id, r.status, r.amount, r.transferredAt]), (stalled || []).map(r => [r._id, r.status]), (rejected || []).map(r => r._id), bookName, otherCount, hiddenCount]);
@@ -120,7 +130,7 @@ Page({
       this.setData(patch);
       return true;
     } catch (e) {
-      this.setData({ loaded: true });
+      this.setData({ loaded: true, ...(silent && req.isNetErr(e) ? { netBad: true } : {}) });
       return false;
     }
   },

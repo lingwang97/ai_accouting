@@ -75,6 +75,31 @@ function ensureConnected() {
   return enqueue(_ensure);
 }
 
+/**
+ * 自动打印（确认收礼 / 礼台入簿后）专用的连接判断（v3.65.2）：
+ *  - 'none'   从没配对过打印机：不打印、不提示（很多家庭不用打印机）
+ *  - 'ok'     已连接 / 重连成功
+ *  - 'failed' 本次重连失败：开始暂停 10 分钟，调用方只提示这一次
+ *  - 'paused' 暂停期内：不再尝试重连（每次重连最多要等约 6 秒，会拖慢连续确认）
+ * 手动补打、测试打印仍走 ensureConnected；任何方式连上打印机都会立即结束暂停。
+ */
+const AUTO_PAUSE_MS = 10 * 60 * 1000;
+const _auto = { until: 0 };
+async function autoConnect(now) {
+  if (isConnected()) { _auto.until = 0; return 'ok'; }
+  if (!ble.loadDevice()) return 'none';
+  const t = now || Date.now();
+  if (t < _auto.until) return 'paused';
+  const before = _auto.until;
+  const ok = await ensureConnected();
+  if (ok) { _auto.until = 0; return 'ok'; }
+  if (_auto.until !== before) return 'paused'; // 并发的另一笔已经开始暂停并提示过
+  _auto.until = t + AUTO_PAUSE_MS;
+  return 'failed';
+}
+function resumeAuto() { _auto.until = 0; }
+try { ble.onStateChange(c => { if (c) _auto.until = 0; }); } catch (e) { /* 忽略 */ }
+
 /** 打印一笔账目；成功后回写 printed 标记 */
 function printRecord(record) {
   return enqueue(() => _printRecord(record));
@@ -206,4 +231,4 @@ async function _writeRetry(buffer) {
   }
 }
 
-module.exports = { getTemplate, defaultTemplate, clearTemplateCache, isConnected, ensureConnected, printRecord, printTest, printQrTest, printBorderSample, resetQrBreaker, _qrBytes };
+module.exports = { getTemplate, defaultTemplate, clearTemplateCache, isConnected, ensureConnected, autoConnect, resumeAuto, AUTO_PAUSE_MS, printRecord, printTest, printQrTest, printBorderSample, resetQrBreaker, _qrBytes };

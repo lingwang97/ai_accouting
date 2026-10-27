@@ -56,7 +56,7 @@
 
     <!-- 按记账人 -->
     <view class="card" wx:if="{{r.handlers.length}}">
-      <view class="section-title">按记账人</view>
+      <view class="section-title">按{{staffWord || '记账人'}}</view>
       <view class="h-row" wx:for="{{r.handlers}}" wx:key="name">
         <view class="row"><text>{{item.name}}</text><text><text class="muted">{{item.count}} 份 · </text>￥{{item.sumStr}}</text></view>
         <view class="muted small" wx:if="{{item.cashCount}}">其中现金 {{item.cashCount}} 份 · ￥{{item.cashSumStr}}</view>

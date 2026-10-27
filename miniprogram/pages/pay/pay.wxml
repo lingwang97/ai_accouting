@@ -1,4 +1,6 @@
 <view class="container" style="{{themeStyle}}">
+  <!-- 读取主家信息期间（扫码冷启动常要 1～2 秒）：显示加载中，不留白屏 -->
+  <loading show="{{!account && !loadErr}}" rows="3" />
   <!-- 加载失败 -->
   <view class="card center" wx:if="{{loadErr}}">
     <view style="font-size:80rpx">⚠️</view>
@@ -27,7 +29,7 @@
       <view class="card batch-switch">
         <view>
           <view>批次录入</view>
-          <view class="muted">帮多人一起登记（如一家人、同事一起随礼），每人单独记入礼簿，按合计转一笔账</view>
+          <view class="muted">帮多人一起登记（如一家人、同事一起{{act}}），每人单独记入礼簿，按合计转一笔账</view>
         </view>
         <switch checked="{{batchMode}}" bindchange="onBatchMode" color="{{primary}}" />
       </view>
@@ -37,8 +39,8 @@
         </block>
         <block wx:else>
           <view class="field">
-            <text class="label">随礼人 *</text>
-            <input class="input" placeholder="请输入您的姓名（必填）" maxlength="20" value="{{payerName}}" bindinput="onName" />
+            <text class="label">{{who}} *</text>
+            <input class="input" placeholder="请输入您的姓名（必填）" maxlength="20" value="{{payerName}}" bindinput="onName" confirm-type="next" bindconfirm="onNameNext" />
           </view>
           <view class="field">
             <text class="label">与主家关系</text>
@@ -53,7 +55,7 @@
             </view>
             <view class="amount-row">
               <text class="yen">￥</text>
-              <input class="input amount" type="digit" maxlength="11" placeholder="其他金额" value="{{amount}}" bindinput="onAmount" />
+              <input class="input amount" type="digit" maxlength="11" placeholder="其他金额" value="{{amount}}" bindinput="onAmount" focus="{{amountFocus}}" bindblur="onAmountBlur" />
             </view>
           </view>
           <view class="field">
@@ -72,7 +74,7 @@
           <view class="muted" wx:if="{{payMethod === 'mixed'}}">转账部分扫码付一笔，现金当面交给礼台</view>
         </view>
       </view>
-      <button class="btn-primary" loading="{{submitting}}" bindtap="onConfirmTransfer">{{payMethod === 'cash' ? '确认随礼（现金）' : '确认随礼'}}</button>
+      <button class="btn-primary" loading="{{submitting}}" bindtap="onConfirmTransfer">{{payMethod === 'cash' ? '确认' + act + '（现金）' : '确认' + act}}</button>
     </block>
 
     <!-- 第 2 步：扫收款码转账 -->
@@ -81,7 +83,7 @@
         <view class="muted">请转账</view>
         <view class="pay-amount money big-amount">￥{{record.payStr}}</view>
         <view class="cash-tip" wx:if="{{record.mixed}}">另有现金 ￥{{record.cashStr}}，请当面交给礼台（共 ￥{{record.amountStr}}）</view>
-        <view class="muted">随礼人：{{record.payerName}}</view>
+        <view class="muted">{{who}}：{{record.payerName}}</view>
         <view class="muted items" wx:if="{{record.itemsStr}}">{{record.itemsStr}}</view>
       </view>
       <!-- 在现场：用微信扫一扫扫主家屏幕 / 台卡上的收款码 -->
@@ -113,7 +115,7 @@
         <view class="link-fold" wx:if="{{!onsite}}" bindtap="onSwitchOnsite">在现场？直接扫主家屏幕或台卡上的收款码</view>
       </view>
       <button class="btn-primary" loading="{{submitting}}" bindtap="onTransferred">我已完成转账</button>
-      <button class="btn-text btn-link" bindtap="onCancel">取消本次随礼</button>
+      <button class="btn-text btn-link" bindtap="onCancel">取消本次{{act}}</button>
     </block>
 
     <!-- 第 3 步：等待收款方确认 -->
@@ -144,7 +146,7 @@
       <receipt-view wx:if="{{receiptModel}}" model="{{receiptModel}}" />
       <view wx:else class="card center">
         <view class="pay-amount money">￥{{record.amountStr}}</view>
-        <view class="muted">随礼人：{{record.payerName}} · 主家：{{account.accountName}}</view>
+        <view class="muted">{{who}}：{{record.payerName}} · 主家：{{account.accountName}}</view>
       </view>
       <button wx:if="{{receiptModel}}" class="btn-primary btn-receipt" loading="{{savingReceipt}}" bindtap="onSaveReceipt">保存回执到相册</button>
       <view class="muted center tip">回执也可在首页「我的随礼记录」中随时查看</view>
@@ -159,7 +161,7 @@
         <view class="ok-title">主家未确认收到</view>
         <view class="muted">{{failReason}}</view>
       </view>
-      <button class="btn-primary" bindtap="onRetry">重新随礼</button>
+      <button class="btn-primary" bindtap="onRetry">重新{{act}}</button>
     </block>
   </block>
   <!-- 低调的求助入口：宾客无需登录；文案中性（白事同样适用） -->

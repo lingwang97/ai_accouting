@@ -86,7 +86,7 @@ Page({
     if (format !== 'backup' && !bookId && startDay > endDay) return wx.showToast({ title: '开始日期不能晚于结束日期', icon: 'none' });
 
     this.setData({ exporting: format });
-    wx.showLoading({ title: '正在生成…', mask: true });
+    wx.showLoading({ title: '约需半分钟…', mask: true }); // 导出一般 10～30 秒，礼金多时接近 1 分钟（v3.65.2 提示预计时间）
     try {
       const params = format === 'backup' ? { format } : (bookId ? { format, bookId } : { format, startDay, endDay });
       const res = await req.exportFile(params);

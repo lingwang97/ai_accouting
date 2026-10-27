@@ -49,7 +49,8 @@ Page({
     busy: false,
     showTop: false,   // 回到顶部按钮
     amend: null,      // 修改已入簿礼金的弹层：{ rid, name, amount, relIdx, remark, orig }
-    amendRels: ['不选', ...scenes.RELATIONS]
+    amendRels: ['不选', ...scenes.RELATIONS],
+    netBad: false     // 轮询网络失败：顶部提示条
   },
 
   async onShow() {
@@ -184,7 +185,15 @@ Page({
     if (this.data.loading || this.data.busy || !this.data.loggedIn) return false;
     const before = this.data.pendingCount;
     // 先只查合计与计数（不取列表行）；列表条数 / 待确认数变化才拉第一页
-    const res = await req.recordList({ ...this.buildParams(1), statOnly: true });
+    // 轮询失败不弹 toast（弱网时会每个周期弹一次），改为顶部提示条，恢复后自动消失
+    let res;
+    try {
+      res = await req.recordList({ ...this.buildParams(1), statOnly: true }, { silent: true });
+      if (this.data.netBad) this.setData({ netBad: false });
+    } catch (e) {
+      if (req.isNetErr(e) && !this.data.netBad) this.setData({ netBad: true });
+      return false;
+    }
     if (res.pendingCount > before) wx.vibrateShort({ type: 'heavy', fail() {} });
     // 角标统一按当前礼簿的待确认（工作台 / 待确认页设置），这里按筛选礼簿计数，不改角标
     // 合计与份数及时更新；值没变就不 setData
@@ -197,7 +206,7 @@ Page({
     if (!changed) return statChanged;
     if (this.data.page <= 2) {
       // 只看第一页时直接替换列表
-      const full = await req.recordList(this.buildParams(1));
+      const full = await req.recordList(this.buildParams(1), { silent: true });
       if (this._hidden) return true;
       this._listTotal = full.listTotal;
       this.setData({ list: full.list.map(decorate), page: 2, hasMore: full.list.length < full.listTotal });

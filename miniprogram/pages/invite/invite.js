@@ -81,7 +81,8 @@ Page({
           : (r.type === 'viewer' ? `你现在可以查看「${r.accountName}」共享的礼簿了（只读）。` : `你现在可以为「${r.accountName}」记账了。`)
             + (r.switched === false ? '你还有自己的礼簿，请在「我的 → 切换身份」里切换。' : ''),
         showCancel: false,
-        success: () => wx.switchTab({ url: r.type === 'viewer' ? '/pages/index/index' : '/pages/mine/mine' })
+        // 记账人 / 家人共享直接进工作台开始干活（v3.65.2）；接收移交的新主家去「我的」核对收款码
+        success: () => wx.switchTab({ url: r.type === 'transfer' ? '/pages/mine/mine' : '/pages/index/index' })
       });
     } catch (e) { /* toast 已提示 */ } finally {
       this.setData({ accepting: false });

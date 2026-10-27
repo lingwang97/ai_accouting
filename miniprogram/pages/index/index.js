@@ -59,7 +59,8 @@ Page({
     dismissed: {},     // 本地已读签名：notify=提示文案；j_<aid>=已同意的身份。签名变化（文案 / 身份不同）再提醒
     setupCard: null,   // 已登录、选了办事收礼但还没建好主家信息：「开始办事 · 3 步」进度 { name, code, book }
     themeStyle: '',
-    peakText: ''   // 高峰模式剩余时间（空 = 未开启）：工作台顶部提示条
+    peakText: '',  // 高峰模式剩余时间（空 = 未开启）：工作台顶部提示条
+    netBad: false  // 轮询网络失败：顶部提示条（不弹 toast），恢复后自动消失
   },
 
   onShow() {
@@ -185,7 +186,7 @@ Page({
         otherPending: d.pending.other || 0,
         joinCount: d.pendingMembers || 0  // 申请加入、待主家同意的人数
       };
-      this.setData({ mode: 'host', ...view });
+      this.setData({ mode: 'host', ...view, netBad: false });
       // 身份变化（是否只读）后按对应间隔重新轮询；页面已隐藏时不重启
       if (this._poller && this._pollMs !== (view.readonly ? POLL_MS_READONLY : POLL_MS)) this.startTimer();
       // 刷新频率设置：每次启动 / 切身份同步一次（可能在别的设备上改过），变了就按新间隔重启轮询
@@ -225,6 +226,7 @@ Page({
     if (this.data.mode !== 'host') return false;
     try {
       const pending = await req.pendingStat();
+      if (this.data.netBad) this.setData({ netBad: false });
       if (!pending) return false;
       if (silent && pending.count > this.data.pendingCount) wx.vibrateShort({ type: 'heavy', fail() {} });
       const sum = fmt.money(pending.sum);
@@ -238,7 +240,10 @@ Page({
       this.setData({ pendingCount: pending.count, pendingSum: sum, otherPending: other });
       getApp().setBadge(pending.count);
       return true;
-    } catch (e) { return false; /* 静默 */ }
+    } catch (e) {
+      if (req.isNetErr(e) && !this.data.netBad) this.setData({ netBad: true });
+      return false;
+    }
   },
 
   // —— 工作台操作 ——
