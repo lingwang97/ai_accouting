@@ -316,6 +316,14 @@ Page({
         const b = shown[res.tapIndex];
         if (!b) return this.goBooks();
         if (b._id === cur) return;
+        if (!this.data.mySwitch) {
+          const curBook = this.data.book;
+          const ok = await require('../../utils/switchguard.js').confirmSwitch({
+            orgMode: !!(this.data.account && this.data.account.orgMode),
+            fromName: curBook && curBook.name, toName: b.name
+          });
+          if (!ok) return;
+        }
         try {
           await (this.data.mySwitch ? req.bookSetMine(b._id) : req.bookSetActive(b._id));
           require('../../utils/printer.js').clearTemplateCache(); // 打印样式跟礼簿走

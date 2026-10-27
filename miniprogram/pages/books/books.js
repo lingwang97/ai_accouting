@@ -78,6 +78,12 @@ Page({
   async onSetActive(e) {
     try {
       const id = e.currentTarget.dataset.id;
+      const target = this.data.list.find(x => x._id === id);
+      const ok = await require('../../utils/switchguard.js').confirmSwitch({
+        orgMode: this.data.orgMode,
+        fromName: this.data.current && this.data.current.name, toName: target && target.name
+      });
+      if (!ok) return;
       await req.bookSetActive(id);
       printer.clearTemplateCache(); // 当前礼簿变了，打印样式随之变化
       const b = this.data.list.find(x => x._id === id);

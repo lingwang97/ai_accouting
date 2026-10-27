@@ -85,7 +85,22 @@ Page({
   },
 
   /** 新建礼簿是否设为当前：返回 true / false，取消返回 null */
-  askSetActive() {
+  async askSetActive(newName) {
+    const r = await this.askSetActiveBase();
+    if (r !== true) return r;
+    const app = getApp();
+    const a = app.globalData.account || {};
+    if (a.orgMode) return true;
+    let fromName = '';
+    try {
+      const { list, activeBookId } = await req.bookList();
+      const cur = activeBookId && (list || []).find(b => b._id === activeBookId);
+      fromName = cur ? cur.name : '';
+    } catch (e) { return null; }
+    const ok = await require('../../utils/switchguard.js').confirmSwitch({ orgMode: false, fromName, toName: newName });
+    return ok ? true : null;
+  },
+  askSetActiveBase() {
     const app = getApp();
     const a = app.globalData.account || {};
     const clerkOrg = app.globalData.role === 'clerk' && a.orgMode;
@@ -131,7 +146,7 @@ Page({
       const { id, type, date, location, origType, orgMode, hostName, payCodeChanged, payCodeFileID } = this.data;
       const org = orgMode ? { hostName: (hostName || '').trim(), ...(payCodeChanged ? { payCodeFileID } : {}) } : {};
       // 新建：询问是否设为当前（设为当前后，宾客扫主礼簿码的礼金会记到这本）
-      const setActive = id ? undefined : await this.askSetActive();
+      const setActive = id ? undefined : await this.askSetActive(name);
       if (setActive === null) return;
       const { book, pendingPayCode } = await req.bookSave({ _id: id || undefined, name, type, date, location, setActive, ...org });
       printer.clearTemplateCache(); // 新建即设为当前礼簿 / 事由类型可能变化

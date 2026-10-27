@@ -11,7 +11,7 @@
       <view class="a-head" bindtap="onOrgTap">
         <view class="a-headtext">
           <view class="a-line"><text class="a-title">机构模式</text><text class="a-vip" wx:if="{{org.vip}}">会员</text></view>
-          <view class="muted a-sub">一个账号办多场，每场单独设主家与收款码；记账人称「礼台人员」，礼簿称「场次」</view>
+          <view class="muted a-sub">一个账号办多场，每场单独设主家与收款码；记账人称「礼台人员」，礼簿称「场次」。普通模式同一时间只记一本礼簿；同一天办多场、分场次收礼请打开机构模式。</view>
         </view>
         <view catchtap="onOrgTap"><switch checked="{{orgMode}}" disabled="{{!org.enabled}}" bindchange="onOrgSwitch" color="{{primary}}" /></view>
       </view>
