@@ -38,6 +38,7 @@ App({
         name: 'login',
         data: { action: 'check' },
         success: res => {
+          this.loginFailed = false;
           const d = res.result && res.result.code === 0 ? res.result.data : null;
           if (d && d.user) {
             this.globalData.openid = d.openid;
@@ -45,9 +46,17 @@ App({
           }
           resolve(this.globalData.user);
         },
-        fail: () => resolve(null)
+        // 网络失败：记下来，工作台显示「网络不佳，点此重试」，不把已登录的主家当成未登录宾客（v3.66.0）
+        fail: () => { this.loginFailed = true; resolve(null); }
       });
     });
+  },
+
+  /** 登录检查因网络失败时重试（工作台「点此重试」） */
+  retryLogin() {
+    if (this.globalData.user || !this.loginFailed) return this.loginReady;
+    this.loginReady = this.restoreLogin();
+    return this.loginReady;
   },
 
   /** 刷新"我的"角标：待确认礼金笔数；未完善主家信息的用户（宾客）不显示 */

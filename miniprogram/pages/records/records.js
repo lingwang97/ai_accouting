@@ -50,7 +50,8 @@ Page({
     showTop: false,   // 回到顶部按钮
     amend: null,      // 修改已入簿礼金的弹层：{ rid, name, amount, relIdx, remark, orig }
     amendRels: ['不选', ...scenes.RELATIONS],
-    netBad: false     // 轮询网络失败：顶部提示条
+    netBad: false,    // 轮询网络失败：顶部提示条
+    loadErr: ''       // 第一页加载失败且没有可显示的数据（v3.66.0）：不显示「暂无礼金记录」，改为点此重试
   },
 
   async onShow() {
@@ -153,15 +154,21 @@ Page({
       const c = cache.get(key);
       if (c) this.applyFirst(c);
     }
-    this.setData({ loading: true });
+    this.setData({ loading: true, loadErr: '' });
     const at = Date.now();
     try {
-      const res = await req.recordList(params);
+      const res = await req.recordList(params, { silent: true });
       if (JSON.stringify(this.buildParams(1)) !== JSON.stringify(params)) return; // 期间筛选已变
       this.applyFirst(res);
+      if (this.data.netBad) this.setData({ netBad: false });
       fresh.mark(this, at);
       if (key) cache.set(key, res);
-    } catch (e) { /* toast 已提示 */ } finally {
+    } catch (e) {
+      // 列表为空：页面显示失败原因与重试；正显示缓存：顶部提示条说明数据可能不是最新
+      if (!this.data.list.length) this.setData({ loadErr: req.errText(e, '礼簿没加载出来') });
+      else if (req.isNetErr(e)) this.setData({ netBad: true });
+      else wx.showToast({ title: req.errText(e), icon: 'none' });
+    } finally {
       this.setData({ loading: false });
     }
   },
@@ -180,6 +187,12 @@ Page({
     });
   },
 
+  /** 加载失败「点此重试」/ 网络提示条 */
+  onRetryLoad() {
+    if (this.data.loading) return;
+    this.refreshFirst();
+  },
+
   /** 后台静默刷新首页数据（有新待确认转账时提醒） */
   async silentRefresh() {
     if (this.data.loading || this.data.busy || !this.data.loggedIn) return false;
@@ -189,7 +202,7 @@ Page({
     let res;
     try {
       res = await req.recordList({ ...this.buildParams(1), statOnly: true }, { silent: true });
-      if (this.data.netBad) this.setData({ netBad: false });
+      if (this.data.netBad || this.data.loadErr) { this.setData({ netBad: false, loadErr: '' }); if (!this.data.list.length) this._listTotal = -1; } // 网络恢复：空列表时下面强制重拉
     } catch (e) {
       if (req.isNetErr(e) && !this.data.netBad) this.setData({ netBad: true });
       return false;

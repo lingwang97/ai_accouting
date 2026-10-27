@@ -67,4 +67,14 @@ function sync() {
   }).catch(() => false);
 }
 
-module.exports = { LEVELS, MS, level, set, ms, sync, peakUntil, peakOn };
+/** 服务端已随工作台返回档位与高峰到期（v3.66.0）：直接写入并记为本身份已同步；返回是否有变化 */
+function apply(lv, peak) {
+  const g = getApp().globalData;
+  const before = level();
+  const beforePeak = peakOn();
+  set(lv, peak || 0);
+  g._pollSyncVer = g.identityVer;
+  return level() !== before || peakOn() !== beforePeak;
+}
+
+module.exports = { LEVELS, MS, level, set, ms, sync, apply, peakUntil, peakOn };

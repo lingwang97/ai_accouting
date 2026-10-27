@@ -3,3 +3,5 @@
 .item .link { display: block; margin-top: 12rpx; text-align: right; }
 .pad { padding: 80rpx 0; }
 .host-cta { margin: 24rpx 0; padding: 22rpx 24rpx; background: var(--primary-soft); color: var(--primary); border-radius: var(--r-s); font-size: 26rpx; line-height: 1.6; text-align: center; }
+.wait-title { margin: 8rpx 8rpx 12rpx; }
+.wait-st { margin-top: 8rpx; font-size: 26rpx; color: var(--warn, #C25E00); }

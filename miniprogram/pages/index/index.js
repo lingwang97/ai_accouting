@@ -38,7 +38,8 @@ const sumCls = str => (str.length >= 13 ? 'xlong' : str.length >= 10 ? 'long' : 
 
 Page({
   data: {
-    mode: 'loading',   // loading | host 工作台 | guest 扫码随礼
+    mode: 'loading',   // loading | host 工作台 | guest 扫码随礼 | neterr 首次加载网络失败（点此重试）
+    netErrText: '',
     loggedIn: false,
     account: null,
     role: 'none',
@@ -89,7 +90,7 @@ Page({
       }
     }
     // 切回页面：45 秒内且期间没有写操作时不重复拉整页（轮询仍会更新待确认数）；首次 / 下拉等强制刷新走 refresh()
-    if (fresh.needs(this) || this.data.mode === 'loading') this.refresh();
+    if (fresh.needs(this) || this.data.mode === 'loading' || this.data.mode === 'neterr') this.refresh();
     this.startTimer();
     this.startPeakTip();
     this.watchPrinter();
@@ -142,13 +143,16 @@ Page({
     try {
       // 一次取齐：主家信息、当前礼簿、今日、待确认；与启动时的登录检查并行发出
       const loggedOut = !!wx.getStorageSync(LOGOUT_KEY);
-      const dP = loggedOut ? null : req.dashboard().catch(() => null);
+      // 失败不弹 toast：页面自己说明（首次加载失败显示「网络不佳，点此重试」，有缓存时顶部提示条）
+      const dP = loggedOut ? null : req.dashboard({ silent: true }).catch(() => null);
       if (!app.globalData.user && !loggedOut) await app.loginReady;
+      if (!app.globalData.user && !loggedOut && app.loginFailed) await app.retryLogin(); // 登录检查因网络失败：再试一次
       const user = app.globalData.user;
       this.setData({ loggedIn: !!user });
-      if (!user) return this.toGuest();
+      // 登录检查连不上：不能断定是宾客，显示网络失败（v3.66.0；以前会退到「扫码随礼」宾客页，主家以为礼簿没了）
+      if (!user) return !loggedOut && app.loginFailed ? this.toNetErr(req.errText({ net: true })) : this.toGuest();
 
-      const d = (dP && (await dP)) || (await req.dashboard());
+      const d = (dP && (await dP)) || (await req.dashboard({ silent: true }));
       this.setData({ joins: (d.joins || []).map(j => ({ ...j, dk: 'j_' + j.aid })) }); // 申请加入的进度：待同意 / 已同意待切换
       app.globalData.account = d.account;
       app.globalData.role = d.role;
@@ -186,11 +190,13 @@ Page({
         otherPending: d.pending.other || 0,
         joinCount: d.pendingMembers || 0  // 申请加入、待主家同意的人数
       };
-      this.setData({ mode: 'host', ...view, netBad: false });
+      this.setData({ mode: 'host', ...view, netBad: false, netErrText: '' });
       // 身份变化（是否只读）后按对应间隔重新轮询；页面已隐藏时不重启
       if (this._poller && this._pollMs !== (view.readonly ? POLL_MS_READONLY : POLL_MS)) this.startTimer();
       // 刷新频率设置：每次启动 / 切身份同步一次（可能在别的设备上改过），变了就按新间隔重启轮询
-      pollcfg.sync().then(changed => { this.updatePeakTip(); if (changed && this._poller) this.startTimer(); });
+      // v3.66.0：dashboard 已带档位与高峰到期，直接用；旧版云函数没带时再单独同步
+      (d.pollLevel !== undefined ? Promise.resolve(pollcfg.apply(d.pollLevel, d.peakUntil || 0)) : pollcfg.sync())
+        .then(changed => { this.updatePeakTip(); if (changed && this._poller) this.startTimer(); });
       cache.set('dashboard', view);
       // 刚通过创建向导建好：提示下一步
       if (app.globalData.justSetup) {
@@ -207,8 +213,31 @@ Page({
       theme.apply(this, b ? b.type : 'other');
     } catch (e) {
       fresh.reset(this);
-      if (this.data.mode === 'loading') this.toGuest();
+      const net = req.isNetErr(e);
+      if (this.data.mode === 'loading' || this.data.mode === 'neterr') {
+        if (net) this.toNetErr(req.errText(e));
+        else {
+          if (e && e.biz && e.message) wx.showToast({ title: e.message, icon: 'none' });
+          this.toGuest();
+        }
+      } else if (net && !this.data.netBad) this.setData({ netBad: true }); // 正显示上次的数据：顶部提示，可点刷新
     }
+  },
+
+  /** 首次加载网络失败：不退到宾客页，显示重试（不清缓存、不清角标） */
+  toNetErr(text) {
+    this.setData({ mode: 'neterr', netErrText: text || '网络不佳' });
+  },
+  /** 「点此重试」/ 网络提示条 */
+  async onNetRetry() {
+    if (this._retrying) return;
+    this._retrying = true;
+    if (this.data.mode === 'neterr') this.setData({ mode: 'loading' });
+    try {
+      const app = getApp();
+      if (!app.globalData.user && app.loginFailed) await app.retryLogin();
+      await this.refresh();
+    } finally { this._retrying = false; }
   },
 
   toGuest() {

@@ -39,3 +39,4 @@ button.s-op:not([size=mini]) { width: auto; font-weight: normal; }
 .try { text-align: center; color: var(--link); font-size: 26rpx; padding: 28rpx 0 8rpx; }
 .s-try { color: rgba(255, 255, 255, .9); }
 .s-book { color: rgba(255, 255, 255, .85); font-size: 28rpx; margin: -16rpx 0 24rpx; }
+.s-offline { margin-top: 24rpx; padding: 14rpx 20rpx; border-radius: 12rpx; background: rgba(255, 255, 255, .92); color: #C25E00; font-size: 24rpx; line-height: 1.6; text-align: center; }

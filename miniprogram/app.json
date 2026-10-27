@@ -42,8 +42,8 @@
     { "root": "pages/advanced", "pages": ["advanced"] }
   ],
   "preloadRule": {
-    "pages/index/index": { "network": "all", "packages": ["pages/members", "pages/export", "pages/printer", "pages/reconcile"] },
-    "pages/mine/mine": { "network": "all", "packages": ["pages/members", "pages/export", "pages/printer", "pages/reconcile"] }
+    "pages/index/index": { "network": "wifi", "packages": ["pages/members", "pages/export", "pages/printer", "pages/reconcile"] },
+    "pages/mine/mine": { "network": "wifi", "packages": ["pages/members", "pages/export", "pages/printer", "pages/reconcile"] }
   },
   "window": {
     "backgroundTextStyle": "light",

@@ -18,8 +18,13 @@ Page({
     const token = options.token || '';
     this.setData({ token });
     if (!token) return this.setData({ errMsg: '邀请链接无效' });
+    await this.loadInfo(token);
+  },
+
+  /** 读取邀请信息；网络失败可点此重试（v3.66.0，以前会显示「邀请不存在或已失效」） */
+  async loadInfo(token) {
     try {
-      const info = await req.inviteInfo(token);
+      const info = await req.inviteInfo(token, { silent: true });
       if (Array.isArray(info.books)) info.books = info.books.map(b => (b.sum === undefined ? b : { ...b, sumStr: fmt.money(b.sum) })); // 记账人 / 共享卡不带金额
       this.setData({ info });
       // 家人共享沿用微信昵称（需等邀请信息返回才知道类型）；记账人不预填
@@ -31,8 +36,16 @@ Page({
       else if (info.type !== 'transfer' && info.left === 0) this.setData({ errMsg: '这张邀请卡的人数已满，请让对方重新邀请' });
       else if (info.expired) this.setData({ errMsg: '邀请已过期，请让对方重新邀请' });
     } catch (e) {
-      this.setData({ errMsg: e.message || '邀请不存在或已失效' });
+      if (req.isNetErr(e)) this.setData({ errMsg: req.errText(e) + '，没能读取邀请', errNet: true });
+      else this.setData({ errMsg: (e && e.biz && e.message) || '邀请不存在或已失效', errNet: false });
     }
+  },
+  onRetryLoad() {
+    if (!this.data.errNet || this._reloading) return;
+    this._reloading = true;
+    this.setData({ errMsg: '', errNet: false });
+    const done = () => { this._reloading = false; };
+    this.loadInfo(this.data.token).then(done, done);
   },
 
   async onShow() {

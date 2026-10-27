@@ -22,3 +22,4 @@
 .perms { display: flex; flex-wrap: wrap; margin: 0 -12rpx 12rpx 0; text-align: left; }
 .perm { font-size: 24rpx; color: #555; background: var(--fill); border-radius: 999rpx; padding: 6rpx 20rpx; margin: 0 12rpx 12rpx 0; }
 .req { color: var(--danger); }
+.retry { color: var(--primary, #C8161D); }

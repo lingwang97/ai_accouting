@@ -57,3 +57,4 @@
 .help-row { text-align: center; padding: 8rpx 0 0; }
 button.help-link:not([size=mini]) { display: inline-block; width: auto; margin: 0; padding: 0 24rpx; background: transparent; border: none; border-radius: 0; font-size: 24rpx; line-height: 80rpx; height: 80rpx; min-height: 0; color: var(--text-3); }
 button.help-link::after { border: none; }
+.retry-btn { display: inline-block; margin-top: 20rpx; padding: 10rpx 40rpx; border-radius: 40rpx; border: 2rpx solid var(--primary, #C8161D); color: var(--primary, #C8161D); font-size: 28rpx; }

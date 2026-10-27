@@ -149,21 +149,18 @@ Page({
       // 先检查礼簿再选同名，避免选完同名才提示没选礼簿
       const b = this.data.books[this.data.bookIdx];
       if (this.data.books.length && !b) return wx.showToast({ title: '请先选择记入哪本礼簿', icon: 'none' });
-      const picked = await this.pickSameName(payload, b ? b._id : '');
-      if (!picked) return;
       if (this.data.books.length && b) payload.bookId = b._id;
       payload.payMethod = this.data.payMethod;
-      // 幂等键：弱网下超时重试、重复点击都带同一个 reqId，服务端不会重复入簿；成功后才换新的
-      // 内容变了（重试前改过表单）就换新的，避免把修改后的内容当成重复提交
-      const sig = JSON.stringify(payload);
-      if (!this._reqId || this._reqSig !== sig) {
-        this._reqId = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
-        this._reqSig = sig;
-      }
-      payload.reqId = this._reqId;
       // 转账+现金只填了一位：按这一位的方式提交，不算混合
       if (payload.payMethod === 'mixed' && payload.items && payload.items.length === 1) payload.payMethod = payload.items[0].method;
-      const { record, list } = await req.cashEntry(payload);
+      // 一次调用完成同名检查 + 入簿（v3.66.0）：礼簿里没有同名直接入簿；有同名时云端只返回名单，选好是哪一位后再提交
+      let res = await req.cashEntry({ ...payload, reqId: this.reqIdOf(payload), nameCheck: true });
+      if (res.needPick) {
+        const picked = await this.pickSameName(payload, b ? b._id : '', res.map || {});
+        if (!picked) return; // 取消即中止，不提示
+        res = await req.cashEntry({ ...payload, reqId: this.reqIdOf(payload) });
+      }
+      const { record, list } = res;
       this._reqId = ''; // 已入簿，下一位换新 reqId
       const added = (list && list.length ? list : [record]).map(r => ({ ...r, amountStr: fmt.money(r.amount), nameStr: samename.nameStr(r.payerName, r.nameTag) }));
       const done = added.slice().reverse().concat(this.data.done).slice(0, DONE_MAX);
@@ -185,17 +182,32 @@ Page({
   },
 
   /**
+   * 幂等键：弱网下超时重试、重复点击都带同一个 reqId，服务端不会重复入簿；成功后才换新的
+   * 内容变了（重试前改过表单、选了同名的哪一位）就换新的，避免把修改后的内容当成重复提交
+   */
+  reqIdOf(payload) {
+    const sig = JSON.stringify(payload);
+    if (!this._reqId || this._reqSig !== sig) {
+      this._reqId = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+      this._reqSig = sig;
+    }
+    return this._reqId;
+  },
+
+  /**
    * 同名区分：查询礼簿里已有的同名宾客，逐个选择「是哪一位」或「新的一位」并填区分备注
    * 选中已有 → personRef（那一位的某条记录 id，服务端换成往来人）+ tag；新的一位 → tag。返回 false 表示用户取消，否则 { notes }（自动归并的提示）；查询失败（网络）按无备注继续
    */
-  async pickSameName(payload, bookId) {
+  async pickSameName(payload, bookId, given) {
     const items = payload.items || [payload];
     const nameOf = it => it.name || it.payerName;
     const notes = [];
-    let map = {};
-    try {
-      map = (await req.bookNameCheck(items.map(nameOf), bookId)).map || {};
-    } catch (e) { return { notes }; }
+    let map = given || {};
+    if (!given) { // 旧用法：单独查询（云端已随 cashEntry 返回名单时不再查）
+      try {
+        map = (await req.bookNameCheck(items.map(nameOf), bookId)).map || {};
+      } catch (e) { return { notes }; }
+    }
     for (const it of items) {
       const name = nameOf(it);
       const d = samename.decide(map[name]);

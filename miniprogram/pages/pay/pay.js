@@ -35,6 +35,8 @@ Page({
     primary: theme.DEFAULT, // 开关颜色，加载主家信息后按主题更新
     account: null,
     loadErr: '',
+    loadErrNet: false,   // 读取失败是网络问题（v3.66.0）：显示「点此重试」，不说礼簿码无效
+    pollTimeout: false,  // 等待确认超过约 10 分钟、自动查询已停止（v3.66.0）：停止转圈并说明
     step: 'form',      // form | transfer | waiting | success | failed
     payerName: '',
     amount: '',
@@ -130,15 +132,25 @@ Page({
 
   async loadAccount(aid) {
     try {
-      const { account } = await req.accountGetByAid(aid);
+      const { account } = await req.accountGetByAid(aid, { silent: true });
       const t = theme.forType(account.book && account.book.type, account.theme && account.theme.chosen ? account.theme.primary : '');
       const funeral = !!(account.book && account.book.type === 'funeral');
       this.setData({ account, isFuneral: funeral, themeStyle: theme.styleOf(t), primary: t.primary, who: funeral ? '致奠人' : '随礼人', act: funeral ? '登记' : '随礼' });
       wx.setNavigationBarColor({ frontColor: '#ffffff', backgroundColor: t.primary, fail() {} });
       wx.setNavigationBarTitle({ title: funeral ? `向「${account.accountName}」致奠` : `向「${account.accountName}」随礼` });
     } catch (e) {
-      this.setData({ loadErr: '礼簿码无效或主家已停用' });
+      // 网络失败与「礼簿码无效」区分开：网络问题可重试（宾客在宴会厅信号差很常见）
+      if (req.isNetErr(e)) this.setData({ loadErr: req.errText(e) + '，没能读取礼簿信息', loadErrNet: true });
+      else this.setData({ loadErr: (e && e.biz && e.message) || '礼簿码无效或主家已停用', loadErrNet: false });
     }
+  },
+  /** 读取礼簿信息失败（网络）：点此重试 */
+  onRetryLoad() {
+    if (!this.data.loadErrNet || this._reloading) return;
+    this._reloading = true;
+    this.setData({ loadErr: '', loadErrNet: false });
+    const done = () => { this._reloading = false; }; // 不用 finally，兼容低版本基础库
+    this.loadAccount(this.data.aid).then(() => this.resumeOpen(this.data.aid)).then(done, done);
   },
 
   onName(e) { this.setData({ payerName: e.detail.value }); },
@@ -247,9 +259,16 @@ Page({
     if (!onsite && this.data.payCodeUrl && !this.data.codeSaved && (await this.savePayCode(true))) this.showScanGuide();
   },
 
+  /**
+   * 宾客「入簿通知」订阅的接入点（预留，v3.66.0）：wx.requestSubscribeMessage 必须在点击的同步调用链里调用，
+   * 所以放在 onTransferred 的第一行、任何 await 之前。模板 ID 确定后在这里调用，并把结果随 payTransferred 传给云端
+   */
+  askGuestNotify() { return null; },
+
   /** 第 2 步：付款方转账完成 → 等待收款方确认 */
   async onTransferred() {
     if (this.data.submitting) return;
+    this.askGuestNotify(); // 必须在第一个 await 之前（见上）
     this.setData({ submitting: true });
     try {
       await req.payTransferred(this.data.record._id);
@@ -287,6 +306,7 @@ Page({
   startPoll() {
     this.stopPoll();
     this._pollCount = 0;
+    if (this.data.pollTimeout) this.setData({ pollTimeout: false });
     this._timer = setInterval(() => this.poll(), POLL_MS);
     this.poll();
   },
@@ -303,6 +323,7 @@ Page({
     if (this._polling) return; // 网络慢时上一次查询未返回，不重叠
     if (++this._pollCount > POLL_MAX) {
       this.stopPoll();
+      this.setData({ pollTimeout: true }); // 停止转圈，说明可以离开、之后去哪里看
       return;
     }
     this._polling = true;

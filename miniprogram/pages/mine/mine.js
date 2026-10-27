@@ -70,6 +70,8 @@ Page({
         return;
       }
 
+      // 套餐与主家信息并行取（v3.66.0，原先依次等待）
+      const planP = plan.load(true);
       const { account, role, identities, restricted, readonly, perms, pollLevel } = await req.accountGet();
       app.globalData.account = account;
       app.globalData.role = role;
@@ -87,7 +89,7 @@ Page({
       this.setData(view);
       cache.set('mine', { user: app.globalData.user, ...view });
       app.refreshTabBar();
-      plan.load(true).then(p => this.setData({
+      planP.then(p => this.setData({
         isAdmin: !!p.isAdmin,
         planText: p.plan && p.plan !== 'free' ? `${p.name}${p.expiresAt ? ' · 到期 ' + require('../../utils/format.js').day(p.expiresAt) : ''}` : ''
       }));

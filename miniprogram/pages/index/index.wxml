@@ -6,7 +6,7 @@
     <view class="role-line" wx:elif="{{role === 'clerk'}}">记账人 · 为「{{account.accountName}}」记账</view>
 
     <!-- 高峰模式进行中：点击进高级功能（可提前关闭），到期自动消失 -->
-    <view class="net-bar" wx:if="{{netBad}}">网络不稳定，正在自动重试…</view>
+    <view class="net-bar" wx:if="{{netBad}}" bindtap="onNetRetry">网络不稳定，数据可能不是最新 · 点此刷新</view>
     <view class="peak-bar" wx:if="{{peakText}}" bindtap="goAdvanced">高峰模式进行中 · 剩 {{peakText}} ›</view>
 
     <!-- 主家待办（不可忽略，处理后才消失）：收成一行小红点，不占首屏 -->
@@ -133,6 +133,15 @@
     <ad-slot slot="workbench" book-type="{{book ? book.type : ''}}" />
     <!-- 提示条关闭后：页面底部常驻低调入口 -->
     <view class="guide-foot" wx:if="{{!guideTip}}" bindtap="goGuide">使用教程与常见问题 ›</view>
+  </block>
+
+  <!-- ===== 首次加载网络失败（v3.66.0）：不退到宾客页，点此重试 ===== -->
+  <block wx:elif="{{mode === 'neterr'}}">
+    <view class="card net-err" bindtap="onNetRetry">
+      <view class="ne-title">工作台没加载出来</view>
+      <view class="ne-sub">{{netErrText}}，请检查网络后重试</view>
+      <view class="ne-btn">点此重试</view>
+    </view>
   </block>
 
   <!-- ===== 加载中骨架（首次打开、没有缓存时） ===== -->

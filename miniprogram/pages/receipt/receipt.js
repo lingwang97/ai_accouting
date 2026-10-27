@@ -22,9 +22,16 @@ Page({
     // 扫小票小程序码：参数在 options.scene（t=token，URL 编码）；兼容 ?t=token
     const token = rcptscene.tokenFromOptions(options);
     if (!options.rid && !token) return this.setData({ errMsg: options.scene ? '二维码无效' : '回执不存在' });
+    this._opt = { rid: options.rid, token };
+    await this.load();
+  },
+
+  async load() {
+    const { rid, token } = this._opt;
+    const options = { rid };
     try {
       // 扫小票二维码（?t=token）：按 token 取这一笔；否则按记录 id（付款人 / 主家 / 认领人）
-      const { record, accountName, tpl, claim } = token ? await req.receiptByToken(token) : await req.receiptGet(options.rid);
+      const { record, accountName, tpl, claim } = token ? await req.receiptByToken(token, { silent: true }) : await req.receiptGet(options.rid, false, { silent: true });
       // 扫码冷启动时 globalData.account 还没加载：主家 / 记账人以服务端判断（claim=staff）为准，不显示「我家也要办事」
       if (token) this.setData({ token, claim, isHost: this.data.isHost || claim === 'staff' });
       const model = receipt.buildModel(record, tpl, accountName);
@@ -36,8 +43,17 @@ Page({
       }
       this.setData({ model: await receipt.withAppCode(model) }); // 小程序码后补，不拖慢回执显示
     } catch (e) {
-      this.setData({ errMsg: e.message || '回执加载失败' });
+      // 网络失败可点此重试（v3.66.0）
+      if (req.isNetErr(e)) this.setData({ errMsg: req.errText(e) + '，回执没加载出来', errNet: true });
+      else this.setData({ errMsg: (e && e.biz && e.message) || '回执加载失败', errNet: false });
     }
+  },
+  onRetryLoad() {
+    if (!this.data.errNet || this._reloading) return;
+    this._reloading = true;
+    this.setData({ errMsg: '', errNet: false });
+    const done = () => { this._reloading = false; };
+    this.load().then(done, done);
   },
 
   /** 宾客转化：我家也要办事收礼 → 首页（登录后创建礼簿） */

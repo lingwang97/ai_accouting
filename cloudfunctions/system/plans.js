@@ -176,7 +176,26 @@ async function planOf(db, ownerOpenid) {
   };
 }
 
+/**
+ * 刷新档位与高峰到期（v3.66.0，工作台 dashboard 一并返回，省掉冷启动时单独一次 account.get）
+ * 口径与 account.get 的 pollLevelOf / peakOf 相同：allowed 为调用方算好的「主家，或有确认收礼权限的记账人，且非只读」
+ * 读套餐失败按开放处理；套餐只在需要时读一次
+ */
+async function refreshOf(db, ctx, allowed, now) {
+  const t = now || Date.now();
+  const saved = normalizePollLevel(ctx.user && ctx.user.pollLevel);
+  const until = ctx.account && ctx.account.peakUntil ? new Date(ctx.account.peakUntil).getTime() : 0;
+  if (!allowed || (saved === 'off' && !(until > t))) return { pollLevel: 'off', peakUntil: 0 };
+  let features;
+  try { features = (await planOf(db, ctx.ownerOpenid)).features; } catch (e) { features = undefined; }
+  return {
+    pollLevel: saved === 'off' ? 'off' : effectivePollLevel(saved, features),
+    peakUntil: until > t && featureOpen(features, 'peakMode') ? until : 0
+  };
+}
+
 module.exports = {
+  refreshOf,
   WARMABLE, DEFAULT_WARMUP, DEFAULT_PLANS, AD_SLOTS, DEFAULT_ADS,
   bookMaxOf, BOOK_MAX_DEFAULT, PEAK_HOURS,
   limitOf, quotaMsg, TRASH_DAYS_OPTIONS, TRASH_DAYS_DEFAULT, trashDaysMax, effectiveTrashDays,

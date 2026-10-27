@@ -3,3 +3,4 @@
 .host-cta { margin: 24rpx 0; padding: 22rpx 24rpx; background: var(--primary-soft); color: var(--primary); border-radius: var(--r-s); font-size: 26rpx; text-align: center; }
 .claim { margin-top: 24rpx; }
 .claim-tip { margin: 24rpx 0; text-align: center; font-size: 26rpx; color: var(--text-2); }
+.retry { margin-top: 16rpx; color: var(--primary, #C8161D); font-size: 28rpx; }

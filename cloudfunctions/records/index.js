@@ -7,6 +7,8 @@ const db = cloud.database();
 const _ = db.command;
 const records = db.collection('records');
 const { resolveCtx, canBook, readonly, can, workBook } = require('./ctx.js');
+const P = require('./plans.js');
+const { nameCheckMap } = require('./namecheck.js');
 
 /** 幂等建集合（init 未跑完时自愈；同一实例每个集合只尝试一次） */
 const colReady = {};
@@ -104,7 +106,7 @@ async function dashboard(ctx) {
   const activeId = workBook(ctx); // 机构模式记账人：自己选的一场
   // 待确认只算当前礼簿；其他礼簿的只给个数（工作台小提示），确认要先切换礼簿
   const pendCond = { ownerOpenid: owner, status: REC.TRANSFERRED, bookId: activeId || '__none__' };
-  const [bookRes, todayRes, pendRes, pendCount, otherCount, todayBookRes, joinRes] = await Promise.all([
+  const [bookRes, todayRes, pendRes, pendCount, otherCount, todayBookRes, joinRes, refresh] = await Promise.all([
     activeId ? db.collection('books').doc(activeId).get().catch(() => null) : null,
     records.aggregate()
       .match({ ownerOpenid: owner, status: REC.PAID, payDay: today, ...scope })
@@ -119,7 +121,9 @@ async function dashboard(ctx) {
     // 当前礼簿的今日入簿份数：前端据此判断「今日新增」是否与礼簿合计重复
     activeId ? records.where({ ownerOpenid: owner, status: REC.PAID, payDay: today, bookId: activeId }).count() : null,
     // 主家：通过邀请卡申请加入、待同意的人数
-    ctx.role === 'owner' ? db.collection('members').where({ aid: account._id, status: MEMBER.PENDING }).count() : null
+    ctx.role === 'owner' ? db.collection('members').where({ aid: account._id, status: MEMBER.PENDING }).count() : null,
+    // 刷新档位与高峰到期（v3.66.0）：随工作台一起返回，前端不再单独调 account.get 同步
+    P.refreshOf(db, ctx, !readonly(ctx) && can(ctx, 'confirm')).catch(() => null)
   ]);
   const b = bookRes && bookRes.data;
   const book = b && b.ownerOpenid === owner && b.statReady
@@ -147,7 +151,8 @@ async function dashboard(ctx) {
     today: { count: t.count, sum: Math.round(t.fen) / 100, book: todayBookRes ? todayBookRes.total : 0 },
     pending: { count: pendCount.total, sum: pendFen / 100, other: otherCount.total },
     pendingMembers: joinRes ? joinRes.total : 0,
-    joins
+    joins,
+    ...(refresh ? { pollLevel: refresh.pollLevel, peakUntil: refresh.peakUntil } : {})
   });
 }
 
@@ -558,47 +563,9 @@ async function remindDue(openid) {
   } catch (e) { return false; }
 }
 
-/**
- * 礼簿（主家全部礼簿，受限记账人为负责的礼簿）里同名的人：按 微信身份 / 区分备注 / 指定的人 分组
- * 返回 { 姓名: [{ ref, tag, scanned, relation, count, lastDay }] }，只返回有记录的姓名
- * ref 为这一位的某条记录 id（礼台记账时回传，由服务端换成往来人 key），不把宾客 openid 交给前端
- * inBook：这一位在「本场」礼簿里的条数（v3.50.0）。本场 = 本次要记入的礼簿，取法与 payment.cashEntry 一致：
- * 传入的 bookId（须是自己可记的），否则 workBook(ctx)；旧前端不传 bookId 时按 workBook 算，也不读 inBook
- */
+/** 礼簿里同名的宾客（逻辑在共享模块 namecheck.js，与 payment.cashEntry 共用） */
 async function nameCheck(ctx, names, bookIdIn) {
-  if (!ctx.account) return ok({ map: {} });
-  const list = (Array.isArray(names) ? names : []).map(s => String(s || '').trim().slice(0, 20)).filter(Boolean).slice(0, 10);
-  if (!list.length) return ok({ map: {} });
-  const cond = { ownerOpenid: ctx.ownerOpenid, payerName: _.in(list), status: _.in(COUNTED.slice()) }; // 与宾客端口径一致
-  if (ctx.bookIds) cond.bookId = _.in(ctx.bookIds);
-  let curBook = String(bookIdIn || '').slice(0, 64);
-  if (!curBook || !canBook(ctx, curBook)) curBook = workBook(ctx) || '';
-  const res = await records.aggregate().match(cond)
-    .group({
-      _id: { name: '$payerName', openid: '$payerOpenid', tag: '$nameTag', pk: '$personKey', bk: '$bookId' },
-      count: _.aggregate.sum(1), relation: _.aggregate.first('$relation'), lastDay: _.aggregate.max('$payDay'), ref: _.aggregate.first('$_id')
-    })
-    .limit(500).end();
-  const norm = s => String(s || '').replace(/[\s\u3000]/g, '');
-  const map = {};
-  (res.list || []).forEach(g => {
-    const { name, openid, tag, pk, bk } = g._id;
-    const here = curBook && bk === curBook ? g.count : 0;
-    const key = pk || (openid ? `o:${openid}:${norm(name)}` : `n:${norm(name)}${tag ? '#' + tag : ''}`);
-    const arr = (map[name] = map[name] || []);
-    const same = arr.find(x => x.key === key);
-    if (same) {
-      same.count += g.count; same.inBook += here;
-      if ((g.lastDay || '') > same.lastDay) same.lastDay = g.lastDay;
-      if (!same.relation && g.relation) same.relation = g.relation;
-      if (here) same.ref = g.ref; // 本场有记录时 ref 取本场的，往来人标识更贴近当前
-      return;
-    }
-    arr.push({ key, ref: g.ref, tag: tag || '', scanned: !!openid, relation: g.relation || '', count: g.count, inBook: here, lastDay: g.lastDay || '' });
-  });
-  // 去掉内部 key（含宾客 openid）
-  Object.keys(map).forEach(n => { map[n] = map[n].map(({ key, ...x }) => x); });
-  return ok({ map });
+  return ok({ map: await nameCheckMap(db, ctx, names, bookIdIn) });
 }
 
 /** 给宾客设区分备注：扫码宾客按微信身份改主家全部同名记录，礼台登记的只改这一条 */

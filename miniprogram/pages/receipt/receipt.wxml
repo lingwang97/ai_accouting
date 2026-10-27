@@ -1,6 +1,6 @@
 <view class="container" style="{{themeStyle}}">
   <loading show="{{!model && !errMsg}}" rows="3" />
-  <view wx:if="{{errMsg}}" class="card center muted">{{errMsg}}</view>
+  <view wx:if="{{errMsg}}" class="card center muted" bindtap="onRetryLoad">{{errMsg}}<view class="retry" wx:if="{{errNet}}">点此重试</view></view>
   <block wx:if="{{model}}">
     <receipt-view model="{{model}}" />
     <view class="card claim" wx:if="{{claim === 'open'}}">

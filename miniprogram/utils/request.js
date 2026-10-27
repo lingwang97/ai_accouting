@@ -19,6 +19,8 @@ function markWrite(data) {
   } catch (e) { /* 忽略 */ }
 }
 
+const isTimeout = e => /timeout|timed out|超时/i.test(String((e && (e.errMsg || e.message)) || ''));
+
 // opts.silent：失败不弹提示（非关键的附加内容，如回执上的小程序码）
 const call = (name, data = {}, opts = {}) =>
   new Promise((resolve, reject) => {
@@ -36,7 +38,7 @@ const call = (name, data = {}, opts = {}) =>
         }
       },
       fail: err => {
-        if (!opts.silent) wx.showToast({ title: '网络不佳，请稍后重试', icon: 'none' });
+        if (!opts.silent) wx.showToast({ title: isTimeout(err) ? '请求超时，请检查网络后重试' : '网络不佳，请稍后重试', icon: 'none' });
         const e = err || {};
         try { e.net = true; } catch (x) { /* 忽略 */ }
         reject(e);
@@ -59,13 +61,22 @@ function dropDash(r) {
 
 /** 是否为网络失败（超时 / 断网 / 云函数未响应）：页面据此显示「网络不佳，点此重试」，而不是「没有数据」 */
 const isNetErr = e => !!(e && !e.biz && (e.net || e.errMsg));
+/**
+ * 页面上显示的错误说明（v3.66.0）：网络失败说清楚是网络问题（超时 / 连不上），业务错误用服务端的原话，其他用页面给的兜底文案
+ */
+function errText(e, fallback) {
+  if (isNetErr(e)) return isTimeout(e) ? '网络较慢，请求超时了' : '网络不佳，没能连上服务器';
+  if (e && e.biz && e.message) return e.message;
+  return fallback || '加载失败，请稍后重试';
+}
 
 module.exports = {
   isNetErr,
+  errText,
   login: userInfo => call('login', { action: 'login', userInfo }),
   loginCheck: () => call('login', { action: 'check' }),
   // withPayCode：需要预览收款码时才让云函数生成临时链接（主家信息页、礼簿码页）
-  accountGet: withPayCode => call('account', { action: 'get', withPayCode: !!withPayCode }),
+  accountGet: (withPayCode, opts) => call('account', { action: 'get', withPayCode: !!withPayCode }, opts),
   // 主家称呼等改动：工作台、我的、礼簿下拉的缓存都已过期
   accountSave: d => call('account', { action: 'save', ...d }).then(r => { ['books', 'dashboard', 'mine'].forEach(k => require('./cache.js').set(k, null)); return r; }),
   pollLevelGet: () => call('account', { action: 'get' }, { silent: true }),
@@ -73,12 +84,12 @@ module.exports = {
   advGet: () => call('account', { action: 'advGet' }, { silent: true }),
   setTrashDays: days => call('account', { action: 'setTrashDays', days }),
   setPollLevel: level => call('account', { action: 'setPollLevel', level }),
-  accountGetByAid: aid => call('account', { action: 'getByAid', aid }),
-  receiptGet: (rid, batch) => call('payment', { action: 'receipt', rid, batch: !!batch }),
-  myReceipts: () => call('payment', { action: 'myReceipts' }),
+  accountGetByAid: (aid, opts) => call('account', { action: 'getByAid', aid }, opts),
+  receiptGet: (rid, batch, opts) => call('payment', { action: 'receipt', rid, batch: !!batch }, opts),
+  myReceipts: opts => call('payment', { action: 'myReceipts' }, opts),
   // 小票二维码（v3.57.0）：issueQr 静默（失败不弹提示，小票照常打印）
   issueQr: rid => call('payment', { action: 'issueQr', rid, envVersion: envVersion() }, { silent: true }),
-  receiptByToken: token => call('payment', { action: 'receiptByToken', token }),
+  receiptByToken: (token, opts) => call('payment', { action: 'receiptByToken', token }, opts),
   qrCheck: withRaster => call('payment', { action: 'qrCheck', envVersion: envVersion(), withRaster: !!withRaster }),
   claimReceipt: token => call('payment', { action: 'claimReceipt', token }),
   resetQr: rid => call('payment', { action: 'resetToken', rid }),
@@ -110,7 +121,7 @@ module.exports = {
   bookSaveTpl: (bookId, tpls) => call('books', { action: 'saveTpl', bookId, ...tpls }),
   purgeAccount: () => call('account', { action: 'purge', confirm: 'DELETE' }),
   inviteCreate: (type, opts) => call('account', { action: 'createInvite', type, ...(opts || {}) }),
-  inviteInfo: token => call('account', { action: 'inviteInfo', token }),
+  inviteInfo: (token, opts) => call('account', { action: 'inviteInfo', token }, opts),
   inviteAccept: (token, displayName) => call('account', { action: 'acceptInvite', token, displayName }),
   setHandlerName: (name, memberId) => call('account', { action: 'setHandlerName', name, memberId }),
   memberList: () => call('account', { action: 'members' }),
@@ -166,7 +177,7 @@ module.exports = {
   recordList: (d, opts) => call('records', { action: 'list', ...d }, opts),
   markPrinted: rids => call('records', { action: 'markPrinted', rids }),
   recordPending: (withRejected, opts) => call('records', withRejected ? { action: 'pending', withRejected: true } : { action: 'pending' }, opts),
-  dashboard: () => call('records', { action: 'dashboard' }),
+  dashboard: opts => call('records', { action: 'dashboard' }, opts),
   pendingStat: () => call('records', { action: 'pendingStat' }, { silent: true }),
   // 待确认页轮询：带 withExtra 另返回 stall / rej 两个分组的条数
   recordStat: d => call('records', { action: 'pendingStat', ...d }, { silent: true }),

@@ -35,7 +35,7 @@
       </block>
     </block>
 
-    <view class="err" wx:if="{{errMsg}}">{{errMsg}}</view>
+    <view class="err" wx:if="{{errMsg}}" bindtap="onRetryLoad">{{errMsg}}<text class="retry" wx:if="{{errNet}}">　点此重试</text></view>
 
     <block wx:if="{{info && !errMsg}}">
       <view class="dn" wx:if="{{loggedIn && info.type === 'clerk'}}">

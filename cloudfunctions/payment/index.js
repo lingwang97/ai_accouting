@@ -9,6 +9,7 @@ const db = cloud.database();
 const _ = db.command;
 const notify = require('./notify.js');
 const P = require('./plans.js');
+const { nameCheckMap } = require('./namecheck.js');
 const { MAX_AMOUNT, MAX_MSG } = require('./limits.js'); // 单笔礼金上限（tools/cloud-shared/limits.js）
 const { resolveCode, resolveCtx, handlerName, canBook, readonly, can, workBook, soloBook, trusted } = require('./ctx.js');
 const accounts = db.collection('accounts');
@@ -357,6 +358,18 @@ async function cashEntry(openid, ctx, event) {
     : [{ name: event.payerName, amount: event.amount, relation: event.relation, remark: event.remark, tag: event.tag, personRef: event.personRef }], method === 'mixed', true);
   if (parsed.error) return err(parsed.error);
   const items = parsed.items;
+  // 一次调用完成同名检查（v3.66.0，原先前端先调 records.nameCheck 再调 cashEntry）：
+  // 传 nameCheck:true 时，礼簿里已有同名宾客就只返回名单（不入簿），前端选好是哪一位后不带 nameCheck 再提交；没有同名直接入簿
+  // 同一 reqId 已入簿过（上次成功但前端没收到结果的重试）：跳过检查，下面按重复提交返回原记录
+  if (event.nameCheck === true) {
+    const key = reqKeyOf(ctx.ownerOpenid, event.reqId);
+    let done = false;
+    if (key) { try { done = !!(await records.doc('q' + key + '00').get()).data; } catch (e) { done = false; } }
+    if (!done) {
+      const map = await nameCheckMap(db, ctx, items.map(x => x.payerName), event.bookId);
+      if (Object.keys(map).length) return ok({ needPick: true, map });
+    }
+  }
   // 同名区分：选了礼簿里已有的某一位（personRef 为那一位的某条记录 id），由服务端换成往来人 key（不把宾客 openid 交给前端）
   const raw = Array.isArray(event.items) && event.items.length ? event.items : [{ personRef: event.personRef }];
   for (let i = 0; i < items.length; i++) {
@@ -641,18 +654,50 @@ async function receiptView(rec, batch) {
   };
 }
 
-/** 付款方的收据列表（最近 50 笔已到账） */
+/** 等待主家确认一栏只看最近 3 天（更早的多半已被主家处理或自动取消） */
+const WAITING_DAYS = 3;
+
+/**
+ * 付款方的收据列表（最近 50 笔已到账）+ 等待主家确认的（v3.66.0）
+ * waiting：只查 payerOpenid 为本人的记录（自己扫码登记的），状态为已转账待确认 / 还没点「我已完成转账」；
+ * 批次合成一行；只返回姓名、金额、状态、主家称呼与时间，不含任何 openid 与内部字段
+ */
 async function myReceipts(openid) {
   // 本人扫码付款的 + 小票二维码认领的（礼台登记的）
-  const res = await records.where(_.and([{ status: REC.PAID }, _.or([{ payerOpenid: openid }, { claimedOpenid: openid }])]))
-    .orderBy('paidAt', 'desc').limit(50).get();
-  const aids = [...new Set(res.data.map(r => r.aid))];
+  const [res, wres] = await Promise.all([
+    records.where(_.and([{ status: REC.PAID }, _.or([{ payerOpenid: openid }, { claimedOpenid: openid }])]))
+      .orderBy('paidAt', 'desc').limit(50).get(),
+    records.where({
+      payerOpenid: openid,
+      status: _.in([REC.TRANSFERRED, REC.PENDING]),
+      createdAt: _.gte(new Date(Date.now() - WAITING_DAYS * 86400000))
+    }).orderBy('createdAt', 'desc').limit(50).get()
+  ]);
+  const waitRows = [];
+  const byBatch = {};
+  wres.data.forEach(r => {
+    const g = r.batchId ? byBatch[r.batchId] : null;
+    if (g) { g.names.push(r.payerName); g.fen += Math.round(r.amount * 100); return; }
+    const row = { _id: r._id, aid: r.aid, hostName: r.hostName || '', status: r.status, names: [r.payerName], fen: Math.round(r.amount * 100), createdAt: r.createdAt, transferredAt: r.transferredAt || null };
+    if (r.batchId) byBatch[r.batchId] = row;
+    waitRows.push(row);
+  });
+  const aids = [...new Set(res.data.map(r => r.aid).concat(waitRows.map(r => r.aid)))];
   const names = {};
   if (aids.length) {
     const acc = await accounts.where({ _id: _.in(aids) }).field({ accountName: true }).get();
     acc.data.forEach(a => { names[a._id] = a.accountName; });
   }
-  return ok({ list: res.data.map(r => ({ ...receiptRecord(r), accountName: r.hostName || names[r.aid] || '' })) });
+  return ok({
+    list: res.data.map(r => ({ ...receiptRecord(r), accountName: r.hostName || names[r.aid] || '' })),
+    waiting: waitRows.slice(0, 20).map(w => ({
+      _id: w._id, status: w.status,
+      payerName: w.names.length > 1 ? `${w.names[0]} 等 ${w.names.length} 人` : w.names[0],
+      amount: w.fen / 100,
+      accountName: w.hostName || names[w.aid] || '',
+      createdAt: w.createdAt, transferredAt: w.transferredAt
+    }))
+  });
 }
 
 /** 收据只暴露必要字段 */

@@ -58,6 +58,11 @@
 
   <!-- 首次加载完成前显示加载中，避免空状态闪现 -->
   <block wx:if="{{!loaded}}"><loading show="{{true}}" rows="3" /></block>
+  <view class="net-err" wx:elif="{{loadErr && total === 0}}" bindtap="onRetryLoad">
+    <view class="ne-title">待确认没加载出来</view>
+    <view class="ne-sub">{{loadErr}}，请检查网络后重试</view>
+    <view class="ne-btn">点此重试</view>
+  </view>
   <view class="empty" wx:elif="{{total === 0}}">
     <view class="empty-icon">✓</view>
     <view>全部处理完了</view>

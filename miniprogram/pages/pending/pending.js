@@ -38,7 +38,8 @@ Page({
     hiddenCount: 0,   // 待确认超过单次显示上限（100 笔）时，未显示的笔数
     otherCount: 0,    // 其他礼簿的待确认份数（提示回工作台切换）
     unit: '礼簿',      // 机构模式称「场次」
-    netBad: false     // 轮询网络失败：顶部提示条（不弹 toast）
+    netBad: false,    // 轮询网络失败：顶部提示条（不弹 toast）
+    loadErr: ''       // 首次加载失败的说明（v3.66.0）：不再显示「全部处理完了」，改为点此重试
   },
 
   onLoad() {
@@ -102,8 +103,8 @@ Page({
     if (!silent && this._poller) this._poller.kick(); // 用户操作后恢复轮询频率
     try {
       // 轮询（silent）失败不弹 toast，由顶部提示条说明
-      const { list, stalled, rejected, bookName, otherCount, count } = await req.recordPending(true, silent ? { silent: true } : undefined);
-      if (this.data.netBad) this.setData({ netBad: false });
+      const { list, stalled, rejected, bookName, otherCount, count } = await req.recordPending(true, { silent: true });
+      if (this.data.netBad || this.data.loadErr) this.setData({ netBad: false, loadErr: '' });
       const hiddenCount = Math.max(0, (count || 0) - list.length); // 超过单次上限 100 笔的部分
       // 轮询取回的内容与上次相同：不动界面（返回 false 让轮询放慢）
       const sig = JSON.stringify([list.map(r => [r._id, r.status, r.amount, r.transferredAt]), (stalled || []).map(r => [r._id, r.status]), (rejected || []).map(r => r._id), bookName, otherCount, hiddenCount]);
@@ -130,9 +131,22 @@ Page({
       this.setData(patch);
       return true;
     } catch (e) {
-      this.setData({ loaded: true, ...(silent && req.isNetErr(e) ? { netBad: true } : {}) });
+      // 还没有任何数据：显示失败原因 + 重试，不显示「全部处理完了」（弱网时主家会误以为没有待确认）；已有列表：保留并顶部提示
+      const empty = !countOf(this._list) && !(this.data.stalled || []).length;
+      const patch = { loaded: true };
+      if (empty && !silent) patch.loadErr = req.errText(e, '待确认没加载出来');
+      else if (req.isNetErr(e)) patch.netBad = true;
+      else if (!silent) wx.showToast({ title: req.errText(e), icon: 'none' });
+      this.setData(patch);
       return false;
     }
+  },
+
+  /** 加载失败「点此重试」 */
+  onRetryLoad() {
+    this.setData({ loadErr: '', loaded: false });
+    this._sig = '';
+    this.load(false);
   },
 
   /** 下拉刷新：强制重拉（含两个分组） */

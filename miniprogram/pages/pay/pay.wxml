@@ -2,9 +2,10 @@
   <!-- 读取主家信息期间（扫码冷启动常要 1～2 秒）：显示加载中，不留白屏 -->
   <loading show="{{!account && !loadErr}}" rows="3" />
   <!-- 加载失败 -->
-  <view class="card center" wx:if="{{loadErr}}">
+  <view class="card center" wx:if="{{loadErr}}" bindtap="onRetryLoad">
     <view style="font-size:80rpx">⚠️</view>
     <view class="muted">{{loadErr}}</view>
+    <view class="retry-btn" wx:if="{{loadErrNet}}">点此重试</view>
   </view>
 
   <block wx:elif="{{account}}">
@@ -121,13 +122,14 @@
     <!-- 第 3 步：等待收款方确认 -->
     <block wx:if="{{step === 'waiting'}}">
       <view class="card center waiting">
-        <view class="spinner"></view>
-        <view class="ok-title">等待主家确认收到…</view>
+        <view class="spinner" wx:if="{{!pollTimeout}}"></view>
+        <view class="ok-title">{{pollTimeout ? '主家还没确认' : '等待主家确认收到…'}}</view>
         <view class="muted">{{record.payerName}} · ￥{{record.amountStr}}<text wx:if="{{record.payMethod === 'cash'}}"> · 现金</text></view>
         <view class="muted items" wx:if="{{record.itemsStr}}">{{record.itemsStr}}</view>
         <view class="cash-tip" wx:if="{{record.payMethod === 'cash'}}">请将现金 ￥{{record.amountStr}} 当面交给主家或礼台</view>
         <view class="cash-tip" wx:if="{{record.mixed}}">转账 ￥{{record.payStr}} 已完成，请将现金 ￥{{record.cashStr}} 当面交给礼台</view>
-        <view class="muted tip">主家确认收到后，礼金将记入礼簿，本页自动显示回执，请勿关闭</view>
+        <view class="muted tip" wx:if="{{!pollTimeout}}">主家确认收到后本页会自动显示回执。也可以先离开，主家确认后到首页「我的随礼记录」查看回执</view>
+        <view class="muted tip" wx:else>主家可能正在忙，已暂停自动查询。你可以先离开，主家确认后到首页「我的随礼记录」查看回执；也可点下方「刷新状态」再看看</view>
       </view>
       <button class="btn-outline" bindtap="onRefresh">刷新状态</button>
     </block>

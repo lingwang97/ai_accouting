@@ -10,7 +10,9 @@ ROOT = os.path.join(os.path.dirname(__file__), '..')
 SHARED = os.path.join(ROOT, 'tools', 'cloud-shared')
 TARGETS = {
     'ctx.js': ['account', 'books', 'records', 'payment', 'export', 'qrcode', 'system'],
-    'plans.js': ['system', 'warmer', 'account', 'books', 'export', 'payment'],
+    'plans.js': ['system', 'warmer', 'account', 'books', 'export', 'payment', 'records'],
+    # 礼簿同名宾客：records.nameCheck 与 payment.cashEntry（一次调用完成同名检查 + 入簿）共用
+    'namecheck.js': ['records', 'payment'],
     'purge.js': ['account', 'system'],
     'trash.js': ['books', 'warmer'],
     'limits.js': ['payment', 'renqing', 'account'],
