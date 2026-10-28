@@ -110,12 +110,15 @@ Page({
     const trashDays = a2 && a2.trashDays ? a2.trashDays : 15;
     const quota = adv.quotaItem({ role: g.role, orgMode, adv: a2 });
     const saved = pollcfg.level();
-    const level = poll.enabled && adv.pollOptionEnabled(poll, saved) ? saved : 'off';
+    // 超出套餐的档位（如免费版之前存过 3 秒）：按云端口径降到允许的最快一档显示
+    const order = ['high', 'mid', 'low'];
+    const level = !poll.enabled ? 'off' : adv.pollOptionEnabled(poll, saved) ? saved
+      : (order.slice(Math.max(0, order.indexOf(saved))).find(k => adv.pollOptionEnabled(poll, k)) || 'off');
     this.setData({
       org, poll, gift, ad, peak, trash, trashDays, quota, orgMode, levelName: SHORT[level],
       orgName: (g.account && g.account.orgName) || '',
       level,
-      options: OPTIONS.map(o => ({ ...o, enabled: adv.pollOptionEnabled(poll, o.key) })),
+      options: OPTIONS.map(o => ({ ...o, enabled: adv.pollOptionEnabled(poll, o.key), vip: adv.pollOptionVip(poll, o.key) })),
       trashOptions: TRASH_OPTIONS.map(o => ({ ...o, enabled: adv.trashOptionEnabled(trash, o.days) }))
     });
   },

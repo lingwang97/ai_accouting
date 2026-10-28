@@ -17,16 +17,28 @@ function orgItem(s) {
 }
 
 /**
- * 工作台刷新频率（刷新频率）：主家与有「确认收礼」权限的记账人可设置；家人共享只读；套餐关闭 fastRefresh 时高档不可选（标准档始终可选）
+ * 工作台刷新频率（刷新频率）：主家与有「确认收礼」权限的记账人可设置；家人共享只读。
+ * 套餐限制最快一档（v3.69.0，口径同云端 plans.refreshMinSec）：fastRefresh === false 只能标准档；否则 refreshMinSec（免费 8、会员 3，缺项 = 3 全部开放）。
+ * 超出套餐的档位置灰并带「会员」标签，点了说明并可「联系我们」；返回的 minSec 供 pollOptionEnabled 判断每一档
  * @param {{role:string, perms:string[]|null, features:object}} s
  */
+const POLL_SEC = { low: 8, mid: 5, high: 3 };
+function pollMinSec(features) {
+  if (features && features.fastRefresh === false) return Infinity;
+  const n = Number(features && features.refreshMinSec);
+  return n > 0 ? n : 3;
+}
 function pollItem(s) {
-  const vip = !!(s.features && s.features.fastRefresh === false);
+  const minSec = pollMinSec(s.features);
+  const vip = minSec > 3;
   if (s.role === 'viewer') return { enabled: false, reason: '家人共享为只读，无需设置', contact: false, vip: false };
   const can = s.role === 'owner' || (s.role === 'clerk' && !!s.perms && s.perms.indexOf('confirm') >= 0);
   if (!can) return { enabled: false, reason: '需要「确认收礼」权限', contact: false, vip: false };
-  if (vip) return { enabled: true, partial: true, reason: '会员功能，暂未开通高频刷新', contact: true, vip: true };
-  return { enabled: true, reason: '', contact: false, vip: false };
+  if (vip) {
+    const reason = minSec === Infinity ? '会员功能，暂未开通高频刷新' : `免费版最快 ${minSec} 秒刷新一次，更快的档位为会员功能`;
+    return { enabled: true, partial: true, minSec, reason, contact: true, vip: true };
+  }
+  return { enabled: true, minSec, reason: '', contact: false, vip: false };
 }
 
 /**
@@ -40,10 +52,16 @@ function giftItem(s) {
   return { enabled: true, reason: '', contact: false, vip: false };
 }
 
-/** 某一档是否可选：标准档（off）在有权限时始终可选；其余档要求权限且套餐含该功能 */
+/** 某一档是否可选：标准档（off）在有权限时始终可选；其余档要求间隔不快于套餐允许的最快一档 */
 function pollOptionEnabled(item, key) {
   if (!item.enabled) return false;
-  return key === 'off' || !item.partial;
+  if (key === 'off') return true;
+  const min = item.minSec === undefined ? (item.partial ? Infinity : 3) : item.minSec;
+  return POLL_SEC[key] >= min;
+}
+/** 某一档是否为会员档（当前套餐不可选，界面在该档旁显示「会员」） */
+function pollOptionVip(item, key) {
+  return !!item.enabled && key !== 'off' && !pollOptionEnabled(item, key);
 }
 
 /**
@@ -124,4 +142,4 @@ function peakItem(s) {
   return { enabled: true, on, leftText, reason: '', contact: false, vip: closed };
 }
 
-module.exports = { peakLeftText, peakItem, orgItem, pollItem, giftItem, pollOptionEnabled, adItem, trashItem, trashOptionEnabled, quotaItem };
+module.exports = { peakLeftText, peakItem, orgItem, pollItem, giftItem, pollOptionEnabled, pollOptionVip, pollMinSec, adItem, trashItem, trashOptionEnabled, quotaItem };

@@ -38,7 +38,7 @@
             wx:for="{{options}}" wx:key="key" data-key="{{item.key}}" bindtap="onPick">
         <view class="a-radio"><view class="a-dot" wx:if="{{level === item.key}}" /></view>
         <view class="a-text">
-          <view class="a-name">{{item.name}}</view>
+          <view class="a-name">{{item.name}}<text class="a-vip" wx:if="{{item.vip}}">会员</text></view>
           <view class="muted a-sub">{{item.desc}}</view>
         </view>
       </view>

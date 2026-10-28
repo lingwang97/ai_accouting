@@ -8,6 +8,7 @@ App({
     tpl: null,       // 打印模板
     recordsBookId: '', // 礼簿页要筛选的礼簿（从礼簿统计页跳转时设置）
     remindDot: false,  // 「往来」红点：有到期未处理的办事提醒
+    remindVer: Date.now(), // 往来提醒版本：往来页刷新提醒后更新，云端红点缓存随之失效（v3.69.0）
     badge: 0,          // 待确认礼金数（自定义底部菜单「工作台」角标）
     bookType: '',      // 当前礼簿事由，决定主题色（utils/theme.js）
     role: null,        // 当前身份：owner | clerk | viewer；冷启动为空，用 ensureRole() 读取
@@ -65,7 +66,7 @@ App({
     return new Promise(resolve => {
       wx.cloud.callFunction({
         name: 'records',
-        data: { action: 'pendingStat' }, // 轻接口：只统计待确认笔数
+        data: { action: 'pendingStat', ...require('./utils/request.js').pollHint() }, // 轻接口：只统计待确认笔数（带身份与提醒版本，云端可复用缓存）
         success: res => {
           const d = res.result && res.result.code === 0 ? res.result.data : {};
           const n = d.count || 0;

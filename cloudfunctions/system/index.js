@@ -596,6 +596,7 @@ const INDEXES = [
   ['members', 'member', [['memberOpenid', 1]]],
   ['members', 'aid', [['aid', 1]]],
   ['accounts', 'owner', [['ownerOpenid', 1]]],
+  ['accounts', 'peak', [['peakUntil', -1]]], // warmer 判断是否有人开着高峰模式（v3.69.0）
   ['users', 'openid', [['openid', 1]]],
   ['books', 'owner_time', [['ownerOpenid', 1], ['createdAt', -1]]],
   ['gifts_out', 'owner_name', [['ownerOpenid', 1], ['toName', 1]]],

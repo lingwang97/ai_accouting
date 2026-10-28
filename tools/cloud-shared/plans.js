@@ -56,26 +56,46 @@ function normalizeAds(a) {
 const DEFAULT_PLANS = {
   free: {
     name: '免费版',
-    features: { warmup: true, maxBooks: 3, maxClerks: 3, exportPdf: true, receiptAppCode: true, org: false, fastRefresh: true,
-      pdfThemePremium: true, receiptStylePremium: true, trashDays: 15, peakMode: false, bookMax: 3000 } // v3.66.7 免费版：最多 3 本礼簿、3 位记账人，回收站最长 15 天（30 / 60 天仅会员）；0 = 不限；peakMode 办事日高峰模式（v3.65.1 起仅会员：free 为 false，pro 为 true）；bookMax 传统礼簿 PDF 单次最多笔数（免费 3000，专业版 6000；缺项 = 3000）；trashDays 回收站可选的最长保留天数（缺项 / 0 视为 60，即全部开放——兼容 settings/plans 里没有该项的旧文档）；org 机构版；fastRefresh 待确认高频刷新；pdfThemePremium 礼簿 PDF 会员主题 / 自定义 / 宋体毛笔 / 尾页设置；receiptStylePremium 电子回执会员样式（现阶段全部免费开放，只有 === false 才限制）
+    features: { warmup: true, maxBooks: 3, maxClerks: 3, exportPdf: true, receiptAppCode: true, org: false, fastRefresh: true, refreshMinSec: 8,
+      pdfThemePremium: true, receiptStylePremium: true, trashDays: 15, peakMode: false, bookMax: 3000 } // refreshMinSec（v3.69.0）：工作台刷新最快几秒一次，免费 8（可选标准 / 8 秒），会员 3（5 秒 / 3 秒）；缺项 = 3（全部开放，兼容旧 settings/plans 文档） // v3.66.7 免费版：最多 3 本礼簿、3 位记账人，回收站最长 15 天（30 / 60 天仅会员）；0 = 不限；peakMode 办事日高峰模式（v3.65.1 起仅会员：free 为 false，pro 为 true）；bookMax 传统礼簿 PDF 单次最多笔数（免费 3000，专业版 6000；缺项 = 3000）；trashDays 回收站可选的最长保留天数（缺项 / 0 视为 60，即全部开放——兼容 settings/plans 里没有该项的旧文档）；org 机构版；fastRefresh 待确认高频刷新；pdfThemePremium 礼簿 PDF 会员主题 / 自定义 / 宋体毛笔 / 尾页设置；receiptStylePremium 电子回执会员样式（现阶段全部免费开放，只有 === false 才限制）
   },
   pro: {
     name: '专业版',
-    features: { warmup: true, maxBooks: 0, maxClerks: 0, exportPdf: true, receiptAppCode: false, org: true, fastRefresh: true,
+    features: { warmup: true, maxBooks: 0, maxClerks: 0, exportPdf: true, receiptAppCode: false, org: true, fastRefresh: true, refreshMinSec: 3,
       pdfThemePremium: true, receiptStylePremium: true, trashDays: 60, peakMode: true, bookMax: 6000 }
   }
 };
 
 /**
  * 待确认刷新频率（我的 → 高级功能）：存 users.pollLevel，取值只能是下面几档，其余一律按 off。
- * 套餐 features.fastRefresh === false 时不能设置高档，读取时也按 off（features 里没有该项视为开放，兼容管理员已保存的旧套餐文档）。
+ * 套餐 features.fastRefresh === false 时不能设置高档，读取时也按 off；v3.69.0 起另按 features.refreshMinSec 限制最快一档（见 refreshMinSec）。
  * 毫秒数只有前端用（miniprogram/utils/pollcfg.js 同表）。
  */
 const POLL_LEVELS = ['off', 'low', 'mid', 'high'];
+const POLL_SEC = { low: 8, mid: 5, high: 3 }; // 各档固定间隔（秒），与 miniprogram/utils/pollcfg.js 的 MS 一致
 function normalizePollLevel(v) { return POLL_LEVELS.includes(v) ? v : 'off'; }
 function fastRefreshAllowed(features) { return !features || features.fastRefresh !== false; }
-/** 实际生效的档位：非法值 / 套餐不含该功能 → off */
-function effectivePollLevel(v, features) { return fastRefreshAllowed(features) ? normalizePollLevel(v) : 'off'; }
+/**
+ * v3.69.0 套餐允许的最快刷新间隔（秒）：fastRefresh === false 时只能用标准档（Infinity）；
+ * 否则 features.refreshMinSec（免费 8、会员 3）；缺项 / 非正数 = 3（全部开放，兼容管理员已保存的旧套餐文档）
+ */
+function refreshMinSec(features) {
+  if (!fastRefreshAllowed(features)) return Infinity;
+  const n = Number(features && features.refreshMinSec);
+  return n > 0 ? n : 3;
+}
+/** 某一档套餐是否允许：标准档（off）始终允许 */
+function pollLevelAllowed(level, features) {
+  const l = normalizePollLevel(level);
+  return l === 'off' || POLL_SEC[l] >= refreshMinSec(features);
+}
+/** 实际生效的档位：非法值 → off；超出套餐的降到允许的最快一档（免费版存过 5 秒 / 3 秒的按 8 秒），一档都不允许为 off */
+function effectivePollLevel(v, features) {
+  const l = normalizePollLevel(v);
+  if (pollLevelAllowed(l, features)) return l;
+  const order = ['high', 'mid', 'low'];
+  return order.slice(order.indexOf(l)).find(x => pollLevelAllowed(x, features)) || 'off';
+}
 
 /** 会员功能开关：features 里没有该项视为开放，只有明确为 false 才限制（兼容管理员已保存的旧套餐文档） */
 function featureOpen(features, key) { return !features || features[key] !== false; }
@@ -201,6 +221,6 @@ module.exports = {
   bookMaxOf, BOOK_MAX_DEFAULT, PEAK_HOURS,
   limitOf, quotaMsg, TRASH_DAYS_OPTIONS, TRASH_DAYS_DEFAULT, trashDaysMax, effectiveTrashDays,
   featureOpen, RECEIPT_STYLES_FREE, RECEIPT_STYLES_PREMIUM, RECEIPT_STYLES_FUNERAL,
-  POLL_LEVELS, normalizePollLevel, fastRefreshAllowed, effectivePollLevel,
+  POLL_LEVELS, POLL_SEC, normalizePollLevel, fastRefreshAllowed, refreshMinSec, pollLevelAllowed, effectivePollLevel,
   readSetting, writeSetting, normalizeWarmup, normalizeAds, isAdmin, planOf
 };

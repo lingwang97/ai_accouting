@@ -996,7 +996,8 @@ async function setPollLevel(openid, level) {
   if (!canPollSetting(ctx)) return err('无权设置');
   if (level !== 'off') {
     const plan = await P.planOf(db, ctx.ownerOpenid);
-    if (!P.fastRefreshAllowed(plan.features)) return err('高频刷新属于会员功能');
+    // v3.69.0：免费版最快 8 秒，5 秒 / 3 秒为会员
+    if (!P.pollLevelAllowed(level, plan.features)) return err(P.fastRefreshAllowed(plan.features) ? `${plan.name}最快 ${P.refreshMinSec(plan.features)} 秒刷新一次，更快的档位属于会员功能` : '高频刷新属于会员功能');
   }
   if (!ctx.user) return err('请先登录');
   await db.collection('users').where({ openid, _openid: _.exists(false) }).update({ data: { pollLevel: level } });

@@ -98,12 +98,14 @@ function seed(plansDoc, members) {
 }
 const call = (openid, ev) => { state.openid = openid; return loadFunction('account').main(ev); };
 const updates = () => db.log.filter(l => l.op === 'update' && l.col === 'users');
+// 全部开放的套餐文档（features 缺 refreshMinSec = 3 秒可用）；v3.69.0 起默认免费版最快 8 秒，见 v3690.test.js
+const OPEN_PLANS = { free: { name: '免费版', features: {} }, pro: { name: '专业版', features: {} } };
 const OFF_PLANS = { free: { name: '免费版', features: { fastRefresh: false } }, pro: { name: '专业版', features: { fastRefresh: false } } };
 const CLERK_DESK = { _id: 'm1', aid: 'acc1', memberOpenid: 'c1', role: 'clerk', soloBookId: 'b1', perms: ['desk'] };
 const VIEWER = { _id: 'm2', aid: 'acc1', memberOpenid: 'v1', role: 'viewer', bookIds: ['b1'] };
 
 test('account.get：主家返回已保存的档位', async () => {
-  seed();
+  seed(OPEN_PLANS);
   const r = await call(OWNER, { action: 'get' });
   assert.strictEqual(r.data.pollLevel, 'mid');
 });
@@ -118,12 +120,12 @@ test('account.get：家人共享、没有确认权限的记账人按 off；有�
   seed(null, [CLERK_DESK, VIEWER]);
   assert.strictEqual((await call('c1', { action: 'get' })).data.pollLevel, 'off');
   assert.strictEqual((await call('v1', { action: 'get' })).data.pollLevel, 'off');
-  seed(null, [{ ...CLERK_DESK, perms: ['confirm'] }]);
+  seed(OPEN_PLANS, [{ ...CLERK_DESK, perms: ['confirm'] }]);
   assert.strictEqual((await call('c1', { action: 'get' })).data.pollLevel, 'high');
 });
 
 test('account.setPollLevel：合法值写入当前用户；非法值拒绝且不写库', async () => {
-  seed();
+  seed(OPEN_PLANS);
   const r = await call(OWNER, { action: 'setPollLevel', level: 'high' });
   assert.strictEqual(r.code, 0);
   assert.strictEqual(r.data.pollLevel, 'high');

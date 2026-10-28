@@ -136,13 +136,13 @@ async function hasPeak() {
   try {
     const _ = db.command;
     // v3.65.1 高峰模式仅会员：只算套餐含 peakMode 的主家（免费版遗留的 peakUntil 不触发预热）
-    const rows = (await db.collection('accounts').where({ peakUntil: _.gt(new Date()), _openid: _.exists(false) }).limit(100).get()).data;
-    for (const a of rows) {
-      let features = {};
-      try { features = (await planOf(db, a.ownerOpenid)).features; } catch (e) { /* 读套餐失败：按开放处理 */ }
-      if (featureOpen(features, 'peakMode')) return true;
-    }
-    return false;
+    // v3.69.0：只取主家 openid 字段、最多 20 个（有一个是会员就够），按主家去重后并行读套餐；accounts.peak 索引（peakUntil）由 system 一键建索引创建
+    const rows = (await db.collection('accounts').where({ peakUntil: _.gt(new Date()), _openid: _.exists(false) })
+      .field({ ownerOpenid: true }).limit(20).get()).data;
+    const owners = [...new Set(rows.map(a => a.ownerOpenid).filter(Boolean))];
+    const open = await Promise.all(owners.map(o => planOf(db, o)
+      .then(p => featureOpen(p.features, 'peakMode'), () => true))); // 读套餐失败：按开放处理
+    return open.some(Boolean);
   } catch (e) {
     return false;
   }

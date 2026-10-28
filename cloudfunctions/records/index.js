@@ -26,7 +26,7 @@ exports.main = async (event) => {
   try {
     await ensureCol('records');
     // 记账人代主家操作：数据一律按主家
-    const ctx = await resolveCtx(db, OPENID);
+    const ctx = await ctxFor(OPENID, event);
     const OWNER = ctx.ownerOpenid;
     // 只读家人不触发写操作
     if (['list', 'pending', 'dashboard', 'pendingStat'].includes(event.action) && !readonly(ctx) && ctx.account) await expirePending(OWNER);
@@ -51,7 +51,7 @@ exports.main = async (event) => {
       case 'pending':
         return await pending(OWNER, ctx, event.withRejected === true);
       case 'pendingStat':
-        return await pendingStat(OWNER, ctx, OPENID, event.withExtra === true);
+        return await pendingStat(OWNER, ctx, OPENID, event.withExtra === true, String(event.rv || ''));
       case 'themes':
         return await themes(OWNER, ctx);
       // 同名区分：礼台记账前查礼簿里同名的人；给某位宾客设区分备注
@@ -69,6 +69,43 @@ exports.main = async (event) => {
     return err('查询失败，请稍后重试');
   }
 };
+
+// —— 轮询减负（v3.69.0）：工作台 / 待确认页每 3~10 秒调一次 pendingStat，原先每次约 7~9 次读库 ——
+// 都是同一实例内的内存缓存，多实例之间不共享；只用于只读的轮询接口，写操作（确认、登记等在 payment）始终实时解析身份
+const CTX_TTL = 15 * 1000;       // 身份：前端带当前身份 aid 且与缓存一致时复用（切换身份后 aid 变了立即重新解析）
+const OTHER_TTL = 30 * 1000;     // 「其他礼簿待确认」个数：最多每 30 秒查一次（3 秒档约每 10 次）；待确认页拉列表时顺带刷新
+const SUM_TTL = 30 * 1000;       // 待确认合计：份数没变且不超过 30 秒时沿用上次的聚合结果
+const REMIND_TTL = 5 * 60 * 1000; // 往来红点：5 分钟；前端改过提醒后换 rv，立即重算
+const ctxCache = new Map();
+const otherCache = new Map();
+const sumCache = new Map();
+const remindCache = new Map();
+const cacheSet = (m, k, v) => { if (m.size > 500) m.clear(); m.set(k, v); };
+
+/** 解析身份：pendingStat / pending 且前端带了 aid 时，15 秒内复用同一身份的解析结果；其余接口照常解析并刷新缓存 */
+async function ctxFor(openid, event) {
+  const aid = typeof event.aid === 'string' ? event.aid : '';
+  if (aid && ['pendingStat', 'pending'].includes(event.action)) {
+    const hit = ctxCache.get(openid);
+    if (hit && hit.exp > Date.now() && hit.ctx.account && hit.ctx.account._id === aid) return hit.ctx;
+  }
+  const ctx = await resolveCtx(db, openid);
+  if (ctx.account) cacheSet(ctxCache, openid, { exp: Date.now() + CTX_TTL, ctx });
+  else ctxCache.delete(openid);
+  return ctx;
+}
+
+/** 其他礼簿待确认个数（缓存键含主家、当前礼簿与负责范围）；fresh 为刚查到的值时直接写入 */
+async function otherCount(ctx, cur, fresh) {
+  const key = `${ctx.ownerOpenid}|${cur}|${ctx.bookIds ? ctx.bookIds.join(',') : '*'}`;
+  if (fresh === undefined) {
+    const hit = otherCache.get(key);
+    if (hit && hit.exp > Date.now()) return hit.v;
+    fresh = (await records.where(otherPendCond(ctx, cur)).count()).total;
+  }
+  cacheSet(otherCache, key, { exp: Date.now() + OTHER_TTL, v: fresh });
+  return fresh;
+}
 
 /**
  * 超过 PENDING_TTL 仍未转账的记录自动取消（惰性执行，付款方之后仍可补点「已转账」）
@@ -502,6 +539,7 @@ async function pending(openid, ctx, withRejected) {
   ]);
   const b = bookRes && bookRes.data;
   const bookName = b && b.ownerOpenid === openid ? (b.hostName ? `${b.hostName} · ${b.name}` : b.name) : '';
+  await otherCount(ctx, cur, other.total); // 与轮询（pendingStat）共用缓存，避免两边个数不一致导致待确认页反复重拉
   return ok({ list: res.data.map(strip), count: cnt.total, stalled: stall.data.map(strip), bookName, otherCount: other.total, rejected: rejRes ? rejRes.data.map(strip) : [] });
 }
 
@@ -519,22 +557,32 @@ function otherPendCond(ctx, cur) {
 
 /** 待确认份数与合计（工作台轮询用，只做计数 + 聚合） */
 // withExtra（待确认页轮询）：另返回 stall / rej 两个分组的条数，页面据此判断是否需要重拉完整列表（旧前端不传，行为不变）
-async function pendingStat(openid, ctx, selfOpenid, withExtra) {
-  if (!ctx.account) return ok({ count: 0, sum: 0, remindDue: await remindDue(selfOpenid) });
+// v3.69.0：合计只在份数变化（或超过 SUM_TTL）时重新聚合；其他礼簿个数、往来红点走缓存（见上方 *_TTL）
+async function pendingStat(openid, ctx, selfOpenid, withExtra, rv) {
+  if (!ctx.account) return ok({ count: 0, sum: 0, remindDue: await remindDueCached(selfOpenid, rv) });
   const cur = workBook(ctx);
   const cond = { ownerOpenid: openid, status: REC.TRANSFERRED, bookId: cur || '__none__' };
   const now = Date.now();
-  const [cnt, agg, other, due, stall, rej] = await Promise.all([
+  const [cnt, other, due, stall, rej] = await Promise.all([
     records.where(cond).count(),
-    records.aggregate().match(cond)
-      .group({ _id: null, fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) })
-      .end(),
-    records.where(otherPendCond(ctx, cur)).count(),
-    remindDue(selfOpenid),
+    otherCount(ctx, cur),
+    remindDueCached(selfOpenid, rv),
     withExtra && cur ? records.where(stallCondOf(openid, cur, now)).count().catch(() => null) : null,
     withExtra && cur && can(ctx, 'confirm') ? records.where(rejectedCondOf(openid, cur, now)).count().catch(() => null) : null
   ]);
-  const out = { count: cnt.total, sum: Math.round(((agg.list && agg.list[0]) || { fen: 0 }).fen) / 100, other: other.total, remindDue: due };
+  const sumKey = `${openid}|${cur}`;
+  const hit = sumCache.get(sumKey);
+  let fen;
+  if (hit && hit.exp > now && hit.count === cnt.total) fen = hit.fen;
+  else if (!cnt.total) fen = 0;
+  else {
+    const agg = await records.aggregate().match(cond)
+      .group({ _id: null, fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) })
+      .end();
+    fen = Math.round(((agg.list && agg.list[0]) || { fen: 0 }).fen);
+  }
+  if (!hit || hit.count !== cnt.total || hit.exp <= now) cacheSet(sumCache, sumKey, { exp: now + SUM_TTL, count: cnt.total, fen });
+  const out = { count: cnt.total, sum: fen / 100, other, remindDue: due };
   if (withExtra) { out.stall = stall ? stall.total : -1; out.rej = rej ? rej.total : -1; } // -1：未查询 / 无权限，页面不据此刷新
   return ok(out);
 }
@@ -562,6 +610,17 @@ async function remindDue(openid) {
     const r = await db.collection('reminders').where(_.and([{ ownerOpenid: openid, done: false }, _.or(or)])).count();
     return r.total > 0;
   } catch (e) { return false; }
+}
+
+/** 往来红点（缓存 5 分钟；rv 为前端的提醒版本，往来页刷新 / 改过提醒后变化，立即重算） */
+async function remindDueCached(openid, rv) {
+  if (!openid) return false;
+  const key = `${openid}|${rv || ''}`;
+  const hit = remindCache.get(key);
+  if (hit && hit.exp > Date.now()) return hit.v;
+  const v = await remindDue(openid);
+  cacheSet(remindCache, key, { exp: Date.now() + REMIND_TTL, v });
+  return v;
 }
 
 /** 礼簿里同名的宾客（逻辑在共享模块 namecheck.js，与 payment.cashEntry 共用） */

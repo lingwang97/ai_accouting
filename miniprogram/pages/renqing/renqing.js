@@ -202,6 +202,7 @@ Page({
       });
       // 红点与提示条同口径：直接按本次结果更新，不必再请求
       getApp().globalData.remindDot = hotCount > 0;
+      getApp().globalData.remindVer = Date.now(); // 云端红点缓存失效，轮询按最新提醒重算
       getApp().refreshTabBar();
     } catch (e) { /* 静默 */ }
   },

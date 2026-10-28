@@ -21,6 +21,17 @@ function markWrite(data) {
 
 const isTimeout = e => /timeout|timed out|超时/i.test(String((e && (e.errMsg || e.message)) || ''));
 
+/**
+ * 轮询接口的提示参数（v3.69.0）：aid 当前身份的主家信息 id（云端据此 15 秒内复用身份解析，切换身份后 aid 变化立即重新解析）；
+ * rv 往来提醒版本（往来页刷新提醒后变化，云端红点缓存随之失效）
+ */
+function pollHint() {
+  try {
+    const g = getApp().globalData;
+    return { aid: (g.account && g.account._id) || '', rv: String(g.remindVer || '') };
+  } catch (e) { return {}; }
+}
+
 /** 额度已满的提示（服务端 plans.quotaMsg 的统一后缀）；弹窗带「联系我们」，页面自己处理时用 silent */
 const isQuotaMsg = m => /开通会员可添加更多/.test(String(m || ''));
 function quotaModal(msg) {
@@ -192,11 +203,12 @@ module.exports = {
   payAmend: (rid, fields) => call('payment', { action: 'amend', rid, ...fields }).then(dropDash),
   recordList: (d, opts) => call('records', { action: 'list', ...d }, opts),
   markPrinted: rids => call('records', { action: 'markPrinted', rids }),
-  recordPending: (withRejected, opts) => call('records', withRejected ? { action: 'pending', withRejected: true } : { action: 'pending' }, opts),
+  recordPending: (withRejected, opts) => call('records', { action: 'pending', ...pollHint(), ...(withRejected ? { withRejected: true } : {}) }, opts),
   dashboard: opts => call('records', { action: 'dashboard' }, opts),
-  pendingStat: () => call('records', { action: 'pendingStat' }, { silent: true }),
+  pendingStat: () => call('records', { action: 'pendingStat', ...pollHint() }, { silent: true }),
   // 待确认页轮询：带 withExtra 另返回 stall / rej 两个分组的条数
-  recordStat: d => call('records', { action: 'pendingStat', ...d }, { silent: true }),
+  recordStat: d => call('records', { action: 'pendingStat', ...pollHint(), ...d }, { silent: true }),
+  pollHint,
   recordThemes: () => call('records', { action: 'themes' }),
   exportFile: d => call('export', d),
   // 传统礼簿 PDF 预览（3 页小 PDF）与示意图用的前几笔宾客数据
