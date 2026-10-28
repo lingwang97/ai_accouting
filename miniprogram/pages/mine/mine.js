@@ -79,12 +79,11 @@ Page({
 
       // 套餐与主家信息并行取（v3.66.0，原先依次等待）
       const planP = plan.load(true);
-      const { account, role, identities, restricted, readonly, perms, pollLevel } = await req.accountGet();
+      const { account, role, identities, restricted, readonly, perms } = await req.accountGet();
       app.globalData.account = account;
       app.globalData.role = role;
       app.refreshTabBar(); // 记账人身份隐藏「往来」
       app.globalData.perms = perms || [];
-      require('../../utils/pollcfg.js').set(pollLevel);
       theme.setAccount(account);
       this.setData({ primary: theme.apply(this).primary });
       app._accountChecked = true;

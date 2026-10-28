@@ -134,7 +134,7 @@ async function getMine(openid, withPayCode) {
     pendingMembers,
     lastNotify: (ctx.user && ctx.user.lastNotify) || null, // 最近一次新礼金提醒的发送结果
     giftNotify: giftNotifyOf(ctx),      // 新礼金微信提醒是否开启（v3.66.3，默认关；无权限的身份恒为 false）
-    pollLevel: refresh.pollLevel,       // 待确认刷新频率（高级功能），已按权限与套餐校验
+    pollLevel: refresh.pollLevel,       // 旧字段：v3.70.0 起恒为 'off'（智能刷新不需要设置），保留给旧前端
     peakUntil: refresh.peakUntil,       // 办事日高峰模式到期时间（毫秒；0 = 未开启 / 已到期 / 无权限）
     identities: ids
   });
@@ -969,7 +969,7 @@ async function setTheme(openid, primary) {
   return ok({ account: safeAccount({ ...ctx.account, theme }, ctx) });
 }
 
-/** 能使用「待确认刷新频率」的身份：主家，或有「确认收礼」权限的记账人（家人只读不可用） */
+/** 能确认收礼的身份：主家，或有「确认收礼」权限的记账人（家人只读不可用）；高峰模式、新礼金提醒按此判断 */
 function canPollSetting(ctx) { return !!ctx.account && !readonly(ctx) && can(ctx, 'confirm'); }
 
 /** 新礼金微信提醒是否开启：users.giftNotify === true 且当前身份有确认收礼权限（缺省 = 关闭，不读额外集合） */
@@ -985,19 +985,15 @@ async function setGiftNotify(openid, on) {
   return ok({ giftNotify: on });
 }
 
-/** 高级功能：待确认刷新频率（跟人走，换设备 / 换身份都沿用；只影响自己这部手机的轮询间隔） */
+/**
+ * 旧接口（v3.61.0～v3.69.x 的「工作台刷新频率」）：v3.70.0 起改为智能刷新，不再有手动档位。
+ * 保留给旧版前端调用：校验参数与身份后不写库，恒返回 off（旧前端据此按标准间隔刷新，不会固定 3 秒）
+ */
 async function setPollLevel(openid, level) {
   if (!P.POLL_LEVELS.includes(level)) return err('选项不正确');
   const ctx = await resolveCtx(db, openid);
   if (!canPollSetting(ctx)) return err('无权设置');
-  if (level !== 'off') {
-    const plan = await P.planOf(db, ctx.ownerOpenid);
-    // v3.69.0：免费版最快 8 秒，5 秒 / 3 秒为会员
-    if (!P.pollLevelAllowed(level, plan.features)) return err(P.fastRefreshAllowed(plan.features) ? `${plan.name}最快 ${P.refreshMinSec(plan.features)} 秒刷新一次，更快的档位属于会员功能` : '高频刷新属于会员功能');
-  }
-  if (!ctx.user) return err('请先登录');
-  await db.collection('users').where({ openid, _openid: _.exists(false) }).update({ data: { pollLevel: level } });
-  return ok({ pollLevel: level });
+  return ok({ pollLevel: 'off' });
 }
 
 /**

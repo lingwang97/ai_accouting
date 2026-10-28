@@ -1,6 +1,6 @@
-// pages/advanced/advanced.js — 高级功能（列表，可继续扩展）：机构模式、工作台刷新频率（频率）
+// pages/advanced/advanced.js — 高级功能（列表，可继续扩展）：机构模式、新礼金提醒、办事日高峰模式、回收站保留时间等
 // 所有有账户身份的角色都能进入；无权限的项目仍显示并置灰，写明原因（可用性见 utils/advperm.js，云端另有校验）
-// 工作台刷新频率默认收起（pollOpen）；刷新频率按人保存在服务端（account.setPollLevel → users.pollLevel），本机缓存见 utils/pollcfg.js
+// v3.70.0 去掉「工作台刷新频率」：改为智能刷新（有新转账后 10 分钟内 5 秒，见 utils/poller.js），不需要设置；高峰到期缓存见 utils/pollcfg.js
 const req = require('../../utils/request.js');
 const theme = require('../../utils/theme.js');
 const plan = require('../../utils/plan.js');
@@ -9,17 +9,10 @@ const adv = require('../../utils/advperm.js');
 const cache = require('../../utils/cache.js');
 const notify = require('../../utils/notify.js');
 
-const SHORT = { off: '标准', low: '8 秒', mid: '5 秒', high: '3 秒' };
 const TRASH_OPTIONS = [
   { days: 15, name: '15 天（默认）' },
   { days: 30, name: '30 天' },
   { days: 60, name: '60 天' }
-];
-const OPTIONS = [
-  { key: 'off', name: '标准（默认）', desc: '10 秒起，长时间没有新转账会自动放慢，最慢 1 分钟一次，最省流量' },
-  { key: 'low', name: '较快 · 8 秒', desc: '固定每 8 秒刷新一次' },
-  { key: 'mid', name: '快 · 5 秒', desc: '固定每 5 秒刷新一次' },
-  { key: 'high', name: '最快 · 3 秒', desc: '固定每 3 秒刷新一次，办事高峰时使用' }
 ];
 
 Page({
@@ -31,7 +24,6 @@ Page({
     orgMode: false,
     orgName: '',
     org: { enabled: false, reason: '', contact: false, vip: false },
-    poll: { enabled: false, reason: '', contact: false, vip: false },
     gift: { enabled: false, reason: '', contact: false, vip: false },
     giftOn: false,           // 新礼金微信提醒（服务端 users.giftNotify，默认关）
     ad: { show: false },
@@ -43,10 +35,6 @@ Page({
     trashOptions: TRASH_OPTIONS.map(o => ({ ...o, enabled: false })),
     adv: null,               // account.advGet：数量与额度、回收站天数（只有主家）
     quota: { show: false },
-    level: 'off',
-    levelName: '标准',
-    pollOpen: false,
-    options: OPTIONS.map(o => ({ ...o, enabled: false })),
     saving: false
   },
   async onShow() {
@@ -58,14 +46,14 @@ Page({
     this.setData({ hasAccount: !!g.account, ready: true, planReady: !!plan.get(), giftOn: notify.giftOn() }); // 提醒开关先按本机缓存显示，服务端返回后再校正
     this.build();
     if (!g.account) return;
-    // 套餐（记账人 / 家人跟随所服务的主家）与最新刷新设置（可能在别的设备上改过）
+    // 套餐（记账人 / 家人跟随所服务的主家）与最新的高峰到期、提醒开关（可能在别的设备上改过）
     try {
       const [, r, adv2] = await Promise.all([
         plan.load(true), req.pollLevelGet().catch(() => null),
         g.role === 'owner' ? req.advGet().catch(() => null) : Promise.resolve(null)
       ]);
       if (r) {
-        pollcfg.set(r.pollLevel, r.peakUntil || 0);
+        pollcfg.set(null, r.peakUntil || 0);
         notify.setGift(r.giftNotify);
         if (r.giftNotify !== undefined) this.setData({ giftOn: r.giftNotify === true });
       }
@@ -101,7 +89,6 @@ Page({
     const features = (p && p.features) || {};
     const orgMode = !!(g.account && g.account.orgMode);
     const org = adv.orgItem({ role: g.role, orgMode, features });
-    const poll = adv.pollItem({ role: g.role, perms: g.perms, features });
     const gift = adv.giftItem({ role: g.role, perms: g.perms });
     const ad = adv.adItem({ role: g.role, plan: p && p.plan });
     const peak = adv.peakItem({ role: g.role, features, peakUntil: pollcfg.peakUntil() });
@@ -109,16 +96,9 @@ Page({
     const a2 = this.data.adv;
     const trashDays = a2 && a2.trashDays ? a2.trashDays : 15;
     const quota = adv.quotaItem({ role: g.role, orgMode, adv: a2 });
-    const saved = pollcfg.level();
-    // 超出套餐的档位（如免费版之前存过 3 秒）：按云端口径降到允许的最快一档显示
-    const order = ['high', 'mid', 'low'];
-    const level = !poll.enabled ? 'off' : adv.pollOptionEnabled(poll, saved) ? saved
-      : (order.slice(Math.max(0, order.indexOf(saved))).find(k => adv.pollOptionEnabled(poll, k)) || 'off');
     this.setData({
-      org, poll, gift, ad, peak, trash, trashDays, quota, orgMode, levelName: SHORT[level],
+      org, gift, ad, peak, trash, trashDays, quota, orgMode,
       orgName: (g.account && g.account.orgName) || '',
-      level,
-      options: OPTIONS.map(o => ({ ...o, enabled: adv.pollOptionEnabled(poll, o.key), vip: adv.pollOptionVip(poll, o.key) })),
       trashOptions: TRASH_OPTIONS.map(o => ({ ...o, enabled: adv.trashOptionEnabled(trash, o.days) }))
     });
   },
@@ -229,7 +209,7 @@ Page({
     this._peakBusy = true;
     try {
       const r = await req.setPeak(on);
-      pollcfg.set(pollcfg.level(), r.peakUntil || 0);
+      pollcfg.set(null, r.peakUntil || 0);
       this.build();
       wx.showToast({ title: on ? '已开启高峰模式' : '已关闭', icon: 'none' });
     } catch (err) {
@@ -270,30 +250,6 @@ Page({
   /** 去广告：未开通时点击说明如何开通 */
   onAdTap() {
     if (!this.data.ad.member) this.explain({ contact: true, reason: '开通会员后，主家与记账人使用的页面不再显示广告' }, '去广告');
-  },
-
-  // —— 工作台刷新频率 ——
-  /** 标题行：无权限弹原因；否则展开 / 收起档位 */
-  onPollHead() {
-    const { poll, pollOpen } = this.data;
-    if (!poll.enabled) return this.explain(poll, '工作台刷新频率');
-    this.setData({ pollOpen: !pollOpen });
-  },
-  async onPick(e) {
-    const key = e.currentTarget.dataset.key;
-    const { poll, level, saving } = this.data;
-    if (saving) return;
-    if (!adv.pollOptionEnabled(poll, key)) return this.explain(poll, '工作台刷新频率');
-    if (key === level) return;
-    this.setData({ saving: true });
-    try {
-      const r = await req.setPollLevel(key);
-      pollcfg.set(r.pollLevel);
-      this.setData({ level: r.pollLevel, levelName: SHORT[r.pollLevel] || '标准' });
-      wx.showToast({ title: '已保存', icon: 'success' });
-    } catch (err) { /* request 已提示 */ } finally {
-      this.setData({ saving: false });
-    }
   }
 });
 

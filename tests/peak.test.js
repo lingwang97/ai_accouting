@@ -26,25 +26,19 @@ function harness(opt) {
   };
 }
 
-test('poller hold：高峰期间超过 30 分钟没有变化仍固定间隔；hold 结束后退回标准', async () => {
+test('poller hold：高峰期间长时间没有变化仍固定 3 秒，优先于加速窗口；hold 结束后退回（v3.70.0 智能刷新）', async () => {
+  poller.resetBoost();
   let holding = true;
-  const h = harness({ base: 10000, fast: 3000, hold: () => holding });
+  const h = harness({ base: 10000, boost: 5000, peak: 3000, hold: () => holding });
   try {
     h.p.start();
-    h.advance(poller.FAST_IDLE_MS + 5 * 60 * 1000); await h.tick();
-    assert.strictEqual(h.next(), 3000, '高峰期间不退回');
-    h.advance(2 * 3600 * 1000); await h.tick();
     assert.strictEqual(h.next(), 3000);
-    holding = false; // 高峰结束
+    h.advance(2 * 3600 * 1000); await h.tick();
+    assert.strictEqual(h.next(), 3000, '高峰期间不放慢');
+    holding = false; // 高峰结束，没有新转账：标准深度放慢
     h.advance(1000); await h.tick();
     assert.ok(h.next() >= 30000, '退回标准的放慢行为：' + h.next());
-  } finally { h.restore(); }
-  const g = harness({ base: 10000, fast: 3000 }); // 不传 hold：行为同 v3.61
-  try {
-    g.p.start();
-    g.advance(poller.FAST_IDLE_MS + 1000); await g.tick();
-    assert.ok(g.next() > 3000);
-  } finally { g.restore(); }
+  } finally { h.restore(); poller.resetBoost(); }
 });
 
 // ---- plans
@@ -120,12 +114,12 @@ test('account.setPeak：套餐关闭 peakMode 时不能开启，但可以关闭'
   assert.strictEqual((await call(OWNER, { action: 'setPeak', on: false })).code, 0);
 });
 
-test('account.get：peakUntil 只给主家与有确认权限的记账人；到期 / 套餐关闭 / 家人 / 无权限为 0；pollLevel 不被覆盖', async () => {
+test('account.get：peakUntil 只给主家与有确认权限的记账人；到期 / 套餐关闭 / 家人 / 无权限为 0；pollLevel 恒 off', async () => {
   const until = Date.now() + 3 * HOUR;
   seed(null, new Date(until));
   let r = await call(OWNER, { action: 'get' });
   assert.strictEqual(r.data.peakUntil, until);
-  assert.strictEqual(r.data.pollLevel, 'low', '高峰不改用户保存的档位，到期自然回到原档位');
+  assert.strictEqual(r.data.pollLevel, 'off', 'v3.70.0 起没有手动档位，恒为 off');
   assert.strictEqual((await call('c1', { action: 'get' })).data.peakUntil, until, '有确认权限的记账人跟随主家');
   assert.strictEqual((await call('c2', { action: 'get' })).data.peakUntil, 0);
   assert.strictEqual((await call('v1', { action: 'get' })).data.peakUntil, 0);
@@ -148,12 +142,12 @@ test('免费版（默认套餐）：setPeak 被拒并提示「高峰模式属于
   assert.strictEqual((await call(OWNER, { action: 'setPeak', on: true })).code, 0, '会员可开启');
 });
 
-test('免费版：遗留的 peakUntil 读取时无效（account.get 为 0），刷新档位回到自选档；会员有效', async () => {
+test('免费版：遗留的 peakUntil 读取时无效（account.get 为 0）；会员有效', async () => {
   const until = Date.now() + 3 * HOUR;
   seed(null, new Date(until), true);
   let r = await call(OWNER, { action: 'get' });
   assert.strictEqual(r.data.peakUntil, 0);
-  assert.strictEqual(r.data.pollLevel, 'low');
+  assert.strictEqual(r.data.pollLevel, 'off');
   assert.strictEqual((await call('c1', { action: 'get' })).data.peakUntil, 0, '记账人跟随主家的免费状态');
   seed(null, new Date(until), false);
   r = await call(OWNER, { action: 'get' });

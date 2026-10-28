@@ -111,8 +111,8 @@ Page({
   startTimer() {
     this.clearTimer();
     this._pollMs = this.data.readonly ? POLL_MS_READONLY : POLL_MS;
-    this._pollFast = this.data.readonly ? 0 : pollcfg.ms(); // 高级功能：待确认刷新频率（只读家人不受影响）
-    this._poller = poller.create(() => this.refreshPending(true), { base: this._pollMs, slow: !this.data.readonly, fast: this._pollFast, hold: pollcfg.peakOn });
+    // 智能刷新（v3.70.0）：有新转账后 10 分钟内 5 秒；高峰模式 3 秒；只读家人固定 30 秒（slow:false，不加速）
+    this._poller = poller.create(() => this.refreshPending(true), { base: this._pollMs, slow: !this.data.readonly, boost: pollcfg.boostMs, peak: pollcfg.peakMs, hold: pollcfg.peakOn });
     this._poller.start();
   },
   onHide() { this.clearTimer(); this.stopPeakTip(); this.unwatchPrinter(); },
@@ -194,8 +194,8 @@ Page({
       this.setData({ mode: 'host', ...view, netBad: false, netErrText: '' });
       // 身份变化（是否只读）后按对应间隔重新轮询；页面已隐藏时不重启
       if (this._poller && this._pollMs !== (view.readonly ? POLL_MS_READONLY : POLL_MS)) this.startTimer();
-      // 刷新频率设置：每次启动 / 切身份同步一次（可能在别的设备上改过），变了就按新间隔重启轮询
-      // v3.66.0：dashboard 已带档位与高峰到期，直接用；旧版云函数没带时再单独同步
+      // 高峰到期：每次启动 / 切身份同步一次（可能在别的设备上开关过），变了就重排轮询
+      // v3.66.0：dashboard 已带高峰到期，直接用；旧版云函数没带时再单独同步（pollLevel 自 v3.70.0 起恒为 off、不再使用）
       (d.pollLevel !== undefined ? Promise.resolve(pollcfg.apply(d.pollLevel, d.peakUntil || 0)) : pollcfg.sync())
         .then(changed => { this.updatePeakTip(); if (changed && this._poller) this.startTimer(); });
       cache.set('dashboard', view);

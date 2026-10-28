@@ -53,7 +53,7 @@
       <view class="menu-item" bindtap="goAppearance" wx:if="{{account && role === 'owner'}}">
         <image class="mi-icon" src="/assets/icons/palette-m.svg" /><text class="mi-text">主题色</text><text class="arrow">›</text>
       </view>
-      <!-- 高级功能：机构模式、待确认刷新频率等；所有有账户身份的角色都显示，无权限的项目在页内置灰并说明 -->
+      <!-- 高级功能：机构模式、新礼金提醒、高峰模式等；所有有账户身份的角色都显示，无权限的项目在页内置灰并说明 -->
       <view class="menu-item" bindtap="goAdvanced" wx:if="{{account}}">
         <image class="mi-icon" src="/assets/icons/settings-m.svg" /><text class="mi-text">高级功能</text><text class="arrow">›</text>
       </view>

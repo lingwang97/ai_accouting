@@ -118,8 +118,8 @@ Page({
     if (booksP) booksP.then(() => { if (this.selectedBookId() !== before) this.reload(); });
     this.clearTimer();
     if (this._hidden) return; // 加载期间已离开本页：不再启动轮询
-    const fast = pollcfg.ms(); // 高级功能：待确认刷新频率；设置变了就重建轮询
-    if (!this._poller || this._pollFast !== fast) { this._pollFast = fast; this._poller = poller.create(() => this.silentRefresh(), { base: POLL_MS, fast, hold: pollcfg.peakOn }); }
+    // 智能刷新（v3.70.0）：有新转账后 10 分钟内 5 秒（加速窗口各页共用）；高峰模式 3 秒；间隔每次按当前身份取值，不用重建
+    if (!this._poller) this._poller = poller.create(() => this.silentRefresh(), { base: POLL_MS, boost: pollcfg.boostMs, peak: pollcfg.peakMs, hold: pollcfg.peakOn });
     this._poller.start();
   },
 

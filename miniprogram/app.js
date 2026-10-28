@@ -90,7 +90,8 @@ App({
     this.globalData.identityVer = (this.globalData.identityVer || 0) + 1;
     this.globalData.themePrimary = null; // 主题色随身份重新读取
     require('./utils/cache.js').clear();
-    require('./utils/qroff.js').clearFiles(); // 礼簿码离线副本（含收款码图片）的本机文件一并删除（v3.69.1）
+    require('./utils/qroff.js').clearFiles();
+    require('./utils/poller.js').resetBoost(); // 智能刷新的加速窗口属于上一个身份 // 礼簿码离线副本（含收款码图片）的本机文件一并删除（v3.69.1）
     require('./utils/plan.js').reset();
     this._accountChecked = false;
     try { require('./utils/printer.js').clearTemplateCache(); } catch (e) { /* 忽略 */ }
@@ -110,7 +111,7 @@ App({
     return require('./utils/request.js').accountGet(false, silent ? { silent: true } : undefined).then(r => {
       this.globalData.role = r.role || 'none';
       this.globalData.perms = r.perms || [];
-      require('./utils/pollcfg.js').set(r.pollLevel, r.peakUntil || 0);
+      require('./utils/pollcfg.js').set(null, r.peakUntil || 0); // 只用高峰到期（v3.70.0 起没有手动刷新档位）
       this.globalData.account = r.account || null;
       this._accountChecked = true;
       this._fresh = { account: r.account || null, at: Date.now() }; // 刚取到的完整主家信息，页面 15 秒内可直接用一次，省一次重复调用（v3.66.2）

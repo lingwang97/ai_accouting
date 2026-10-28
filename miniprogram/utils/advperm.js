@@ -2,7 +2,8 @@
 // 返回 { enabled, reason, contact, vip }：
 //   enabled 能否操作；reason 不能操作时显示在项目下方、点击时弹窗说明的原因；
 //   contact 原因是「需要开通套餐」时弹窗带「联系我们」按钮（权限 / 角色原因只说明）；vip 旁边显示「会员」小标签。
-// 云端仍会校验（account.setOrgMode / setPollLevel），这里只决定界面显示。
+// 云端仍会校验（account.setOrgMode / setPeak 等），这里只决定界面显示。
+// v3.70.0 去掉「工作台刷新频率」（改为智能刷新，见 utils/poller.js），pollItem / pollOptionEnabled 已删除。
 
 /**
  * 机构模式：只有主家本人、且套餐含机构版才能打开；已开启的账号照常使用，关闭任何时候都可以（套餐到期也能关）
@@ -17,31 +18,6 @@ function orgItem(s) {
 }
 
 /**
- * 工作台刷新频率（刷新频率）：主家与有「确认收礼」权限的记账人可设置；家人共享只读。
- * 套餐限制最快一档（v3.69.0，口径同云端 plans.refreshMinSec）：fastRefresh === false 只能标准档；否则 refreshMinSec（免费 8、会员 3，缺项 = 3 全部开放）。
- * 超出套餐的档位置灰并带「会员」标签，点了说明并可「联系我们」；返回的 minSec 供 pollOptionEnabled 判断每一档
- * @param {{role:string, perms:string[]|null, features:object}} s
- */
-const POLL_SEC = { low: 8, mid: 5, high: 3 };
-function pollMinSec(features) {
-  if (features && features.fastRefresh === false) return Infinity;
-  const n = Number(features && features.refreshMinSec);
-  return n > 0 ? n : 3;
-}
-function pollItem(s) {
-  const minSec = pollMinSec(s.features);
-  const vip = minSec > 3;
-  if (s.role === 'viewer') return { enabled: false, reason: '家人共享为只读，无需设置', contact: false, vip: false };
-  const can = s.role === 'owner' || (s.role === 'clerk' && !!s.perms && s.perms.indexOf('confirm') >= 0);
-  if (!can) return { enabled: false, reason: '需要「确认收礼」权限', contact: false, vip: false };
-  if (vip) {
-    const reason = minSec === Infinity ? '会员功能，暂未开通高频刷新' : `免费版最快 ${minSec} 秒刷新一次，更快的档位为会员功能`;
-    return { enabled: true, partial: true, minSec, reason, contact: true, vip: true };
-  }
-  return { enabled: true, minSec, reason: '', contact: false, vip: false };
-}
-
-/**
  * 新礼金微信提醒（v3.66.3，默认关闭，不是会员功能）：主家与有「确认收礼」权限的记账人可开启；家人共享只读、没有确认权限的记账人置灰
  * @param {{role:string, perms:string[]|null}} s
  */
@@ -50,18 +26,6 @@ function giftItem(s) {
   const can = s.role === 'owner' || (s.role === 'clerk' && !!s.perms && s.perms.indexOf('confirm') >= 0);
   if (!can) return { enabled: false, reason: '需要「确认收礼」权限', contact: false, vip: false };
   return { enabled: true, reason: '', contact: false, vip: false };
-}
-
-/** 某一档是否可选：标准档（off）在有权限时始终可选；其余档要求间隔不快于套餐允许的最快一档 */
-function pollOptionEnabled(item, key) {
-  if (!item.enabled) return false;
-  if (key === 'off') return true;
-  const min = item.minSec === undefined ? (item.partial ? Infinity : 3) : item.minSec;
-  return POLL_SEC[key] >= min;
-}
-/** 某一档是否为会员档（当前套餐不可选，界面在该档旁显示「会员」） */
-function pollOptionVip(item, key) {
-  return !!item.enabled && key !== 'off' && !pollOptionEnabled(item, key);
 }
 
 /**
@@ -142,4 +106,4 @@ function peakItem(s) {
   return { enabled: true, on, leftText, reason: '', contact: false, vip: closed };
 }
 
-module.exports = { peakLeftText, peakItem, orgItem, pollItem, giftItem, pollOptionEnabled, pollOptionVip, pollMinSec, adItem, trashItem, trashOptionEnabled, quotaItem };
+module.exports = { peakLeftText, peakItem, orgItem, giftItem, adItem, trashItem, trashOptionEnabled, quotaItem };

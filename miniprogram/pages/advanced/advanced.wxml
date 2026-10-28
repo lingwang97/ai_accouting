@@ -2,7 +2,7 @@
   <view class="muted a-loading" wx:if="{{!ready || (hasAccount && !planReady)}}">加载中…</view>
   <view class="card" wx:if="{{ready && !hasAccount}}">
     <view class="a-title">高级功能</view>
-    <view class="muted a-desc">还没有礼簿，创建礼簿后可在这里设置机构模式、工作台刷新频率等</view>
+    <view class="muted a-desc">还没有礼簿，创建礼簿后可在这里设置机构模式、办事日高峰模式等</view>
   </view>
 
   <block wx:if="{{hasAccount && planReady}}">
@@ -22,30 +22,6 @@
       </view>
     </view>
 
-    <!-- 工作台刷新频率（默认收起，点标题行展开） -->
-    <view class="card">
-      <view class="a-head" bindtap="onPollHead">
-        <view class="a-headtext">
-          <view class="a-line"><text class="a-title">工作台刷新频率</text><text class="a-vip" wx:if="{{poll.vip}}">会员</text></view>
-        </view>
-        <text class="muted a-cur">{{levelName}}</text>
-        <text class="a-arrow {{pollOpen ? 'open' : ''}}">›</text>
-      </view>
-      <view class="a-reason" wx:if="{{poll.reason}}">{{poll.reason}}</view>
-      <block wx:if="{{pollOpen}}">
-      <view class="muted a-desc">宾客转账后，工作台、待确认页、礼簿页多久自动刷新一次。更快的档位能更早看到新转账，设置跟随你的账号，换手机也沿用。</view>
-      <view class="a-opt {{level === item.key ? 'on' : ''}} {{item.enabled ? '' : 'dis'}}"
-            wx:for="{{options}}" wx:key="key" data-key="{{item.key}}" bindtap="onPick">
-        <view class="a-radio"><view class="a-dot" wx:if="{{level === item.key}}" /></view>
-        <view class="a-text">
-          <view class="a-name">{{item.name}}<text class="a-vip" wx:if="{{item.vip}}">会员</text></view>
-          <view class="muted a-sub">{{item.desc}}</view>
-        </view>
-      </view>
-      <view class="a-note">高刷新会增加云开发调用量。选了更快的档位后，连续 30 分钟没有新转账会自动退回标准；离开页面或切到后台时停止刷新。家人共享（只读）不受影响。</view>
-      </block>
-    </view>
-
     <!-- 新礼金微信提醒（默认关闭，按人开启；不是会员功能） -->
     <view class="card">
       <view class="a-head" bindtap="onGiftTap">
@@ -63,7 +39,7 @@
       <view class="a-head" bindtap="onPeakTap">
         <view class="a-headtext">
           <view class="a-line"><text class="a-title">办事日高峰模式</text><text class="a-vip" wx:if="{{peak.vip}}">会员</text></view>
-          <view class="muted a-sub">办事当天一键开启：{{peakHours}} 小时内工作台、待确认、礼簿页每 3 秒刷新，并提前唤醒云端，响应更快；时间到自动恢复，你原来的刷新设置不变。</view>
+          <view class="muted a-sub">办事当天一键开启：{{peakHours}} 小时内工作台、待确认、礼簿页每 3 秒刷新，并提前唤醒云端，响应更快；时间到自动恢复智能刷新（平时有新转账后 10 分钟内每 5 秒刷新，没有新转账逐步放慢）。</view>
         </view>
         <view catchtap="onPeakTap"><switch checked="{{peak.on}}" disabled="{{!peak.enabled}}" bindchange="onPeakSwitch" color="{{primary}}" /></view>
       </view>

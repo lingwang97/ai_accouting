@@ -1,49 +1,12 @@
-// v3.69.0：刷新档位套餐化（免费版最快 8 秒，5 秒 / 3 秒为会员）与轮询减负（身份、其他礼簿个数、合计、往来红点缓存），warmer.hasPeak 减负
+// v3.69.0：轮询减负（身份、其他礼簿个数、合计、往来红点缓存），warmer.hasPeak 减负（刷新档位套餐化的用例已随 v3.70.0 智能刷新移除）
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const { test } = require('./helpers/harness.js');
 const { db, state, loadFunction, ROOT } = require('./helpers/sdk-stub.js');
-const P = require('../tools/cloud-shared/plans.js');
-const A = require('../miniprogram/utils/advperm.js');
 
 const OWNER = 'o-owner';
 const read = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
-
-test('plans：refreshMinSec 免费 8、会员 3；超出套餐的档位降到允许的最快一档；缺项全部开放；fastRefresh=false 只能标准', () => {
-  const free = P.DEFAULT_PLANS.free.features, pro = P.DEFAULT_PLANS.pro.features;
-  assert.strictEqual(free.refreshMinSec, 8);
-  assert.strictEqual(pro.refreshMinSec, 3);
-  assert.strictEqual(P.effectivePollLevel('high', free), 'low', '免费版存过 3 秒：按 8 秒');
-  assert.strictEqual(P.effectivePollLevel('mid', free), 'low');
-  assert.strictEqual(P.effectivePollLevel('low', free), 'low');
-  assert.strictEqual(P.effectivePollLevel('off', free), 'off');
-  assert.strictEqual(P.effectivePollLevel('high', pro), 'high');
-  assert.strictEqual(P.effectivePollLevel('high', {}), 'high', '旧 settings/plans 文档没有 refreshMinSec：全部开放');
-  assert.strictEqual(P.effectivePollLevel('high', { refreshMinSec: 5 }), 'mid');
-  assert.strictEqual(P.effectivePollLevel('low', { refreshMinSec: 10 }), 'off');
-  assert.strictEqual(P.effectivePollLevel('high', { fastRefresh: false, refreshMinSec: 3 }), 'off');
-  assert.ok(P.pollLevelAllowed('low', free) && !P.pollLevelAllowed('mid', free) && P.pollLevelAllowed('off', { fastRefresh: false }));
-  assert.deepStrictEqual(P.POLL_SEC, { low: 8, mid: 5, high: 3 });
-  // 前端 pollcfg 的毫秒表与云端一致
-  const M = require('../miniprogram/utils/pollcfg.js').MS;
-  Object.keys(P.POLL_SEC).forEach(k => assert.strictEqual(M[k], P.POLL_SEC[k] * 1000));
-});
-
-test('advperm：免费版标准 / 8 秒可选，5 秒 / 3 秒置灰带会员与联系我们；会员全部可选；关闭 fastRefresh 只有标准', () => {
-  const free = A.pollItem({ role: 'owner', perms: [], features: P.DEFAULT_PLANS.free.features });
-  assert.ok(free.enabled && free.vip && free.contact && free.partial);
-  assert.ok(/免费版最快 8 秒/.test(free.reason), free.reason);
-  assert.deepStrictEqual(['off', 'low', 'mid', 'high'].map(k => A.pollOptionEnabled(free, k)), [true, true, false, false]);
-  assert.deepStrictEqual(['off', 'low', 'mid', 'high'].map(k => A.pollOptionVip(free, k)), [false, false, true, true]);
-  const pro = A.pollItem({ role: 'owner', perms: [], features: P.DEFAULT_PLANS.pro.features });
-  assert.ok(!pro.vip);
-  assert.deepStrictEqual(['off', 'low', 'mid', 'high'].map(k => A.pollOptionEnabled(pro, k)), [true, true, true, true]);
-  const off = A.pollItem({ role: 'owner', perms: [], features: { fastRefresh: false } });
-  assert.deepStrictEqual(['off', 'low', 'mid', 'high'].map(k => A.pollOptionEnabled(off, k)), [true, false, false, false]);
-  const wxml = read('miniprogram/pages/advanced/advanced.wxml');
-  assert.ok(/item\.vip/.test(wxml), '每一档旁显示会员标签');
-});
 
 function seedAcc(plansDoc, level) {
   db.reset().applyUpdates = true;
@@ -54,19 +17,6 @@ function seedAcc(plansDoc, level) {
   state.openid = OWNER;
 }
 const acc = ev => loadFunction('account').main(ev);
-
-test('account：免费版可设 8 秒，设 5 秒 / 3 秒被拒（提示会员）；已存 3 秒的读取时按 8 秒；旧套餐文档缺项照常开放', async () => {
-  seedAcc(null, 'off');
-  assert.strictEqual((await acc({ action: 'setPollLevel', level: 'low' })).code, 0);
-  const r = await acc({ action: 'setPollLevel', level: 'mid' });
-  assert.notStrictEqual(r.code, 0);
-  assert.ok(/免费版最快 8 秒/.test(r.msg) && /会员/.test(r.msg), r.msg);
-  seedAcc(null, 'high');
-  assert.strictEqual((await acc({ action: 'get' })).data.pollLevel, 'low');
-  seedAcc({ free: { name: '免费版', features: { fastRefresh: true } }, pro: { name: '专业版', features: {} } }, 'high');
-  assert.strictEqual((await acc({ action: 'get' })).data.pollLevel, 'high', '旧文档没有 refreshMinSec');
-  assert.strictEqual((await acc({ action: 'setPollLevel', level: 'high' })).code, 0);
-});
 
 // ---- 轮询减负
 function seedRec() {
@@ -154,9 +104,4 @@ test('warmer.hasPeak：最多取 20 个、只取主家字段、按主家去重�
   const sys = read('cloudfunctions/system/index.js');
   assert.ok(/\['accounts', 'peak', \[\['peakUntil', -1\]\]\]/.test(sys));
   assert.ok(/'records', 'guest_retry'/.test(sys));
-});
-
-test('常见问题与教程写明免费版最快 8 秒', () => {
-  assert.ok(/免费版可选「标准」和「较快 8 秒」/.test(read('miniprogram/pages/guide/faq.js')));
-  assert.ok(/免费版最快 8 秒/.test(read('miniprogram/pages/guide/guide.js')));
 });

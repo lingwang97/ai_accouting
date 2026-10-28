@@ -31,7 +31,7 @@ test('dashboard 返回刷新档位与高峰到期，和 account.get 一致（会
     assert.strictEqual(d.peakUntil, a.peakUntil, who);
   }
   const d = await dash(OWNER);
-  assert.strictEqual(d.pollLevel, 'mid');
+  assert.strictEqual(d.pollLevel, 'off'); // v3.70.0 起恒为 off
   assert.ok(d.peakUntil > Date.now());
   assert.strictEqual((await dash('c-desk')).pollLevel, 'off'); // 没有确认收礼权限
   assert.strictEqual((await dash('v1')).peakUntil, 0);          // 家人只读

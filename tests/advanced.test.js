@@ -32,31 +32,12 @@ test('机构模式：记账人 / 家人 → 置灰「仅主家可设置」，不
   });
 });
 
-test('刷新频率：主家 / 有确认权限的记账人可用', () => {
-  assert.strictEqual(A.pollItem({ role: 'owner', perms: [], features: {} }).enabled, true);
-  assert.strictEqual(A.pollItem({ role: 'clerk', perms: ['confirm'], features: { fastRefresh: true } }).enabled, true);
-});
-
-test('刷新频率：无确认权限的记账人、家人 → 置灰并写明原因，不带联系我们', () => {
-  const c = A.pollItem({ role: 'clerk', perms: ['desk'], features: {} });
-  assert.strictEqual(c.enabled, false);
-  assert.ok(/确认收礼/.test(c.reason));
-  assert.strictEqual(c.contact, false);
-  assert.strictEqual(A.pollItem({ role: 'clerk', perms: null, features: {} }).enabled, false);
-  const v = A.pollItem({ role: 'viewer', perms: [], features: {} });
-  assert.strictEqual(v.enabled, false);
-  assert.strictEqual(v.contact, false);
-});
-
-test('刷新频率：套餐关闭 fastRefresh → 标准档可选、高档置灰，带会员标签与联系我们；缺项视为开放', () => {
-  const r = A.pollItem({ role: 'owner', perms: [], features: { fastRefresh: false } });
-  assert.strictEqual(r.vip, true);
-  assert.strictEqual(r.contact, true);
-  assert.strictEqual(A.pollOptionEnabled(r, 'off'), true);
-  ['low', 'mid', 'high'].forEach(k => assert.strictEqual(A.pollOptionEnabled(r, k), false));
-  const open = A.pollItem({ role: 'owner', perms: [], features: {} });
-  assert.strictEqual(open.vip, false);
-  ['off', 'low', 'mid', 'high'].forEach(k => assert.strictEqual(A.pollOptionEnabled(open, k), true));
-  const none = A.pollItem({ role: 'viewer', perms: [], features: {} });
-  ['off', 'low'].forEach(k => assert.strictEqual(A.pollOptionEnabled(none, k), false));
+test('v3.70.0 去掉「工作台刷新频率」：advperm 不再有 pollItem / pollOptionEnabled，高级功能页没有刷新卡片', () => {
+  assert.strictEqual(A.pollItem, undefined);
+  assert.strictEqual(A.pollOptionEnabled, undefined);
+  const fs = require('fs'), path = require('path');
+  const dir = path.join(__dirname, '..', 'miniprogram', 'pages', 'advanced');
+  const wxml = fs.readFileSync(path.join(dir, 'advanced.wxml'), 'utf8');
+  const js = fs.readFileSync(path.join(dir, 'advanced.js'), 'utf8');
+  assert.ok(!/工作台刷新频率/.test(wxml) && !/onPollHead|onPick|setPollLevel/.test(wxml + js));
 });

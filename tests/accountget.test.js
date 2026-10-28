@@ -37,7 +37,7 @@ test('account.get：套餐只读一次，刷新档位 / 高峰到期 / 待处理
   subReads = 0;
   const d = await get(OWNER);
   assert.strictEqual(subReads, 1, '套餐订阅只读一次');
-  assert.strictEqual(d.pollLevel, 'mid');
+  assert.strictEqual(d.pollLevel, 'off', 'v3.70.0 起没有手动档位：恒为 off（旧前端按标准刷新）');
   assert.ok(d.peakUntil > Date.now());
   assert.strictEqual(d.role, 'owner');
   assert.strictEqual(d.pendingMembers, 1);

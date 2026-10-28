@@ -57,7 +57,7 @@ const DEFAULT_PLANS = {
   free: {
     name: '免费版',
     features: { warmup: true, maxBooks: 3, maxClerks: 3, exportPdf: true, receiptAppCode: true, org: false, fastRefresh: true, refreshMinSec: 8,
-      pdfThemePremium: true, receiptStylePremium: true, trashDays: 15, peakMode: false, bookMax: 3000 } // refreshMinSec（v3.69.0）：工作台刷新最快几秒一次，免费 8（可选标准 / 8 秒），会员 3（5 秒 / 3 秒）；缺项 = 3（全部开放，兼容旧 settings/plans 文档） // v3.66.7 免费版：最多 3 本礼簿、3 位记账人，回收站最长 15 天（30 / 60 天仅会员）；0 = 不限；peakMode 办事日高峰模式（v3.65.1 起仅会员：free 为 false，pro 为 true）；bookMax 传统礼簿 PDF 单次最多笔数（免费 3000，专业版 6000；缺项 = 3000）；trashDays 回收站可选的最长保留天数（缺项 / 0 视为 60，即全部开放——兼容 settings/plans 里没有该项的旧文档）；org 机构版；fastRefresh 待确认高频刷新；pdfThemePremium 礼簿 PDF 会员主题 / 自定义 / 宋体毛笔 / 尾页设置；receiptStylePremium 电子回执会员样式（现阶段全部免费开放，只有 === false 才限制）
+      pdfThemePremium: true, receiptStylePremium: true, trashDays: 15, peakMode: false, bookMax: 3000 } // fastRefresh / refreshMinSec：v3.70.0 起不再使用（智能刷新不分套餐），保留字段兼容旧 settings/plans 文档 // v3.66.7 免费版：最多 3 本礼簿、3 位记账人，回收站最长 15 天（30 / 60 天仅会员）；0 = 不限；peakMode 办事日高峰模式（v3.65.1 起仅会员：free 为 false，pro 为 true）；bookMax 传统礼簿 PDF 单次最多笔数（免费 3000，专业版 6000；缺项 = 3000）；trashDays 回收站可选的最长保留天数（缺项 / 0 视为 60，即全部开放——兼容 settings/plans 里没有该项的旧文档）；org 机构版；fastRefresh 待确认高频刷新；pdfThemePremium 礼簿 PDF 会员主题 / 自定义 / 宋体毛笔 / 尾页设置；receiptStylePremium 电子回执会员样式（现阶段全部免费开放，只有 === false 才限制）
   },
   pro: {
     name: '专业版',
@@ -67,7 +67,9 @@ const DEFAULT_PLANS = {
 };
 
 /**
- * 待确认刷新频率（我的 → 高级功能）：存 users.pollLevel，取值只能是下面几档，其余一律按 off。
+ * 【v3.70.0 起不再使用】待确认刷新频率（原「我的 → 高级功能」手动档位，存 users.pollLevel）已改为前端智能刷新（utils/poller.js）。
+ * 下面的档位表、fastRefresh / refreshMinSec 套餐字段与函数保留，只为兼容旧版前端的 setPollLevel 参数校验和管理员已保存的 settings/plans 文档，请勿删除。
+ * 原说明：取值只能是下面几档，其余一律按 off。
  * 套餐 features.fastRefresh === false 时不能设置高档，读取时也按 off；v3.69.0 起另按 features.refreshMinSec 限制最快一档（见 refreshMinSec）。
  * 毫秒数只有前端用（miniprogram/utils/pollcfg.js 同表）。
  */
@@ -198,19 +200,19 @@ async function planOf(db, ownerOpenid) {
 }
 
 /**
- * 刷新档位与高峰到期（v3.66.0，工作台 dashboard 一并返回，省掉冷启动时单独一次 account.get）
+ * 高峰到期（v3.66.0 起随工作台 dashboard 一并返回；pollLevel 自 v3.70.0 起恒为 off，只为兼容旧前端）
  * 口径与 account.get 的 pollLevelOf / peakOf 相同：allowed 为调用方算好的「主家，或有确认收礼权限的记账人，且非只读」
  * 读套餐失败按开放处理；套餐只在需要时读一次
  */
 async function refreshOf(db, ctx, allowed, now) {
   const t = now || Date.now();
-  const saved = normalizePollLevel(ctx.user && ctx.user.pollLevel);
   const until = ctx.account && ctx.account.peakUntil ? new Date(ctx.account.peakUntil).getTime() : 0;
-  if (!allowed || (saved === 'off' && !(until > t))) return { pollLevel: 'off', peakUntil: 0 };
+  if (!allowed || !(until > t)) return { pollLevel: 'off', peakUntil: 0 };
   let features;
   try { features = (await planOf(db, ctx.ownerOpenid)).features; } catch (e) { features = undefined; }
+  // v3.70.0 智能刷新：没有手动档位，pollLevel 恒为 off（旧前端读到 off 按标准刷新）；users.pollLevel 不再读取
   return {
-    pollLevel: saved === 'off' ? 'off' : effectivePollLevel(saved, features),
+    pollLevel: 'off',
     peakUntil: until > t && featureOpen(features, 'peakMode') ? until : 0
   };
 }
