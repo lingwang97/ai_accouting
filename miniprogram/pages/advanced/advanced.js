@@ -225,6 +225,8 @@ Page({
   async onPeakSwitch(e) {
     const on = e.detail.value;
     if (!this.data.peak.enabled) return this.resetSwitch('peak.on', !on);
+    if (this._peakBusy) return this.resetSwitch('peak.on', !on); // 上一次还没返回：连点不重复提交（v3.69.1）
+    this._peakBusy = true;
     try {
       const r = await req.setPeak(on);
       pollcfg.set(pollcfg.level(), r.peakUntil || 0);
@@ -232,6 +234,8 @@ Page({
       wx.showToast({ title: on ? '已开启高峰模式' : '已关闭', icon: 'none' });
     } catch (err) {
       this.resetSwitch('peak.on', !on); // 失败：开关复位（request 已提示原因）
+    } finally {
+      this._peakBusy = false;
     }
   },
 

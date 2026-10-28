@@ -2,6 +2,7 @@
 // 数据始终属于主家；记账人与主家权限相同，只有"清除数据"和"人情往来"按本人身份处理
 const cloud = require('wx-server-sdk');
 const { ok, err } = require('./common.js');
+const { ownPayCode } = require('./paycode.js'); // 收款码归属（tools/cloud-shared/paycode.js）
 const { MEMBER } = require('./status.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
@@ -273,11 +274,6 @@ async function save(openid, event) {
   return ok({ account: safeAccount(merged, ctx), pendingPayCode: pendingCode });
 }
 
-/** 是否为该用户本人上传到 paycodes/ 目录的收款码（前端上传路径见 pages/account、pages/bookedit） */
-function ownPayCode(fileID, openid) {
-  const esc = String(openid).replace(/[^a-zA-Z0-9_-]/g, '');
-  return !!esc && new RegExp(`^cloud://[^/]+/paycodes/(book-)?${esc}-\\d+\\.(png|jpe?g|webp)$`, 'i').test(String(fileID || ''));
-}
 
 const handlerOf = ctx => (ctx.member && ctx.member.displayName) || (ctx.user && ctx.user.nickname) || '记账人';
 

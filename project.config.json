@@ -17,5 +17,14 @@
   "editorSetting": {
     "tabIndent": "insertSpaces",
     "tabSize": 2
+  },
+  "packOptions": {
+    "ignore": [
+      {
+        "type": "folder",
+        "value": ".claude"
+      }
+    ],
+    "include": []
   }
 }

@@ -22,16 +22,17 @@ Page({
     // 扫小票小程序码：参数在 options.scene（t=token，URL 编码）；兼容 ?t=token
     const token = rcptscene.tokenFromOptions(options);
     if (!options.rid && !token) return this.setData({ errMsg: options.scene ? '二维码无效' : '回执不存在' });
-    this._opt = { rid: options.rid, token };
+    // batch=1：入簿通知打开的批次回执（v3.69.1），整批合并显示；云端只对扫码登记这一批的宾客本人与主家 / 记账人放开，认领人仍只看自己那张
+    this._opt = { rid: options.rid, token, batch: options.batch === '1' };
     await this.load();
   },
 
   async load() {
-    const { rid, token } = this._opt;
+    const { rid, token, batch } = this._opt;
     const options = { rid };
     try {
       // 扫小票二维码（?t=token）：按 token 取这一笔；否则按记录 id（付款人 / 主家 / 认领人）
-      const { record, accountName, tpl, claim } = token ? await req.receiptByToken(token, { silent: true }) : await req.receiptGet(options.rid, false, { silent: true });
+      const { record, accountName, tpl, claim } = token ? await req.receiptByToken(token, { silent: true }) : await req.receiptGet(options.rid, batch, { silent: true });
       // 扫码冷启动时 globalData.account 还没加载：主家 / 记账人以服务端判断（claim=staff）为准，不显示「我家也要办事」
       if (token) this.setData({ token, claim, isHost: this.data.isHost || claim === 'staff' });
       const model = receipt.buildModel(record, tpl, accountName);

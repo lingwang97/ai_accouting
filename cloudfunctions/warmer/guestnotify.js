@@ -89,7 +89,8 @@ function create(db, cloud) {
       await cloud.openapi.subscribeMessage.send({
         touser: rec.payerOpenid,
         templateId: GUEST_TMPL_ID,
-        page: `pages/receipt/receipt?rid=${rec._id}`, // 回执页参数 rid；批次为宾客自己那条
+        // 回执页参数 rid（批次为宾客自己那条）；批次带 batch=1 打开整批合并回执（v3.69.1，payment.receipt 只对付款人本人与主家 / 记账人放开）
+        page: `pages/receipt/receipt?rid=${rec._id}${rec.batchId ? '&batch=1' : ''}`,
         miniprogramState: { develop: 'developer', trial: 'trial' }[rec.guestEnv] || 'formal',
         data
       });

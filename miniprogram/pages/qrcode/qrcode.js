@@ -9,7 +9,7 @@ const perm = require('../../utils/perm.js');
 const cache = require('../../utils/cache.js');
 const fmt = require('../../utils/format.js');
 
-const OFF_PREFIX = 'qroff_';           // 本机保存的礼簿码（离线兜底），放在页面缓存里：切换身份 / 退出登录时随缓存清空
+const OFF_PREFIX = require('../../utils/qroff.js').PREFIX; // 本机保存的礼簿码（离线兜底）：索引在页面缓存里，图片在 USER_DATA_PATH；切换身份 / 退出 / 清除数据时一并删除（utils/qroff.js）
 const OFF_REFRESH_MS = 24 * 3600 * 1000; // 礼簿码 / 收款码没变时，至少隔一天才重新下载保存一次
 
 const CARD_W = 750;

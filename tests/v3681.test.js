@@ -89,7 +89,7 @@ test('入簿通知：批次补发合成一条、打开宾客自己那条，整�
   seedGuest([b('a1', 1, 200), b('a0', 0, 100)]);
   await GN.create(db, sdk).retryPending(10);
   assert.strictEqual(sent.length, 1);
-  assert.strictEqual(sent[0].page, 'pages/receipt/receipt?rid=a0');
+  assert.strictEqual(sent[0].page, 'pages/receipt/receipt?rid=a0&batch=1');
   assert.strictEqual(sent[0].data.amount3.value, '300.00元');
   assert.ok(db.data.records.every(r => r.guestNotifyDone));
 });

@@ -4,6 +4,7 @@
 // 份数与合计存在礼簿上（statCount / statFen，确认收到时累加），列表无需每次全量统计
 const cloud = require('wx-server-sdk');
 const { ok, err } = require('./common.js');
+const { ownPayCode } = require('./paycode.js'); // 收款码归属（tools/cloud-shared/paycode.js）
 const { REC } = require('./status.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
@@ -566,11 +567,6 @@ async function saveTpl(openid, bookId, receiptTpl, printTpl) {
   return ok({ saved: Object.keys(data) });
 }
 
-/** 是否为该用户本人上传到 paycodes/ 目录的收款码（与 account 云函数一致） */
-function ownPayCode(fileID, openid) {
-  const esc = String(openid || '').replace(/[^a-zA-Z0-9_-]/g, '');
-  return !!esc && new RegExp(`^cloud://[^/]+/paycodes/(book-)?${esc}-\\d+\\.(png|jpe?g|webp)$`, 'i').test(String(fileID || ''));
-}
 
 async function getBook(openid, bookId) {
   if (!/^[a-zA-Z0-9_-]{1,64}$/.test(String(bookId || ''))) return null;

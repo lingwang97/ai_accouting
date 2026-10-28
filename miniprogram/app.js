@@ -90,6 +90,7 @@ App({
     this.globalData.identityVer = (this.globalData.identityVer || 0) + 1;
     this.globalData.themePrimary = null; // 主题色随身份重新读取
     require('./utils/cache.js').clear();
+    require('./utils/qroff.js').clearFiles(); // 礼簿码离线副本（含收款码图片）的本机文件一并删除（v3.69.1）
     require('./utils/plan.js').reset();
     this._accountChecked = false;
     try { require('./utils/printer.js').clearTemplateCache(); } catch (e) { /* 忽略 */ }

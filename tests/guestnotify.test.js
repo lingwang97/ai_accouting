@@ -99,7 +99,7 @@ test('批次：整批确认只发一条，金额为合计，点开宾客自己�
   seed([b('a0', 0, 100), b('a1', 1, 200), b('a2', 2, 300)]);
   await owner({ action: 'confirm', rid: 'a1' });
   assert.strictEqual(sent.length, 1);
-  assert.strictEqual(sent[0].page, 'pages/receipt/receipt?rid=a0');
+  assert.strictEqual(sent[0].page, 'pages/receipt/receipt?rid=a0&batch=1');
   assert.strictEqual(sent[0].data.amount3.value, '600.00元');
   assert.strictEqual(sent[0].data.thing5.value, '3人一起随礼，已入簿');
   // 列表批量确认：同一批被拆到两次调用

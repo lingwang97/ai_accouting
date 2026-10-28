@@ -9,6 +9,7 @@
 //   adminIndexes 管理员：一键创建数据库索引（调用云开发 HTTP API updateIndex，需在本函数环境变量配置 WX_APPSECRET）
 const cloud = require('wx-server-sdk');
 const { ok, err } = require('./common.js');
+const { ownPayCode } = require('./paycode.js'); // 收款码归属（tools/cloud-shared/paycode.js）
 const https = require('https');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
@@ -204,11 +205,6 @@ async function setPlan(admin, ownerOpenid, plan, o, source) {
 const _ = db.command;
 const OPENID_RE = /^[a-zA-Z0-9_-]{10,64}$/;
 
-/** 是否为该用户本人上传到 paycodes/ 目录的收款码（与 account 云函数一致） */
-function ownPayCode(fileID, openid) {
-  const esc = String(openid || '').replace(/[^a-zA-Z0-9_-]/g, '');
-  return !!esc && new RegExp(`^cloud://[^/]+/paycodes/(book-)?${esc}-\\d+\\.(png|jpe?g|webp)$`, 'i').test(String(fileID || ''));
-}
 
 /** 被清除账户的显示信息（确认时输入的名称：主家称呼；没有主家信息时用微信昵称） */
 async function target(ownerOpenid) {
