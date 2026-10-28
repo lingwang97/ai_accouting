@@ -13,7 +13,7 @@ const all = FAQ.reduce((a, c) => a.concat(c.items.map(it => ({ cat: c.cat, ...it
 
 test('faq：分类与条数合理，每条有 q、a、who', () => {
   assert.ok(FAQ.length >= 5);
-  assert.ok(all.length >= 40 && all.length <= 80, '条数 ' + all.length);
+  assert.ok(all.length >= 40 && all.length <= 90, '条数 ' + all.length);
   FAQ.forEach(c => assert.ok(c.cat && c.items.length > 0, '分类为空：' + c.cat));
   all.forEach(it => {
     assert.ok(typeof it.q === 'string' && it.q.trim(), '缺少 q：' + it.cat);

@@ -11,13 +11,14 @@
 // 安全：settings / subscriptions 只由云函数写入（无 _openid）；带 _openid 的是客户端直接写库伪造的，一律忽略。
 
 // export 首次调用要加载字体与 PDF 库，预热只唤醒实例、不加载这些，收益很小，不列入
-const WARMABLE = ['login', 'account', 'records', 'payment', 'books', 'renqing'];
+// qrcode：办事当天出示礼簿码（v3.67.0）
+const WARMABLE = ['login', 'account', 'records', 'payment', 'books', 'renqing', 'qrcode'];
 
 const DEFAULT_WARMUP = {
   enabled: true,
   mode: 'paid',       // always 始终预热 | paid 仅存在有效付费订阅（或有人开着高峰模式）时预热（默认）| peak 仅有人开着办事日高峰模式时预热
   intervalMin: 5,     // 5 / 10 / 15 / 30（调度器每 5 分钟触发一次，按间隔跳过）
-  functions: ['login', 'account', 'records', 'payment', 'books']
+  functions: ['login', 'account', 'records', 'payment', 'books', 'renqing', 'qrcode'] // v3.67.0 起默认含往来、礼簿码；已保存的 settings.warmup 不迁移，由管理员手动勾选
 };
 
 /** 广告位（流量主）：默认关闭，开通流量主后在「系统设置」填广告单元 ID 再开启 */

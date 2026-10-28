@@ -6,6 +6,7 @@ const ENVS = ['develop', 'trial', 'release'];
 const { shortCodeOf, resolveCtx, canBook, readonly, trusted, can, workBook } = require('./ctx.js');
 
 exports.main = async (event) => {
+  if (event && event.action === '__warm') return { code: 0, msg: 'warm', data: null }; // 预热（warmer 定时调用）：早返回，只唤醒实例
   const { OPENID } = cloud.getWXContext();
   if (!OPENID) return err('未获取到用户身份');
   try {

@@ -29,7 +29,7 @@ exports.main = async (event) => {
       case 'adminSetAds': return await guard(OPENID, () => adminSetAds(event.ads));
       case 'adminGet': return await guard(OPENID, adminGet);
       case 'adminSetWarmup': return await guard(OPENID, () => adminSetWarmup(event.warmup));
-      case 'adminSetPlan': return await guard(OPENID, () => setPlan(event.ownerOpenid, event.plan, event.days, 'admin'));
+      case 'adminSetPlan': return await guard(OPENID, () => setPlan(OPENID, event.ownerOpenid, event.plan, event, 'admin'));
       case 'adminFindHosts': return await guard(OPENID, () => findHosts(event.keyword));
       case 'adminIndexes': return await guard(OPENID, () => ensureIndexes());
       case 'adminPreflight': return await guard(OPENID, () => preflight(false));
@@ -124,30 +124,80 @@ async function findHosts(keyword) {
   return ok({ list });
 }
 
+/** 北京时间 YYYY-MM-DD 当天 23:59:59 对应的时间点；格式或日期不合法返回 null */
+function bjEndOfDay(str) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(str || ''));
+  if (!m) return null;
+  const y = +m[1], mo = +m[2], d = +m[3];
+  const chk = new Date(Date.UTC(y, mo - 1, d));
+  if (chk.getUTCFullYear() !== y || chk.getUTCMonth() !== mo - 1 || chk.getUTCDate() !== d) return null;
+  return new Date(Date.UTC(y, mo - 1, d, 23, 59, 59) - 8 * 3600 * 1000);
+}
+
+/** 在北京时间日历上加 n 个月（31 号加 1 个月落在月末，如 1/31 → 2/28），保持当天的时分秒 */
+function addMonthsBj(base, n) {
+  const t = new Date(base.getTime() + 8 * 3600 * 1000);
+  const day = t.getUTCDate();
+  t.setUTCDate(1);
+  t.setUTCMonth(t.getUTCMonth() + n);
+  const last = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0)).getUTCDate();
+  t.setUTCDate(Math.min(day, last));
+  return new Date(t.getTime() - 8 * 3600 * 1000);
+}
+
 /**
- * 开通 / 延期 / 取消套餐（订阅接口预留）
- * days > 0：在当前到期时间（未过期）或现在的基础上延长；plan='free' 为取消
+ * 开通 / 延期 / 缩短 / 取消套餐（v3.67.0）
+ * o.mode：
+ *   'add'   在当前到期时间（同套餐且未过期）或现在的基础上加 o.days 天，或 o.months 个月（日历月）；缺省按 o.days（默认 30 天，兼容旧调用）
+ *   'until' 直接指定到期日 o.until（YYYY-MM-DD，北京时间当天 23:59:59），可延长也可缩短；必须晚于现在
+ *   plan='free'（或 mode='cancel'）：取消，无到期日
+ * 到期日最晚为 5 年后。每次都写 admin_logs（旧 / 新套餐与到期、模式、主家名）。
  */
-async function setPlan(ownerOpenid, plan, days, source) {
+async function setPlan(admin, ownerOpenid, plan, o, source) {
+  o = o || {};
   ownerOpenid = String(ownerOpenid || '').trim();
   if (!/^[a-zA-Z0-9_-]{10,64}$/.test(ownerOpenid)) return err('openid 不正确');
   const plans = await P.readSetting(db, 'plans', P.DEFAULT_PLANS);
   if (!plans[plan]) return err('套餐不存在');
+  const cancel = plan === 'free' || o.mode === 'cancel';
+  const mode = cancel ? 'cancel' : o.mode === 'until' ? 'until' : 'add';
+  const now = new Date();
+  const maxAt = new Date(now.getTime() + 5 * 366 * 24 * 3600 * 1000);
   try { await db.createCollection('subscriptions'); } catch (e) { /* 已存在 */ }
   const col = db.collection('subscriptions');
   let cur = null;
   try { cur = (await col.doc(ownerOpenid).get()).data; } catch (e) { /* 无订阅 */ }
+  const before = await P.planOf(db, ownerOpenid);
   let expiresAt = null;
-  if (plan !== 'free') {
-    const n = Math.max(1, Math.min(3660, Number(days) || 30));
-    const base = cur && cur.plan === plan && cur.expiresAt && new Date(cur.expiresAt) > new Date()
-      ? new Date(cur.expiresAt) : new Date();
-    expiresAt = new Date(base.getTime() + n * 24 * 3600 * 1000);
+  if (mode === 'until') {
+    expiresAt = bjEndOfDay(o.until);
+    if (!expiresAt) return err('到期日格式不正确');
+    if (expiresAt <= now) return err('到期日不能是过去，要停用请选「取消」');
+    if (expiresAt > maxAt) return err('到期日最晚为 5 年后');
+  } else if (mode === 'add') {
+    const base = cur && cur.plan === plan && cur.expiresAt && new Date(cur.expiresAt) > now ? new Date(cur.expiresAt) : now;
+    if (Number(o.months) > 0) {
+      expiresAt = addMonthsBj(base, Math.min(60, Math.floor(Number(o.months))));
+    } else {
+      const n = Math.max(1, Math.min(3660, Math.floor(Number(o.days)) || 30));
+      expiresAt = new Date(base.getTime() + n * 24 * 3600 * 1000);
+    }
+    if (expiresAt > maxAt) return err('到期日最晚为 5 年后');
   }
-  await col.doc(ownerOpenid).set({ data: { plan, expiresAt, source, updatedAt: new Date() } });
+  await col.doc(ownerOpenid).set({ data: { plan: cancel ? 'free' : plan, expiresAt, source, updatedAt: now } });
   // 读回确认已生效
-  const now = await P.planOf(db, ownerOpenid);
-  return ok({ ownerOpenid, plan: now.plan, planName: now.name, expiresAt: now.expiresAt });
+  const after = await P.planOf(db, ownerOpenid);
+  let name = '';
+  try { name = String(((await db.collection('accounts').where({ ownerOpenid }).limit(1).get()).data[0] || {}).accountName || ''); } catch (e) { /* 无主家信息 */ }
+  await log(admin, 'setPlan', {
+    name, ownerOpenid, mode,
+    oldPlan: before.plan, oldExpiresAt: before.expiresAt || null,
+    newPlan: after.plan, newExpiresAt: after.expiresAt || null
+  });
+  return ok({
+    ownerOpenid, plan: after.plan, planName: after.name, expiresAt: after.expiresAt,
+    oldPlan: before.plan, oldPlanName: before.name, oldExpiresAt: before.expiresAt || null, mode
+  });
 }
 
 // —— 数据清除（管理员） ——

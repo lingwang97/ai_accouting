@@ -24,6 +24,16 @@
 .host.on { border-color: var(--primary); background: var(--primary-soft); }
 /* 数据清除 */
 .danger-title { color: var(--danger); }
+/* 折叠标题行（默认收起，点击展开） */
+.fold { display: flex; align-items: center; background: #fff; border-radius: var(--r-m); padding: 26rpx 28rpx; margin-bottom: 24rpx; }
+.fold-main { flex: 1; min-width: 0; }
+.fold-title { font-size: 30rpx; font-weight: 600; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.fold-sum { margin-top: 6rpx; font-size: 24rpx; color: var(--text-3); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.fold-sum.warn { color: var(--warn); }
+.fold-sum.bad { color: var(--danger); }
+.fold-arrow { margin-left: 16rpx; color: var(--text-3); font-size: 28rpx; flex-shrink: 0; }
+.danger-fold .fold-title { color: var(--danger); }
+.fold + .card { margin-top: -12rpx; }
 .pv-head { margin-top: 24rpx; font-weight: 600; }
 .backup-st { margin-left: 16rpx; }
 .book-name { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin-right: 16rpx; }
