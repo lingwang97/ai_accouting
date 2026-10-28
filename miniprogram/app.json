@@ -46,7 +46,7 @@
     "pages/mine/mine": { "network": "wifi", "packages": ["pages/members", "pages/export", "pages/printer", "pages/reconcile"] }
   },
   "window": {
-    "backgroundTextStyle": "light",
+    "backgroundTextStyle": "dark",
     "navigationBarBackgroundColor": "#C8161D",
     "navigationBarTitleText": "慧礼记",
     "navigationBarTextStyle": "white"

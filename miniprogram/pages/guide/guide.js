@@ -98,6 +98,7 @@ const GUIDES = {
     }
   ]
 };
+const SEARCH_OPEN = 5; // 搜索时默认展开的条数（宽词命中很多时不一次全部展开）
 const TABS = ['host', 'clerk', 'guest', 'faq'];
 
 /** 机构模式的称呼替换（与教程一致：礼簿管理→场次管理、记账人→礼台人员） */
@@ -163,7 +164,9 @@ Page({
     const a = getApp().globalData.account;
     const org = !!(a && a.orgMode);
     const { openCat, openQ } = this.data;
+    const sCat = this._sCat || {}, sQ = this._sQ || {}; // 搜索态下用户手动展开/收起的记录
     const kw = this.data.kw.trim().toLowerCase();
+    let hit = 0; // 搜索命中序号：只默认展开前 SEARCH_OPEN 条，其余收起，可手动展开
     const txt = s => (org ? orgText(s) : s);
     let count = 0;
     const faqView = [];
@@ -175,11 +178,13 @@ Page({
         const ans = org && it.aOrg ? it.aOrg : txt(it.a);
         if (kw && (q + ans).toLowerCase().indexOf(kw) < 0) return;
         const k = ci + '-' + ii;
-        items.push({ k, q, a: ans, url: it.url || '', tab: !!it.tab, go: it.go || '去看看', open: !!(kw || openQ[k]) });
+        const open = kw ? (sQ[k] !== undefined ? sQ[k] : hit < SEARCH_OPEN) : !!openQ[k];
+        hit++;
+        items.push({ k, q, a: ans, url: it.url || '', tab: !!it.tab, go: it.go || '去看看', open });
       });
       if (!items.length) return;
       count += items.length;
-      faqView.push({ ci, cat: c.cat, n: items.length, open: !!(kw || openCat[ci]), items });
+      faqView.push({ ci, cat: c.cat, n: items.length, open: kw ? sCat[ci] !== false : !!openCat[ci], items });
     });
     this.setData({ faqView, faqCount: count });
   },
@@ -187,6 +192,7 @@ Page({
   onKw(e) {
     const kw = e.detail.value || '';
     this.setData({ kw });
+    this._sCat = {}; this._sQ = {}; // 换了搜索词：手动展开/收起记录作废
     clearTimeout(this._kwTimer);
     // 搜索词清空时恢复默认展开；否则按关键词过滤（命中自动展开）
     this._kwTimer = setTimeout(() => (kw.trim() ? this.buildFaq() : this.resetFaqOpen()), 150);
@@ -199,18 +205,30 @@ Page({
   },
 
   resetFaqOpen() {
+    this._sCat = {}; this._sQ = {};
     this.setData({ openCat: { [this._defCat || 0]: true }, openQ: {} });
     this.buildFaq();
   },
 
   onToggleCat(e) {
     const ci = e.currentTarget.dataset.ci;
+    if (this.data.kw.trim()) { // 搜索态：按当前显示状态取反，单独记录
+      const c = this.data.faqView.find(x => x.ci === ci);
+      this._sCat = { ...(this._sCat || {}), [ci]: !(c && c.open) };
+      return this.buildFaq();
+    }
     this.setData({ openCat: { ...this.data.openCat, [ci]: !this.data.openCat[ci] } });
     this.buildFaq();
   },
 
   onToggleQ(e) {
     const k = e.currentTarget.dataset.k;
+    if (this.data.kw.trim()) {
+      let cur = false;
+      this.data.faqView.forEach(c => c.items.forEach(it => { if (it.k === k) cur = it.open; }));
+      this._sQ = { ...(this._sQ || {}), [k]: !cur };
+      return this.buildFaq();
+    }
     this.setData({ openQ: { ...this.data.openQ, [k]: !this.data.openQ[k] } });
     this.buildFaq();
   },

@@ -115,7 +115,7 @@
   <button wx:if="{{role === 'clerk'}}" class="btn-danger btn-leave" bindtap="onLeave">退出，不再为这位主家记账</button>
 
   <!-- 设置负责的礼簿与权限（机构版另可设岗位） -->
-  <view class="mask" wx:if="{{editor}}">
+  <view class="mask" wx:if="{{editor}}" catchtouchmove="noop">
     <view class="sheet ed-sheet">
       <view class="ed-body">
       <view class="sheet-title">设置「{{editor.name}}」</view>

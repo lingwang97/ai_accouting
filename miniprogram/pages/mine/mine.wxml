@@ -65,7 +65,7 @@
           <image class="mi-icon" src="/assets/icons/export-m.svg" /><text class="mi-text">{{role === 'viewer' ? '导出礼簿' : '导出与备份'}}</text><text class="arrow">›</text>
         </view>
         <view class="menu-item" bindtap="goTrash" wx:if="{{role === 'owner'}}">
-          <image class="mi-icon" src="/assets/icons/trash-m.svg" /><text class="mi-text">回收站</text><text class="arrow"><text class="muted">删除的礼簿保留 15 天</text> ›</text>
+          <image class="mi-icon" src="/assets/icons/trash-m.svg" /><text class="mi-text">回收站</text><text class="arrow"><text class="muted">删除的礼簿可恢复</text> ›</text>
         </view>
       </view>
     </block>

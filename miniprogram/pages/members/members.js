@@ -385,5 +385,7 @@ Page({
     };
   },
 
+  noop() {},
+
   goContact() { wx.navigateTo({ url: '/pages/contact/contact' }); }
 });

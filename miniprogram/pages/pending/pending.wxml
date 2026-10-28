@@ -140,7 +140,7 @@
   </block>
 
   <!-- 批次明细：底部弹层，点遮罩或 ✕ 关闭 -->
-  <view class="mask" wx:if="{{sheet}}" bindtap="onCloseSheet">
+  <view class="mask" wx:if="{{sheet}}" bindtap="onCloseSheet" catchtouchmove="noop">
     <view class="sheet" catchtap="noop">
       <view class="sh-head">
         <view class="sheet-title">批次明细（{{sheet.records.length}} 人）<text class="cash-tag">{{sheet.methodLabel}}</text></view>
@@ -166,7 +166,7 @@
   </view>
 
   <!-- 批次：逐人按实际金额入簿 -->
-  <view class="mask" wx:if="{{editor}}">
+  <view class="mask" wx:if="{{editor}}" catchtouchmove="noop">
     <view class="sheet">
       <view class="sheet-title">按实际金额入簿</view>
       <view class="muted ed-tip">{{editor.group.nameStr}} · 宾客登记合计 ￥{{editor.group.amountStr}}</view>
