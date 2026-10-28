@@ -144,7 +144,7 @@ module.exports = {
   viewerList: () => call('account', { action: 'viewers' }),
   memberUpdate: (memberId, d) => call('account', { action: 'memberUpdate', memberId, ...d }),
   setOrgMode: (orgMode, orgName) => call('account', { action: 'setOrgMode', orgMode, orgName }),
-  // 外观设置：主题色（仅主家本人）
+  // 主题色（仅主家本人）
   setTheme: primary => call('account', { action: 'setTheme', primary }).then(r => { ['dashboard', 'mine'].forEach(k => require('./cache.js').set(k, null)); return r; }),
   orgSummary: month => call('records', { action: 'orgSummary', month }),
   reconcile: (bookId, day) => call('records', { action: 'reconcile', bookId, day }),

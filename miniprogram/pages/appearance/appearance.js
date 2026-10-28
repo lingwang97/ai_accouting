@@ -1,4 +1,4 @@
-// pages/appearance/appearance.js — 外观设置：主家选择主题色，实时预览工作台、按钮与底部菜单
+// pages/appearance/appearance.js — 主题色：主家选择主题色，实时预览工作台、按钮与底部菜单
 const req = require('../../utils/request.js');
 const theme = require('../../utils/theme.js');
 

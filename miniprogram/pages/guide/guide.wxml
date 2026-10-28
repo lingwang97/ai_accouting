@@ -61,9 +61,14 @@
               <view class="m-avatar"></view><text class="m-nick">我的</text>
               <text class="m-head-btn {{st.mock.head ? 'hl' : ''}}" wx:if="{{st.mock.head}}">{{st.mock.head}} ›<text class="m-tap">点这里</text></text>
             </view>
-            <view class="m-row {{item === st.mock.hl ? 'hl' : ''}}" wx:for="{{st.mock.items}}" wx:key="*this">
-              <text>{{item}}</text><text class="m-tap" wx:if="{{item === st.mock.hl}}">点这里</text><text class="m-arrow" wx:else>›</text>
-            </view>
+            <block wx:for="{{st.mock.groups}}" wx:for-item="grp" wx:key="g">
+              <view class="m-group">{{grp.g}}<text class="m-fold" wx:if="{{!grp.show}}">　· 略</text></view>
+              <block wx:if="{{grp.show}}">
+                <view class="m-row {{item === st.mock.hl ? 'hl' : ''}}" wx:for="{{grp.items}}" wx:key="*this">
+                  <text>{{item}}</text><text class="m-tap" wx:if="{{item === st.mock.hl}}">点这里</text><text class="m-arrow" wx:else>›</text>
+                </view>
+              </block>
+            </block>
           </view>
           <!-- 某个底部菜单页 -->
           <view wx:elif="{{st.mock.type === 'page'}}">
@@ -76,6 +81,22 @@
             <view class="m-tabbar">
               <text class="m-tabitem {{item === st.mock.tab ? 'on' : ''}}" wx:for="{{tabbar}}" wx:key="*this">{{item}}</text>
             </view>
+          </view>
+          <!-- 礼台记账页 -->
+          <view wx:elif="{{st.mock.type === 'cashdesk'}}">
+            <view class="m-pr {{st.mock.hl === 'status' ? 'hl' : ''}}"><text class="m-pr-t">{{st.mock.c.status}}</text><text class="m-tap" wx:if="{{st.mock.hl === 'status'}}">看这里</text></view>
+            <view class="m-sum {{st.mock.hl === 'sum' ? 'hl' : ''}}"><text>{{st.mock.c.sum}}</text><text class="m-tap" wx:if="{{st.mock.hl === 'sum'}}">看这里</text></view>
+            <view class="m-input {{st.mock.hl === 'name' ? 'hl' : ''}}">{{st.mock.c.name}}</view>
+            <view class="m-input {{st.mock.hl === 'amount' ? 'hl' : ''}}">{{st.mock.c.amount}}</view>
+            <view class="m-save">保存并入簿</view>
+          </view>
+          <!-- 工作台顶部提示条 -->
+          <view wx:elif="{{st.mock.type === 'bars'}}">
+            <view class="m-notice {{item.k === st.mock.hl ? 'hl' : ''}}" wx:for="{{st.mock.items}}" wx:key="k"><text class="m-notice-t">{{item.t}}</text><text class="m-vip" wx:if="{{item.vip}}">会员</text></view>
+          </view>
+          <!-- 打印机三种状态 -->
+          <view wx:elif="{{st.mock.type === 'printer3'}}">
+            <view class="m-state {{item.k === st.mock.hl ? 'hl' : ''}}" wx:for="{{st.mock.items}}" wx:key="k"><text class="m-state-k">{{item.k}}</text><text class="m-state-sub">{{item.sub}}</text></view>
           </view>
           <!-- 操作顺序 -->
           <view class="m-flow" wx:elif="{{st.mock.type === 'flow'}}">

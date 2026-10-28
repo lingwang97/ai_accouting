@@ -33,6 +33,22 @@
 .m-row { display: flex; justify-content: space-between; align-items: center; background: #fff; border: 3rpx solid transparent; border-radius: 8rpx; padding: 10rpx 14rpx; margin-bottom: 6rpx; }
 .m-arrow { color: #ccc; }
 
+.m-group { font-size: 20rpx; color: var(--text-3); margin: 10rpx 6rpx 6rpx; }
+.m-fold { color: #bbb; }
+
+/* 礼台记账页、提示条、打印机状态 */
+.m-pr, .m-sum, .m-input, .m-notice, .m-state { background: #fff; border: 3rpx solid transparent; border-radius: 8rpx; padding: 10rpx 14rpx; margin-bottom: 8rpx; }
+.m-pr, .m-sum { display: flex; justify-content: space-between; align-items: center; }
+.m-pr-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-input { color: var(--text-3); }
+.m-save { text-align: center; background: var(--primary); color: #fff; border-radius: 8rpx; padding: 10rpx 0; margin-top: 4rpx; }
+.m-notice { display: flex; align-items: center; }
+.m-notice-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-vip { flex-shrink: 0; margin-left: 12rpx; font-size: 20rpx; color: var(--warn); background: var(--warn-bg); border: 2rpx solid var(--warn-border); border-radius: 999rpx; padding: 0 12rpx; line-height: 32rpx; }
+.m-state { display: flex; justify-content: space-between; align-items: center; }
+.m-state-k { flex-shrink: 0; margin-right: 16rpx; }
+.m-state-sub { flex: 1; min-width: 0; text-align: right; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* 底部菜单页 */
 .m-bar { display: flex; justify-content: flex-end; margin-bottom: 12rpx; }
 .m-btn { background: #fff; border: 3rpx solid transparent; border-radius: 8rpx; padding: 6rpx 14rpx; margin-left: 10rpx; }

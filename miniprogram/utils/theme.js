@@ -5,7 +5,7 @@ const GRAY = '#4A4A4A';
 // 预设主题色 → 底部菜单选中图标的颜色版本（assets/icons/*-{key}.svg，由 tools/gen_icons.py 生成）
 const ICON_KEYS = { '#C8161D': 'r', '#4A4A4A': 'd', '#07C160': 'n', '#B8860B': 'y', '#2B7FFF': 'b', '#333333': 'k' };
 const STORE_KEY = 'theme_primary';
-// 主家可选的预设主题色（外观设置页使用）
+// 主家可选的预设主题色（主题色页使用）
 const PRESET_COLORS = ['#C8161D', '#07C160', '#B8860B', '#2B7FFF', '#333333'];
 
 function hexSoft(hex) {
