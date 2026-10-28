@@ -6,6 +6,7 @@ const perm = require('../../utils/perm.js');
 const fmt = require('../../utils/format.js');
 const scenes = require('../../utils/scenes.js');
 const theme = require('../../utils/theme.js');
+const avatarUtil = require('../../utils/avatar.js');
 
 Page({
   data: {
@@ -63,7 +64,7 @@ Page({
       wx.setNavigationBarTitle({ title: orgMode ? '礼台人员' : '记账人' }); // 机构模式称「礼台人员」
       this.setData({
         role: r.role,
-        owner: r.owner || null,
+        owner: r.owner ? { ...r.owner, avatar: avatarUtil.safe(r.owner.avatar) } : null,
         orgMode,
         canManage: r.canManage !== false,
         myPerms,
@@ -71,6 +72,7 @@ Page({
         accountName: (account && account.accountName) || '',
         list: (r.list || []).map(m => ({
           ...m,
+          avatar: avatarUtil.safe(m.avatar),
           timeStr: m.createdAt ? fmt.day(m.createdAt) : '',
           booksText: !orgMode ? (bookName[m.soloBookId] || '已删除的礼簿')
             : m.allBooks || !(m.bookIds && m.bookIds.length) ? '全部礼簿' : m.bookIds.map(id => bookName[id] || '已删除的礼簿').join('、'),
@@ -80,7 +82,7 @@ Page({
       if (r.role === 'owner') {
         try {
           const j = await req.memberPending();
-          this.setData({ joins: (j.list || []).map(x => ({ ...x, booksText: (x.books || []).join('、'), timeStr: x.createdAt ? fmt.day(x.createdAt) : '' })) });
+          this.setData({ joins: (j.list || []).map(x => ({ ...x, avatar: avatarUtil.safe(x.avatar), booksText: (x.books || []).join('、'), timeStr: x.createdAt ? fmt.day(x.createdAt) : '' })) });
         } catch (e) { /* 忽略 */ }
       }
       if (r.canManage === false) return;
@@ -386,6 +388,8 @@ Page({
   },
 
   noop() {},
+  /** 头像加载失败：回落默认头像 */
+  onAvatarErr(e) { const p = e.currentTarget.dataset.p; if (p) this.setData({ [p]: '' }); },
 
   goContact() { wx.navigateTo({ url: '/pages/contact/contact' }); }
 });

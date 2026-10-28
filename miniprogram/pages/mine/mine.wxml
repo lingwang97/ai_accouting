@@ -11,9 +11,10 @@
   <block wx:if="{{user}}">
     <!-- 用户信息与身份 -->
     <view class="card user-card">
-      <image class="avatar" src="{{user.avatar || '/assets/avatar-default.png'}}" mode="aspectFill" />
+      <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar"><image class="avatar" src="{{avatarSrc || '/assets/avatar-default.png'}}" mode="aspectFill" binderror="onAvatarError" /></button>
       <view class="info">
         <view class="name">{{user.nickname}}</view>
+        <view class="muted" wx:if="{{avatarBad}}">点头像可重新选择</view>
         <view class="muted">{{account ? (role === 'clerk' ? (account.orgMode ? '礼台人员' : '记账人') + ' · 为「' + account.accountName + '」记账' : (role === 'viewer' ? '家人共享 · 查看「' + account.accountName + '」的礼簿' : '主家：' + account.accountName)) : '尚未完善主家信息'}}</view>
         <view class="plan-tag" wx:if="{{planText}}">{{planText}}</view>
       </view>

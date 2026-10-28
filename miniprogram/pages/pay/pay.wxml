@@ -3,8 +3,7 @@
   <loading show="{{!account && !loadErr}}" rows="3" />
   <!-- 加载失败 -->
   <view class="card center" wx:if="{{loadErr}}" bindtap="onRetryLoad">
-    <view style="font-size:80rpx">⚠️</view>
-    <view class="muted">{{loadErr}}</view>
+        <view class="muted">{{loadErr}}</view>
     <view class="retry-btn" wx:if="{{loadErrNet}}">点此重试</view>
   </view>
 
@@ -68,7 +67,7 @@
           <text class="label">支付方式</text>
           <view class="chips">
             <view class="chip {{payMethod === 'wechat' ? 'on' : ''}}" data-m="wechat" bindtap="onPayMethod">微信转账</view>
-            <view class="chip {{payMethod === 'cash' ? 'on' : ''}}" data-m="cash" bindtap="onPayMethod">💵 现金</view>
+            <view class="chip {{payMethod === 'cash' ? 'on' : ''}}" data-m="cash" bindtap="onPayMethod">{{isFuneral ? "" : "💵 "}}现金</view>
             <view class="chip {{payMethod === 'mixed' ? 'on' : ''}}" wx:if="{{batchMode}}" data-m="mixed" bindtap="onPayMethod">转账+现金</view>
           </view>
           <view class="muted" wx:if="{{payMethod === 'cash'}}">现金请当面交给主家或礼台，无需扫码转账</view>
@@ -89,7 +88,7 @@
       </view>
       <!-- 在现场：用微信扫一扫扫主家屏幕 / 台卡上的收款码 -->
       <view class="card center" wx:if="{{onsite}}">
-        <view class="scan-icon">📷</view>
+        <view class="scan-icon" wx:if="{{!isFuneral}}">📷</view>
         <view class="section-title">请用微信「扫一扫」付款</view>
         <view class="step-row">
           <view class="sr-item"><text class="sr-num">①</text>扫一扫</view>
@@ -159,7 +158,7 @@
     <!-- 失败 -->
     <block wx:if="{{step === 'failed'}}">
       <view class="card center success">
-        <view class="ok">❌</view>
+        <view class="ok" wx:if="{{!isFuneral}}">❌</view>
         <view class="ok-title">主家未确认收到</view>
         <view class="muted">{{failReason}}</view>
       </view>

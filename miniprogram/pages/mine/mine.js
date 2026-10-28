@@ -6,10 +6,17 @@ const cache = require('../../utils/cache.js');
 const plan = require('../../utils/plan.js');
 const perm = require('../../utils/perm.js');
 const fresh = require('../../utils/fresh.js');
+const avatarUtil = require('../../utils/avatar.js');
 
 const { VERSION } = require('../../config.js');
 
 const LOGOUT_KEY = 'logged_out'; // 主动退出标记，login 页登录成功后清除
+
+/** 头像显示：旧临时路径视为失效，显示默认头像并提示「点头像可更换」 */
+function avatarView(user) {
+  const ok = !!user && avatarUtil.isValid(user.avatar);
+  return { avatarSrc: ok ? user.avatar : '', avatarBad: !!user && !ok };
+}
 
 Page({
   data: {
@@ -40,7 +47,7 @@ Page({
         const g = getApp().globalData;
         c = c.role === 'owner' || g.perms ? { ...c, pm: perm.map(g.perms, c.role) } : null;
       }
-      if (c && !wx.getStorageSync(LOGOUT_KEY)) this.setData({ ...c, loading: false }); // 冷启动时 globalData.user 尚未恢复
+      if (c && !wx.getStorageSync(LOGOUT_KEY)) this.setData({ ...c, ...avatarView(c.user), loading: false }); // 冷启动时 globalData.user 尚未恢复
     }
     // 打印机名称取本地存储，每次显示都更新；账户信息 45 秒内且期间没有写操作（改称呼 / 切身份 / 主题等）时不重复请求
     const saved = wx.getStorageSync('printerDevice');
@@ -64,7 +71,7 @@ Page({
         app.globalData.openid = openid;
         app.globalData.user = user;
       }
-      this.setData({ user: app.globalData.user });
+      this.setData({ user: app.globalData.user, ...avatarView(app.globalData.user) });
       if (!app.globalData.user) {
         this.setData({ loading: false });
         return;
@@ -98,6 +105,30 @@ Page({
       this.setData({ loading: false });
     }
   },
+
+  /** 点头像重新选择：上传云存储并更新到账号（旧版本存的临时头像已失效，靠这里补救） */
+  async onChooseAvatar(e) {
+    const tmp = e && e.detail && e.detail.avatarUrl;
+    const app = getApp();
+    const user = app.globalData.user;
+    if (!tmp || !user || this._avatarBusy) return;
+    this._avatarBusy = true;
+    wx.showLoading({ title: '上传中', mask: true });
+    try {
+      const fileID = await avatarUtil.upload(tmp);
+      await req.login({ nickname: user.nickname, avatar: fileID });
+      app.globalData.user = { ...user, avatar: fileID };
+      this.setData({ user: app.globalData.user, ...avatarView(app.globalData.user) });
+      cache.set('mine', { user: app.globalData.user, account: this.data.account, role: this.data.role, identities: this.data.identities, restricted: this.data.restricted, readonly: this.data.readonly, pm: this.data.pm });
+      wx.showToast({ title: '头像已更新', icon: 'success' });
+    } catch (err) {
+      wx.showToast({ title: '头像上传失败', icon: 'none' });
+    } finally {
+      wx.hideLoading();
+      this._avatarBusy = false;
+    }
+  },
+  onAvatarError() { this.setData({ avatarSrc: '', avatarBad: true }); },
 
   goMembers() { wx.navigateTo({ url: '/pages/members/members' }); },
   goAdmin() { wx.navigateTo({ url: '/pages/admin/admin' }); },

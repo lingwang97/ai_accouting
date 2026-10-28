@@ -19,7 +19,7 @@ Page({
 
   async onLoad(options) {
     const acc0 = getApp().globalData.account;
-    this.setData({ staffWord: acc0 && acc0.orgMode ? '礼台人员' : '记账人' }); // 机构模式称「礼台人员」
+    this.setData({ org: !!(acc0 && acc0.orgMode), staffWord: acc0 && acc0.orgMode ? '礼台人员' : '记账人' }); // 机构模式称「礼台人员」
     if (!(await perm.guard('export', '你没有对账与导出的权限', { viewer: true }))) return; // 文案同 records.reconcile
     try {
       this.setData({ canRecalc: perm.can('books') && getApp().globalData.role !== 'viewer' });

@@ -53,7 +53,7 @@ Page({
     this.clearTimer(); // 先清旧轮询，避免重复进入页面叠加
     theme.apply(this); // 主题色跟当前礼簿事由走
     const acc = getApp().globalData.account;
-    const patch = { unit: acc && acc.orgMode ? '场次' : '礼簿' };
+    const patch = { unit: acc && acc.orgMode ? '场次' : '礼簿', funeral: getApp().globalData.bookType === 'funeral' };
     // 已有缓存身份：首次渲染前同步确定权限，避免先隐藏再闪出
     if (getApp().globalData.role) Object.assign(patch, this.rolePatch());
     this.setData(patch);

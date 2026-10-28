@@ -1,12 +1,13 @@
+<wxs module="o" src="/utils/orgtext.wxs"></wxs>
 <view class="page" style="{{themeStyle}}">
-  <view class="book-tip muted">宾客扫礼簿码随礼时记入「当前礼簿」；办新的事（满月、乔迁…）新建一本，各自统计、导出。</view>
+  <view class="book-tip muted">{{o.t("宾客扫礼簿码随礼时记入「当前礼簿」；办新的事（满月、乔迁…）新建一本，各自统计、导出。", orgMode)}}</view>
 
   <loading show="{{loading && !current && !list.length}}" rows="4" />
 
   <!-- 当前礼簿 -->
   <view class="cur-card" wx:if="{{current}}">
     <view class="cc-top">
-      <text class="cc-tag">当前礼簿</text>
+      <text class="cc-tag">{{o.t("当前礼簿", orgMode)}}</text>
       <text class="cc-type">{{current.typeLabel}}<text wx:if="{{current.date}}"> · {{current.date}}</text></text>
     </view>
     <view class="cc-name">{{current.title}}</view>
@@ -38,11 +39,11 @@
     </view>
   </view>
 
-  <view class="muted center pad" wx:if="{{!loading && !current && list.length === 0}}">还没有礼簿</view>
+  <view class="muted center pad" wx:if="{{!loading && !current && list.length === 0}}">{{o.t("还没有礼簿", orgMode)}}</view>
 
   <!-- 已归档 -->
   <view class="fold" wx:if="{{archived.length > 0}}" bindtap="onToggleArchived">
-    {{showArchived ? '收起' : '查看'}}已归档礼簿（{{archived.length}}） {{showArchived ? '▴' : '▾'}}
+    {{showArchived ? '收起' : '查看'}}{{o.t('已归档礼簿', orgMode)}}（{{archived.length}}） {{showArchived ? '▴' : '▾'}}
   </view>
   <block wx:if="{{showArchived}}">
     <view class="card book archived" wx:for="{{archived}}" wx:key="_id" data-id="{{item._id}}" bindtap="onDetail">

@@ -29,6 +29,7 @@ Page({
     books: [],        // 机构模式：可选场次（未归档）
     orgMode: !!(getApp().globalData.account && getApp().globalData.account.orgMode), // 机构模式称「场次」，个人称「礼簿」
     bookIdx: 0,
+    funeral: false,   // 当前登记的礼簿是白事：用「致奠人」、不用 emoji
     relations: scenes.RELATIONS,
     saving: false,
     pageLoading: true, // 首次读取礼簿期间：转圈 + 不可操作
@@ -77,6 +78,7 @@ Page({
         orgMode: !!account.orgMode,
         books: pickBook ? books : [],
         bookIdx: books.findIndex(b => b._id === activeBookId), // -1：没有当前礼簿，须先选
+        funeral: ((pickBook ? books[books.findIndex(b => b._id === activeBookId)] : book) || {}).type === 'funeral',
         bookName: book ? book.name : '',
         quick: Array.isArray(account.quickAmounts) ? account.quickAmounts : DEFAULT_QUICK
       });
@@ -129,7 +131,10 @@ Page({
     this.setData({ batchMode: on, ...(on || this.data.payMethod !== 'mixed' ? {} : { payMethod: 'cash' }) });
   },
   onPayMethod(e) { this.setData({ payMethod: e.currentTarget.dataset.m }); },
-  onPickBook(e) { this.setData({ bookIdx: Number(e.detail.value) }); },
+  onPickBook(e) {
+    const i = Number(e.detail.value);
+    this.setData({ bookIdx: i, funeral: !!(this.data.books[i] && this.data.books[i].type === 'funeral') });
+  },
   onBatchChange(e) { this._batchRows = e.detail.rows; },
 
   /** 入簿：直接记入当前礼簿，自动打印回执，清空表单登记下一位 */
@@ -143,7 +148,7 @@ Page({
     } else {
       const name = (this.data.payerName || '').trim();
       const amount = Number(this.data.amount);
-      if (!name) return wx.showToast({ title: '请填写随礼人姓名', icon: 'none' });
+      if (!name) return wx.showToast({ title: this.data.funeral ? '请填写致奠人姓名' : '请填写随礼人姓名', icon: 'none' });
       if (!(amount > 0)) return wx.showToast({ title: '请选择或填写金额', icon: 'none' });
       payload = { payerName: name, amount, relation: this.data.relation, remark: this.data.remark };
     }

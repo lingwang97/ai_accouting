@@ -36,6 +36,8 @@ Page({
   },
 
   async onLoad(options) {
+    const acc0 = getApp().globalData.account;
+    this.setData({ org: !!(acc0 && acc0.orgMode) });
     if (!(await perm.guard('export', '你没有导出权限', { viewer: true }))) return; // 文案同 export 云函数
     const viewer = getApp().globalData.role === 'viewer';
     this.setData({ viewer });

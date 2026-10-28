@@ -1,3 +1,4 @@
+<wxs module="o" src="/utils/orgtext.wxs"></wxs>
 <view class="container" style="{{themeStyle}}">
   <view class="card intro muted">
     为每位{{orgMode ? '礼台人员设置负责的场次' : '记账人设置负责的礼簿'}}和可做的事；回执、小票上显示{{orgMode ? '礼台人员' : '记账人'}}姓名。
@@ -6,8 +7,8 @@
   <view class="card join" wx:if="{{joins.length}}">
     <view class="section-title">申请加入（{{joins.length}}）</view>
     <view class="row" wx:for="{{joins}}" wx:key="_id">
-      <image class="avatar" src="{{item.avatar || '/assets/avatar-default.png'}}" mode="aspectFill" />
-      <view class="name">{{item.name}}<text class="tag">{{item.role === 'viewer' ? '家人共享' : '记账人'}}</text>
+      <image class="avatar" src="{{item.avatar || '/assets/avatar-default.png'}}" mode="aspectFill" binderror="onAvatarErr" data-p="joins[{{index}}].avatar" />
+      <view class="name">{{item.name}}<text class="tag">{{item.role === 'viewer' ? '家人共享' : (orgMode ? '礼台人员' : '记账人')}}</text>
         <view class="muted small" wx:if="{{item.nickname && item.nickname !== item.name}}">微信：{{item.nickname}}</view>
         <view class="muted small" wx:if="{{item.booksText}}">查看：{{item.booksText}}</view>
         <view class="muted small">{{item.from ? '「' + item.from + '」的邀请卡 · ' : ''}}{{item.timeStr}}</view>
@@ -20,7 +21,7 @@
   <view class="card">
     <view class="section-title">主家</view>
     <view class="row" wx:if="{{owner}}">
-      <image class="avatar" src="{{owner.avatar || '/assets/avatar-default.png'}}" mode="aspectFill" />
+      <image class="avatar" src="{{owner.avatar || '/assets/avatar-default.png'}}" mode="aspectFill" binderror="onAvatarErr" data-p="owner.avatar" />
       <view class="name">{{owner.name}}<text class="tag" wx:if="{{owner.me}}">我</text>
         <view class="muted small" wx:if="{{owner.nickname && owner.nickname !== owner.name}}">微信：{{owner.nickname}}</view>
       </view>
@@ -31,7 +32,7 @@
   <view class="card" wx:if="{{role !== 'viewer'}}">
     <view class="section-title">{{orgMode ? '礼台人员' : '记账人'}}（{{list.length}}）</view>
     <view class="row" wx:for="{{list}}" wx:key="_id">
-      <image class="avatar" src="{{item.avatar || '/assets/avatar-default.png'}}" mode="aspectFill" />
+      <image class="avatar" src="{{item.avatar || '/assets/avatar-default.png'}}" mode="aspectFill" binderror="onAvatarErr" data-p="list[{{index}}].avatar" />
       <view class="name">{{item.name}}<text class="tag" wx:if="{{item.me}}">我</text><text class="tag" wx:if="{{orgMode && item.title}}">{{item.title}}</text>
         <view class="muted small" wx:if="{{item.nickname && item.nickname !== item.name}}">微信：{{item.nickname}}</view>
         <view class="muted small">负责：{{item.booksText}} · {{item.permCount}} 项权限<text wx:if="{{item.timeStr}}"> · {{item.timeStr}} 加入</text></view>
@@ -53,7 +54,7 @@
     </view>
     <view class="book-row {{inviteAll ? 'on' : ''}}" wx:if="{{myAllBooks && orgMode}}" bindtap="onInviteAll">
       <view class="check {{inviteAll ? 'on' : ''}}">{{inviteAll ? '✓' : ''}}</view>
-      <view class="b-info">全部礼簿<text class="muted small">（含以后新建的）</text></view>
+      <view class="b-info">{{o.t("全部礼簿", orgMode)}}<text class="muted small">（含以后新建的）</text></view>
     </view>
     <view class="perm-head">
       <text class="muted">权限</text>
@@ -128,7 +129,7 @@
       <view class="muted" style="margin-top:20rpx">负责的礼簿{{orgMode ? '' : '（选一本）'}}</view>
       <view class="book-row {{editor.all ? 'on' : ''}}" wx:if="{{orgMode && (myAllBooks || editor.all)}}" bindtap="onEdAll">
         <view class="check {{editor.all ? 'on' : ''}}">{{editor.all ? '✓' : ''}}</view>
-        <view class="b-info">全部礼簿<text class="muted small">{{myAllBooks ? '（含以后新建的）' : '（你无权修改）'}}</text></view>
+        <view class="b-info">{{o.t("全部礼簿", orgMode)}}<text class="muted small">{{myAllBooks ? '（含以后新建的）' : '（你无权修改）'}}</text></view>
       </view>
       <scroll-view scroll-y class="ed-list">
         <view class="book-row {{item.on && !editor.all ? 'on' : ''}}" wx:for="{{editor.books}}" wx:key="_id" data-i="{{index}}" bindtap="onEdBook">

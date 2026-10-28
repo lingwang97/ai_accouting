@@ -79,7 +79,7 @@
     <view class="item {{item.picked ? 'picked' : ''}}" wx:for="{{shown}}" wx:key="_id" data-id="{{item._id}}" bindtap="onPick">
       <view class="check {{item.picked ? 'on' : ''}}" wx:if="{{selectMode}}">{{item.picked ? '✓' : ''}}</view>
       <view class="info">
-        <view class="name-row"><text class="payer">{{item.nameStr}}</text><text class="money amt">￥{{item.amountStr}}</text><text class="cash-tag" wx:if="{{!item.mixed && item.payMethod === 'cash'}}">💵 现金</text></view>
+        <view class="name-row"><text class="payer">{{item.nameStr}}</text><text class="money amt">￥{{item.amountStr}}</text><text class="cash-tag" wx:if="{{!item.mixed && item.payMethod === 'cash'}}">{{funeral ? "" : "💵 "}}现金</text></view>
         <!-- 批次：同一批的其余几位 -->
         <view class="muted others" wx:if="{{item.batch}}">同批：{{item.othersStr}}</view>
         <!-- 单笔：说明在左、操作在右；批次：说明独占一行，操作在下一行 -->
@@ -121,7 +121,7 @@
         <view class="big-name">{{current.nameStr}}</view>
         <view class="big-amount {{current.amountStr.length >= 11 ? 'md' : ''}}">￥{{current.amountStr}}</view>
         <view class="big-cash" wx:if="{{current.mixed}}">转账+现金：转账 ￥{{current.wechatSumStr}} · 现金 ￥{{current.cashSumStr}}</view>
-        <view class="big-cash" wx:elif="{{current.payMethod === 'cash'}}">💵 现金，请当面清点</view>
+        <view class="big-cash" wx:elif="{{current.payMethod === 'cash'}}">{{funeral ? "" : "💵 "}}现金，请当面清点</view>
         <view class="big-meta" wx:if="{{current.relation}}">{{current.relation}}</view>
         <view class="big-meta" wx:if="{{current.remark}}">礼品/备注：{{current.remark}}</view>
         <view class="batch-rows big" wx:if="{{current.batch}}">

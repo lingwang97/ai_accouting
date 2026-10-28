@@ -34,6 +34,8 @@ Page({
   },
 
   async onLoad(options) {
+    const acc0 = getApp().globalData.account;
+    this.setData({ org: !!(acc0 && acc0.orgMode) });
     if (!(await perm.guard('style', '你没有修改回执与打印样式的权限'))) { this.setData({ pageLoading: false }); return; } // 文案同 books.saveTpl
     try {
       const [{ account }, { list, activeBookId }] = await Promise.all([req.accountGet(), req.bookList()]);

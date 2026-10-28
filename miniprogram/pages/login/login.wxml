@@ -14,10 +14,10 @@
 
   <view class="card form">
     <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
-      <image class="avatar" src="{{avatar || '/assets/avatar-default.png'}}" mode="aspectFill" />
+      <image class="avatar" src="{{avatar || '/assets/avatar-default.png'}}" mode="aspectFill" binderror="onAvatarError" />
     </button>
     <view class="muted avatar-tip">点击设置头像</view>
-    <input class="input" type="nickname" placeholder="请输入昵称" value="{{nickname}}" bindinput="onNicknameInput" />
+    <input class="input" type="nickname" placeholder="请输入昵称" value="{{nickname}}" bindinput="onNicknameInput" bindblur="onNicknameBlur" bindnicknamereview="onNicknameReview" />
     <button class="btn-primary" loading="{{submitting}}" bindtap="onSubmit">登录 / 注册</button>
   </view>
 </view>

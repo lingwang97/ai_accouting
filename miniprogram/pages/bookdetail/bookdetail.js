@@ -50,6 +50,7 @@ Page({
       this.setData({
         book: s.book,
         typeLabel: scenes.label(s.book.type),
+        funeral: s.book.type === 'funeral',
         sum: fmt.money(total),
         count: s.count,
         avg: fmt.money(s.count ? total / s.count : 0),

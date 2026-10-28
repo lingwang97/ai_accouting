@@ -29,7 +29,7 @@ Page({
       const picked = new Set(this.data.books.filter(b => b.on).map(b => b._id));
       this.setData({
         books: list.map(b => ({ _id: b._id, title: title(b), count: b.count, sumStr: fmt.money(b.sum), archived: !!b.archived, on: picked.has(b._id) })),
-        viewers: viewers.map(v => ({ ...v, booksText: v.bookIds.map(id => names[id] || '已删除的礼簿').join('、') }))
+        viewers: viewers.map(v => ({ ...v, avatar: require('../../utils/avatar.js').safe(v.avatar), booksText: v.bookIds.map(id => names[id] || '已删除的礼簿').join('、') }))
       });
     } catch (e) { /* toast 已提示 */ } finally {
       this.setData({ loading: false });
@@ -53,6 +53,7 @@ Page({
   },
 
   noop() {},
+  onAvatarErr(e) { const i = e.currentTarget.dataset.i; this.setData({ [`viewers[${i}].avatar`]: '' }); },
 
   onShareAppMessage(res) {
     // 右上角菜单转发不带邀请卡：只有点页面上的分享按钮才发邀请 / 移交 / 共享

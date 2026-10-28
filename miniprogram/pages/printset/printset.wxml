@@ -1,3 +1,4 @@
+<wxs module="o" src="/utils/orgtext.wxs"></wxs>
 <view class="container" style="{{themeStyle}}">
   <!-- 回执样式：电子回执 / 打印小票（两页互相切换，带上当前礼簿） -->
   <view class="seg">
@@ -6,7 +7,7 @@
   </view>
   <!-- 样式跟礼簿走：每本礼簿各自一套 -->
   <view class="card book-bar">
-    <text class="muted">设置礼簿</text>
+    <text class="muted">{{o.t("设置礼簿", org)}}</text>
     <picker range="{{books}}" range-key="name" value="{{bookIdx}}" bindchange="onBook">
       <view class="book-pick">{{books[bookIdx].name}} ▾</view>
     </picker>

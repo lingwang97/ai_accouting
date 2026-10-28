@@ -1,3 +1,4 @@
+<wxs module="o" src="/utils/orgtext.wxs"></wxs>
 <view class="page tab-page" style="{{themeStyle}}">
   <!-- ===== 工作台：主家 / 记账人 ===== -->
   <block wx:if="{{mode === 'host'}}">
@@ -31,14 +32,14 @@
       </view>
     </block>
     <!-- 没有可记的礼簿 -->
-    <view class="warn-card" wx:if="{{noBook === 'ended'}}">你负责的礼簿已结束（归档、删除或移交），暂时不能出示礼簿码和登记，请联系主家重新安排</view>
-    <view class="warn-card" wx:elif="{{noBook === 'none' && !readonly}}" bindtap="goBooks">还没有当前礼簿：请先在「礼簿管理」里新建或选择一本，宾客的礼金才知道记到哪里 ›</view>
+    <view class="warn-card" wx:if="{{noBook === 'ended'}}">{{o.t("你负责的礼簿已结束（归档、删除或移交），暂时不能出示礼簿码和登记，请联系主家重新安排", account.orgMode)}}</view>
+    <view class="warn-card" wx:elif="{{noBook === 'none' && !readonly}}" bindtap="goBooks">{{o.t("还没有当前礼簿：请先在「礼簿管理」里新建或选择一本，宾客的礼金才知道记到哪里 ›", account.orgMode)}}</view>
 
     <!-- 当前礼簿 -->
     <view class="book-card" bindtap="goRecords">
       <view class="bc-top">
         <view class="bc-title" catchtap="{{canSwitch ? 'onSwitchBook' : ''}}">
-          <view class="bc-name">{{book ? (book.hostName ? book.hostName + ' · ' + book.name : book.name) : '我的礼簿'}}</view>
+          <view class="bc-name">{{book ? (book.hostName ? book.hostName + ' · ' + book.name : book.name) : o.t('我的礼簿', account.orgMode)}}</view>
           <view class="bc-meta" wx:if="{{book}}">{{book.typeLabel}}<text wx:if="{{book.date}}"> · {{book.date}}</text></view>
         </view>
         <view class="bc-switch-btn" wx:if="{{canSwitch}}" hover-class="bc-switch-hover" catchtap="onSwitchBook">⇅ 切换{{account.orgMode ? '场次' : '礼簿'}}</view>
@@ -49,7 +50,7 @@
         <text class="bc-cnt">{{book ? book.count : 0}} 份</text>
       </view>
       <view class="bc-foot">
-        <text wx:if="{{todayCount !== (book ? book.count : 0) || todayBook !== (book ? book.count : 0)}}">今日新增{{restricted ? '' : '（全部礼簿）'}} ￥{{todaySum}} · {{todayCount}} 份</text>
+        <text wx:if="{{todayCount !== (book ? book.count : 0) || todayBook !== (book ? book.count : 0)}}">今日新增{{restricted ? '' : o.t('（全部礼簿）', account.orgMode)}} ￥{{todaySum}} · {{todayCount}} 份</text>
         <text>明细 ›</text>
       </view>
     </view>

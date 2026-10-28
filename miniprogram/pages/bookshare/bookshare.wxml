@@ -26,7 +26,7 @@
   <view class="section-title" style="margin-top:36rpx">已共享的家人（{{viewers.length}}）</view>
   <view class="card">
     <view class="v-row" wx:for="{{viewers}}" wx:key="_id">
-      <image class="avatar" src="{{item.avatar || '/assets/avatar-default.png'}}" mode="aspectFill" />
+      <image class="avatar" src="{{item.avatar || '/assets/avatar-default.png'}}" mode="aspectFill" binderror="onAvatarErr" data-i="{{index}}" />
       <view class="v-info">
         <view>{{item.name}}</view>
         <view class="muted small">可查看：{{item.booksText}}</view>
