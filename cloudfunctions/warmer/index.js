@@ -23,6 +23,11 @@ exports.main = async (event) => {
     const pushDeadline = new Date().getMinutes() < 5 ? deadline - 30 * 1000 : deadline;
     try { await pushReminders(pushDeadline); } catch (e) { console.warn('提醒推送失败', e.message); }
   }
+  // 宾客入簿通知补发（v3.68.1）：确认时没发出（可重试的失败 / 实例中断）的，每轮最多补 10 批
+  const hourly = new Date().getMinutes() < 5; // 每小时第一轮给回收站清理留出时间
+  if (left() > (hourly ? 40 : 15) * 1000) {
+    try { await require('./guestnotify.js').create(db, cloud).retryPending(10, deadline - (hourly ? 35 : 10) * 1000); } catch (e) { console.warn('入簿通知补发失败', e.message); }
+  }
   // 每小时第一轮：永久删除回收站里超过保留期的礼簿（每次最多 5 本，没删完的下个小时继续）
   if (new Date().getMinutes() < 5) {
     const trash = require('./trash.js');

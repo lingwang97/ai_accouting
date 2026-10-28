@@ -588,6 +588,7 @@ const INDEXES = [
   ['records', 'claimed_status_paid', [['claimedOpenid', 1], ['status', 1], ['paidAt', -1]]], // 我的随礼记录（小票二维码认领）
   ['records', 'rcpt_token', [['rcptToken', 1]]], // 扫小票二维码按 token 查回执
   ['records', 'batch', [['batchId', 1]]],
+  ['records', 'guest_retry', [['guestNotify', 1], ['status', 1], ['paidAt', -1]]], // warmer 补发宾客入簿通知（v3.68.1）
   ['records', 'owner_payer', [['ownerOpenid', 1], ['payerName', 1]]], // 往来按姓名查询 / nameCheck
   ['trash_records', 'owner_book', [['ownerOpenid', 1], ['bookId', 1]]],
   ['trash_books', 'status_purge', [['trashStatus', 1], ['purgeAt', 1]]], // warmer 到期清除 / 续跑未完成

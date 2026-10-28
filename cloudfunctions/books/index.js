@@ -67,7 +67,7 @@ exports.main = async (event) => {
       case 'remove': return ctx.role === 'owner' ? await removeBook(OWNER, account, String(event.bookId || ''), true) : err('只有主家本人可以删除礼簿');
       // 回收站（只限主家本人）
       case 'trashList': return ctx.role === 'owner' ? await trashList(OWNER, account) : err('只有主家本人可以查看回收站');
-      case 'trashRestore': return ctx.role === 'owner' ? await trashOp(OWNER, String(event.bookId || ''), 'restore') : err('只有主家本人可以恢复');
+      case 'trashRestore': return ctx.role === 'owner' ? await trashOp(OWNER, String(event.bookId || ''), 'restore', undefined, account) : err('只有主家本人可以恢复');
       case 'trashPurge': return ctx.role === 'owner' ? await trashOp(OWNER, String(event.bookId || ''), 'purge', event.confirmName) : err('只有主家本人可以删除');
       case 'stats': return await stats(OWNER, event.bookId, ctx);
       case 'recalc': return await recalc(OWNER, String(event.bookId || ''));
@@ -378,11 +378,20 @@ async function trashList(openid, account) {
 }
 
 /** 回收站里的一本：恢复 / 彻底删除（须输入礼簿名称） */
-async function trashOp(openid, bookId, op, confirmName) {
+async function trashOp(openid, bookId, op, confirmName, account) {
   let t;
   try { t = (await db.collection('trash_books').doc(bookId).get()).data; } catch (e) { return err('回收站里没有这本礼簿'); }
   if (t.ownerOpenid !== openid || t._openid) return err('回收站里没有这本礼簿');
   if (op === 'restore') {
+    // v3.68.1：恢复也算新增一本，受礼簿数额度限制（恢复中途续跑的不再检查）
+    if (t.trashStatus !== 'restoring') {
+      let plan = null;
+      try { plan = await P.planOf(db, openid); } catch (e) { /* 读套餐失败：按不限处理 */ }
+      const lim = P.limitOf(plan && plan.features, 'maxBooks');
+      if (isFinite(lim) && (await books.where({ ownerOpenid: openid }).count()).total >= lim) {
+        return err('不能恢复：' + P.quotaMsg(plan.name, 'books', lim, account && account.orgMode));
+      }
+    }
     const r = await trash.restore(db, openid, bookId);
     return r.error ? err(r.error) : ok({ done: r.done });
   }

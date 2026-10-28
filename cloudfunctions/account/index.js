@@ -512,6 +512,9 @@ async function acceptInvite(openid, token, displayName) {
         // 家人共享（只读）接受记账人邀请：升级为记账人，负责的礼簿与权限按这张卡；
         // 记账人发的卡需主家重新同意（避免记账人把只读家人升级成记账人）
         const fromOwner = inv.fromOpenid === acc.ownerOpenid;
+        // 升级后算一位记账人（待同意的申请也计入）：与新加入同样受记账人数额度限制（v3.68.1）
+        const q = await clerkQuota(acc);
+        if (q.full) return err(q.acceptMsg);
         const upgrade = {
           role: 'clerk', perms: grant.perms, displayName: dn,
           ...(grant.allBooks ? { allBooks: true, bookIds: [] } : { allBooks: false, bookIds: grant.bookIds }),

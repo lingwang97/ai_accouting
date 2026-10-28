@@ -29,11 +29,13 @@ exports.main = async (event) => {
       return ok({ openid: OPENID, user: found.data[0] || null });
     }
     const now = db.serverDate();
+    // 头像只接受本小程序云存储 avatars/ 下的文件（v3.68.1）；其他值（任意网址、临时路径）一律不存
+    const avatar = await acceptAvatar(String(userInfo.avatar || ''), OPENID);
     if (found.data.length === 0) {
       const user = {
         openid: OPENID,
         nickname: String(userInfo.nickname || '微信用户').slice(0, 20),
-        avatar: String(userInfo.avatar || '').slice(0, 500),
+        avatar: avatar || '',
         createdAt: now,
         lastLoginAt: now
       };
@@ -48,17 +50,36 @@ exports.main = async (event) => {
       return ok({ openid: OPENID, user: { _id: OPENID, ...user }, isNew: true });
     }
     const u = found.data[0];
-    await users.doc(u._id).update({
-      data: {
-        nickname: String(userInfo.nickname || u.nickname).slice(0, 20),
-        avatar: String(userInfo.avatar || u.avatar).slice(0, 500),
-        lastLoginAt: now
-      }
-    });
-    return ok({ openid: OPENID, user: u, isNew: false });
+    const data = { nickname: String(userInfo.nickname || u.nickname).slice(0, 20), lastLoginAt: now };
+    if (avatar && avatar !== u.avatar) data.avatar = avatar;
+    await users.doc(u._id).update({ data });
+    // 换了头像：删掉旧的头像文件（只删 avatars/ 下、没有别人在用的）
+    if (data.avatar && isAvatarFile(u.avatar)) await removeAvatar(u.avatar, OPENID);
+    return ok({ openid: OPENID, user: { ...u, ...data, lastLoginAt: undefined }, isNew: false });
   } catch (e) {
     console.error('login', e);
     return err('登录失败，请稍后重试');
   }
 };
 
+/** 是否本小程序云存储 avatars/ 目录下的头像文件 */
+function isAvatarFile(v) {
+  return /^cloud:\/\/[^/\s]+\/avatars\/[A-Za-z0-9_.-]{1,80}\.(jpg|jpeg|png|webp)$/i.test(String(v || ''));
+}
+
+/** 可接受的头像：avatars/ 下的文件，且没有被别的用户使用（防止把别人的头像文件挂到自己名下，清除数据时误删）；否则返回空 */
+async function acceptAvatar(v, openid) {
+  if (!isAvatarFile(v) || v.length > 300) return '';
+  try {
+    const n = (await users.where({ avatar: v, openid: db.command.neq(openid) }).count()).total;
+    return n ? '' : v;
+  } catch (e) { return ''; }
+}
+
+/** 删除不再使用的头像文件（失败忽略） */
+async function removeAvatar(fileID, openid) {
+  try {
+    const n = (await users.where({ avatar: fileID, openid: db.command.neq(openid) }).count()).total;
+    if (!n) await cloud.deleteFile({ fileList: [fileID] });
+  } catch (e) { console.warn('删除旧头像失败', e.message); }
+}

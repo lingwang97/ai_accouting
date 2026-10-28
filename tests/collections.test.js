@@ -28,11 +28,11 @@ test('集合清单里的每个集合：要么被 purge 清除，要么在 NOT_PU
   Object.keys(NOT_PURGED).forEach(c => assert.ok(COLLECTIONS.includes(c), `豁免项 ${c} 已不在集合清单，请清理`));
 });
 
-test('purge 条件都只按「本人」限定，不会误删他人数据', () => {
+test('purge 条件都只按「本人」限定，不会误删他人数据（_id 须含本人 openid，如 rate_limits 的 nc_<openid>）', () => {
   Purge.targets('o-me', { guestRecords: true }).forEach(([label, col, cond]) => {
     const keys = Object.keys(cond);
     assert.strictEqual(keys.length, 1, label);
-    assert.ok(['ownerOpenid', 'memberOpenid', 'fromOpenid', 'payerOpenid', 'openid'].includes(keys[0]), label + ' ' + keys[0]);
+    assert.ok(['ownerOpenid', 'memberOpenid', 'fromOpenid', 'payerOpenid', 'openid', '_id'].includes(keys[0]), label + ' ' + keys[0]);
     assert.ok(String(cond[keys[0]]).includes('o-me'), label);
   });
   // 默认不删「作为宾客的随礼」（属于对方礼簿）

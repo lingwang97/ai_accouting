@@ -19,7 +19,9 @@ TARGETS = {
     # 统一返回格式 / 北京时间：用到 ok、err、bjDay 的云函数
     'common.js': ['account', 'books', 'export', 'login', 'payment', 'qrcode', 'records', 'renqing', 'system', 'warmer'],
     # 记录状态与时间阈值：云函数 + 小程序 utils（前端同名模块）
-    'status.js': ['account', 'books', 'export', 'payment', 'qrcode', 'records', 'renqing', 'system', 'MINI:utils'],  # ctx.js 依赖它，凡是带 ctx.js 的云函数都要有
+    'status.js': ['account', 'books', 'export', 'payment', 'qrcode', 'records', 'renqing', 'system', 'warmer', 'MINI:utils'],  # ctx.js 依赖它，凡是带 ctx.js 的云函数都要有
+    # 宾客入簿通知（v3.68.1）：payment 确认后发送，warmer 补发
+    'guestnotify.js': ['payment', 'warmer'],
     # 集合清单：init 与 system 上线前检查共用
     'collections.js': ['init', 'system'],
 }

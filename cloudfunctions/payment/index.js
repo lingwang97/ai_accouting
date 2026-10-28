@@ -8,6 +8,7 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
 const notify = require('./notify.js');
+const guestNotify = require('./guestnotify.js').create(db, cloud); // 宾客入簿通知（与 warmer 补发共用）
 const P = require('./plans.js');
 const { nameCheckMap } = require('./namecheck.js');
 const { MAX_AMOUNT, MAX_MSG } = require('./limits.js'); // 单笔礼金上限（tools/cloud-shared/limits.js）
@@ -600,72 +601,22 @@ function guestFlag(envVersion) {
   return { guestNotify: true, guestEnv: ['develop', 'trial'].includes(envVersion) ? envVersion : 'release' };
 }
 
-/** 确认入簿成功后发宾客通知；最多等 3 秒，失败只记日志，不影响确认结果 */
+/**
+ * 确认入簿成功后发宾客通知（逻辑在共享模块 guestnotify.js）；最多等 1.5 秒，不拖慢确认（v3.68.1，原 3 秒）
+ * 没发完 / 可重试的失败由 warmer 每 5 分钟补发，确定性失败不再发；失败只记日志，不影响确认结果
+ */
+const GUEST_WAIT_MS = 1500;
 async function afterPaid(res) {
   if (!res || res.code !== 0) return res;
   const d = res.data || {};
   const ids = (d.list || (d.record ? [d.record] : [])).map(r => r && r._id).filter(Boolean);
   if (ids.length) {
-    const wait = new Promise(r => setTimeout(r, 3000));
-    try { await Promise.race([notifyGuests(ids), wait]); } catch (e) { console.warn('入簿通知失败', e.message); }
+    let timer = null;
+    const wait = new Promise(r => { timer = setTimeout(r, GUEST_WAIT_MS); });
+    try { await Promise.race([guestNotify.notifyGuests(ids), wait]); } catch (e) { console.warn('入簿通知失败', e.message); }
+    clearTimeout(timer);
   }
   return res;
-}
-
-/**
- * 给刚入簿的记录的宾客发通知：只发订阅过（guestNotify）、宾客本人扫码登记（有 payerOpenid，不是礼台代记 / 经办人自己）、还没发过的；
- * 批次合成一条（整批都已处理完才发，金额为已入簿合计），点通知打开宾客自己那条记录的回执
- */
-async function notifyGuests(ids) {
-  if (!notify.GUEST_TMPL_ID) return 0;
-  const res = await records.where({ _id: _.in(ids.slice(0, 100)), status: REC.PAID, guestNotify: true }).get();
-  const pick = new Map();
-  res.data.forEach(r => {
-    if (r.guestNotifiedAt || !r.payerOpenid || r.deskEntry || r.payerOpenid === r.handlerOpenid) return;
-    const k = r.batchId || r._id;
-    const cur = pick.get(k);
-    if (!cur || (r.batchIdx || 0) < (cur.batchIdx || 0)) pick.set(k, r);
-  });
-  let sent = 0;
-  await Promise.all([...pick.values()].map(async r => { if (await sendGuest(r)) sent++; }));
-  return sent;
-}
-
-async function sendGuest(rec) {
-  let all = [rec];
-  if (rec.batchId) {
-    all = await batchRecords(rec.batchId, { ownerOpenid: rec.ownerOpenid });
-    if (all.some(r => r.status === REC.TRANSFERRED || r.status === REC.PENDING)) return false; // 批次还有没处理的：等最后一次确认再发
-  }
-  const paid = all.filter(r => r.status === REC.PAID);
-  if (!paid.length) return false;
-  // 先原子占位，保证同一笔（批）只发一次（并发确认、重复调用都不会重复发）
-  const key = rec.batchId ? { batchId: rec.batchId, ownerOpenid: rec.ownerOpenid } : { _id: rec._id };
-  const mark = await records.where({ ...key, guestNotifiedAt: _.exists(false) }).update({ data: { guestNotifiedAt: new Date() } });
-  if (!mark.stats || !mark.stats.updated) return false;
-  let hostName = rec.hostName || '';
-  if (!hostName && rec.aid) {
-    try { hostName = ((await accounts.doc(rec.aid).get()).data || {}).accountName || ''; } catch (e) { /* 主家信息读不到：只写礼簿名 */ }
-  }
-  const method = rec.batchPay === 'mixed' ? 'mixed' : (rec.payMethod === 'cash' ? 'cash' : 'wechat');
-  const data = notify.buildGuest({
-    hostName, themeName: rec.themeName || '', funeral: rec.bookType === 'funeral', method,
-    count: paid.length, amount: paid.reduce((t, r) => t + Math.round(r.amount * 100), 0) / 100
-  }, bjTime(rec.paidAt || new Date()));
-  try {
-    await cloud.openapi.subscribeMessage.send({
-      touser: rec.payerOpenid,
-      templateId: notify.GUEST_TMPL_ID,
-      page: `pages/receipt/receipt?rid=${rec._id}`, // 回执页参数 rid；批次为宾客自己那条
-      miniprogramState: { develop: 'developer', trial: 'trial' }[rec.guestEnv] || 'formal',
-      data
-    });
-    return true;
-  } catch (e) {
-    // 43101=宾客没订阅或次数已用；47003=模板参数不符
-    console.warn('入簿通知发送失败', e.errCode, e.errMsg || e.message);
-    return false;
-  }
 }
 
 /** 是否可查看该记录：宾客本人，或主家 / 其记账人 */

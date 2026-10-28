@@ -4,7 +4,7 @@
 // 范围（openid 为被清除的用户）：
 //   作为主家：主家信息（含合并别名）、礼簿、礼金记录、回收站里的礼簿与礼金记录、打印样式、导出 / 存档登记及文件、收款码与礼簿码图片、小票二维码缓存、
 //             记账人与家人共享关系、发出的邀请卡
-//   本人数据：送礼记录、办事提醒、同名合并记录、作为记账人 / 家人的加入关系、用户信息
+//   本人数据：送礼记录、办事提醒、同名合并记录、作为记账人 / 家人的加入关系、用户信息与头像文件、同名检查频率计数
 //   opts.subscription：套餐订阅（管理员清除时删，用户自己注销时保留开通记录）
 //   opts.guestRecords：他作为宾客在别人礼簿里的随礼记录（属于对方礼簿，默认不删）
 // 每类数据按条件反复删除直到删完，云函数中途超时后再执行一次即可继续。
@@ -36,7 +36,8 @@ function targets(openid, opts) {
     ['发出的邀请卡', 'invites', { fromOpenid: openid }],
     ['主家信息', 'accounts', { ownerOpenid: openid }],
     ['合并的主家信息', 'accounts', { ownerOpenid: 'merged:' + openid }],
-    ['用户信息', 'users', { openid }]
+    ['用户信息', 'users', { openid }],
+    ['频率限制记录', 'rate_limits', { _id: 'nc_' + openid }] // 宾客同名检查的频率计数（v3.68.1）
   ];
   if (opts.guestRecords) list.unshift(['作为宾客的随礼', 'records', { payerOpenid: openid }]);
   return list;
@@ -80,6 +81,8 @@ async function fileIds(db, openid, ownPayCode) {
       }
     });
   }
+  // 头像（v3.68.1）：users.avatar 指向 avatars/ 下的文件，且没有别的用户在用时才删
+  files.push(...(await avatarFiles(db, openid)));
   // 小票二维码的光栅缓存：正常礼金记录 + 回收站里的礼金记录（v3.59.1 补回收站）
   files.push(...(await qrCacheFiles(db, 'records', { ownerOpenid: openid })));
   files.push(...(await qrCacheFiles(db, 'trash_records', { ownerOpenid: openid })));
@@ -89,6 +92,17 @@ async function fileIds(db, openid, ownPayCode) {
       .forEach(t => (t.files || []).forEach(f => files.push(f)));
   } catch (e) { /* 集合不存在 */ }
   return [...new Set(files.filter(Boolean))];
+}
+
+/** 本人头像文件（avatars/ 目录、没有被别人引用）；读取失败返回空 */
+async function avatarFiles(db, openid) {
+  try {
+    const u = (await db.collection('users').where({ openid }).field({ avatar: true }).limit(1).get()).data[0];
+    const f = u && !u._openid ? String(u.avatar || '') : '';
+    if (!/^cloud:\/\/[^/]+\/avatars\//.test(f)) return [];
+    const others = (await db.collection('users').where({ avatar: f, openid: db.command.neq(openid) }).count()).total;
+    return others ? [] : [f];
+  } catch (e) { return []; }
 }
 
 /**
@@ -165,4 +179,4 @@ async function run(db, cloud, openid, opts = {}) {
   return { removed, files };
 }
 
-module.exports = { preview, run, isMissing, targets, qrCacheFiles, deleteFiles };
+module.exports = { preview, run, isMissing, targets, qrCacheFiles, deleteFiles, avatarFiles };

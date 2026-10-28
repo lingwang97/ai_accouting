@@ -31,6 +31,7 @@ function matchVal(v, c) {
       default: throw new Error('fakedb: 不支持的字段操作符 ' + c.__op);
     }
   }
+  if (v instanceof Date && c instanceof Date) return v.getTime() === c.getTime();
   return v === c;
 }
 
@@ -62,6 +63,7 @@ class Query {
     const rows = this._rows();
     rows.forEach(d => Object.keys(o.data || {}).forEach(k => {
       const v = o.data[k]; // _.inc(n) 按增量写入（邀请卡名额等）；其余原样赋值
+      if (v && v.__op === 'remove') { delete d[k]; return; } // _.remove() 删除字段
       d[k] = v && v.__op === 'inc' ? (Number(d[k]) || 0) + v.v : v;
     }));
     return { stats: { updated: rows.length } };
