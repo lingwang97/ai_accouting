@@ -52,7 +52,7 @@
 /* ===== 常见问题 ===== */
 .faq-search { display: flex; align-items: center; background: #fff; border-radius: var(--r-m); padding: 0 24rpx; height: 80rpx; margin-bottom: 16rpx; }
 .faq-input { flex: 1; min-width: 0; height: 80rpx; font-size: 28rpx; }
-.faq-clear { padding: 0 8rpx 0 20rpx; color: var(--text-3); font-size: 28rpx; line-height: 80rpx; }
+.faq-clear { min-width: 72rpx; padding: 0 8rpx 0 16rpx; text-align: center; color: var(--text-3); font-size: 28rpx; line-height: 80rpx; }
 .faq-cat { background: #fff; border-radius: var(--r-m); margin-bottom: 20rpx; overflow: hidden; }
 .faq-cat-head { display: flex; align-items: center; padding: 26rpx 28rpx; }
 .faq-cat-name { flex: 1; min-width: 0; font-size: 30rpx; font-weight: 600; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -63,4 +63,4 @@
 .faq-q-text { flex: 1; min-width: 0; font-size: 28rpx; color: #333; line-height: 1.55; }
 .faq-q .faq-arrow { line-height: 1.55; }
 .faq-a { padding: 0 0 24rpx; }
-.faq-a-text { word-break: break-all; font-size: 26rpx; color: #666; line-height: 1.75; background: var(--fill); border-radius: 12rpx; padding: 18rpx 20rpx; }
+.faq-a-text { overflow-wrap: anywhere; white-space: pre-wrap; font-size: 26rpx; color: #666; line-height: 1.75; background: var(--fill); border-radius: 12rpx; padding: 18rpx 20rpx; }

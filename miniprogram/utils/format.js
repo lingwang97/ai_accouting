@@ -72,4 +72,15 @@ function amountUpper(n) {
   return s;
 }
 
-module.exports = { money, day, time, dateTime, sumAmounts, receiptNo, amountUpper };
+/**
+ * 画图用的行数上限：画布过高时部分安卓机导出失败，超出时截断并补一行说明（完整内容用「复制对账单」）
+ * @param {string[]} lines 全部行
+ * @param {number} max 最多画几行（含说明行）
+ */
+function clipLines(lines, max) {
+  if (lines.length <= max) return lines;
+  const keep = Math.max(1, max - 1);
+  return lines.slice(0, keep).concat(`…… 另有 ${lines.length - keep} 行未画出，请用「复制对账单」查看完整内容`);
+}
+
+module.exports = { clipLines, money, day, time, dateTime, sumAmounts, receiptNo, amountUpper };

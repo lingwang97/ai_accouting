@@ -11,7 +11,7 @@ Page({
     themeStyle: ''
   },
 
-  onShow() { this.setData({ themeStyle: theme.styleOf(theme.current()) }); }, // 白事礼簿的灰色主题与其他页一致
+  onShow() { this.setData({ themeStyle: theme.styleOf(theme.current()) }); theme.applyNav(); }, // 白事礼簿的灰色主题与其他页一致
 
   onChooseAvatar(e) {
     this.setData({ avatar: e.detail.avatarUrl });

@@ -71,4 +71,9 @@ function apply(page, bookType) {
   return t;
 }
 
-module.exports = { forType, current, styleOf, apply, setAccount, make, PRESET_COLORS, DEFAULT };
+/** 只设导航栏颜色（不套页面变量）：不走 apply 的页面（登录、邀请、我的随礼记录）也跟随当前主题 */
+function applyNav() {
+  wx.setNavigationBarColor({ frontColor: '#ffffff', backgroundColor: current().primary, fail() {} });
+}
+
+module.exports = { applyNav, forType, current, styleOf, apply, setAccount, make, PRESET_COLORS, DEFAULT };

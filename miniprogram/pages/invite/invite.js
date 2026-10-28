@@ -51,6 +51,7 @@ Page({
   async onShow() {
     const app = getApp();
     this.setData({ themeStyle: theme.styleOf(theme.current()) });
+    theme.applyNav();
     await app.loginReady;
     this.setData({ loggedIn: !!app.globalData.user });
     // 家人共享沿用微信昵称；记账人必须自己填写真实姓名，不预填昵称

@@ -9,6 +9,7 @@ Page({
 
   onShow() {
     this.setData({ themeStyle: theme.styleOf(theme.current()) });
+    theme.applyNav();
     this.load();
   },
 

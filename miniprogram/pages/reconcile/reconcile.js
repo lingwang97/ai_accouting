@@ -5,6 +5,9 @@ const theme = require('../../utils/theme.js');
 const receipt = require('../../utils/receipt.js');
 const perm = require('../../utils/perm.js');
 
+// 对账图最多画的行数：750 × (80 + 行数×52 + 60 + 小程序码 220) 不超过约 4000px，避免部分安卓机画布过高导出失败
+const MAX_LINES = 70;
+
 Page({
   data: {
     books: [],        // 可选礼簿（含已归档）
@@ -139,7 +142,9 @@ Page({
   async onSaveImage() {
     if (!this.data.r || this.data.saving) return;
     this.setData({ saving: true });
-    const lines = this.lines();
+    const all = this.lines();
+    const lines = fmt.clipLines(all, MAX_LINES);
+    if (lines.length < all.length) wx.showToast({ title: '内容较长，图片只含前面部分', icon: 'none' });
     const codeUrl = (await receipt.withAppCode({})).appCode || '';
     wx.createSelectorQuery().select('#reconCanvas').fields({ node: true }).exec(async res => {
       try {

@@ -98,6 +98,8 @@ const GUIDES = {
     }
   ]
 };
+/** 长答案分句显示：超过 90 字时每个句号后换行（句号后紧跟引号 / 括号的不拆）；搜索仍用原文，不受影响 */
+const fmtAnswer = a => (a.length > 90 ? a.replace(/。(?=[^」）』\n])/g, '。\n') : a);
 const SEARCH_OPEN = 5; // 搜索时默认展开的条数（宽词命中很多时不一次全部展开）
 const TABS = ['host', 'clerk', 'guest', 'faq'];
 
@@ -180,7 +182,7 @@ Page({
         const k = ci + '-' + ii;
         const open = kw ? (sQ[k] !== undefined ? sQ[k] : hit < SEARCH_OPEN) : !!openQ[k];
         hit++;
-        items.push({ k, q, a: ans, url: it.url || '', tab: !!it.tab, go: it.go || '去看看', open });
+        items.push({ k, q, a: fmtAnswer(ans), url: it.url || '', tab: !!it.tab, go: it.go || '去看看', open });
       });
       if (!items.length) return;
       count += items.length;

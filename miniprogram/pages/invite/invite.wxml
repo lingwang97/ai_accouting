@@ -40,7 +40,8 @@
     <block wx:if="{{info && !errMsg}}">
       <view class="dn" wx:if="{{loggedIn && info.type === 'clerk'}}">
         <view class="dn-label">你的真实姓名 <text class="req">*</text></view>
-        <input class="input" placeholder="如：李华（回执、小票上显示，主家据此辨认）" maxlength="12" value="{{displayName}}" bindinput="onDisplayName" />
+        <view class="muted dn-hint">回执、小票上显示，主家据此辨认</view>
+        <input class="input" placeholder="如：李华" maxlength="12" value="{{displayName}}" bindinput="onDisplayName" />
       </view>
       <button wx:if="{{!loggedIn}}" class="btn-primary" bindtap="goLogin">登录后接受</button>
       <button wx:else class="btn-primary" loading="{{accepting}}" bindtap="onAccept">
