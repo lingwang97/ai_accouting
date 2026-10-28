@@ -2,6 +2,7 @@
 // 数据始终属于主家；记账人与主家权限相同，只有"清除数据"和"人情往来"按本人身份处理
 const cloud = require('wx-server-sdk');
 const { ok, err } = require('./common.js');
+const S = require('./secure.js'); // 内容安全审核（tools/cloud-shared/secure.js，失败放行）
 const { ownPayCode } = require('./paycode.js'); // 收款码归属（tools/cloud-shared/paycode.js）
 const { MEMBER } = require('./status.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
@@ -205,6 +206,17 @@ async function save(openid, event) {
     }
   }
 
+  // 内容安全（v3.71.0）：主家称呼、机构名称（只审核有改动的）；新上传的收款码图片
+  {
+    const orgText = isOwnerOf(ctx) && typeof event.orgMode === 'boolean' ? String(event.orgName || '').trim().slice(0, 30) : '';
+    const bad = await S.checkText(cloud, openid, [accountName !== (ctx.account && ctx.account.accountName) ? accountName : '', orgText !== ((ctx.account && ctx.account.orgName) || '') ? orgText : '']);
+    if (bad) return bad;
+    if (codeChanged) {
+      const badImg = await S.checkImage(cloud, payCodeFileID);
+      if (badImg) return badImg;
+    }
+  }
+
   const theme = {
     name: String((event.theme && event.theme.name) || '默认主题').slice(0, 20),
     primary: /^#[0-9a-fA-F]{6}$/.test((event.theme || {}).primary || '') ? event.theme.primary : '#C8161D',
@@ -275,6 +287,8 @@ async function save(openid, event) {
 }
 
 
+/** 保存主家信息时是否按主家本人处理（与下方 isOwner 一致） */
+const isOwnerOf = ctx => ctx.role === 'owner' || !ctx.account;
 const handlerOf = ctx => (ctx.member && ctx.member.displayName) || (ctx.user && ctx.user.nickname) || '记账人';
 
 /** 礼簿上待主家确认的收款码数量（机构版本场收款码） */
@@ -468,6 +482,7 @@ async function takeUse(inv) {
 
 async function acceptInvite(openid, token, displayName) {
   const dn = cleanName(displayName);
+  { const bad = await S.checkText(cloud, openid, [dn]); if (bad) return bad; } // 内容安全（v3.71.0）
   const inv = await getInvite(token);
   if (!inv) return err('邀请不存在或已失效');
   // 本人接收的移交中途超时：再次打开移交卡续跑
@@ -922,6 +937,7 @@ async function setHandlerName(openid, memberId, name) {
   const ctx = await resolveCtx(db, openid);
   if (!ctx.account) return err('请先完善主家信息');
   const n = cleanName(name);
+  { const bad = await S.checkText(cloud, openid, [n]); if (bad) return bad; } // 内容安全（v3.71.0）：记账名称主家、宾客都会看到
   // 记账人的名称须为真实姓名（主家本人、家人不限）
   if (!memberId && ctx.role === 'clerk' && !realName(n)) return err('请填写记账人的真实姓名（2～12 个字）');
   if (!memberId) {
@@ -955,6 +971,7 @@ async function setOrgMode(openid, on, orgName) {
   }
   const data = { orgMode: on, updatedAt: db.serverDate() };
   if (orgName !== undefined) data.orgName = String(orgName || '').trim().slice(0, 30);
+  if (data.orgName && data.orgName !== (ctx.account.orgName || '')) { const bad = await S.checkText(cloud, openid, [data.orgName]); if (bad) return bad; } // 内容安全（v3.71.0）
   await accounts.doc(ctx.account._id).update({ data });
   return ok({ orgMode: on, orgName: data.orgName !== undefined ? data.orgName : (ctx.account.orgName || '') });
 }

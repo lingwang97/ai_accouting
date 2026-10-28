@@ -2,7 +2,9 @@
   "permissions": {
     "openapi": [
       "subscribeMessage.send",
-      "wxacode.getUnlimited"
+      "wxacode.getUnlimited",
+      "security.msgSecCheck",
+      "security.imgSecCheck"
     ]
   },
   "timeout": 20

@@ -1,6 +1,7 @@
 // 云函数 login — 登录注册（文档 §6.1）
 const cloud = require('wx-server-sdk');
 const { ok, err } = require('./common.js');
+const S = require('./secure.js'); // 内容安全审核（tools/cloud-shared/secure.js，失败放行）
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const users = db.collection('users');
@@ -31,6 +32,17 @@ exports.main = async (event) => {
     const now = db.serverDate();
     // 头像只接受本小程序云存储 avatars/ 下的文件（v3.68.1）；其他值（任意网址、临时路径）一律不存
     const avatar = await acceptAvatar(String(userInfo.avatar || ''), OPENID);
+    // 内容安全（v3.71.0）：昵称、头像只在新用户或有变化时审核；昵称违规拒绝登录并提示修改，头像违规丢弃该文件
+    {
+      const old = found.data[0] || {};
+      const nick = String(userInfo.nickname || '').slice(0, 20);
+      const bad = await S.checkText(cloud, OPENID, [nick && nick !== old.nickname ? nick : '']);
+      if (bad) return bad;
+      if (avatar && avatar !== old.avatar) {
+        const badImg = await S.checkImage(cloud, avatar);
+        if (badImg) return badImg;
+      }
+    }
     if (found.data.length === 0) {
       const user = {
         openid: OPENID,

@@ -10,8 +10,7 @@ const samename = require('../../utils/samename.js');
 const theme = require('../../utils/theme.js');
 const { GUEST_NOTIFY_TMPL_ID } = require('../../config.js');
 
-const POLL_MS = 3000;
-const POLL_MAX = 200; // 约 10 分钟
+const paypoll = require('../../utils/paypoll.js'); // 轮询退避：3 秒 → 5 秒 → 10 秒，最长 10 分钟（v3.71.0）
 const NAME_KEY = 'pay_last_name'; // 本机上次随礼用的姓名（宾客常去多家随礼，免得每次重填）
 const OPEN_KEY = 'pay_open'; // 本机最近一笔未点「我已完成转账」的随礼（{ aid, rid, record, payCodeUrl, at }）
 
@@ -321,30 +320,32 @@ Page({
   // —— 轮询收款方确认结果 ——
   startPoll() {
     this.stopPoll();
-    this._pollCount = 0;
+    this._pollAt = Date.now(); // 从头计时：回到页面、点「刷新状态」都重新从 3 秒开始
+    this._on = true;
     if (this.data.pollTimeout) this.setData({ pollTimeout: false });
-    this._timer = setInterval(() => this.poll(), POLL_MS);
-    this.poll();
+    this.poll(this._gen);
   },
 
   stopPoll() {
+    this._on = false;
+    this._gen = (this._gen || 0) + 1; // 作废进行中的查询，其返回不再处理也不再排下一次
     if (this._timer) {
-      clearInterval(this._timer);
+      clearTimeout(this._timer);
       this._timer = null;
     }
   },
 
-  async poll() {
-    if (!this.data.record) return;
-    if (this._polling) return; // 网络慢时上一次查询未返回，不重叠
-    if (++this._pollCount > POLL_MAX) {
+  async poll(gen) {
+    if (!this.data.record || !this._on || gen !== this._gen) return;
+    const elapsed = Date.now() - this._pollAt;
+    if (elapsed > paypoll.MAX_MS) {
       this.stopPoll();
       this.setData({ pollTimeout: true }); // 停止转圈，说明可以离开、之后去哪里看
       return;
     }
-    this._polling = true;
     try {
       const { status } = await req.payStatus(this.data.record._id);
+      if (gen !== this._gen) return; // 期间已停止 / 重新开始
       if (status === REC.PAID) {
         this.stopPoll();
         wx.vibrateShort({ type: 'medium', fail() {} });
@@ -354,9 +355,9 @@ Page({
         this.stopPoll();
         this.setData({ step: 'failed', failReason: '主家未收到该笔转账，请与主家核实' });
       }
-    } catch (e) { /* 网络抖动，下次再试 */ } finally {
-      this._polling = false;
-    }
+    } catch (e) { /* 网络抖动，下次再试 */ }
+    // 逐步放慢：每次查询返回后再排下一次，网络慢时不会重叠
+    if (this._on && gen === this._gen) this._timer = setTimeout(() => this.poll(gen), paypoll.delay(Date.now() - this._pollAt));
   },
 
   /** 收款方确认后加载留存收据（失败时退回简单成功页） */

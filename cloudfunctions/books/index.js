@@ -4,6 +4,7 @@
 // 份数与合计存在礼簿上（statCount / statFen，确认收到时累加），列表无需每次全量统计
 const cloud = require('wx-server-sdk');
 const { ok, err } = require('./common.js');
+const S = require('./secure.js'); // 内容安全审核（tools/cloud-shared/secure.js，失败放行）
 const { ownPayCode } = require('./paycode.js'); // 收款码归属（tools/cloud-shared/paycode.js）
 const { REC } = require('./status.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
@@ -73,7 +74,7 @@ exports.main = async (event) => {
       case 'stats': return await stats(OWNER, event.bookId, ctx);
       case 'recalc': return await recalc(OWNER, String(event.bookId || ''));
       case 'getTpl': return await getTpl(OWNER, account, event.bookId);
-      case 'saveTpl': return await saveTpl(OWNER, event.bookId, event.receiptTpl, event.printTpl);
+      case 'saveTpl': return await saveTpl(OWNER, event.bookId, event.receiptTpl, event.printTpl, OPENID);
       default: return err('未知 action');
     }
   } catch (e) {
@@ -227,10 +228,18 @@ async function save(openid, account, input, ctx, caller) {
 
   const old = input._id ? await getBook(openid, String(input._id)) : null;
   if (input._id && !old) return err('礼簿不存在');
+  // 内容安全（v3.71.0）：礼簿名、地点、本场主家称呼（只审核有改动的）
+  {
+    const o = old || {};
+    const bad = await S.checkText(cloud, caller, [b.name !== o.name ? b.name : '', b.location !== (o.location || '') ? b.location : '', b.hostName !== undefined && b.hostName !== (o.hostName || '') ? b.hostName : '']);
+    if (bad) return bad;
+  }
   let pendingCode = false;
   if (b.payCodeFileID && b.payCodeFileID !== ((old && old.payCodeFileID) || '')) {
     // 收款码关系到钱进谁的账户：只能用本人刚上传的图片
     if (!ownPayCode(b.payCodeFileID, caller)) return err('收款码图片无效，请重新上传');
+    const badImg = await S.checkImage(cloud, b.payCodeFileID); // 内容安全（v3.71.0）
+    if (badImg) return badImg;
     if (ctx.role !== 'owner') {
       b.pendingPayCode = { fileID: b.payCodeFileID, by: (ctx.member && ctx.member.displayName) || (ctx.user && ctx.user.nickname) || '记账人', byOpenid: caller, at: new Date() };
       delete b.payCodeFileID;
@@ -509,9 +518,19 @@ async function getTpl(openid, account, bookId) {
 }
 
 /** 保存礼簿的回执 / 打印样式（两者可只传其一） */
-async function saveTpl(openid, bookId, receiptTpl, printTpl) {
+async function saveTpl(openid, bookId, receiptTpl, printTpl, caller) {
   const book = await getBook(openid, bookId);
   if (!book) return err('礼簿不存在');
+  // 内容安全（v3.71.0）：回执标题 / 落款 / 页脚、小票标题 / 致谢语 / 页脚（回执宾客可见；只审核有改动的）
+  {
+    const rt = receiptTpl || {}, pt = printTpl || {}, orc = book.receiptTpl || {}, opr = book.printTpl || {};
+    const chg = (n, o) => { const v = String(n || '').trim(); return v && v !== String(o || '') ? v : ''; };
+    const bad = await S.checkText(cloud, caller || openid, [
+      receiptTpl ? chg(String(rt.title || '').slice(0, 20), orc.title) : '', receiptTpl ? chg(String(rt.stamp || '').slice(0, 4), orc.stamp) : '', receiptTpl ? chg(String(rt.footer || '').slice(0, 60), orc.footer) : '',
+      printTpl ? chg(String(pt.title || '').slice(0, 30), opr.title) : '', printTpl ? chg(String(pt.thanks || '').slice(0, 40), opr.thanks) : '', printTpl ? chg(String(pt.footer || '').replace(/\s+/g, ' ').slice(0, 30), opr.footer) : ''
+    ]);
+    if (bad) return bad;
+  }
   const data = {};
   if (receiptTpl) {
     const t = receiptTpl;

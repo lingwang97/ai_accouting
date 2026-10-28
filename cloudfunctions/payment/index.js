@@ -3,6 +3,7 @@
 //          pending → cancelled(付款方取消，或超过 30 分钟未转账被自动取消，仍可补点「已转账」)；transferred → rejected(收款方未收到款)；paid → void(作废)
 const cloud = require('wx-server-sdk');
 const { ok, err, bjDay, bjTime } = require('./common.js');
+const S = require('./secure.js'); // 内容安全审核（tools/cloud-shared/secure.js，失败放行）
 const { REC, MEMBER, UNREJECT_MS, COUNTED } = require('./status.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
@@ -125,6 +126,8 @@ async function create(openid, event) {
   if (new Set(recent.data.map(r => r.batchId || r._id)).size >= RATE_MAX) return err('操作太频繁，请稍后再试');
   // 同名检查也计入频率：防止反复提交试探某人是否随过礼（按本次比对的姓名个数计）
   if (!(await sameNameQuota(openid, items.filter(x => !x.nameTag).length))) return err('操作太频繁，请稍后再试');
+  // 内容安全（v3.71.0）：宾客填写的姓名、备注、区分备注主家会看到
+  { const bad = await S.checkText(cloud, openid, items.flatMap(x => [x.payerName, x.remark, x.nameTag])); if (bad) return bad; }
 
   // 同名提醒：主家礼簿里已有别的宾客用了同一个姓名（不是本人扫码登记的）时，请宾客填区分信息，方便主家辨认
   // 只返回需要填写的姓名，不透露对方任何信息
@@ -362,6 +365,8 @@ async function cashEntry(openid, ctx, event) {
     : [{ name: event.payerName, amount: event.amount, relation: event.relation, remark: event.remark, tag: event.tag, personRef: event.personRef }], method === 'mixed', true);
   if (parsed.error) return err(parsed.error);
   const items = parsed.items;
+  // 内容安全（v3.71.0）：礼台录入的姓名、备注、区分备注会印在回执与小票上
+  { const bad = await S.checkText(cloud, openid, items.flatMap(x => [x.payerName, x.remark, x.nameTag])); if (bad) return bad; }
   // 一次调用完成同名检查（v3.66.0，原先前端先调 records.nameCheck 再调 cashEntry）：
   // 传 nameCheck:true 时，礼簿里已有同名宾客就只返回名单（不入簿），前端选好是哪一位后不带 nameCheck 再提交；没有同名直接入簿
   // 同一 reqId 已入簿过（上次成功但前端没收到结果的重试）：跳过检查，下面按重复提交返回原记录

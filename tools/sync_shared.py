@@ -24,6 +24,8 @@ TARGETS = {
     'guestnotify.js': ['payment', 'warmer'],
     # 收款码文件归属（v3.69.1）
     'paycode.js': ['account', 'books', 'system'],
+    # 内容安全审核（v3.71.0）：文本 msgSecCheck / 图片 imgSecCheck，失败放行
+    'secure.js': ['account', 'books', 'login', 'payment'],
     # 集合清单：init 与 system 上线前检查共用
     'collections.js': ['init', 'system'],
 }
