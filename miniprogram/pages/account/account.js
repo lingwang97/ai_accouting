@@ -28,6 +28,7 @@ Page({
   },
 
   onLoad(options) {
+    theme.early(this); // 首帧前同步套主题色（v3.70.1）
     // own=1：记账人新建自己的主家信息（不修改正在记账的主家）
     this._own = options.own === '1';
     if (this._own) wx.setNavigationBarTitle({ title: '新建我自己的礼簿' });

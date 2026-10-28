@@ -29,6 +29,7 @@ Page({
   },
 
   onLoad(options) {
+    theme.early(this); // 首帧前同步套主题色（v3.70.1）
     const app = getApp();
     if (options.edit && app.globalData.editGift) {
       const g = app.globalData.editGift;

@@ -53,6 +53,7 @@ Page({
   },
 
   async onLoad() {
+    theme.early(this); // 首帧前同步套主题色（v3.70.1）
     const d0 = new Date();
     const day = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     this.setData({ today: day(d0), maxDay: day(new Date(d0.getFullYear() + 5, d0.getMonth(), d0.getDate())) });

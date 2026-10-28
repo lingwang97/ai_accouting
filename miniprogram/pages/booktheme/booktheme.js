@@ -52,6 +52,7 @@ Page({
   onKbOff() { if (this.data.kb) this.setData({ kb: false }); },
 
   onLoad(options) {
+    theme.early(this); // 首帧前同步套主题色（v3.70.1）
     this.setData({ id: options.bookId || '' });
     this.load();
   },

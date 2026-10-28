@@ -37,6 +37,8 @@ Page({
     quota: { show: false },
     saving: false
   },
+  onLoad() { theme.early(this); }, // 首帧前同步套主题色（v3.70.1）
+
   async onShow() {
     theme.apply(this);
     this.startTick();

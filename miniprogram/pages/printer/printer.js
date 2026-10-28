@@ -14,6 +14,8 @@ Page({
     slow: false // 稳定模式（本机）：打印机乱码 / 缺行时打开
   },
 
+  onLoad() { theme.early(this); }, // 首帧前同步套主题色（v3.70.1）
+
   onShow() {
     const t = theme.apply(this); // 主题色跟当前礼簿事由走
     this.setData({ primary: t.primary, savedDevice: ble.loadDevice(), connected: printer.isConnected(), slow: ble.isSlow() });

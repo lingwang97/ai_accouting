@@ -32,6 +32,8 @@ Page({
     themeStyle: ''
   },
 
+  onLoad() { theme.early(this); }, // 首帧前同步套主题色（v3.70.1）
+
   onShow() {
     this.setData({ iconKey: theme.apply(this).icon }); // 主题色跟当前礼簿事由走
     const a = getApp().globalData.account;

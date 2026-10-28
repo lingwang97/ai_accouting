@@ -77,6 +77,7 @@ Page({
   },
 
   async onLoad(options) {
+    theme.early(this); // 首帧前同步套主题色（v3.70.1）
     const acc0 = getApp().globalData.account;
     this.setData({ org: !!(acc0 && acc0.orgMode), staffWord: acc0 && acc0.orgMode ? '礼台人员' : '记账人' }); // 机构模式称「礼台人员」
     if (!(await perm.guard('style', '你没有修改回执与打印样式的权限'))) { this.setData({ pageLoading: false }); return; } // 文案同 books.saveTpl

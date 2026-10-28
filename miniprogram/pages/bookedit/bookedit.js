@@ -31,6 +31,7 @@ Page({
   },
 
   async onLoad(options) {
+    theme.early(this); // 首帧前同步套主题色（v3.70.1）
     this._editId = options.id || '';
     const acc = getApp().globalData.account;
     this.setData({ orgMode: !!(acc && acc.orgMode) });

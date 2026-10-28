@@ -153,6 +153,7 @@ Page({
   },
 
   onLoad(options) {
+    theme.early(this); // 首帧前同步套主题色（v3.70.1）
     const tab = TABS.includes(options.tab) ? options.tab : 'host';
     this.setData({ tab, secs: this.secsOf(tab) });
     // 常见问题默认展开：链接带 cat=（分类 key，如 guest）展开该类，否则展开第一类；

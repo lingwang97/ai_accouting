@@ -64,6 +64,8 @@ Page({
     netBad: false  // 轮询网络失败：顶部提示条（不弹 toast），恢复后自动消失
   },
 
+  onLoad() { theme.early(this); }, // 首帧前同步套主题色（v3.70.1）
+
   onShow() {
     // 已退出登录：立即显示宾客首页，不先渲染上一个账户的工作台
     if (getApp().isLoggedOut()) {

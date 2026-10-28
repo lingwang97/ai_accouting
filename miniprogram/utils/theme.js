@@ -71,9 +71,26 @@ function apply(page, bookType) {
   return t;
 }
 
+/**
+ * 页面 onLoad 最开始调用（首帧渲染前，同步）：按当前主题设导航栏颜色与 themeStyle，
+ * 避免导航栏、内容区先显示 app.json / app.wxss 的默认红再变成主题色（v3.70.1）。
+ * 不刷新底部菜单；onShow 的 apply 仍负责礼簿切换等后续变化。
+ * 宾客端页面（pay、receipt、qrcode）不调用：它们不跟随主家主题。
+ */
+function early(page) {
+  const t = current();
+  try {
+    wx.setNavigationBarColor({ frontColor: '#ffffff', backgroundColor: t.primary, animation: { duration: 0, timingFunc: 'linear' }, fail() {} });
+  } catch (e) { /* 忽略 */ }
+  if (page && typeof page.setData === 'function') {
+    try { page.setData({ themeStyle: styleOf(t), themeIcon: t.icon, themePrimary: t.primary }); } catch (e) { /* 忽略 */ }
+  }
+  return t;
+}
+
 /** 只设导航栏颜色（不套页面变量）：不走 apply 的页面（登录、邀请、我的随礼记录）也跟随当前主题 */
 function applyNav() {
   wx.setNavigationBarColor({ frontColor: '#ffffff', backgroundColor: current().primary, fail() {} });
 }
 
-module.exports = { applyNav, forType, current, styleOf, apply, setAccount, make, PRESET_COLORS, DEFAULT };
+module.exports = { early, applyNav, forType, current, styleOf, apply, setAccount, make, PRESET_COLORS, DEFAULT };

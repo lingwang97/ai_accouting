@@ -13,6 +13,8 @@ Page({
     themeStyle: ''
   },
 
+  onLoad() { theme.early(this); }, // 首帧前同步套主题色（v3.70.1）
+
   onShow() {
     theme.apply(this);
     this.load();

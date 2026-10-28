@@ -18,6 +18,7 @@ Page({
   },
 
   async onLoad() {
+    theme.early(this); // 首帧前同步套主题色（v3.70.1）
     if (!(await perm.guard('export', '你没有对账与导出的权限', { viewer: true }))) return; // 文案同 records.orgSummary
     // 最近 12 个月
     const months = ['全部'];

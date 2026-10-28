@@ -54,6 +54,8 @@ Page({
     loadErr: ''       // 第一页加载失败且没有可显示的数据（v3.66.0）：不显示「暂无礼金记录」，改为点此重试
   },
 
+  onLoad() { theme.early(this); }, // 首帧前同步套主题色（v3.70.1）
+
   async onShow() {
     this._hidden = false;
     const app = getApp();

@@ -15,6 +15,7 @@ Page({
   },
 
   async onLoad(options) {
+    theme.early(this); // 首帧前同步套主题色（v3.70.1）
     const token = options.token || '';
     this.setData({ token });
     if (!token) return this.setData({ errMsg: '邀请链接无效' });

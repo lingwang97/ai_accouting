@@ -11,6 +11,8 @@ Page({
     themeStyle: ''
   },
 
+  onLoad() { theme.early(this); }, // 首帧前同步套主题色（v3.70.1）
+
   onShow() { this.setData({ themeStyle: theme.styleOf(theme.current()) }); theme.applyNav(); }, // 白事礼簿的灰色主题与其他页一致
 
   onChooseAvatar(e) {

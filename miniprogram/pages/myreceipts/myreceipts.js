@@ -7,6 +7,8 @@ const { REC } = require('../../utils/status.js');
 Page({
   data: { list: [], waiting: [], loading: true, loadErr: '', themeStyle: '' },
 
+  onLoad() { theme.early(this); }, // 首帧前同步套主题色（v3.70.1）
+
   onShow() {
     this.setData({ themeStyle: theme.styleOf(theme.current()) });
     theme.applyNav();

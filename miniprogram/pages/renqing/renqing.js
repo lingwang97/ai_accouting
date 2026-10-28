@@ -31,6 +31,8 @@ Page({
     loggedIn: true
   },
 
+  onLoad() { theme.early(this); }, // 首帧前同步套主题色（v3.70.1）
+
   async onShow() {
     // 已退出登录：立即清空上一个账户的往来（不等登录状态恢复，也不再查询身份）
     if (getApp().isLoggedOut()) {

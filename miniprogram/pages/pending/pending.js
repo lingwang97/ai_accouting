@@ -43,6 +43,7 @@ Page({
   },
 
   onLoad() {
+    theme.early(this); // 首帧前同步套主题色（v3.70.1）
     this._list = [];  // 全部待确认（仅 JS 使用，不进 data，减少 setData 传输）
     let mode = 'list';
     try { mode = wx.getStorageSync(MODE_KEY) || 'list'; } catch (e) { /* 默认列表 */ }

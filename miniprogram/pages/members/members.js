@@ -37,6 +37,8 @@ Page({
     loading: true
   },
 
+  onLoad() { theme.early(this); }, // 首帧前同步套主题色（v3.70.1）
+
   onShow() {
     this.setData({ primary: theme.apply(this).primary }); // 主题色跟当前礼簿事由走
     this.load();

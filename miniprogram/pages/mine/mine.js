@@ -35,6 +35,8 @@ Page({
     loading: true
   },
 
+  onLoad() { theme.early(this); }, // 首帧前同步套主题色（v3.70.1）
+
   onShow() {
     this.setData({ primary: theme.apply(this).primary });
     // 在「隐私与数据」页清除数据后回到这里：界面按退出状态重置

@@ -18,8 +18,8 @@ Component({
     selected: '',
     badge: '',
     dot: false,
-    color: '#C8161D',
-    iconOn: 'r'
+    color: theme.current().primary,
+    iconOn: theme.current().icon
   },
 
   lifetimes: {
