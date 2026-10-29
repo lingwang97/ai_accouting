@@ -41,6 +41,25 @@
     <view class="link center stall-more" wx:if="{{stalled.length > 3}}" bindtap="onStallAll">{{stallAll ? '收起' : '查看全部 ' + stalled.length + ' 笔'}}</view>
   </view>
 
+  <!-- 宾客申诉（v3.74.0）：被标「未收到」的宾客说确实转了，请主家再核对微信到账 -->
+  <view class="card stall" wx:if="{{canConfirm && appeals.length}}">
+    <view class="stall-title">宾客申诉（{{appeals.length}}）</view>
+    <view class="muted small">宾客说这笔已经转账，请再核对微信；核对到的点「确认入簿」，确实没有的点「维持未收到」（宾客不能再申诉）</view>
+    <view class="stall-row" wx:for="{{appeals}}" wx:key="_id">
+      <view class="stall-info">
+        <view class="stall-name"><text class="payer">{{item.nameStr}}</text><text class="money">￥{{item.amountStr}}</text></view>
+        <view class="muted small">{{item.timeStr}} 申请 · 标记原因：{{item.reasonStr || '未写'}}</view>
+        <view class="muted small" wx:if="{{item.appealNote}}">宾客说明：{{item.appealNote}}</view>
+        <view class="muted small" wx:if="{{item.appealRef}}">转账单号后几位：{{item.appealRef}}</view>
+        <view class="muted small others" wx:if="{{item.batch}}">同批：{{item.othersStr}}</view>
+        <view class="ops stall-ops">
+          <button class="btn btn-sm btn-plain op-btn" data-id="{{item._id}}" catchtap="onTrail">处理经过</button>
+          <button class="btn btn-sm btn-primary op-btn" data-id="{{item._id}}" catchtap="onAppeal">去核对</button>
+        </view>
+      </view>
+    </view>
+  </view>
+
   <!-- 最近 24 小时内标记「未收到」的：点错了可撤销 -->
   <view class="card stall" wx:if="{{canConfirm && rejected.length}}">
     <view class="stall-title">最近标记「未收到」（{{rejected.length}}）</view>
@@ -48,8 +67,9 @@
     <view class="stall-row" wx:for="{{rejected}}" wx:key="_id">
       <view class="stall-info">
         <view class="stall-name"><text class="payer">{{item.nameStr}}</text><text class="money">￥{{item.amountStr}}</text></view>
-        <view class="muted small">{{item.timeStr}} 标记未收到</view>
+        <view class="muted small">{{item.timeStr}} 标记未收到<text wx:if="{{item.reasonStr}}"> · {{item.reasonStr}}</text></view>
         <view class="ops stall-ops">
+          <button class="btn btn-sm btn-plain op-btn" data-id="{{item._id}}" catchtap="onTrail">处理经过</button>
           <button class="btn btn-sm btn-outline op-btn" data-id="{{item._id}}" catchtap="onUnreject">撤销未收到</button>
         </view>
       </view>

@@ -544,6 +544,11 @@ Page({
       this.setData({ busy: false });
     }
   },
+  /** 查看处理经过（申诉 / 未收到的日志，v3.74.0） */
+  onTrail(e) {
+    const r = this.data.list[e.currentTarget.dataset.idx];
+    if (r) require('../../utils/trail.js').show(r);
+  },
   /** 查看修改记录（最近 20 次） */
   onAmendLog(e) {
     const r = this.data.list[e.currentTarget.dataset.idx];

@@ -38,7 +38,7 @@ Component({
       const isHost = !!(app && app.globalData.user && app.globalData.account);
       const pages = getCurrentPages();
       const cur = pages.length ? pages[pages.length - 1].route : '';
-      const n = (app && app.globalData.badge) || 0;
+      const n = ((app && app.globalData.badge) || 0) + ((app && app.globalData.appealN) || 0); // 待确认 + 宾客申诉
       const t = theme.current();
       const org = !!(app && app.globalData.account && app.globalData.account.orgMode);
       this.setData({

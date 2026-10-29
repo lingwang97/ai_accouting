@@ -8,6 +8,7 @@ const theme = require('../../utils/theme.js');
 const perm = require('../../utils/perm.js');
 const { countOf, groupRecords } = require('../../utils/group.js');
 const poller = require('../../utils/poller.js');
+const trail = require('../../utils/trail.js');
 const pollcfg = require('../../utils/pollcfg.js');
 
 const POLL_MS = 10000; // 轮询只查计数（pendingStat，含「宾客未点完成」「最近未收到」两组的条数），任一变化才拉完整列表；另每 30 次兜底拉一次
@@ -95,6 +96,7 @@ Page({
     // 两个分组靠条数变化触发刷新（宾客转账后超过 3 分钟未点完成会自己进入「未点完成」；未收到满 24 小时会自己移出）
     if (s.stall >= 0 && Math.min(s.stall, 100) !== (this._stallN || 0)) return this.load(true);
     if (s.rej >= 0 && Math.min(s.rej, 50) !== (this._rejN || 0)) return this.load(true);
+    if (s.appeal >= 0 && Math.min(s.appeal, 50) !== (this._appN || 0)) return this.load(true); // 宾客申诉
     return false;
   },
 
@@ -104,20 +106,24 @@ Page({
     if (!silent && this._poller) this._poller.kick(); // 用户操作后恢复轮询频率
     try {
       // 轮询（silent）失败不弹 toast，由顶部提示条说明
-      const { list, stalled, rejected, bookName, otherCount, count } = await req.recordPending(true, { silent: true });
+      const { list, stalled, rejected, appeals, bookName, otherCount, count } = await req.recordPending(true, { silent: true });
       if (this.data.netBad || this.data.loadErr) this.setData({ netBad: false, loadErr: '' });
       const hiddenCount = Math.max(0, (count || 0) - list.length); // 超过单次上限 100 笔的部分
       // 轮询取回的内容与上次相同：不动界面（返回 false 让轮询放慢）
-      const sig = JSON.stringify([list.map(r => [r._id, r.status, r.amount, r.transferredAt]), (stalled || []).map(r => [r._id, r.status]), (rejected || []).map(r => r._id), bookName, otherCount, hiddenCount]);
+      const sig = JSON.stringify([list.map(r => [r._id, r.status, r.amount, r.transferredAt]), (stalled || []).map(r => [r._id, r.status]), (rejected || []).map(r => r._id), (appeals || []).map(r => r._id), bookName, otherCount, hiddenCount]);
       if (silent && sig === this._sig) return false;
       this._sig = sig;
       this._stallN = (stalled || []).length; // 轮询用：两个分组的条数
       this._rejN = (rejected || []).length;
+      this._appN = (appeals || []).length;
+      getApp().setAppeal(this._appN);
       // 宾客没点「我已完成转账」的（含 24 小时内被自动取消的）：主家核对微信到账后可直接入簿
       this.setData({
         stalled: groupRecords(stalled || []).map(g => ({ ...g, auto: g.status === REC.CANCELLED, timeStr: fmt.time(g.createdAt) })),
         // 最近 24 小时内标记「未收到」的：点错了可以撤销
-        rejected: groupRecords(rejected || []).map(g => ({ ...g, timeStr: fmt.time(g.rejectedAt || g.createdAt) }))
+        rejected: groupRecords(rejected || []).map(g => ({ ...g, timeStr: fmt.time(g.rejectedAt || g.createdAt), reasonStr: trail.REASON[g.rejectReason] || '' })),
+        // 宾客申诉（v3.74.0）：宾客说被标未收到的这笔确实转了，请主家再核对
+        appeals: groupRecords(appeals || []).map(g => ({ ...g, timeStr: fmt.dateTime(g.appealAt || g.rejectedAt || g.createdAt), reasonStr: [trail.REASON[g.rejectReason] || '', g.rejectNote || ''].filter(Boolean).join('：') }))
       });
       if (silent && list.length > countOf(this._list)) wx.vibrateShort({ type: 'heavy', fail() {} });
       const picked = new Set(this._list.filter(r => r.picked).map(r => r._id));
@@ -268,6 +274,19 @@ Page({
       getApp().refreshBadge();
     }
     this.load(false);
+  },
+  /** 宾客申诉：核对后入簿 / 维持未收到 */
+  async onAppeal(e) {
+    const g = (this.data.appeals || []).find(x => x._id === e.currentTarget.dataset.id);
+    if (!g) return;
+    const res = await this.run(() => confirm.resolveAppeal(g));
+    if (res) this.load(false);
+  },
+  /** 查看处理经过（谁、何时、做了什么） */
+  onTrail(e) {
+    const list = [].concat(this.data.appeals || [], this.data.rejected || []);
+    const g = list.find(x => x._id === e.currentTarget.dataset.id);
+    if (g) trail.show(g);
   },
   onStallAll() { this.setData({ stallAll: !this.data.stallAll }); },
 

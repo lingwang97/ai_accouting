@@ -43,6 +43,14 @@
       <view class="row" wx:if="{{r.rejected.count}}"><text>未收到（已拒绝）</text><text><text class="muted">{{r.rejected.count}} 份 · </text>￥{{r.rejected.sumStr}}</text></view>
     </view>
 
+    <!-- 宾客申诉（v3.74.0） -->
+    <view class="card" wx:if="{{r.appeal.open || r.appeal.accepted || r.appeal.kept}}">
+      <view class="section-title">宾客申诉</view>
+      <view class="row hot" wx:if="{{r.appeal.open}}" bindtap="goPending"><text>待处理 ›</text><text>{{r.appeal.open}} 份</text></view>
+      <view class="row" wx:if="{{r.appeal.accepted}}"><text>核对后已入簿</text><text>{{r.appeal.accepted}} 份</text></view>
+      <view class="row" wx:if="{{r.appeal.kept}}"><text>维持未收到</text><text>{{r.appeal.kept}} 份</text></view>
+    </view>
+
     <!-- 差异 -->
     <view class="card" wx:if="{{r.diff.count || r.void.count}}">
       <view class="section-title">差异</view>

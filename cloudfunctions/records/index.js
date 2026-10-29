@@ -314,7 +314,7 @@ async function reconcile(ctx, event) {
   const base = { ownerOpenid: owner, bookId };
   if (/^\d{4}-\d{2}-\d{2}$/.test(String(event.day || ''))) base.payDay = event.day;
   const fenOf = _.aggregate.sum(_.aggregate.multiply(['$amount', 100]));
-  const [byStatus, deskCash, diff, byHandler, deskWechat, mixedRes, mixedBatches] = await Promise.all([
+  const [byStatus, deskCash, diff, byHandler, deskWechat, mixedRes, mixedBatches, apOpen, apAccepted, apKept] = await Promise.all([
     records.aggregate().match(base)
       .group({ _id: { status: '$status', method: '$payMethod' }, count: _.aggregate.sum(1), fen: fenOf })
       .limit(100).end(),
@@ -334,7 +334,11 @@ async function reconcile(ctx, event) {
     records.aggregate().match({ ...base, status: REC.PAID, batchPay: 'mixed' })
       .group({ _id: '$payMethod', fen: fenOf }).limit(10).end(),
     records.aggregate().match({ ...base, status: REC.PAID, batchPay: 'mixed' })
-      .group({ _id: '$batchId' }).count('n').end()
+      .group({ _id: '$batchId' }).count('n').end(),
+    // 宾客申诉（v3.74.0）：待处理 / 核对后入簿 / 维持未收到
+    records.where({ ...base, appealStatus: 'open' }).count(),
+    records.where({ ...base, appealStatus: 'accepted' }).count(),
+    records.where({ ...base, appealStatus: 'kept' }).count()
   ]);
 
   const z = () => ({ count: 0, fen: 0 });
@@ -383,6 +387,7 @@ async function reconcile(ctx, event) {
     pending: y(s.pending),
     rejected: y(s.rejected),
     void: y(s.void),
+    appeal: { open: apOpen.total, accepted: apAccepted.total, kept: apKept.total },
     diff: { count: d.count, declared: Math.round(d.declaredFen) / 100, actual: Math.round(d.fen) / 100, gap: Math.round(d.fen - d.declaredFen) / 100 },
     handlers: Object.values(hs).map(h => ({ name: h.name, count: h.count, sum: h.fen / 100, cashCount: h.cashCount, cashSum: h.cashFen / 100 }))
       .sort((a, b) => b.sum - a.sum)
@@ -518,9 +523,29 @@ function stallCondOf(openid, bk, now) {
     { ownerOpenid: openid, status: REC.CANCELLED, autoCancelled: true, stallDismissed: _.neq(true), createdAt: _.gt(new Date(now - STALL_KEEP_MS)), bookId: bk }
   ]);
 }
-/** 「最近标记未收到」条件 */
+/** 「最近标记未收到」条件（宾客已申诉待处理的另归「宾客申诉」栏，不重复出现） */
 function rejectedCondOf(openid, cur, now) {
-  return { ownerOpenid: openid, status: REC.REJECTED, bookId: cur, rejectedAt: _.gt(new Date(now - UNREJECT_MS)) };
+  return { ownerOpenid: openid, status: REC.REJECTED, bookId: cur, rejectedAt: _.gt(new Date(now - UNREJECT_MS)), appealStatus: _.neq('open') };
+}
+/**
+ * 宾客申诉待处理数（轮询 / 角标用）：30 秒缓存，省掉每次轮询多一次计数；待确认页轮询（withExtra）总是实时查询并刷新缓存
+ * 出错返回缓存值或 0，不影响待确认计数
+ */
+const APPEAL_TTL = 30 * 1000;
+const appealCache = new Map();
+async function appealCount(openid, cur, fresh, now) {
+  const key = `${openid}|${cur}`;
+  const hit = appealCache.get(key);
+  if (!fresh && hit && hit.exp > now) return hit.n;
+  try {
+    const n = (await records.where(appealCondOf(openid, cur)).count()).total;
+    cacheSet(appealCache, key, { exp: now + APPEAL_TTL, n });
+    return n;
+  } catch (e) { return hit ? hit.n : 0; }
+}
+/** 「宾客申诉」条件（v3.74.0）：被标未收到、宾客申请了再核对、主家还没处理；不受 24 小时限制（宾客申请期为 30 天） */
+function appealCondOf(openid, cur) {
+  return { ownerOpenid: openid, status: REC.REJECTED, bookId: cur, appealStatus: 'open' };
 }
 async function pending(openid, ctx, withRejected) {
   // 只取当前礼簿（workBook）的待确认；确认接口同样限定当前礼簿，避免跨礼簿确认
@@ -529,7 +554,7 @@ async function pending(openid, ctx, withRejected) {
   const cond = { ownerOpenid: openid, status: REC.TRANSFERRED, bookId: bk };
   const now = Date.now();
   const stallCond = stallCondOf(openid, bk, now);
-  const [res, cnt, stall, other, bookRes, rejRes] = await Promise.all([
+  const [res, cnt, stall, other, bookRes, rejRes, appRes] = await Promise.all([
     records.where(cond).orderBy('createdAt', 'desc').limit(100).get(),
     records.where(cond).count(),
     records.where(stallCond).orderBy('createdAt', 'desc').limit(100).get(),
@@ -538,12 +563,16 @@ async function pending(openid, ctx, withRejected) {
     // 最近 24 小时内标记「未收到」的（可撤销）：只有待确认页请求时才查，需要确认收礼权限
     withRejected && cur && can(ctx, 'confirm')
       ? records.where(rejectedCondOf(openid, cur, now)).orderBy('rejectedAt', 'desc').limit(50).get().catch(() => null)
+      : null,
+    // 宾客申诉（需要确认收礼权限）
+    withRejected && cur && can(ctx, 'confirm')
+      ? records.where(appealCondOf(openid, cur)).orderBy('appealAt', 'desc').limit(50).get().catch(() => null)
       : null
   ]);
   const b = bookRes && bookRes.data;
   const bookName = b && b.ownerOpenid === openid ? (b.hostName ? `${b.hostName} · ${b.name}` : b.name) : '';
   await otherCount(ctx, cur, other.total); // 与轮询（pendingStat）共用缓存，避免两边个数不一致导致待确认页反复重拉
-  return ok({ list: res.data.map(strip), count: cnt.total, stalled: stall.data.map(strip), bookName, otherCount: other.total, rejected: rejRes ? rejRes.data.map(strip) : [] });
+  return ok({ list: res.data.map(strip), count: cnt.total, stalled: stall.data.map(strip), bookName, otherCount: other.total, rejected: rejRes ? rejRes.data.map(strip) : [], appeals: appRes ? appRes.data.map(strip) : [] });
 }
 
 /**
@@ -566,12 +595,15 @@ async function pendingStat(openid, ctx, selfOpenid, withExtra, rv) {
   const cur = workBook(ctx);
   const cond = { ownerOpenid: openid, status: REC.TRANSFERRED, bookId: cur || '__none__' };
   const now = Date.now();
-  const [cnt, other, due, stall, rej] = await Promise.all([
+  const canAppeal = !!cur && can(ctx, 'confirm');
+  const [cnt, other, due, stall, rej, app] = await Promise.all([
     records.where(cond).count(),
     otherCount(ctx, cur),
     remindDueCached(selfOpenid, rv),
     withExtra && cur ? records.where(stallCondOf(openid, cur, now)).count().catch(() => null) : null,
-    withExtra && cur && can(ctx, 'confirm') ? records.where(rejectedCondOf(openid, cur, now)).count().catch(() => null) : null
+    withExtra && cur && can(ctx, 'confirm') ? records.where(rejectedCondOf(openid, cur, now)).count().catch(() => null) : null,
+    // 宾客申诉待处理数（角标与待确认页轮询用；没有确认收礼权限的不查）
+    canAppeal ? appealCount(openid, cur, withExtra, now) : 0
   ]);
   const sumKey = `${openid}|${cur}`;
   const hit = sumCache.get(sumKey);
@@ -585,7 +617,7 @@ async function pendingStat(openid, ctx, selfOpenid, withExtra, rv) {
     fen = Math.round(((agg.list && agg.list[0]) || { fen: 0 }).fen);
   }
   if (!hit || hit.count !== cnt.total || hit.exp <= now) cacheSet(sumCache, sumKey, { exp: now + SUM_TTL, count: cnt.total, fen });
-  const out = { count: cnt.total, sum: fen / 100, other, remindDue: due };
+  const out = { count: cnt.total, sum: fen / 100, other, remindDue: due, appeal: app || 0 };
   if (withExtra) { out.stall = stall ? stall.total : -1; out.rej = rej ? rej.total : -1; } // -1：未查询 / 无权限，页面不据此刷新
   return ok(out);
 }

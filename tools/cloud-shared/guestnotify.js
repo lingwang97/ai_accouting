@@ -54,7 +54,8 @@ const REJECT_NOTE = { nofound: '主家未查到到账', amount: '主家核对金
 function buildReject(g, timeStr) {
   const n = Number(g.count) || 1;
   let note;
-  if (g.funeral) note = n > 1 ? `${n}人暂未核实到账，点此查看` : '暂未核实到账，点此查看';
+  if (g.kept) note = g.funeral ? '核对后仍未核实，点此查看' : (n > 1 ? `${n}人核对后仍未收到，点此查看` : '主家核对后仍未收到，点此查看'); // 宾客申诉后主家维持
+  else if (g.funeral) note = n > 1 ? `${n}人暂未核实到账，点此查看` : '暂未核实到账，点此查看';
   else if (n > 1) note = `${n}人未查到到账，点此查看`;
   else note = (REJECT_NOTE[g.reason] || '主家暂未确认收到') + '，点此查看';
   return {
@@ -178,7 +179,8 @@ function create(db, cloud) {
    * 主家标记「未收到」后通知宾客（v3.73.0）：订阅是一次性的，发完就用掉，所以先原子地把 guestNotify 置为 false 再发，
    * 同一次订阅只发一条，之后即使入簿也不再重复发（宾客申诉时会重新订阅）；不重试，失败只记日志。批次一条，取宾客自己那条
    */
-  async function notifyRejected(ids, operatorOpenid) {
+  async function notifyRejected(ids, operatorOpenid, opts) {
+    const kept = !!(opts && opts.kept);
     if (!GUEST_TMPL_ID || !ids.length) return 0;
     const res = await records.where({ _id: _.in(ids.slice(0, 100)), status: REC.REJECTED, guestNotify: true }).get();
     const pick = new Map();
@@ -200,10 +202,10 @@ function create(db, cloud) {
         try { hostName = ((await db.collection('accounts').doc(rec.aid).get()).data || {}).accountName || ''; } catch (e) { /* 只写礼簿名 */ }
       }
       const data = buildReject({
-        hostName, themeName: rec.themeName || '', funeral: rec.bookType === 'funeral', reason: rec.rejectReason || '',
+        hostName, themeName: rec.themeName || '', funeral: rec.bookType === 'funeral', reason: rec.rejectReason || '', kept,
         method: rec.batchPay === 'mixed' ? 'mixed' : (rec.payMethod === 'cash' ? 'cash' : 'wechat'),
         count: all.length, amount: all.reduce((t, r) => t + Math.round(r.amount * 100), 0) / 100
-      }, bjTime(rec.rejectedAt || new Date()));
+      }, bjTime(kept ? new Date() : (rec.rejectedAt || new Date())));
       try {
         await cloud.openapi.subscribeMessage.send({
           touser: rec.payerOpenid,

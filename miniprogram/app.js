@@ -71,6 +71,7 @@ App({
           const d = res.result && res.result.code === 0 ? res.result.data : {};
           const n = d.count || 0;
           this.globalData.remindDot = d.remindDue === true; // 往来页红点（只算到期未处理）
+          this.globalData.appealN = this.globalData.account ? (d.appeal || 0) : 0; // 宾客申诉待处理数（v3.74.0，计入「工作台」角标）
           this.setBadge(this.globalData.account ? n : 0);
           resolve(n);
         },
@@ -86,6 +87,7 @@ App({
     this.globalData.recordsBookId = '';
     this.globalData.bookType = '';
     this.globalData.role = null;
+    this.globalData.appealN = 0;
     this.globalData.perms = null;
     this.globalData.identityVer = (this.globalData.identityVer || 0) + 1;
     this.globalData.themePrimary = null; // 主题色随身份重新读取
@@ -125,6 +127,13 @@ App({
     const f = this._fresh;
     this._fresh = null;
     return f && Date.now() - f.at < 15000 ? f.account : undefined;
+  },
+
+  /** 宾客申诉待处理数（角标 = 待确认 + 申诉） */
+  setAppeal(n) {
+    if ((this.globalData.appealN || 0) === n) return;
+    this.globalData.appealN = n;
+    this.refreshTabBar();
   },
 
   setBadge(n) {

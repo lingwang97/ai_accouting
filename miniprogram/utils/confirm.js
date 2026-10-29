@@ -38,7 +38,7 @@ function confirmTransfer(record) {
 }
 
 /** 金额不符：输入实际到账金额 */
-function askActual(record) {
+function askActual(record, fn) {
   return new Promise(resolve => {
     wx.showModal({
       title: '实际到账金额',
@@ -52,7 +52,7 @@ function askActual(record) {
           wx.showToast({ title: '金额不正确', icon: 'none' });
           return resolve(false);
         }
-        resolve(doConfirm(record, actual));
+        resolve((fn || doConfirm)(record, actual));
       },
       fail: () => resolve(false)
     });
@@ -78,6 +78,65 @@ function printLater(list, head) {
   autoPrint(list).then(note => {
     if (note) wx.showToast({ title: `${head}（${note}）`, icon: 'none', duration: 2500 });
   }).catch(() => {});
+}
+
+/**
+ * 处理宾客申诉（v3.74.0）：先核对微信到账；按登记金额入簿 / 金额不符输入实际金额（批次只能整批按登记金额）/ 维持未收到（可附回复）
+ * 返回是否已处理
+ */
+function resolveAppeal(record) {
+  notify.renewSilently();
+  const isBatch = isGroup(record);
+  const amount = fmt.money(record.amount);
+  const items = isBatch ? ['整批按登记金额入簿', '维持未收到'] : ['按登记金额入簿', '金额不符，输入实际金额', '维持未收到'];
+  return new Promise(resolve => {
+    wx.showActionSheet({
+      itemList: items,
+      alertText: `${record.payerName} ￥${amount}：宾客申请再核对，请先核对微信是否收到`,
+      success: r => {
+        const pick = items[r.tapIndex];
+        if (pick === '维持未收到') return resolve(keepAppeal(record));
+        if (pick === '金额不符，输入实际金额') return resolve(askActual(record, doAccept));
+        resolve(doAccept(record));
+      },
+      fail: () => resolve(false)
+    });
+  });
+}
+
+async function doAccept(record, actual) {
+  let r;
+  try {
+    r = await req.payResolveAppeal(record._id, 'accept', actual);
+  } catch (e) {
+    return false;
+  }
+  wx.showToast({ title: '已记入礼簿', icon: 'success' });
+  getApp().refreshBadge();
+  printLater(r.list || [r.record || { ...record, amount: actual || record.amount }], '已记入礼簿');
+  return true;
+}
+
+function keepAppeal(record) {
+  return new Promise(resolve => {
+    wx.showModal({
+      title: '维持未收到',
+      editable: true,
+      placeholderText: '给宾客的回复（选填，20 字内）',
+      confirmText: '维持',
+      confirmColor: '#FA5151',
+      success: async m => {
+        if (!m.confirm) return resolve(false);
+        try {
+          await req.payResolveAppeal(record._id, 'keep', undefined, String(m.content || '').trim().slice(0, 20));
+          wx.showToast({ title: '已维持', icon: 'success' });
+          getApp().refreshBadge();
+          resolve(true);
+        } catch (e) { resolve(false); }
+      },
+      fail: () => resolve(false)
+    });
+  });
 }
 
 /** 批次按逐人实际金额入簿：amounts 为 {rid: 金额}，只需列出与登记不一致的 */
@@ -234,5 +293,6 @@ module.exports = {
   askActualAmount: askActual,     // 金额不符：输入实际到账金额入簿
   confirmGroupAmounts,            // 批次：逐人按实际金额入簿
   confirmBatch,
-  rejectTransfer
+  rejectTransfer,
+  resolveAppeal                   // 处理宾客申诉（v3.74.0）
 };

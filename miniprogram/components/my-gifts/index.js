@@ -4,12 +4,14 @@
 const req = require('../../utils/request.js');
 const fmt = require('../../utils/format.js');
 const { REC } = require('../../utils/status.js');
+const guestsub = require('../../utils/guestsub.js');
 
 const HINT = {
   transferred: '你已告知主家转账完成，主家核对微信到账后会确认入簿，届时会出现在「已入簿」里，可查看电子回执。',
   pending: '这笔还没点「我已完成转账」。如果已经转账，请再扫一次主家的礼簿码，按提示点「继续」→「我已完成转账」；没转账可以不用管，过一段时间会自动取消。',
   rejected: '主家没有确认收到这笔。如果你已经转账，请先和主家联系核对（可点「分享给主家」）；确认没转成功，可以点「重新登记」。',
   rejectedFuneral: '主家暂时没有核实到这笔。如果你已经转账，请先和主家联系核对（可点「分享给主家」）；确认没转成功，可以点「重新登记」。',
+  kept: '主家核对后仍维持未收到。如果你确实已转账，请直接联系主家（可点「分享给主家」）；确认没转成功，可以点「重新登记」。',
   cancelAuto: '超过 30 分钟没点「我已完成转账」，已自动取消。如果已经转账，请再扫一次主家的礼簿码重新登记。',
   cancelSelf: '这笔登记已取消。'
 };
@@ -18,7 +20,7 @@ Component({
   properties: {
     keyword: { type: String, value: '', observer() { this.refilter(); } }
   },
-  data: { loading: true, loadErr: '', list: [], waiting: [], rejected: [], cancelled: [], openId: '', empty: false },
+  data: { appeal: null, loading: true, loadErr: '', list: [], waiting: [], rejected: [], cancelled: [], openId: '', empty: false },
   lifetimes: {
     attached() { this.reload(); }
   },
@@ -32,11 +34,15 @@ Component({
         const stText = w => {
           if (w.status === REC.TRANSFERRED) return '等待主家确认';
           if (w.status === REC.PENDING) return '还没点「我已完成转账」';
-          if (w.status === REC.REJECTED) return w.funeral ? '主家暂未核实到账' : '主家未确认收到';
+          if (w.status === REC.REJECTED) {
+            if (w.appealStatus === 'open') return '已申请再核对，等待主家处理';
+            if (w.appealStatus === 'kept') return '主家核对后维持未收到' + (w.appealReply ? `：${w.appealReply}` : '');
+            return w.funeral ? '主家暂未核实到账' : '主家未确认收到';
+          }
           return w.auto ? '超时自动取消' : '已取消';
         };
         const hintOf = w => {
-          if (w.status === REC.REJECTED) return w.funeral ? HINT.rejectedFuneral : HINT.rejected;
+          if (w.status === REC.REJECTED) return w.appealStatus === 'kept' ? HINT.kept : (w.funeral ? HINT.rejectedFuneral : HINT.rejected);
           if (w.status === REC.CANCELLED) return w.auto ? HINT.cancelAuto : HINT.cancelSelf;
           return HINT[w.status] || '';
         };
@@ -99,6 +105,31 @@ Component({
 
     onOpen(e) {
       wx.navigateTo({ url: `/pages/receipt/receipt?rid=${e.currentTarget.dataset.id}` });
+    },
+
+    // —— 申请再核对（v3.74.0）：每笔 1 次；说明 ≤50 字、转账单号后几位（选填）；提交时再请求一次通知订阅，主家处理后宾客能收到提醒 ——
+    onAppealOpen(e) {
+      const w = this.data.rejected.find(x => x._id === e.currentTarget.dataset.id);
+      if (!w) return;
+      this.setData({ appeal: { rid: w._id, name: w.payerName, amountStr: w.amountStr, note: '', ref: '', busy: false } });
+    },
+    onAppealNote(e) { this.setData({ 'appeal.note': e.detail.value }); },
+    onAppealRef(e) { this.setData({ 'appeal.ref': e.detail.value }); },
+    onAppealClose() { if (!(this.data.appeal && this.data.appeal.busy)) this.setData({ appeal: null }); },
+    onAppealSubmit() {
+      const a = this.data.appeal;
+      if (!a || a.busy) return;
+      const subP = guestsub.ask(); // 必须在第一个 await 之前（点击的同步调用链里）
+      this.setData({ 'appeal.busy': true });
+      return (async () => {
+        try {
+          const guestNotify = await subP;
+          await req.payAppeal(a.rid, String(a.note || '').trim().slice(0, 50), String(a.ref || '').replace(/[^0-9A-Za-z]/g, '').slice(0, 6), guestNotify);
+          this.setData({ appeal: null });
+          wx.showToast({ title: '已提交申请', icon: 'success' });
+          await this.reload();
+        } catch (err) { /* toast 已提示 */ this.setData({ 'appeal.busy': false }); }
+      })();
     },
 
     noop() {}

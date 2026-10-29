@@ -207,6 +207,10 @@ module.exports = {
   payDismissStall: rid => call('payment', { action: 'dismissStall', rid }).then(dropDash),
   payVoid: rid => call('payment', { action: 'void', rid }).then(dropDash),
   payUnreject: rid => call('payment', { action: 'unreject', rid }).then(dropDash),
+  // 宾客申请「再核对」（v3.74.0）；guestNotify：点击时同意了通知订阅
+  payAppeal: (rid, note, ref, guestNotify) => call('payment', { action: 'appeal', rid, envVersion: envVersion(), ...(note ? { note } : {}), ...(ref ? { ref } : {}), ...(guestNotify ? { guestNotify: true } : {}) }),
+  // 主家 / 记账人处理申诉：decision accept 入簿（amount 为实际金额）/ keep 维持未收到（note 为给宾客的回复）
+  payResolveAppeal: (rid, decision, amount, note) => call('payment', { action: 'resolveAppeal', rid, decision, ...(amount ? { amount } : {}), ...(note ? { note } : {}) }).then(dropDash),
   payAmend: (rid, fields) => call('payment', { action: 'amend', rid, ...fields }).then(dropDash),
   recordList: (d, opts) => call('records', { action: 'list', ...d }, opts),
   markPrinted: rids => call('records', { action: 'markPrinted', rids }),

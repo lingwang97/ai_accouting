@@ -8,7 +8,7 @@ const scenes = require('../../utils/scenes.js');
 const batch = require('../../utils/batch.js');
 const samename = require('../../utils/samename.js');
 const theme = require('../../utils/theme.js');
-const { GUEST_NOTIFY_TMPL_ID } = require('../../config.js');
+const guestsub = require('../../utils/guestsub.js');
 
 const paypoll = require('../../utils/paypoll.js'); // 轮询退避：3 秒 → 5 秒 → 10 秒，最长 10 分钟（v3.71.0）
 const NAME_KEY = 'pay_last_name'; // 本机上次随礼用的姓名（宾客常去多家随礼，免得每次重填）
@@ -267,16 +267,7 @@ Page({
    * 所以在 onTransferred / 现金「确认随礼」的第一个 await 之前调用；返回是否同意（拒绝 / 失败都按不同意，照常继续）
    */
   askGuestNotify() {
-    if (!GUEST_NOTIFY_TMPL_ID || typeof wx.requestSubscribeMessage !== 'function') return Promise.resolve(false);
-    return new Promise(resolve => {
-      try {
-        wx.requestSubscribeMessage({
-          tmplIds: [GUEST_NOTIFY_TMPL_ID],
-          success: r => resolve(r[GUEST_NOTIFY_TMPL_ID] === 'accept'),
-          fail: () => resolve(false)
-        });
-      } catch (e) { resolve(false); }
-    });
+    return guestsub.ask();
   },
 
   /** 第 2 步：付款方转账完成 → 等待收款方确认 */

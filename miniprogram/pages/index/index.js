@@ -260,6 +260,7 @@ Page({
       const pending = await req.pendingStat();
       if (this.data.netBad) this.setData({ netBad: false });
       if (!pending) return false;
+      getApp().setAppeal(pending.appeal || 0); // 宾客申诉待处理数计入角标
       if (silent && pending.count > this.data.pendingCount) wx.vibrateShort({ type: 'heavy', fail() {} });
       const sum = fmt.money(pending.sum);
       const other = pending.other || 0;

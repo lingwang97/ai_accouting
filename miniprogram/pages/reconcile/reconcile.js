@@ -58,6 +58,7 @@ Page({
           deskWechat: m(r.deskWechat || { count: 0, sum: 0 }), guestWechat: m(r.guestWechat || r.wechat),
           mixed: { ...(r.mixed || { batches: 0 }), sumStr: fmt.money((r.mixed || {}).sum || 0), wechatStr: fmt.money((r.mixed || {}).wechat || 0), cashStr: fmt.money((r.mixed || {}).cash || 0) },
           transferred: m(r.transferred), pending: m(r.pending), rejected: m(r.rejected), void: m(r.void),
+          appeal: r.appeal || { open: 0, accepted: 0, kept: 0 },
           diff: { ...r.diff, declaredStr: fmt.money(r.diff.declared), actualStr: fmt.money(r.diff.actual), gapStr: fmt.money(Math.abs(r.diff.gap)) },
           handlers: r.handlers.map(h => ({ ...h, sumStr: fmt.money(h.sum), cashSumStr: fmt.money(h.cashSum) })),
           at: fmt.dateTime(new Date())
@@ -125,6 +126,7 @@ Page({
     if (r.transferred.count) out.push(`待确认：${r.transferred.count} 份，￥${r.transferred.sumStr}`);
     if (r.pending.count) out.push(`宾客未转账：${r.pending.count} 份，￥${r.pending.sumStr}`);
     if (r.rejected.count) out.push(`未收到（已拒绝）：${r.rejected.count} 份，￥${r.rejected.sumStr}`);
+    if (r.appeal.open || r.appeal.accepted || r.appeal.kept) out.push(`宾客申诉：待处理 ${r.appeal.open} 份，核对后入簿 ${r.appeal.accepted} 份，维持未收到 ${r.appeal.kept} 份`);
     if (r.diff.count) out.push(`按实收入簿：${r.diff.count} 份，宾客登记 ￥${r.diff.declaredStr}，实收 ￥${r.diff.actualStr}（${r.diff.gap < 0 ? '少' : '多'} ￥${r.diff.gapStr}）`);
     if (r.void.count) out.push(`已作废：${r.void.count} 份，￥${r.void.sumStr}`);
     if (r.handlers.length) {
