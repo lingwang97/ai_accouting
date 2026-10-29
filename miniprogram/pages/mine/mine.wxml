@@ -72,6 +72,14 @@
       </view>
     </block>
 
+    <!-- 我作为宾客随过的礼：记账人、机构模式（往来页隐藏）也从这里进入；主家在「往来 → 随礼记录」也能看到同一份 -->
+    <view class="group-title">我的随礼</view>
+    <view class="card menu">
+      <view class="menu-item" bindtap="goMyGifts">
+        <image class="mi-icon" src="/assets/icons/receipt-m.svg" /><text class="mi-text">我的随礼记录</text><text class="arrow"><text class="muted">进度 / 回执</text> ›</text>
+      </view>
+    </view>
+
     <view class="group-title">帮助与隐私</view>
     <view class="card menu">
       <view class="menu-item" bindtap="goGuide">

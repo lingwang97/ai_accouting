@@ -202,7 +202,8 @@ module.exports = {
   payConfirm: (rid, amount, amounts) => call('payment', { action: 'confirm', rid, amount, amounts }).then(dropDash),
   payConfirmBatch: rids => call('payment', { action: 'confirmBatch', rids }).then(dropDash),
   cashEntry: d => call('payment', { action: 'cashEntry', ...d }).then(dropDash),
-  payReject: rid => call('payment', { action: 'reject', rid }).then(dropDash),
+  // reason / note：标记未收到的原因（选填，v3.73.0）
+  payReject: (rid, reason, note) => call('payment', { action: 'reject', rid, ...(reason ? { reason } : {}), ...(note ? { note } : {}) }).then(dropDash),
   payDismissStall: rid => call('payment', { action: 'dismissStall', rid }).then(dropDash),
   payVoid: rid => call('payment', { action: 'void', rid }).then(dropDash),
   payUnreject: rid => call('payment', { action: 'unreject', rid }).then(dropDash),

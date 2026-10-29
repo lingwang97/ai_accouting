@@ -1,6 +1,7 @@
 {
   "navigationBarTitleText": "人情往来",
   "usingComponents": {
-    "loading": "/components/loading/loading"
+    "loading": "/components/loading/loading",
+    "my-gifts": "/components/my-gifts/index"
   }
 }

@@ -344,7 +344,7 @@ Page({
       return;
     }
     try {
-      const { status } = await req.payStatus(this.data.record._id);
+      const { status, reasonText } = await req.payStatus(this.data.record._id);
       if (gen !== this._gen) return; // 期间已停止 / 重新开始
       if (status === REC.PAID) {
         this.stopPoll();
@@ -353,7 +353,7 @@ Page({
         this.loadReceipt();
       } else if (status === REC.REJECTED) {
         this.stopPoll();
-        this.setData({ step: 'failed', failReason: '主家未收到该笔转账，请与主家核实' });
+        this.setData({ step: 'failed', failReason: (this.data.isFuneral ? '主家暂未核实到账' : '主家未收到该笔转账') + (reasonText ? `（${reasonText}）` : '') + '，请与主家核实。这笔记录之后可在「我的随礼记录」查看' });
       }
     } catch (e) { /* 网络抖动，下次再试 */ }
     // 逐步放慢：每次查询返回后再排下一次，网络慢时不会重叠

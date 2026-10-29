@@ -2,7 +2,7 @@
   "navigationBarTitleText": "我的随礼记录",
   "enablePullDownRefresh": true,
   "usingComponents": {
-    "loading": "/components/loading/loading",
+    "my-gifts": "/components/my-gifts/index",
     "ad-slot": "/components/ad-slot/index"
   }
 }

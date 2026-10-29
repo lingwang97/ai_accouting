@@ -201,6 +201,7 @@ Page({
   goQrcode() { wx.navigateTo({ url: '/pages/qrcode/qrcode' }); },
   goPrinter() { wx.navigateTo({ url: '/pages/printer/printer' }); },
   goStyle() { wx.navigateTo({ url: '/pages/receiptset/receiptset' }); },
+  goMyGifts() { wx.navigateTo({ url: '/pages/myreceipts/myreceipts' }); }, // 我的随礼记录（v3.73.0）
   goExport() { wx.navigateTo({ url: '/pages/export/export' }); },
   goTrash() { wx.navigateTo({ url: '/pages/trash/trash' }); }, // 回收站（主家本人）
   /** 使用教程：按身份打开对应分页（未完善主家信息的按宾客） */

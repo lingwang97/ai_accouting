@@ -15,7 +15,7 @@
     <view class="seg">
       <view class="seg-item {{tab === 'people' ? 'on' : ''}}" data-t="recv" bindtap="onTab">收礼往来</view>
       <view class="seg-item {{tab === 'out' ? 'on' : ''}}" data-t="out" bindtap="onTab">送出的礼</view>
-      <view class="seg-item {{tab === 'receipts' ? 'on' : ''}}" data-t="receipts" bindtap="onTab">随礼回执</view>
+      <view class="seg-item {{tab === 'receipts' ? 'on' : ''}}" data-t="receipts" bindtap="onTab">随礼记录</view>
     </view>
 
     <view class="search-row">
@@ -28,7 +28,7 @@
       <view class="btn btn-primary add-btn" hover-class="btn-hover" wx:if="{{tab !== 'receipts'}}" bindtap="onAddGift">＋ 记送礼</view>
     </view>
 
-    <loading show="{{loading && (tab === 'people' ? !shownPeople.length : (tab === 'receipts' ? !shownReceipts.length : !outList.length))}}" rows="4" />
+    <loading show="{{loading && tab !== 'receipts' && (tab === 'people' ? !shownPeople.length : !outList.length)}}" rows="4" />
 
     <!-- 收礼往来：按人（收送对比；逐笔在人详情里看） -->
     <view class="card out-sum" wx:if="{{tab === 'people' && (hasPeople || inTotal)}}">共收到 {{inTotal}} 笔 · <text class="money">￥{{inSum}}</text></view>
@@ -56,16 +56,9 @@
       </view>
     </block>
 
-    <!-- 随礼回执：扫码随礼、主家确认后的电子回执 -->
+    <!-- 随礼记录：我作为宾客的随礼（等待确认 / 主家未确认收到 / 已取消 / 已入簿回执），与宾客「我的随礼记录」同一组件（v3.73.0） -->
     <block wx:elif="{{tab === 'receipts'}}">
-      <view class="card gift" wx:for="{{shownReceipts}}" wx:key="_id" data-id="{{item._id}}" bindtap="onOpenReceipt">
-        <view class="p-top">
-          <text class="p-name">{{item.accountName || '主家'}}<text class="muted" wx:if="{{item.themeName}}"> · {{item.themeName}}</text></text>
-          <text class="money">￥{{item.amountStr}}</text>
-        </view>
-        <view class="muted">{{item.timeStr}} · 随礼人 {{item.payerName}}<text class="link-r"> 查看回执 ›</text></view>
-      </view>
-      <view class="muted center pad" wx:if="{{!loading && shownReceipts.length === 0}}">{{keyword ? '没有找到「' + keyword + '」' : '扫码随礼、主家确认收到后，电子回执会出现在这里'}}</view>
+      <my-gifts id="mg" keyword="{{keyword}}" />
     </block>
 
     <!-- 我送出的礼 -->

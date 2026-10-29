@@ -1,0 +1,21 @@
+.mg-title { margin: 8rpx 8rpx 12rpx; }
+.mg-sub { margin: -4rpx 8rpx 12rpx; font-size: 24rpx; color: #888; }
+.mg-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8rpx; }
+.mg-shop { flex: 1; min-width: 0; font-size: 30rpx; font-weight: 600; padding-right: 16rpx; }
+.mg-money { font-size: 30rpx; font-weight: 600; color: var(--primary); }
+.mg-gray { color: #888; }
+.mg-st { margin-top: 8rpx; font-size: 26rpx; }
+.mg-st.warn { color: var(--warn, #C25E00); }
+.mg-st.bad { color: #FA5151; }
+.mg-more { margin-left: 16rpx; font-size: 24rpx; color: #888; }
+.mg-more2 { display: block; margin: 12rpx 0 0; text-align: right; font-size: 24rpx; color: #888; }
+.mg-reason { margin-top: 6rpx; font-size: 26rpx; }
+.mg-ops { display: flex; margin-top: 16rpx; }
+button.mg-op2:not([size=mini]) { margin-left: 20rpx; }
+.mg-detail { margin-top: 14rpx; padding-top: 14rpx; border-top: 1rpx solid #eee; }
+.mg-hint { font-size: 24rpx; line-height: 1.6; color: #666; margin-bottom: 10rpx; }
+.mg-tl { font-size: 24rpx; line-height: 1.7; color: #444; }
+.mg-tl-t { color: #999; margin-right: 14rpx; }
+.mg-link { margin-top: 12rpx; text-align: right; font-size: 26rpx; color: var(--primary); }
+.mg-empty { padding: 80rpx 0; }
+.ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

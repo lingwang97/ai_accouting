@@ -1,13 +1,14 @@
-// pages/renqing/renqing.js — 人情往来：收礼往来（按人：收/送对比，可筛待回礼、多送；按笔：收到的每一笔）+ 送出的礼 + 随礼回执（扫码随礼后主家确认的电子回执）
+// pages/renqing/renqing.js — 人情往来：收礼往来（按人：收/送对比，可筛待回礼、多送；按笔：收到的每一笔）+ 送出的礼 + 随礼记录（我作为宾客的随礼：等待确认 / 主家未确认收到 / 已入簿回执，v3.73.0 起与宾客「我的随礼记录」共用 components/my-gifts）
 const req = require('../../utils/request.js');
 const fmt = require('../../utils/format.js');
 const scenes = require('../../utils/scenes.js');
 const theme = require('../../utils/theme.js');
 const fresh = require('../../utils/fresh.js');
+const mygifts = require('../../utils/mygifts.js');
 
 Page({
   data: {
-    tab: 'people',     // 收礼往来（people 按人 | in 按笔）| out 送出的礼 | receipts 随礼回执
+    tab: 'people',     // 收礼往来（people 按人 | in 按笔）| out 送出的礼 | receipts 随礼记录
     pFilter: 'all',    // 按人筛选：all 全部 | owe 待回礼 | given 多送
     pFilters: [{ v: 'all', t: '全部' }, { v: 'owe', t: '待回礼' }, { v: 'given', t: '多送' }],
     inSum: '0.00',     // 收礼合计（按人列表汇总：总笔数 / 总金额）
@@ -19,8 +20,6 @@ Page({
     remindShow: false, // 提醒弹层
     hotCount: 0,       // 已到提醒时间 / 已过期未处理的条数
     remindTip: '',     // 提示条文案
-    receipts: [],      // 随礼回执
-    shownReceipts: [],
     keyword: '',
     hasPeople: false, // 往来人名单本体放 this._people（不进 data，避免每次搜索 / 切换时传输整张名单）
     shownPeople: [],
@@ -38,11 +37,13 @@ Page({
     if (getApp().isLoggedOut()) {
       getApp().refreshTabBar();
       this._people = [];
-      return this.setData({ loading: false, loggedIn: false, hasPeople: false, shownPeople: [], outList: [], receipts: [], shownReceipts: [], reminds: [], doneList: [], hotCount: 0, remindTip: '', remindShow: false });
+      return this.setData({ loading: false, loggedIn: false, hasPeople: false, shownPeople: [], outList: [], reminds: [], doneList: [], hotCount: 0, remindTip: '', remindShow: false });
     }
     // 记账人身份不显示「往来」（切换身份后可能停留在本页）：回到工作台
     if ((await getApp().ensureRole()) === 'clerk') return wx.switchTab({ url: '/pages/index/index' });
     theme.apply(this); // 主题色跟当前礼簿事由走
+    const mg = this.selectComponent('#mg'); // 「随礼记录」栏已显示时：从回执页 / 随礼页回来刷新
+    if (mg) mg.reload();
     getApp().refreshTabBar();
     getApp().refreshBadge();
     // 45 秒内且期间没有写操作：不重复拉往来 / 提醒（切页签、搜索仍会加载）
@@ -56,7 +57,7 @@ Page({
   async load() {
     await getApp().loginReady;
     if (!getApp().globalData.user) {
-      return this.setData({ loading: false, loggedIn: false, hasPeople: false, shownPeople: [], outList: [], receipts: [], shownReceipts: [], reminds: [], doneList: [], hotCount: 0, remindTip: '', remindShow: false });
+      return this.setData({ loading: false, loggedIn: false, hasPeople: false, shownPeople: [], outList: [], reminds: [], doneList: [], hotCount: 0, remindTip: '', remindShow: false });
     }
     this.setData({ loading: true, loggedIn: true });
     try {
@@ -80,11 +81,7 @@ Page({
         });
         this.filterPeople();
       } else if (this.data.tab === 'receipts') {
-        const { list } = await req.myReceipts();
-        this.setData({
-          receipts: list.map(r => ({ ...r, amountStr: fmt.money(r.amount), timeStr: fmt.dateTime(r.paidAt || r.createdAt) }))
-        });
-        this.filterReceipts();
+        // 随礼记录由组件 my-gifts 自己加载（切到本栏时创建，页面 onShow 时刷新）
       } else {
         const res = await req.outList({ page: 1, pageSize: 50, keyword: this.data.keyword || undefined });
         this.setData({
@@ -129,19 +126,6 @@ Page({
     this.filterPeople();
   },
 
-  /** 随礼回执按主家 / 随礼人 / 礼簿名筛选 */
-  filterReceipts() {
-    const k = (this.data.keyword || '').trim();
-    const all = this.data.receipts;
-    this.setData({
-      shownReceipts: k ? all.filter(r => [r.accountName, r.payerName, r.themeName].some(x => (x || '').includes(k))) : all
-    });
-  },
-
-  onOpenReceipt(e) {
-    wx.navigateTo({ url: `/pages/receipt/receipt?rid=${e.currentTarget.dataset.id}` });
-  },
-
   /** 切换页签（收礼往来即按人） */
   onTab(e) {
     let t = e.currentTarget.dataset.t;
@@ -157,7 +141,6 @@ Page({
     clearTimeout(this._kwTimer);
     this._kwTimer = setTimeout(() => {
       if (this.data.tab === 'people') this.filterPeople();
-      if (this.data.tab === 'receipts') this.filterReceipts();
     }, 150);
   },
 
@@ -165,7 +148,7 @@ Page({
   onSearch() {
     const k = (this.data.keyword || '').trim();
     if (this.data.tab === 'out') return this.load();
-    if (this.data.tab === 'receipts') return this.filterReceipts();
+    if (this.data.tab === 'receipts') return; // 组件按 keyword 属性自行筛选
     if (k) { // 先同步过滤一次（防抖可能还没触发），再判断名单里有没有
       clearTimeout(this._kwTimer);
       this.filterPeople();
@@ -298,8 +281,8 @@ Page({
   },
 
   /** 转发给好友 / 分享到朋友圈：落地首页（宾客扫码随礼，主家创建礼簿） */
-  onShareAppMessage() {
-    return { title: '慧礼记｜扫码随礼、自动记账、人情往来一本清', path: '/pages/index/index' };
+  onShareAppMessage(e) {
+    return mygifts.shareOf(e) || { title: '慧礼记｜扫码随礼、自动记账、人情往来一本清', path: '/pages/index/index' };
   },
   onShareTimeline() {
     return { title: '慧礼记｜办事收礼，扫码随礼自动记账' };

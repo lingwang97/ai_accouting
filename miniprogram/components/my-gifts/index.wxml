@@ -1,0 +1,77 @@
+<!-- 我的随礼记录：等待主家确认 / 主家未确认收到 / 已取消 / 已入簿（宾客页与往来页共用） -->
+<view class="mg">
+  <block wx:if="{{waiting.length}}">
+    <view class="section-title mg-title">等待主家确认（{{waiting.length}}）</view>
+    <view class="card mg-item" wx:for="{{waiting}}" wx:key="_id" data-id="{{item._id}}" bindtap="onToggle">
+      <view class="mg-top">
+        <text class="mg-shop ell">{{item.accountName || '主家'}}</text>
+        <text class="mg-money">￥{{item.amountStr}}</text>
+      </view>
+      <view class="muted">{{item.timeStr}} · 随礼人 {{item.payerName}}</view>
+      <view class="mg-st warn">{{item.stText}}<text class="mg-more">{{openId === item._id ? '收起 ▴' : '详情 ▾'}}</text></view>
+      <view class="mg-detail" wx:if="{{openId === item._id}}" catchtap="noop">
+        <view class="mg-hint">{{item.hint}}</view>
+        <view class="mg-tl" wx:for="{{item.timeline}}" wx:for-item="t" wx:key="atStr"><text class="mg-tl-t">{{t.atStr}}</text>{{t.text}}</view>
+      </view>
+    </view>
+  </block>
+
+  <block wx:if="{{rejected.length}}">
+    <view class="section-title mg-title">主家未确认收到（{{rejected.length}}）</view>
+    <view class="mg-sub">近 30 天内、用当前微信登记的记录</view>
+    <view class="card mg-item" wx:for="{{rejected}}" wx:key="_id" data-id="{{item._id}}" bindtap="onToggle">
+      <view class="mg-top">
+        <text class="mg-shop ell">{{item.accountName || '主家'}}</text>
+        <text class="mg-money">￥{{item.amountStr}}</text>
+      </view>
+      <view class="muted">{{item.payerName}} · 登记于 {{item.regStr}}</view>
+      <view class="mg-st bad">{{item.stText}}（{{item.timeStr}}）</view>
+      <view class="mg-reason" wx:if="{{item.reasonText}}">原因：{{item.reasonText}}</view>
+      <view class="mg-ops">
+        <button class="btn btn-outline btn-sm" data-aid="{{item.aid}}" catchtap="onRegister">重新登记</button>
+        <button class="btn btn-outline btn-sm mg-op2" open-type="share" data-sharetitle="{{item.shareTitle}}" catchtap="noop">分享给主家</button>
+      </view>
+      <view class="mg-more2">{{openId === item._id ? '收起经过 ▴' : '查看经过 ▾'}}</view>
+      <view class="mg-detail" wx:if="{{openId === item._id}}" catchtap="noop">
+        <view class="mg-hint">{{item.hint}}</view>
+        <view class="mg-tl" wx:for="{{item.timeline}}" wx:for-item="t" wx:key="atStr"><text class="mg-tl-t">{{t.atStr}}</text>{{t.text}}</view>
+      </view>
+    </view>
+  </block>
+
+  <block wx:if="{{cancelled.length}}">
+    <view class="section-title mg-title">已取消（{{cancelled.length}}）</view>
+    <view class="card mg-item" wx:for="{{cancelled}}" wx:key="_id" data-id="{{item._id}}" bindtap="onToggle">
+      <view class="mg-top">
+        <text class="mg-shop ell">{{item.accountName || '主家'}}</text>
+        <text class="mg-money mg-gray">￥{{item.amountStr}}</text>
+      </view>
+      <view class="muted">{{item.timeStr}} · 随礼人 {{item.payerName}}</view>
+      <view class="mg-st">{{item.stText}}<text class="mg-more">{{openId === item._id ? '收起 ▴' : '详情 ▾'}}</text></view>
+      <view class="mg-detail" wx:if="{{openId === item._id}}" catchtap="noop">
+        <view class="mg-hint">{{item.hint}}</view>
+        <button class="btn btn-outline btn-sm" data-aid="{{item.aid}}" bindtap="onRegister">重新登记</button>
+      </view>
+    </view>
+  </block>
+
+  <block wx:if="{{list.length}}">
+    <view class="section-title mg-title" wx:if="{{waiting.length || rejected.length || cancelled.length}}">已入簿</view>
+    <view class="card mg-item" wx:for="{{list}}" wx:key="_id" data-id="{{item._id}}" bindtap="onOpen">
+      <view class="mg-top">
+        <text class="mg-shop ell">{{item.accountName || '主家'}}<text class="muted" wx:if="{{item.themeName}}"> · {{item.themeName}}</text></text>
+        <text class="mg-money">￥{{item.amountStr}}</text>
+      </view>
+      <view class="muted">{{item.timeStr}} · 随礼人 {{item.payerName}}</view>
+      <view class="mg-link">查看回执 ›</view>
+    </view>
+  </block>
+
+  <view class="card net-err" wx:if="{{!loading && loadErr}}" bindtap="onRetryLoad">
+    <view class="ne-title">随礼记录没加载出来</view>
+    <view class="ne-sub">{{loadErr}}，请检查网络后重试</view>
+    <view class="ne-btn">点此重试</view>
+  </view>
+  <view class="muted center mg-empty" wx:elif="{{!loading && empty}}">{{keyword ? '没有找到「' + keyword + '」' : '暂无随礼记录。扫码随礼后，等待确认、已入簿等进度都会出现在这里；需用登记时的同一个微信查看'}}</view>
+  <loading show="{{loading && empty}}" rows="3" />
+</view>

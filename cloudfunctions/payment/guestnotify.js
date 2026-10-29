@@ -46,6 +46,26 @@ function buildGuest(g, timeStr) {
   };
 }
 
+/**
+ * 宾客「主家未确认收到」通知内容（v3.73.0，复用入簿通知模板，只换备注文案）
+ * g：同 buildGuest，另有 reason（原因码）；白事统一用「暂未核实到账」，不说「未收到」
+ */
+const REJECT_NOTE = { nofound: '主家未查到到账', amount: '主家核对金额不符', nomatch: '主家未对上转账人' };
+function buildReject(g, timeStr) {
+  const n = Number(g.count) || 1;
+  let note;
+  if (g.funeral) note = n > 1 ? `${n}人暂未核实到账，点此查看` : '暂未核实到账，点此查看';
+  else if (n > 1) note = `${n}人未查到到账，点此查看`;
+  else note = (REJECT_NOTE[g.reason] || '主家暂未确认收到') + '，点此查看';
+  return {
+    thing6: { value: thingValue([g.hostName, g.themeName].filter(Boolean).join(' '), '慧礼记') },
+    amount3: { value: `${(Math.round(Number(g.amount || 0) * 100) / 100).toFixed(2)}元` },
+    time1: { value: timeStr },
+    thing8: { value: { cash: '现金', mixed: '微信转账+现金' }[g.method] || '微信转账' },
+    thing5: { value: thingValue(note, '请点此查看') }
+  };
+}
+
 /** 是否需要发：订阅过、宾客本人扫码登记（有 payerOpenid，不是礼台代记 / 经办人自己） */
 const eligible = r => r.guestNotify === true && !!r.payerOpenid && !r.deskEntry && r.payerOpenid !== r.handlerOpenid;
 
@@ -154,7 +174,51 @@ function create(db, cloud) {
     return n;
   }
 
-  return { sendGuest, notifyGuests, retryPending };
+  /**
+   * 主家标记「未收到」后通知宾客（v3.73.0）：订阅是一次性的，发完就用掉，所以先原子地把 guestNotify 置为 false 再发，
+   * 同一次订阅只发一条，之后即使入簿也不再重复发（宾客申诉时会重新订阅）；不重试，失败只记日志。批次一条，取宾客自己那条
+   */
+  async function notifyRejected(ids, operatorOpenid) {
+    if (!GUEST_TMPL_ID || !ids.length) return 0;
+    const res = await records.where({ _id: _.in(ids.slice(0, 100)), status: REC.REJECTED, guestNotify: true }).get();
+    const pick = new Map();
+    res.data.forEach(r => {
+      if (!r.payerOpenid || r.deskEntry || r.payerOpenid === operatorOpenid) return;
+      const k = r.batchId || r._id;
+      const cur = pick.get(k);
+      if (!cur || (r.batchIdx || 0) < (cur.batchIdx || 0)) pick.set(k, r);
+    });
+    let sent = 0;
+    await Promise.all([...pick.values()].map(async rec => {
+      const key = rec.batchId ? { batchId: rec.batchId, ownerOpenid: rec.ownerOpenid } : { _id: rec._id };
+      const mark = await records.where({ ...key, status: REC.REJECTED, guestNotify: true }).update({ data: { guestNotify: false, guestRejNotifiedAt: new Date() } });
+      if (!mark.stats || !mark.stats.updated) return;
+      let all = [rec];
+      if (rec.batchId) { try { all = (await batchOf(rec)).filter(r => r.status === REC.REJECTED); } catch (e) { /* 按单人 */ } if (!all.length) all = [rec]; }
+      let hostName = rec.hostName || '';
+      if (!hostName && rec.aid) {
+        try { hostName = ((await db.collection('accounts').doc(rec.aid).get()).data || {}).accountName || ''; } catch (e) { /* 只写礼簿名 */ }
+      }
+      const data = buildReject({
+        hostName, themeName: rec.themeName || '', funeral: rec.bookType === 'funeral', reason: rec.rejectReason || '',
+        method: rec.batchPay === 'mixed' ? 'mixed' : (rec.payMethod === 'cash' ? 'cash' : 'wechat'),
+        count: all.length, amount: all.reduce((t, r) => t + Math.round(r.amount * 100), 0) / 100
+      }, bjTime(rec.rejectedAt || new Date()));
+      try {
+        await cloud.openapi.subscribeMessage.send({
+          touser: rec.payerOpenid,
+          templateId: GUEST_TMPL_ID,
+          page: 'pages/myreceipts/myreceipts',
+          miniprogramState: { develop: 'developer', trial: 'trial' }[rec.guestEnv] || 'formal',
+          data
+        });
+        sent++;
+      } catch (e) { console.warn('未收到通知发送失败', e.errCode, e.errMsg || e.message); }
+    }));
+    return sent;
+  }
+
+  return { sendGuest, notifyGuests, retryPending, notifyRejected };
 }
 
-module.exports = { GUEST_TMPL_ID, MAX_TRIES, STALE_MS, buildGuest, thingValue, create };
+module.exports = { GUEST_TMPL_ID, MAX_TRIES, STALE_MS, buildGuest, buildReject, thingValue, create };

@@ -165,18 +165,44 @@ function confirmBatch(records) {
   });
 }
 
+/** 「未收到」的原因（选填，宾客会看到）：返回 { reason, note }；取消返回 null */
+const REJECT_ITEMS = [['nofound', '未查到到账'], ['amount', '金额不符'], ['nomatch', '转账人对不上'], ['other', '其他原因（自填）'], ['', '不写原因']];
+function askRejectReason() {
+  return new Promise(resolve => {
+    wx.showActionSheet({
+      itemList: REJECT_ITEMS.map(x => x[1]),
+      alertText: '选填：宾客会看到这个原因',
+      success: r => {
+        const code = REJECT_ITEMS[r.tapIndex][0];
+        if (code !== 'other') return resolve({ reason: code, note: '' });
+        wx.showModal({
+          title: '其他原因',
+          editable: true,
+          placeholderText: '最多 20 字',
+          confirmText: '确定',
+          success: m => resolve(m.confirm ? { reason: 'other', note: String(m.content || '').trim().slice(0, 20) } : null),
+          fail: () => resolve(null)
+        });
+      },
+      fail: () => resolve(null)
+    });
+  });
+}
+
 /** 未收到款；返回是否已标记 */
 function rejectTransfer(record) {
   const amount = fmt.money(record.amount);
   return new Promise(resolve => {
     wx.showModal({
       title: '未收到礼金',
-      content: `确定未收到 ${record.payerName} 的 ￥${amount} ？${isGroup(record) ? '整批都将标记为未收到，' : ''}宾客将看到"主家未确认收到"。点错了 24 小时内可在待确认页撤销`,
+      content: `确定未收到 ${record.payerName} 的 ￥${amount} ？${isGroup(record) ? '整批都将标记为未收到，' : ''}宾客能在「我的随礼记录」看到，并可能收到微信提醒。点错了 24 小时内可在待确认页撤销`,
       confirmColor: '#FA5151',
       success: async res => {
         if (!res.confirm) return resolve(false);
         try {
-          await req.payReject(record._id);
+          const why = await askRejectReason();
+          if (!why) return resolve(false); // 在原因选择里点了取消：不标记
+          await req.payReject(record._id, why.reason, why.note);
           wx.showToast({ title: '已标记', icon: 'success' });
           getApp().refreshBadge();
           resolve(true);
