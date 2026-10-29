@@ -139,13 +139,13 @@ test('status：被标未收到时带原因文字；无关的人不能查', async
   assert.notStrictEqual((await guest({ action: 'status', rid: 'r1' }, 'g9')).code, 0);
 });
 
-test('前端：往来页第三栏「随礼记录」使用共用组件，宾客页同一组件；「我的」有入口；索引已加', () => {
+test('前端：往来页第三栏「随礼记录」使用共用组件，宾客页同一组件；「我的」无入口（v3.74.3 去掉）；索引已加', () => {
   const rd = f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
   const wxml = rd('miniprogram/pages/renqing/renqing.wxml');
   assert.ok(wxml.includes('>随礼记录</view>') && !wxml.includes('>随礼回执<'));
   assert.ok(wxml.includes('<my-gifts'));
   assert.ok(rd('miniprogram/pages/myreceipts/myreceipts.wxml').includes('<my-gifts'));
-  assert.ok(rd('miniprogram/pages/mine/mine.wxml').includes('goMyGifts'));
+  assert.ok(!rd('miniprogram/pages/mine/mine.wxml').includes('goMyGifts')); // v3.74.3 起「我的」页不再放随礼记录入口（往来页已有）
   assert.ok(JSON.parse(rd('miniprogram/pages/renqing/renqing.json')).usingComponents['my-gifts']);
   assert.ok(rd('cloudfunctions/system/index.js').includes("'payer_status_rejected'"));
 });
