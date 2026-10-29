@@ -1,5 +1,6 @@
 // pages/bookedit/bookedit.js — 新建 / 编辑礼簿；事由类型变化时询问是否套用场景模板
 const req = require('../../utils/request.js');
+const imgc = require('../../utils/imgcompress.js');
 const scenes = require('../../utils/scenes.js');
 const sceneApply = require('../../utils/sceneApply.js');
 const printer = require('../../utils/printer.js');
@@ -61,9 +62,10 @@ Page({
     wx.chooseMedia({
       count: 1,
       mediaType: ['image'],
-      success: res => {
-        const tempPath = res.tempFiles[0].tempFilePath;
-        this.setData({ payCodePreview: tempPath, uploading: true });
+      success: async res => {
+        const f = res.tempFiles[0];
+        this.setData({ payCodePreview: f.tempFilePath, uploading: true });
+        const tempPath = await imgc.payCode(f.tempFilePath, f.size); // 超过 300KB 先压缩（v3.72.1），失败用原图
         wx.cloud.uploadFile({
           cloudPath: `paycodes/book-${getApp().globalData.openid}-${Date.now()}.png`,
           filePath: tempPath,

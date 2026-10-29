@@ -2,6 +2,7 @@
 // 主家信息要有收款码才能创建：收款码先跳过时只存本机草稿（utils/setup.js），首页显示进度卡片，补上后再创建
 // 保存用现有接口：account.save 建主家信息，books.save 建第一本礼簿并设为当前
 const req = require('../../utils/request.js');
+const imgc = require('../../utils/imgcompress.js');
 const theme = require('../../utils/theme.js');
 const scenes = require('../../utils/scenes.js');
 const setup = require('../../utils/setup.js');
@@ -90,9 +91,10 @@ Page({
     wx.chooseMedia({
       count: 1,
       mediaType: ['image'],
-      success: res => {
-        const tempPath = res.tempFiles[0].tempFilePath;
-        this.setData({ payCodeUrl: tempPath, uploading: true });
+      success: async res => {
+        const f = res.tempFiles[0];
+        this.setData({ payCodeUrl: f.tempFilePath, uploading: true });
+        const tempPath = await imgc.payCode(f.tempFilePath, f.size); // 超过 300KB 先压缩（v3.72.1），失败用原图
         wx.cloud.uploadFile({
           cloudPath: `paycodes/${getApp().globalData.openid}-${Date.now()}.png`,
           filePath: tempPath,

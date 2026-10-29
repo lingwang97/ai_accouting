@@ -21,7 +21,7 @@ const flow = (items, hl) => ({ type: 'flow', items, hl });
 const cashdesk = hl => ({ type: 'cashdesk', hl, c: M.CASHDESK });
 const bars = hl => ({ type: 'bars', hl });
 const printer3 = hl => ({ type: 'printer3', hl });
-const GUEST_FLOW = ['扫礼簿码', '填写礼金', '扫一扫付款', '我已完成转账'];
+const GUEST_FLOW = ['扫礼簿码', '填写礼金', '扫一扫转账', '我已完成转账'];
 
 // 每一步：标题、说明、在哪里操作、示意图、可选跳转页面（tab=true 为底部菜单页，用 switchTab；go 为链接文字，默认「去设置」）
 // orgDesc：机构模式另写的说明（不写则套用统一称呼替换）
@@ -93,7 +93,7 @@ const GUIDES = {
     {
       sec: '散场后',
       steps: [
-        { title: '一键对账', desc: '按支付方式核对现金与微信，交接给主家', where: '工作台 → 一键对账', mock: grid('一键对账'), url: '/pages/reconcile/reconcile', go: '去对账' }
+        { title: '一键对账', desc: '按随礼方式核对现金与微信，交接给主家', where: '工作台 → 一键对账', mock: grid('一键对账'), url: '/pages/reconcile/reconcile', go: '去对账' }
       ]
     }
   ],
@@ -103,7 +103,7 @@ const GUIDES = {
       steps: [
         { title: '扫主家的礼簿码', desc: '用微信扫一扫，扫主家出示的礼簿码或礼台上的台卡', where: '微信 → 扫一扫', mock: flow(GUEST_FLOW, '扫礼簿码') },
         { title: '填写姓名和礼金', desc: '可以替家人一起登记，多人合并转一笔；白事写「致奠人」「奠仪」。如果礼簿里已有同名的人，会请你填一个区分备注（村名、单位等）', where: '随礼页', mock: flow(GUEST_FLOW, '填写礼金') },
-        { title: '扫收款码付款', desc: '用微信扫一扫扫主家的收款码转账；扫不到时，把收款码存到相册，再从相册识别', where: '随礼页 → 扫一扫付款', mock: flow(GUEST_FLOW, '扫一扫付款') },
+        { title: '扫收款码转账', desc: '用微信扫一扫扫主家的收款码转账；扫不到时，把收款码存到相册，再从相册识别', where: '随礼页 → 扫一扫转账', mock: flow(GUEST_FLOW, '扫一扫转账') },
         { title: '回来点「我已完成转账」', desc: '会弹出「入簿通知」授权，点「允许」后主家确认收到时你会收到微信通知。不用一直开着页面等，可以先离开，主家确认后礼金就入簿了', where: '随礼页', mock: flow(GUEST_FLOW, '我已完成转账') }
       ]
     },

@@ -1,0 +1,40 @@
+// utils/imgcompress.js — 收款码图片压缩（v3.72.1）：主家信息、礼簿编辑、首次设置三处选图后共用
+// 原图不超过 300KB 直接用（二维码最清晰）；否则 wx.compressImage 质量 80，仍超过 300KB 再压一次（质量 60）。
+// 云端内容安全只审核 1MB 以内的图片（secure.js），手机原图常有 2~5MB，压缩后才能被审核，宾客打开也更快。
+// 任何一步失败（低版本基础库没有 compressImage、压缩出错）都用上一步的图，不阻断上传。
+const LIMIT = 300 * 1024;
+
+function compress(src, quality) {
+  return new Promise(resolve => {
+    if (typeof wx.compressImage !== 'function') return resolve('');
+    wx.compressImage({ src, quality, success: r => resolve(r.tempFilePath || ''), fail: () => resolve('') });
+  });
+}
+
+function sizeOf(path) {
+  return new Promise(resolve => {
+    try {
+      wx.getFileSystemManager().getFileInfo({ filePath: path, success: r => resolve(r.size), fail: () => resolve(-1) });
+    } catch (e) { resolve(-1); }
+  });
+}
+
+/**
+ * @param {string} path 选图得到的临时路径
+ * @param {number} [size] 原图大小（chooseMedia 的 tempFiles[i].size），没有时自己读
+ * @returns {Promise<string>} 用于上传的临时路径
+ */
+async function payCode(path, size) {
+  let sz = typeof size === 'number' && size > 0 ? size : await sizeOf(path);
+  if (sz >= 0 && sz <= LIMIT) return path;
+  let out = path;
+  const c1 = await compress(out, 80);
+  if (c1) { out = c1; sz = await sizeOf(out); }
+  if (c1 && sz > LIMIT) {
+    const c2 = await compress(out, 60);
+    if (c2) out = c2;
+  }
+  return out;
+}
+
+module.exports = { payCode, LIMIT };

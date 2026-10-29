@@ -569,7 +569,7 @@ async function fontStatus() {
 }
 
 // —— 数据库索引 ——
-// 与 docs/提审与隐私说明.md 第 1 条一致；direction "1" 升序、"-1" 降序
+// 共 30 条，docs/提审与隐私说明.md 第三节第 1 条的表按本清单生成（改这里要同步）；direction "1" 升序、"-1" 降序
 const INDEXES = [
   ['records', 'owner_status_time', [['ownerOpenid', 1], ['status', 1], ['createdAt', -1]]],
   ['records', 'owner_status_amount', [['ownerOpenid', 1], ['status', 1], ['amount', -1]]], // 礼簿页按金额排序

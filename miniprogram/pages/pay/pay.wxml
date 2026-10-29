@@ -64,14 +64,14 @@
           </view>
         </block>
         <view class="field pay-method">
-          <text class="label">支付方式</text>
+          <text class="label">随礼方式</text>
           <view class="chips">
             <view class="chip {{payMethod === 'wechat' ? 'on' : ''}}" data-m="wechat" bindtap="onPayMethod">微信转账</view>
             <view class="chip {{payMethod === 'cash' ? 'on' : ''}}" data-m="cash" bindtap="onPayMethod">{{isFuneral ? "" : "💵 "}}现金</view>
             <view class="chip {{payMethod === 'mixed' ? 'on' : ''}}" wx:if="{{batchMode}}" data-m="mixed" bindtap="onPayMethod">转账+现金</view>
           </view>
           <view class="muted" wx:if="{{payMethod === 'cash'}}">现金请当面交给主家或礼台，无需扫码转账</view>
-          <view class="muted" wx:if="{{payMethod === 'mixed'}}">转账部分扫码付一笔，现金当面交给礼台</view>
+          <view class="muted" wx:if="{{payMethod === 'mixed'}}">转账部分扫码转一笔，现金当面交给礼台</view>
         </view>
       </view>
       <button class="btn-primary" loading="{{submitting}}" bindtap="onConfirmTransfer">{{payMethod === 'cash' ? '确认' + act + '（现金）' : '确认' + act}}</button>
@@ -89,7 +89,7 @@
       <!-- 在现场：用微信扫一扫扫主家屏幕 / 台卡上的收款码 -->
       <view class="card center" wx:if="{{onsite}}">
         <view class="scan-icon" wx:if="{{!isFuneral}}">📷</view>
-        <view class="section-title">请用微信「扫一扫」付款</view>
+        <view class="section-title">请用微信「扫一扫」转账给主家</view>
         <view class="step-row">
           <view class="sr-item"><text class="sr-num">①</text>扫一扫</view>
           <view class="sr-item"><text class="sr-num">②</text>扫台卡收款码</view>
@@ -111,7 +111,7 @@
           <view class="sr-item"><text class="sr-num">③</text>回来点完成</view>
         </view>
         <view class="link-fold" wx:if="{{codeSaved}}" bindtap="onSavePayCode">没找到？重新保存</view>
-        <view class="muted">使用微信扫一扫相册保存的收款码进行付款</view>
+        <view class="muted">用微信扫一扫识别相册里的收款码，转账给主家</view>
         <view class="link-fold" wx:if="{{!onsite}}" bindtap="onSwitchOnsite">在现场？直接扫主家屏幕或台卡上的收款码</view>
       </view>
       <button class="btn-primary" loading="{{submitting}}" bindtap="onTransferred">我已完成转账</button>
@@ -133,7 +133,7 @@
       <button class="btn-outline" bindtap="onRefresh">刷新状态</button>
     </block>
 
-    <!-- 成功：展示付款方留存收据 -->
+    <!-- 成功：展示宾客留存的随礼回执 -->
     <block wx:if="{{step === 'success'}}">
       <view class="card center success-head" wx:if="{{!isFuneral}}">
         <view class="ok">✅</view>

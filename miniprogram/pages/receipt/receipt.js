@@ -4,13 +4,17 @@ const receipt = require('../../utils/receipt.js');
 const rcptscene = require('../../utils/rcptscene.js');
 const theme = require('../../utils/theme.js');
 
+// v3.72.1：导航栏固定浅灰黑字（receipt.json，不随事由变红）；加载中先用素灰，确定不是白事后再换回默认红，白事全程不出现红色
+const GRAY_STYLE = theme.styleOf(theme.forType('funeral'));
+const RED_STYLE = theme.styleOf(theme.make(theme.DEFAULT));
+
 Page({
   data: {
     model: null,
     bookType: '', // 白事不展示广告、不展示推广
     isHost: false, // 主家 / 记账人自己查看时不展示"我家也要办事"
     errMsg: '',
-    themeStyle: '', // 白事回执页用素灰主题；其余保持默认红（宾客端不套用自己的主家主题）
+    themeStyle: GRAY_STYLE, // 白事回执页用素灰主题；其余保持默认红（宾客端不套用自己的主家主题）；加载中素灰
     saving: false,
     token: '',      // 小票二维码进入时的 token
     claim: '',      // open 可认领 / mine 已在我的记录 / taken 已被认领 / staff 主家或记账人
@@ -36,12 +40,8 @@ Page({
       // 扫码冷启动时 globalData.account 还没加载：主家 / 记账人以服务端判断（claim=staff）为准，不显示「我家也要办事」
       if (token) this.setData({ token, claim, isHost: this.data.isHost || claim === 'staff' });
       const model = receipt.buildModel(record, tpl, accountName);
-      this.setData({ model, bookType: record.bookType || 'other' });
-      if (record.bookType === 'funeral') {
-        const t = theme.forType('funeral');
-        this.setData({ themeStyle: theme.styleOf(t) });
-        wx.setNavigationBarColor({ frontColor: '#ffffff', backgroundColor: t.primary, fail() {} });
-      }
+      // model 与主题色一次 setData：白事不会先闪一帧红色
+      this.setData({ model, bookType: record.bookType || 'other', themeStyle: record.bookType === 'funeral' ? GRAY_STYLE : RED_STYLE });
       this.setData({ model: await receipt.withAppCode(model) }); // 小程序码后补，不拖慢回执显示
     } catch (e) {
       // 网络失败可点此重试（v3.66.0）

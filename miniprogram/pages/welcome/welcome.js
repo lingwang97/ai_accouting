@@ -10,7 +10,7 @@ const SLIDES = {
   clerk: [
     { icon: 'cash', title: '礼台记账', sub: '现金、微信当场登记，自动打印小票' },
     { icon: 'check', title: '确认收到', sub: '宾客转账后核对到账，一键确认入簿' },
-    { icon: 'printer', title: '补打与对账', sub: '小票随时补打，散场按支付方式对账' }
+    { icon: 'printer', title: '补打与对账', sub: '小票随时补打，散场按随礼方式对账' }
   ]
 };
 

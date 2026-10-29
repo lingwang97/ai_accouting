@@ -34,7 +34,7 @@
         <text class="muted">点击上传收款码截图</text>
       </view>
     </view>
-    <view class="muted">在微信"收付款"页截图"二维码收款"后上传；宾客向此码转账随礼</view>
+    <view class="muted">在微信「二维码收款」页保存收款码后上传；宾客扫此码转账随礼</view>
     <view class="pending-note" wx:if="{{pendingNote}}">新收款码待主家确认后生效</view>
   </view>
 

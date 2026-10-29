@@ -10,7 +10,7 @@ const perm = require('../../utils/perm.js');
 const FIELD_LABELS = {
   title: '标题', divider: '分隔线', theme: '事由', payDay: '日期', time: '时间',
   payerName: '随礼人', relation: '关系', amount: '礼金', remark: '礼品/备注', thanks: '致谢语',
-  receiptNo: '编号', payMethod: '支付方式', amountUpper: '金额大写'
+  receiptNo: '编号', payMethod: '随礼方式', amountUpper: '金额大写'
 };
 const label = f => FIELD_LABELS[f] || f;
 

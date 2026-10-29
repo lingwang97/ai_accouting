@@ -19,9 +19,9 @@
       <view class="recalc-link" wx:if="{{canRecalc}}" bindtap="onRecalc">{{o.t("合计和礼簿页对不上？重算整本礼簿的合计 ›", org)}}</view>
     </view>
 
-    <!-- 按支付方式 -->
+    <!-- 按随礼方式 -->
     <view class="card">
-      <view class="section-title">按支付方式</view>
+      <view class="section-title">按随礼方式</view>
       <view class="row"><text>微信转账</text><text><text class="muted">{{r.wechat.count}} 份 · </text>￥{{r.wechat.sumStr}}</text></view>
       <block wx:if="{{r.deskWechat.count}}">
         <view class="row sub"><text>宾客扫码转账</text><text><text class="muted">{{r.guestWechat.count}} 份 · </text>￥{{r.guestWechat.sumStr}}</text></view>

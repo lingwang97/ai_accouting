@@ -1,6 +1,7 @@
 // pages/account/account.js — 主家信息：称呼、微信收款码、快捷礼金（主题色在「我的 → 主题色」）
 // 没有「修改主家信息」权限的记账人：只能申请更换收款码（codeOnly），主家确认后生效
 const req = require('../../utils/request.js');
+const imgc = require('../../utils/imgcompress.js');
 const theme = require('../../utils/theme.js');
 
 const PRESET_COLORS = ['#C8161D', '#07C160', '#B8860B', '#2B7FFF', '#333333'];
@@ -129,9 +130,10 @@ Page({
     wx.chooseMedia({
       count: 1,
       mediaType: ['image'],
-      success: res => {
-        const tempPath = res.tempFiles[0].tempFilePath;
-        this.setData({ payCodeUrl: tempPath, uploading: true });
+      success: async res => {
+        const f = res.tempFiles[0];
+        this.setData({ payCodeUrl: f.tempFilePath, uploading: true });
+        const tempPath = await imgc.payCode(f.tempFilePath, f.size); // 超过 300KB 先压缩（v3.72.1），失败用原图
         wx.cloud.uploadFile({
           cloudPath: `paycodes/${getApp().globalData.openid}-${Date.now()}.png`,
           filePath: tempPath,
