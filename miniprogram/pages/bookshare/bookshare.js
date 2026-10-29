@@ -88,9 +88,11 @@ Page({
     const ids = ed.books.filter(b => b.on).map(b => b._id);
     if (!ids.length) return wx.showToast({ title: '至少保留一本，或点「取消共享」', icon: 'none' });
     try {
-      await req.memberUpdate(this.data.viewers[ed.idx]._id, { bookIds: ids });
+      const r = await req.memberUpdate(this.data.viewers[ed.idx]._id, { bookIds: ids });
       this.setData({ editor: null });
-      wx.showToast({ title: '已保存', icon: 'success' });
+      // v3.72.0：记账人新增共享的礼簿需主家同意（主家在人员页处理）；收窄立即生效
+      if (r && r.pendingAdd) wx.showModal({ title: '已提交主家', content: `新增的 ${r.pendingAdd} 本礼簿需主家同意后才共享给对方，其余修改已生效`, showCancel: false, confirmText: '知道了' });
+      else wx.showToast({ title: '已保存', icon: 'success' });
       this.load();
     } catch (err) { /* toast 已提示 */ }
   },

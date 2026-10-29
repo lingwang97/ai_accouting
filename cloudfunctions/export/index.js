@@ -17,7 +17,7 @@
 // 五、定时触发器 cleanup（每天 3 点）：删除所有用户超过 24 小时且 keep=false 的文件
 //   出参：{ code:0, msg:'ok', data:{ deleted: n } }
 const cloud = require('wx-server-sdk');
-const { ok, err, bjTime: fmtDateTime } = require('./common.js');
+const { ok, err, failOf, bjTime: fmtDateTime } = require('./common.js');
 const { REC } = require('./status.js');
 const { resolveCtx, canBook, readonly, can } = require('./ctx.js');
 // 按需加载：pdfkit / exceljs 体积大，只在对应格式时加载，缩短冷启动
@@ -226,6 +226,7 @@ exports.main = async (event) => {
   } catch (e) {
     // 详细堆栈只写日志（含服务器文件路径），前端只提示阶段
     console.error('export failed', stage, e && e.stack);
+    if (e && e.ctxFail) return failOf(e, '');
     if (bigBook) return err('礼金笔数较多，生成失败，请按日期分段导出后再试');
     return err(`导出失败（${stage}），请稍后重试`);
   }
@@ -340,7 +341,7 @@ function validRange(startDay, endDay) {
 
 /** 拉取已入簿礼金（分批，单次最多 QUERY_MAX 条）；超过 MAX_ROWS 时返回 tooMany，由调用方提示分段导出 */
 async function fetchRows(openid, { bookId, startDay, endDay, themeName }) {
-  const cond = { ownerOpenid: openid, status: REC.PAID };
+  const cond = { ownerOpenid: openid, status: REC.PAID, _openid: _.exists(false) }; // 只导出云函数写入的记录（v3.72.0）
   if (startDay && endDay) cond.payDay = _.gte(startDay).and(_.lte(endDay));
   if (bookId) cond.bookId = bookId;
   else if (themeName) cond.themeName = themeName;
@@ -367,7 +368,7 @@ const SAMPLE_ROWS = [
 
 /** 预览取数：与导出同一口径（已入簿、按登记时间 + _id 升序），一个 where 带 ownerOpenid 和 bookId，最多 PREVIEW_ROWS 笔 */
 async function previewRows(openid, bookId) {
-  const res = await db.collection('records').where({ ownerOpenid: openid, status: REC.PAID, bookId })
+  const res = await db.collection('records').where({ ownerOpenid: openid, status: REC.PAID, bookId, _openid: _.exists(false) })
     .orderBy('createdAt', 'asc').orderBy('_id', 'asc').limit(PREVIEW_ROWS).get();
   return res.data;
 }

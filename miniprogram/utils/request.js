@@ -50,6 +50,13 @@ const call = (name, data = {}, opts = {}) =>
       success: res => {
         const r = res.result || {};
         if (r.code === 0) { markWrite(data); resolve(r.data); }
+        else if (r.code === 2) {
+          // v3.72.0：云端身份解析遇到网络 / 超时（不是没有权限、也不是没有数据），按网络错误处理，页面可显示重试
+          if (!opts.silent) wx.showToast({ title: r.msg || '网络异常，请重试', icon: 'none' });
+          const e = new Error(r.msg || 'net error');
+          e.net = true;
+          reject(e);
+        }
         else {
           if (!opts.silent) {
             if (isQuotaMsg(r.msg)) quotaModal(r.msg); // 免费版额度已满：弹窗说明并带「联系我们」（v3.66.7）

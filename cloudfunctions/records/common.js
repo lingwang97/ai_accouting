@@ -4,6 +4,12 @@
 /** 统一返回格式：{ code: 0, msg: 'ok', data } / { code: 1, msg, data: null }（前端 utils/request.js 据此判断） */
 const ok = data => ({ code: 0, msg: 'ok', data });
 const err = msg => ({ code: 1, msg, data: null });
+/**
+ * 主流程 catch 的统一返回（v3.72.0）：身份解析因网络 / 超时失败（ctx.js 抛出的 ctxFail）返回 code 2「网络异常，请重试」，
+ * 前端 utils/request.js 按网络错误处理（页面显示重试，而不是当成没有身份 / 没有数据）；其余错误照旧返回 msg
+ */
+const NET_MSG = '网络异常，请重试';
+const failOf = (e, msg) => (e && e.ctxFail ? { code: 2, msg: NET_MSG, data: null } : err(msg));
 
 const pad = n => (n < 10 ? '0' + n : '' + n);
 
@@ -23,4 +29,4 @@ const bjTime = d => { const b = bj(d); return `${b.day} ${b.hm}`; };
 /** 北京时间的小时（0~23） */
 const bjHour = d => bj(d).hour;
 
-module.exports = { ok, err, bj, bjDay, bjTime, bjHour };
+module.exports = { ok, err, failOf, NET_MSG, bj, bjDay, bjTime, bjHour };

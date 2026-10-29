@@ -42,6 +42,10 @@ exports.main = async (event) => {
     if (left() > 5 * 1000) {
       try { await cleanNonces(); } catch (e) { console.warn('凭据清理失败', e.message); }
     }
+    // 限流计数（rate_limits，payment 按分钟 / 10 分钟时间桶写入）：删除 1 天前的（v3.72.0）
+    if (left() > 5 * 1000) {
+      try { await cleanRateLimits(); } catch (e) { console.warn('限流计数清理失败', e.message); }
+    }
   }
   const cfg = normalizeWarmup(await readSetting(db, 'warmup', DEFAULT_WARMUP));
   // 关闭时不做任何读写（不再每 5 分钟写一次状态）
@@ -130,6 +134,13 @@ async function cleanNonces() {
   return (res.stats && res.stats.removed) || 0;
 }
 
+/** 删除 1 天前的限流计数（payment.takeSlot 写入的 { n, at }；旧版同名检查计数 nc_<openid> 也带 at） */
+async function cleanRateLimits() {
+  const _ = db.command;
+  const res = await db.collection('rate_limits').where({ at: _.lt(new Date(Date.now() - 24 * 3600 * 1000)) }).remove();
+  return (res.stats && res.stats.removed) || 0;
+}
+
 /** 是否存在未过期的非免费订阅 */
 /** 是否有人正开着办事日高峰模式（accounts.peakUntil 未到期）；v3.64.0 */
 async function hasPeak() {
@@ -160,4 +171,4 @@ async function hasPaidSubscription() {
 }
 
 // 仅供本地测试
-exports._test = { cleanNonces, hasPeak };
+exports._test = { cleanNonces, cleanRateLimits, hasPeak };

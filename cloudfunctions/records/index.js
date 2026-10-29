@@ -1,12 +1,13 @@
 // 云函数 records — 账目列表 / 汇总 / 打印标记（文档 §5、§8）
 const cloud = require('wx-server-sdk');
-const { ok, err, bjDay, bjHour } = require('./common.js');
+const { ok, err, failOf, bjDay, bjHour } = require('./common.js');
 const { REC, MEMBER, PENDING_TTL, STALL_MS, STALL_KEEP_MS, UNREJECT_MS, LISTED, COUNTED } = require('./status.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
-const records = db.collection('records');
-const { resolveCtx, canBook, readonly, can, workBook } = require('./ctx.js');
+const { srvCol, resolveCtx, canBook, readonly, can, workBook } = require('./ctx.js');
+// 只读云函数写入的礼金记录（v3.72.0）：where / aggregate 自动排除带 _openid 的伪造记录，见 ctx.srvCol
+const records = srvCol(db, 'records');
 const P = require('./plans.js');
 const { nameCheckMap } = require('./namecheck.js');
 
@@ -66,7 +67,7 @@ exports.main = async (event) => {
     }
   } catch (e) {
     console.error('records', event.action, e);
-    return err('查询失败，请稍后重试');
+    return failOf(e, '查询失败，请稍后重试');
   }
 };
 

@@ -8,7 +8,7 @@
 //   adminPreflight / adminPreflightFix 管理员：上线前检查（密钥来源、集合、WX_APPSECRET）与建缺失集合
 //   adminIndexes 管理员：一键创建数据库索引（调用云开发 HTTP API updateIndex，需在本函数环境变量配置 WX_APPSECRET）
 const cloud = require('wx-server-sdk');
-const { ok, err } = require('./common.js');
+const { ok, err, failOf } = require('./common.js');
 const { ownPayCode } = require('./paycode.js'); // 收款码归属（tools/cloud-shared/paycode.js）
 const https = require('https');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
@@ -52,7 +52,7 @@ exports.main = async (event) => {
     }
   } catch (e) {
     console.error('system', event.action, e);
-    return err('操作失败，请稍后重试');
+    return failOf(e, '操作失败，请稍后重试');
   }
 };
 

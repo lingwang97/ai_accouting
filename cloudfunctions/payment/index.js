@@ -2,7 +2,7 @@
 // 状态流转：pending(待转账) → transferred(付款方已转账，待收款方确认) → paid(收款方确认到账)
 //          pending → cancelled(付款方取消，或超过 30 分钟未转账被自动取消，仍可补点「已转账」)；transferred → rejected(收款方未收到款)；paid → void(作废)
 const cloud = require('wx-server-sdk');
-const { ok, err, bjDay, bjTime } = require('./common.js');
+const { ok, err, failOf, bjDay, bjTime } = require('./common.js');
 const S = require('./secure.js'); // 内容安全审核（tools/cloud-shared/secure.js，失败放行）
 const { REC, MEMBER, UNREJECT_MS, COUNTED } = require('./status.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
@@ -13,9 +13,10 @@ const guestNotify = require('./guestnotify.js').create(db, cloud); // 宾客入�
 const P = require('./plans.js');
 const { nameCheckMap } = require('./namecheck.js');
 const { MAX_AMOUNT, MAX_MSG } = require('./limits.js'); // 单笔礼金上限（tools/cloud-shared/limits.js）
-const { resolveCode, resolveCtx, handlerName, canBook, readonly, can, workBook, soloBook, trusted } = require('./ctx.js');
+const { srvCol, resolveCode, resolveCtx, handlerName, canBook, readonly, can, workBook, soloBook, trusted } = require('./ctx.js');
 const accounts = db.collection('accounts');
-const records = db.collection('records');
+// 礼金记录：where / aggregate 自动排除带 _openid 的伪造记录（v3.72.0，见 ctx.srvCol）；add / doc 原样
+const records = srvCol(db, 'records');
 
 /** 幂等建集合（init 未跑完时自愈；同一实例每个集合只尝试一次） */
 const colReady = {};
@@ -79,9 +80,12 @@ exports.main = async (event) => {
     }
   } catch (e) {
     console.error('payment', event.action, e);
-    return err('操作失败，请稍后重试');
+    return failOf(e, '操作失败，请稍后重试');
   }
 };
+
+// 仅供本地测试
+exports._test = { takeSlot: (...a) => takeSlot(...a) };
 
 /**
  * 付款方发起转账：创建待转账记录，返回收款码
@@ -117,15 +121,21 @@ async function create(openid, event) {
   if (fixed && fixed.archived) return err('本场礼簿已结束');
   const accountId = account._id;
 
-  // 防刷：同一付款人 1 分钟内最多发起 RATE_MAX 次（一个批次算一次）
   const now = new Date();
-  const recent = await records.where({
-    payerOpenid: openid,
-    createdAt: _.gt(new Date(now.getTime() - 60 * 1000))
-  }).field({ batchId: true }).limit(100).get();
-  if (new Set(recent.data.map(r => r.batchId || r._id)).size >= RATE_MAX) return err('操作太频繁，请稍后再试');
-  // 同名检查也计入频率：防止反复提交试探某人是否随过礼（按本次比对的姓名个数计）
-  if (!(await sameNameQuota(openid, items.filter(x => !x.nameTag).length))) return err('操作太频繁，请稍后再试');
+  // 记入的礼簿：本场礼簿码指定的一场，否则主家当前礼簿（下面同名比对、写入都用它）
+  const book = fixed || await activeBookOf(account);
+  // 幂等键：宾客端带 reqId 时，重复提交（弱网重试、连点）只记一条；键含主家与付款人。旧前端不传 reqId 时保持原行为
+  const reqKey = reqKeyOf(account.ownerOpenid + ':' + openid, event.reqId);
+  // 同一 reqId 上次已写入（前端没收到结果的重试）：直接走下面的幂等返回，不再计入频率（v3.72.0）
+  const replay = reqKey ? await records.doc('q' + reqKey + '00').get().then(r => trusted(r.data), () => false) : false;
+  if (!replay) {
+    // 防刷（v3.72.0 原子计数，并发也不能绕过）：同一付款人每分钟最多 RATE_MAX 次（一个批次算一次）；
+    // 同一本礼簿每分钟最多 BOOK_RATE_MAX 次（防止多个微信号一起刷同一主家）
+    if (!(await takeSlot('rp_' + openid, 60 * 1000, RATE_MAX, 1, now))) return err('操作太频繁，请稍后再试');
+    if (!(await takeSlot('rb_' + (book ? book._id : accountId), 60 * 1000, BOOK_RATE_MAX, 1, now))) return err('现在随礼的人较多，请稍等片刻再试');
+    // 同名检查也计入频率：防止反复提交试探某人是否随过礼（按本次比对的姓名个数计）
+    if (!(await sameNameQuota(openid, items.filter(x => !x.nameTag).length, now))) return err('操作太频繁，请稍后再试');
+  }
   // 内容安全（v3.71.0）：宾客填写的姓名、备注、区分备注主家会看到
   { const bad = await S.checkText(cloud, openid, items.flatMap(x => [x.payerName, x.remark, x.nameTag])); if (bad) return bad; }
 
@@ -143,7 +153,6 @@ async function create(openid, event) {
   }
   items.forEach(x => { if (x.nameTag && !x.nameTagBy) x.nameTagBy = 'guest'; }); // 宾客自己填的区分信息（小票、回执上可印）
   // 只比对本次要记入的这一本礼簿（和下面 addItems 写入的 bookId 一致）：每场的宾客大多相同，跨礼簿同名不再要求填区分备注
-  const book = fixed || await activeBookOf(account);
   const needTag = await sameNameOthers(account.ownerOpenid, openid, items.map((x, i) => ({ name: x.payerName, self: i === 0, tagged: !!x.nameTag })), book ? book._id : '');
   if (needTag.length) return ok({ needTag });
 
@@ -179,8 +188,7 @@ async function create(openid, event) {
     payDay,
     createdAt: now
   };
-  // 幂等：宾客端带 reqId 时，重复提交（弱网重试、连点）只记一条；键含主家与付款人。旧前端不传 reqId 时保持原行为
-  const { ids, batchId, existed } = await addItems(base, items, reqKeyOf(account.ownerOpenid + ':' + openid, event.reqId));
+  const { ids, batchId, existed } = await addItems(base, items, reqKey);
   // 重复提交（弱网重试）：这些记录上一次已写入，状态可能已推进（已转账 / 已入簿 / 被拒），按库里真实状态返回，不能固定成 pending
   let realStatus = base.status;
   if (existed.every(Boolean)) {
@@ -223,24 +231,39 @@ async function create(openid, event) {
 }
 
 /**
- * 同名检查的频率限制：每位宾客 10 分钟内最多比对 NAME_CHECK_MAX 个姓名
- * 计数存数据库（rate_limits，多实例、冷启动后仍有效）；返回「需要填区分信息」的请求不建记录，也计入
+ * 同名检查的频率限制：每位宾客每 10 分钟（固定时间桶）最多比对 NAME_CHECK_MAX 个姓名；返回「需要填区分信息」的请求不建记录，也计入
  */
 const NAME_CHECK_MAX = 20;
-async function sameNameQuota(openid, n) {
+async function sameNameQuota(openid, n, now) {
   if (!n) return true;
-  const now = Date.now();
+  return takeSlot('nc_' + openid, 10 * 60 * 1000, NAME_CHECK_MAX, n, now);
+}
+
+/**
+ * 原子限流（v3.72.0）：rate_limits 里每个「键 + 时间桶」一条计数文档 { n, at }。
+ * 先用条件更新 where({ _id, n <= max-k }).update({ n: +k }) 占位——数据库单文档原子执行，并发请求不会一起越过上限；
+ * 更新 0 条时：文档已存在 → 已满；不存在 → add 新建（并发时只有一个 add 成功，失败的回到条件更新重试）。
+ * 计数出错（集合不存在会先自建）放行，不影响随礼；过期桶由 warmer 每小时删除 1 天前的。
+ */
+async function takeSlot(key, windowMs, max, k, now) {
+  if (k > max) return false;
+  const bucket = Math.floor((now ? now.getTime() : Date.now()) / windowMs);
+  const id = key + '_' + bucket;
   const col = db.collection('rate_limits');
-  const id = 'nc_' + openid;
-  let list = [];
-  try { list = ((await col.doc(id).get()).data.t || []).filter(t => now - t < 10 * 60 * 1000); } catch (e) { /* 首次 */ }
-  if (list.length + n > NAME_CHECK_MAX) return false;
-  list = list.concat(Array(n).fill(now));
-  try {
-    await col.doc(id).set({ data: { t: list, at: new Date() } });
-  } catch (e) {
-    try { await ensureCol('rate_limits'); await col.doc(id).set({ data: { t: list, at: new Date() } }); } catch (e2) { /* 计数失败不影响随礼 */ }
+  for (let i = 0; i < 3; i++) {
+    try {
+      const r = await col.where({ _id: id, n: _.lte(max - k) }).update({ data: { n: _.inc(k) } });
+      if (r && r.stats && r.stats.updated) return true;
+      const exists = await col.doc(id).get().then(() => true, () => false);
+      if (exists) return false; // 本时间桶已满
+      await col.add({ data: { _id: id, n: k, at: new Date() } });
+      return true;
+    } catch (e) {
+      // 集合不存在：建好再试；add 撞上并发创建的同一 _id：回到条件更新
+      if (/not exist|-502005/i.test(String((e && (e.errMsg || e.message)) || '') + String((e && e.errCode) || ''))) await ensureCol('rate_limits');
+    }
   }
+  console.warn('限流计数失败，放行', key);
   return true;
 }
 
@@ -979,13 +1002,15 @@ async function amend(ctx, event) {
 async function getRecord(rid) {
   if (!validId(rid)) return null;
   try {
-    return (await records.doc(rid).get()).data;
+    const d = (await records.doc(rid).get()).data;
+    return trusted(d) ? d : null; // 带 _openid 的是客户端伪造的记录（v3.72.0）：当作不存在
   } catch (e) {
     return null;
   }
 }
 
-const RATE_MAX = 3;
+const RATE_MAX = 3;        // 同一付款人每分钟最多发起次数（批次算一次）
+const BOOK_RATE_MAX = 60;  // 同一本礼簿每分钟最多发起次数（所有宾客合计；婚宴高峰约每秒 1 人，足够）
 const BATCH_PEOPLE = 10; // 批次录入最多人数
 const RELATIONS = ['亲戚', '朋友', '同事', '同学', '邻里', '其他'];
 

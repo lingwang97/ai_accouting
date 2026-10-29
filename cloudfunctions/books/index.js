@@ -3,7 +3,7 @@
 // 每本礼簿各存一套电子回执 / 打印样式（receiptTpl / printTpl），避免喜事、白事样式串场
 // 份数与合计存在礼簿上（statCount / statFen，确认收到时累加），列表无需每次全量统计
 const cloud = require('wx-server-sdk');
-const { ok, err } = require('./common.js');
+const { ok, err, failOf } = require('./common.js');
 const S = require('./secure.js'); // 内容安全审核（tools/cloud-shared/secure.js，失败放行）
 const { ownPayCode } = require('./paycode.js'); // 收款码归属（tools/cloud-shared/paycode.js）
 const { REC } = require('./status.js');
@@ -12,8 +12,9 @@ const db = cloud.database();
 const _ = db.command;
 const books = db.collection('books');
 const accounts = db.collection('accounts');
-const records = db.collection('records');
-const { resolveCtx, canBook, restricted, readonly, can, workBook, soloBook } = require('./ctx.js');
+const { srvCol, resolveCtx, canBook, restricted, readonly, can, workBook, soloBook } = require('./ctx.js');
+// 只读云函数写入的礼金记录（v3.72.0）：where / aggregate 自动排除带 _openid 的伪造记录，见 ctx.srvCol
+const records = srvCol(db, 'records');
 const trash = require('./trash.js');
 const P = require('./plans.js');
 
@@ -79,7 +80,7 @@ exports.main = async (event) => {
     }
   } catch (e) {
     console.error('books', event.action, e);
-    return err('礼簿操作失败，请稍后重试');
+    return failOf(e, '礼簿操作失败，请稍后重试');
   }
 };
 

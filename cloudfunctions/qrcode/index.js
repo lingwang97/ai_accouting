@@ -1,6 +1,6 @@
 // 云函数 qrcode — 生成收款专属小程序码（文档 §5、§6.2）；action=app 生成电子回执上的小程序首页码
 const cloud = require('wx-server-sdk');
-const { ok, err } = require('./common.js');
+const { ok, err, failOf } = require('./common.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const ENVS = ['develop', 'trial', 'release'];
 const { shortCodeOf, resolveCtx, canBook, readonly, trusted, can, workBook } = require('./ctx.js');
@@ -84,6 +84,7 @@ exports.main = async (event) => {
       ? '测试号无法调用小程序码接口，请使用正式 AppID，或扫码收款码图片联调'
       : '生成失败，请稍后重试';
     console.error('qrcode gen failed', e && (e.errMsg || e.message)); // 原始错误只写日志，不返回前端
+    if (e && e.ctxFail) return failOf(e, msg); // 身份解析网络失败（v3.72.0）
     return err(msg);
   }
 };

@@ -9,7 +9,7 @@ const COLLECTIONS = ['users', 'accounts', 'records', 'print_templates', 'books',
 const NOT_PURGED = {
   settings: '系统设置（管理员 / 预热 / 广告），不属于用户',
   admin_logs: '管理员操作日志',
-  rate_limits: '限流计数（短期自清理）',
+  rate_limits: '限流计数（按时间桶计数，warmer 每小时删除 1 天前的）',
   sys_config: '往来人标识密钥，注销与清除测试数据都不能动',
   exports: 'purge.run 里单独处理（先删文件再删登记）',
   subscriptions: '用户注销保留开通记录，管理员清除时由 opts.subscription 删'

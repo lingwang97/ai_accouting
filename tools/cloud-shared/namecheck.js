@@ -14,7 +14,7 @@ async function nameCheckMap(db, ctx, names, bookIdIn) {
   const _ = db.command;
   const list = (Array.isArray(names) ? names : []).map(s => String(s || '').trim().slice(0, 20)).filter(Boolean).slice(0, 10);
   if (!list.length) return {};
-  const cond = { ownerOpenid: ctx.ownerOpenid, payerName: _.in(list), status: _.in(COUNTED.slice()) }; // 与宾客端口径一致
+  const cond = { ownerOpenid: ctx.ownerOpenid, payerName: _.in(list), status: _.in(COUNTED.slice()), _openid: _.exists(false) }; // 与宾客端口径一致；排除伪造记录（v3.72.0）
   if (ctx.bookIds) cond.bookId = _.in(ctx.bookIds);
   let curBook = String(bookIdIn || '').slice(0, 64);
   if (!curBook || !canBook(ctx, curBook)) curBook = workBook(ctx) || '';

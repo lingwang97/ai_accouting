@@ -7,7 +7,14 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
 const giftsOut = db.collection('gifts_out');
-const records = db.collection('records');
+// 收到的礼只认云函数写入的记录（v3.72.0）：带 _openid 的是客户端直接写库伪造的，查询一律排除
+const recordsRaw = db.collection('records');
+const SRV = { _openid: _.exists(false) };
+const records = {
+  where: c => recordsRaw.where({ ...c, ...SRV }),
+  aggregate: () => { const a = recordsRaw.aggregate(); const m = a.match; a.match = function (c) { a.match = m; return m.call(this, { ...c, ...SRV }); }; return a; },
+  doc: id => recordsRaw.doc(id)
+};
 
 const crypto = require('crypto');
 const { mergePage } = require('./outpage.js');
@@ -55,7 +62,7 @@ exports.main = async (event) => {
     return mapKeys(await route(OPENID, event), k => PK.hideKeyWith(key, k)); // 返回前把 o: 标识加密
   } catch (e) {
     console.error('renqing', event.action, e);
-    return err('人情往来操作失败，请稍后重试');
+    return err(e && e.forged ? e.message : '人情往来操作失败，请稍后重试'); // forged：密钥文档被伪造（v3.72.0）
   }
 };
 

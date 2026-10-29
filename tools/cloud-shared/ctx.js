@@ -45,7 +45,11 @@ const cleanPerms = a => (Array.isArray(a) ? ALL_PERMS.filter(k => a.includes(k))
  */
 async function resolveCtx(db, openid) {
   const accounts = db.collection('accounts');
-  const safe = async p => { try { return await p; } catch (e) { return null; } };
+  // v3.72.0：只有「集合 / 文档不存在」按空处理（新环境集合尚未建好时降级为无身份）；
+  // 网络 / 超时等其他错误一律抛出（带 ctxFail），由各云函数返回「网络异常，请重试」——
+  // 以前吞掉后 users 读失败会丢掉 currentAid、members 读失败会被当成主家本人，礼台记账可能记进自己的礼簿
+  const safe = async p => { try { return await p; } catch (e) { if (isMissing(e)) return null; throw ctxFail(e); } };
+  const loose = async p => { try { return await p; } catch (e) { return null; } }; // 非关键：迁移写入、礼簿是否结束
 
   const srv = { _openid: db.command.exists(false) };
   const [userRes, ownRes, memRes] = await Promise.all([
@@ -66,7 +70,7 @@ async function resolveCtx(db, openid) {
     if (!viewer && !bookIds && !m.allBooks) {
       // 早期记账人：迁移为只负责主家当前礼簿
       bookIds = acc.data.activeBookId ? [acc.data.activeBookId] : ['__none__'];
-      if (acc.data.activeBookId) await safe(db.collection('members').doc(m._id).update({ data: { bookIds } }));
+      if (acc.data.activeBookId) await loose(db.collection('members').doc(m._id).update({ data: { bookIds } }));
     }
     if (!viewer && m.allBooks) bookIds = null;
     if (viewer && !bookIds) bookIds = ['__none__'];
@@ -77,7 +81,7 @@ async function resolveCtx(db, openid) {
     const act = acc.data.activeBookId || '';
     const inScope = id => !!id && id !== '__none__' && (!bookIds || bookIds.includes(id));
     const cands = [...new Set([acc.data.orgMode ? m.curBookId : '', act].concat(bookIds || []).filter(inScope))].slice(0, 100);
-    const valid = await liveBooks(db, acc.data.ownerOpenid, cands, safe);
+    const valid = await liveBooks(db, acc.data.ownerOpenid, cands, loose);
     const cur = acc.data.orgMode && valid.includes(m.curBookId) ? m.curBookId : '';
     const work = cands.find(id => valid.includes(id)) || '';
     return { role: 'clerk', ownerOpenid: acc.data.ownerOpenid, account: acc.data, user, member: m, bookIds, perms, curBookId: cur, workBookId: work };
@@ -135,6 +139,53 @@ function workBook(ctx) {
   return ctx.bookIds ? (ctx.bookIds.find(id => id !== '__none__') || '') : act;
 }
 
+/** 集合 / 文档不存在（新环境尚未建集合、文档已删除）：与网络 / 超时等错误区分 */
+function isMissing(e) {
+  const code = String((e && (e.errCode !== undefined ? e.errCode : e.code)) || '');
+  if (code === '-502005' || code === '-502004') return true;
+  return /DATABASE_COLLECTION_NOT_EXIST|DOCUMENT_NOT_EXIST|collection not exist|Db or Table not exist|does not exist|document not exist/i
+    .test(String((e && (e.errMsg || e.message)) || ''));
+}
+/** 身份解析失败（网络 / 超时）：标记 ctxFail，各云函数用 common.failOf 返回 code 2「网络异常，请重试」 */
+function ctxFail(e) {
+  const x = new Error('resolveCtx 失败：' + String((e && (e.errMsg || e.message)) || e).slice(0, 200));
+  x.ctxFail = true;
+  return x;
+}
+
+/**
+ * 只读云函数写入的数据（v3.72.0）：where / aggregate 的第一个 match 自动加 `_openid 不存在`，
+ * 客户端绕过云函数直接写库伪造的记录（带 _openid）不会被列出、汇总、确认或打印；doc / add 原样
+ */
+const SRV_COND = db => ({ _openid: db.command.exists(false) });
+function srvCond(db, c) {
+  const plain = c && typeof c === 'object' && Object.getPrototypeOf(c) === Object.prototype && !c.__op;
+  if (plain) return '_openid' in c ? c : { ...c, ...SRV_COND(db) };
+  // 已是 _.and([...])：把条件并进同一层（operands 为原样传入的子条件）；_.or 等其他逻辑条件：外面再套一层 and
+  const ops = c && (c.__op === 'and' ? c.v : (c.operator === 'and' && Array.isArray(c.operands) ? c.operands : null));
+  if (ops) return db.command.and(ops.concat([SRV_COND(db)]));
+  return db.command.and([c, SRV_COND(db)]);
+}
+function srvCol(db, name) {
+  const col = db.collection(name);
+  return {
+    where: c => col.where(srvCond(db, c)),
+    aggregate: () => {
+      const a = col.aggregate();
+      const match = a.match;
+      let first = true;
+      a.match = function (c) {
+        if (first) { first = false; return match.call(this, srvCond(db, c)); }
+        return match.call(this, c);
+      };
+      return a;
+    },
+    doc: id => col.doc(id),
+    add: o => col.add(o),
+    count: () => col.where(SRV_COND(db)).count()
+  };
+}
+
 /** 云函数写入的文档（不是客户端直接写库伪造的） */
 function trusted(d) {
   return !!d && !d._openid;
@@ -186,4 +237,4 @@ async function resolveCode(db, id) {
   return id;
 }
 
-module.exports = { shortCodeOf, resolveCode, resolveCtx, handlerName, canBook, restricted, readonly, trusted, can, soloBook, workBook, PERMS, ALL_PERMS, DEFAULT_PERMS, cleanPerms };
+module.exports = { srvCol, srvCond, isMissing, shortCodeOf, resolveCode, resolveCtx, handlerName, canBook, restricted, readonly, trusted, can, soloBook, workBook, PERMS, ALL_PERMS, DEFAULT_PERMS, cleanPerms };
