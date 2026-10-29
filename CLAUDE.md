@@ -18,7 +18,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-There is no npm build, linter, or test suite. Development goes through the WeChat DevTools CLI (`cli.bat`, at `"/c/Program Files (x86)/Tencent/微信web开发者工具/cli.bat"`). Cloud env: `lingyuan-env-7gf6tlqf2a9ece4a`. Use this repo's path as `--project`.
+There is no npm build or linter. Tests: `node tests/run.js` runs every `tests/*.test.js` (plain Node `assert`, no deps, no network). Cloud functions load against `tests/helpers/sdk-stub.js` (fake `wx-server-sdk`) and `tests/helpers/fakedb.js` (in-memory DB). Tests register with `test(name, fn)` from `helpers/harness.js`, and returning `'SKIP …'` skips a test. There's no single-file option: `run.js` always runs every file. `export.test.js` skips unless `pdfkit`/`exceljs` are reachable via `NODE_PATH`. `tests/README.md` lists what each file covers. Before commit/upload, run `python tools/sync_shared.py --check && node tests/run.js`.
+
+Development goes through the WeChat DevTools CLI (`cli.bat`, at `"/c/Program Files (x86)/Tencent/微信web开发者工具/cli.bat"`). Cloud env: `lingyuan-env-7gf6tlqf2a9ece4a`. Use this repo's path as `--project`.
 
 ```bash
 # After editing anything in tools/cloud-shared/ (copies into every function that uses it)
