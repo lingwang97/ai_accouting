@@ -309,7 +309,7 @@ Page({
     const max = list.length > 6 ? 5 : 6;
     const shown = list.slice(0, max);
     const items = shown.map(b => (b._id === cur ? '✓ ' : '') + (b.hostName ? `${b.hostName} · ${b.name}` : b.name));
-    if (list.length > max) items.push('更多礼簿…');
+    if (list.length > max) items.push(this.data.account && this.data.account.orgMode ? '更多场次…' : '更多礼簿…');
     if (!items.length) { this._switching = false; return this.goBooks(); }
     wx.showActionSheet({
       itemList: items,

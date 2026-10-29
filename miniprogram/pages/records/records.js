@@ -74,6 +74,8 @@ Page({
     await app.loginReady;
     const acc = app.globalData.account;
     this.setData({ unit: acc && acc.orgMode ? '场次' : '礼簿' });
+    // 开关机构模式后回到本页：下拉第一项跟着改名（全部礼簿 / 全部场次），只改本地显示，不重新请求（v3.71.2）
+    if (this.data.books[0] && !this.data.books[0]._id && this.data.books[0].name !== this.allName()) this.setData({ 'books[0].name': this.allName() });
     if (!app.globalData.user) {
       this.setData({ loggedIn: false, list: [], books: [{ _id: '', name: this.allName() }], bookIdx: 0, noBook: false });
       return;

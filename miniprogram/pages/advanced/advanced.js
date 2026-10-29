@@ -153,6 +153,7 @@ Page({
       const app = getApp();
       app.globalData.account = { ...app.globalData.account, orgMode: r.orgMode, orgName: r.orgName };
       cache.clear(); // 工作台入口随模式变化
+      app.globalData.activeBookChanged = true; // 礼簿页下次显示时重新拉礼簿列表（场次名前加本场主家、全部场次）（v3.71.2）
       app.refreshTabBar(); // 机构模式不显示「往来」
       this.build();
       wx.showToast({ title: on ? '已开启机构模式' : '已关闭机构模式', icon: 'none' });
