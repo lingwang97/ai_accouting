@@ -28,6 +28,8 @@ TARGETS = {
     'secure.js': ['account', 'books', 'login', 'payment'],
     # 集合清单：init 与 system 上线前检查共用
     'collections.js': ['init', 'system'],
+    # 上线前检查 __meta（v3.72.2）：内存 / 超时与云调用权限探测
+    'meta.js': ['account', 'books', 'export', 'login', 'payment', 'qrcode', 'records', 'renqing', 'system', 'warmer'],
 }
 
 

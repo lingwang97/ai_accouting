@@ -41,3 +41,22 @@
 .book-name { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin-right: 16rpx; }
 .log { padding: 14rpx 0; border-bottom: 2rpx solid #f5f5f5; font-size: 26rpx; }
 .divider-line { height: 2rpx; background: #f0f0f0; margin: 28rpx 0 16rpx; }
+/* 上线前检查（v3.72.2） */
+.todo-bar { background: #FFF4E5; border: 2rpx solid #FFD8A8; border-radius: var(--r-m); padding: 22rpx 28rpx; margin-bottom: 24rpx; }
+.todo-main { font-size: 30rpx; font-weight: 600; color: #B35C00; }
+.todo-sub { margin-top: 6rpx; font-size: 24rpx; color: #B35C00; }
+.pf-sum { margin-top: 20rpx; font-size: 26rpx; }
+.pf-sum.bad, .pf-text.bad, .pf-mark.bad { color: var(--danger); }
+.pf-sum.warn, .pf-text.warn, .pf-mark.warn { color: var(--warn); }
+.pf-sum.ok, .pf-text.ok, .pf-mark.ok { color: var(--success); }
+.pf-mark.manual, .pf-text.manual { color: var(--text-3); }
+.pf-group { margin-top: 28rpx; font-size: 26rpx; font-weight: 600; color: var(--text-2, #555); }
+.pf-row { display: flex; align-items: flex-start; padding: 14rpx 0; border-bottom: 2rpx solid #f5f5f5; }
+.pf-mark { width: 40rpx; flex-shrink: 0; font-size: 28rpx; font-weight: 600; }
+.pf-body { flex: 1; min-width: 0; }
+.pf-label { font-size: 26rpx; word-break: break-all; }
+.pf-label.done { color: var(--text-3); }
+.pf-text { margin-top: 4rpx; font-size: 24rpx; word-break: break-all; }
+.pf-fix { margin-top: 4rpx; font-size: 22rpx; color: var(--text-3); line-height: 1.5; word-break: break-all; }
+.pf-box { width: 34rpx; height: 34rpx; flex-shrink: 0; margin: 2rpx 18rpx 0 0; border: 2rpx solid #ccc; border-radius: 6rpx; text-align: center; line-height: 32rpx; font-size: 24rpx; color: #fff; }
+.pf-box.on { background: var(--primary); border-color: var(--primary); }

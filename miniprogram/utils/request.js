@@ -12,7 +12,7 @@ const READ_ACTIONS = ['get', 'list', 'query', 'people', 'outList', 'remindList',
   // export 预览：只生成临时文件，不改礼簿 / 礼金数据（与导出不同，不触发页面强制刷新）
   'bookPreview', 'bookPreviewData',
   // system 只读：ads 读设置；admin*Preview / adminFindHosts / adminLogs / adminPreflight(不带 Fix) 只查不写（adminIndexes 会建索引，不列入）
-  'ads', 'adminFindHosts', 'adminLogs', 'adminPreflight', 'adminPurgePreview', 'adminBookPreview', 'adminOrphanPreview', 'adminWipePreview'];
+  'ads', 'adminFindHosts', 'adminLogs', 'adminPreflight', 'adminChecklist', 'adminPurgePreview', 'adminBookPreview', 'adminOrphanPreview', 'adminWipePreview'];
 function markWrite(data) {
   try {
     if (data && READ_ACTIONS.indexOf(data.action) < 0) getApp().globalData.dataDirtyAt = Date.now();
@@ -230,6 +230,9 @@ module.exports = {
   adminFindHosts: keyword => call('system', { action: 'adminFindHosts', keyword }),
   adminIndexes: () => call('system', { action: 'adminIndexes' }),
   adminPreflight: fix => call('system', { action: fix ? 'adminPreflightFix' : 'adminPreflight' }),
+  // 上线前手动清单（v3.72.2）：读取 / 勾选
+  adminChecklist: () => call('system', { action: 'adminChecklist' }),
+  adminCheckItem: (key, done) => call('system', { action: 'adminCheckItem', key, done }),
   // 一次性：把导出字体上传到云存储（fontsetup 云函数，用完可删；未部署时 silent 由页面提示）
   adminFontsUpload: () => call('fontsetup', { action: 'upload' }, { silent: true }),
   // 数据清除（管理员）

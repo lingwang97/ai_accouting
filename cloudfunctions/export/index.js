@@ -58,7 +58,9 @@ const THEME = {
   grey: { main: '#555555', light: '#F5F5F5', argb: 'FF555555' }
 };
 
-exports.main = async (event) => {
+exports.main = async (event, context) => {
+  // 上线前检查（v3.72.2）：返回本函数内存 / 超时，带一次性凭据时探测云调用权限，见 meta.js
+  if (event && event.action === '__meta') return await require('./meta.js').handle(cloud, event, context, []);
   // 预热：warmer 云函数按「系统设置」定时唤醒，保持实例常驻、减少冷启动；直接返回，不做任何读写
   if (event && event.action === '__warm') return { code: 0, msg: 'warm', data: null };
   let stage = '初始化';
@@ -69,7 +71,10 @@ exports.main = async (event) => {
     // 定时触发器：清理过期的临时文件
     // 只认真正的定时触发：定时触发没有用户身份，用户调用无法冒充
     if (!cloud.getWXContext().OPENID && (event.Type === 'Timer' || event.TriggerName === 'cleanup')) {
-      return ok({ deleted: await cleanupExpired() });
+      const deleted = await cleanupExpired();
+      // 记录运行时间（v3.72.2）：管理员「上线前检查」据此判断 cleanup 触发器是否在跑；失败不影响清理
+      try { await db.collection('settings').doc('export_cleanup_beat').set({ data: { at: new Date(), deleted } }); } catch (e) { /* 忽略 */ }
+      return ok({ deleted });
     }
 
     // 管理员清除账户前的备份：由 system 云函数发起，用一次性口令确认（settings.admin_backup）

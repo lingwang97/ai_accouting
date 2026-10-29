@@ -214,7 +214,7 @@ test('warmer：清理 10 分钟前的小程序码一次性凭据（按 kind + cr
     state.openid = '';
     await loadFunction('warmer')._test.cleanNonces();
     const q = seen.find(s => s.name === 'settings');
-    assert.strictEqual(q.cond.kind, 'urllink');
+    assert.deepStrictEqual(q.cond.kind.v, ['urllink', 'metaprobe']); // v3.72.2 起一并清理权限探测凭据
     assert.strictEqual(q.cond.createdAt.__op, 'lt');
     assert.ok(Date.now() - q.cond.createdAt.v >= 10 * 60 * 1000 - 1000);
   } finally { db.collection = origCol; }

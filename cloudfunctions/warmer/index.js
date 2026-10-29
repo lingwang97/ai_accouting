@@ -9,8 +9,11 @@ const { DEFAULT_WARMUP, readSetting, writeSetting, normalizeWarmup, planOf, feat
 
 // 超时 60 秒：各阶段按时间预算执行，剩余时间不足就跳过，留到下一轮（5 分钟后）
 const TOTAL_MS = 50 * 1000;
+let lastBeat = 0; // 本实例上次写心跳的时间
 
-exports.main = async (event) => {
+exports.main = async (event, context) => {
+  // 上线前检查（v3.72.2）：返回本函数内存 / 超时，带一次性凭据时探测云调用权限，见 meta.js
+  if (event && event.action === '__meta') return await require('./meta.js').handle(cloud, event, context, ['subscribeMessage.send']);
   const deadline = Date.now() + TOTAL_MS;
   const left = () => deadline - Date.now();
   // 只认定时触发（没有用户身份）；用户调用直接拒绝，避免被刷
@@ -46,6 +49,11 @@ exports.main = async (event) => {
     if (left() > 5 * 1000) {
       try { await cleanRateLimits(); } catch (e) { console.warn('限流计数清理失败', e.message); }
     }
+  }
+  // 心跳（v3.72.2）：管理员「上线前检查」据此判断定时触发器是否在跑；同一实例 10 分钟最多写一次
+  if (Date.now() - lastBeat > 10 * 60 * 1000) {
+    lastBeat = Date.now();
+    try { await writeSetting(db, 'warmer_beat', { at: new Date() }); } catch (e) { console.warn('心跳写入失败', e.message); }
   }
   const cfg = normalizeWarmup(await readSetting(db, 'warmup', DEFAULT_WARMUP));
   // 关闭时不做任何读写（不再每 5 分钟写一次状态）
@@ -130,7 +138,8 @@ async function pushReminders(deadline) {
 /** 删除过期的小程序码一次性凭据（有效期 60 秒，这里只删 10 分钟前的，不会和正在进行的生成冲突） */
 async function cleanNonces() {
   const _ = db.command;
-  const res = await db.collection('settings').where({ kind: 'urllink', createdAt: _.lt(Date.now() - 10 * 60 * 1000) }).remove();
+  // urllink：payment 的小程序码凭据；metaprobe：system 上线前检查的权限探测凭据（v3.72.2）
+  const res = await db.collection('settings').where({ kind: _.in(['urllink', 'metaprobe']), createdAt: _.lt(Date.now() - 10 * 60 * 1000) }).remove();
   return (res.stats && res.stats.removed) || 0;
 }
 

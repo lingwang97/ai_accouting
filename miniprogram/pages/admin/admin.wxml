@@ -3,6 +3,11 @@
 
   <wxs module="s" src="./admin.wxs"></wxs>
   <block wx:if="{{warmup}}">
+    <!-- 上线前提醒（v3.72.2）：手动清单未勾 + 自动检查待处理，点开「上线前检查」 -->
+    <view class="todo-bar" wx:if="{{launchTodo > 0}}" bindtap="onTodoTap">
+      <view class="todo-main">上线前还有 {{launchTodo}} 项未完成</view>
+      <view class="todo-sub">手动清单 {{launchTodoManual}} 项{{launchTodoUnchecked ? '，自动检查还没运行过' : '，自动检查 ' + launchTodoAuto + ' 项'}} ›</view>
+    </view>
     <view class="fold " data-k="warmup" bindtap="onToggle">
       <view class="fold-main"><view class="fold-title">预热（减少云函数冷启动）</view><view class="fold-sum {{warmDirty ? 'warn' : ''}}">{{s.warm(warmup, funcs, warmDirty)}}</view></view>
       <text class="fold-arrow">{{open.warmup ? '▾' : '▸'}}</text>
@@ -69,23 +74,39 @@
     </view>
 
     <view class="fold " data-k="pf" bindtap="onToggle">
-      <view class="fold-main"><view class="fold-title">上线前检查</view><view class="fold-sum {{s.pfBad(pf) ? 'bad' : ''}}">{{s.pf(pf)}}</view></view>
+      <view class="fold-main"><view class="fold-title">上线前检查</view><view class="fold-sum {{launchTodo > 0 ? 'bad' : ''}}">{{s.pf(pf, launchTodo, pfLast)}}</view></view>
       <text class="fold-arrow">{{open.pf ? '▾' : '▸'}}</text>
     </view>
     <view class="card" wx:if="{{open.pf}}">
-      <view class="muted small tip">检查往来人标识密钥、必需集合和 AppSecret 配置。缺失的集合可一键创建；索引请用下方「数据库索引」。</view>
-      <button class="btn-primary save" loading="{{pfLoading}}" bindtap="onPreflight">检查</button>
+      <view class="muted small tip">自动检查集合、索引、密钥、AppSecret、导出字体、套餐、触发器、各云函数超时 / 内存 / 云调用权限，并在本机试读集合权限、检测隐私指引。✓ 正常　✗ 必须处理　！建议处理　○ 需手动确认。</view>
+      <button class="btn-primary save" loading="{{pfLoading}}" bindtap="onPreflight">{{pf ? '重新检查' : '开始检查'}}</button>
       <block wx:if="{{pf}}">
-        <view class="idx-row"><text>往来人标识密钥</text><text class="{{pf.keyOk ? 'ok' : 'bad'}}">{{pf.keyText}}</text></view>
-        <view class="idx-row"><text>必需集合（{{pf.total}} 个）</text><text class="{{pf.colsOk ? 'ok' : 'bad'}}">{{pf.colsOk ? '已齐全' : '缺 ' + pf.missing.length + ' 个：' + pf.missing.join('、')}}</text></view>
-        <view class="idx-row"><text>WX_APPSECRET（system）</text><text class="{{pf.appSecret ? 'ok' : 'bad'}}">{{pf.appSecret ? '已配置' : '未配置，无法建索引'}}</text></view>
-        <view class="idx-row"><text>导出字体（云存储）</text><text class="{{pf.fontsOk ? 'ok' : 'bad'}}">{{pf.fontsOk ? '已就绪' : '未上传：' + pf.fontsMissing}}</text></view>
+        <view class="pf-sum {{pf.bad ? 'bad' : (pf.warn ? 'warn' : 'ok')}}">{{pf.bad ? pf.bad + ' 项必须处理' : '没有必须处理的项'}}{{pf.warn ? '，' + pf.warn + ' 项建议处理' : ''}}</view>
+        <block wx:for="{{pf.groups}}" wx:for-item="g" wx:key="name">
+          <view class="pf-group">{{g.name}}</view>
+          <view class="pf-row" wx:for="{{g.items}}" wx:key="label">
+            <text class="pf-mark {{item.status}}">{{item.mark}}</text>
+            <view class="pf-body">
+              <view class="pf-label">{{item.label}}</view>
+              <view class="pf-text {{item.status}}">{{item.text}}</view>
+              <view class="pf-fix" wx:if="{{item.fix && item.status !== 'ok'}}">怎么修：{{item.fix}}</view>
+            </view>
+          </view>
+        </block>
+        <button wx:if="{{!pf.colsOk}}" class="btn-primary save" loading="{{pfLoading}}" data-fix="1" bindtap="onPreflight">一键创建缺失集合</button>
         <button wx:if="{{!pf.fontsOk}}" class="btn-primary save" loading="{{fontLoading}}" bindtap="onFontsUpload">上传导出字体</button>
         <view wx:if="{{!pf.fontsOk}}" class="muted small tip">传统礼簿 / 表格 PDF 需要字体。点一次即可（约 11MB，需等几十秒）；需先部署 fontsetup 云函数，上传成功后可在控制台删除它。</view>
-        <view class="idx-row"><text>小程序版本</text><text>{{pf.version}}</text></view>
-        <button wx:if="{{!pf.colsOk}}" class="btn-primary save" loading="{{pfLoading}}" data-fix="1" bindtap="onPreflight">一键创建缺失集合</button>
-        <view class="muted small tip">手动确认（云函数查不到集合权限）：在云开发控制台把下列集合都设为「所有用户不可读写」，其中 sys_config 存放密钥，尤其不能放开：{{pf.permCols}}。</view>
+        <view wx:if="{{pf.manualRuntime}}" class="muted small tip">读不到运行配置的函数（{{pf.manualRuntime}}）：请在云开发控制台「版本与配置」里手动核对超时 / 内存。</view>
       </block>
+      <view class="pf-group">手动清单（勾选后记录勾选人和时间）</view>
+      <view class="pf-row check" wx:for="{{checklist}}" wx:key="key" data-key="{{item.key}}" bindtap="onCheckItem">
+        <text class="pf-box {{item.done ? 'on' : ''}}">{{checkSaving === item.key ? '…' : (item.done ? '✓' : '')}}</text>
+        <view class="pf-body">
+          <view class="pf-label {{item.done ? 'done' : ''}}">{{item.label}}</view>
+          <view class="pf-fix" wx:if="{{!item.done}}">{{item.fix}}</view>
+          <view class="pf-text ok" wx:else>{{item.byName}} 于 {{item.atStr}} 确认</view>
+        </view>
+      </view>
     </view>
 
     <view class="fold " data-k="idx" bindtap="onToggle">

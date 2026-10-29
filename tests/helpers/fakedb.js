@@ -102,6 +102,7 @@ class FakeDb {
         return { _id: db.persist ? id : 'new' };
       },
       doc: id => ({
+        field() { return this; }, // 投影忽略，返回整条
         async get() {
           const d = (db.data[name] || []).find(x => x._id === id);
           if (!d) throw new Error('document.get:fail document not exist');

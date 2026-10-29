@@ -5,7 +5,9 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const ENVS = ['develop', 'trial', 'release'];
 const { shortCodeOf, resolveCtx, canBook, readonly, trusted, can, workBook } = require('./ctx.js');
 
-exports.main = async (event) => {
+exports.main = async (event, context) => {
+  // 上线前检查（v3.72.2）：返回本函数内存 / 超时，带一次性凭据时探测云调用权限，见 meta.js
+  if (event && event.action === '__meta') return await require('./meta.js').handle(cloud, event, context, ['wxacode.getUnlimited']);
   if (event && event.action === '__warm') return { code: 0, msg: 'warm', data: null }; // 预热（warmer 定时调用）：早返回，只唤醒实例
   const { OPENID } = cloud.getWXContext();
   if (!OPENID) return err('未获取到用户身份');

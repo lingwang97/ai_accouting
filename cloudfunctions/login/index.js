@@ -14,7 +14,9 @@ async function ensureCol(name) {
   colReady[name] = true;
 }
 
-exports.main = async (event) => {
+exports.main = async (event, context) => {
+  // 上线前检查（v3.72.2）：返回本函数内存 / 超时，带一次性凭据时探测云调用权限，见 meta.js
+  if (event && event.action === '__meta') return await require('./meta.js').handle(cloud, event, context, ['security.msgSecCheck', 'security.imgSecCheck']);
   // 预热：warmer 云函数按「系统设置」定时唤醒，保持实例常驻、减少冷启动；直接返回，不做任何读写
   if (event && (event.action === '__warm' || event.Type === 'Timer')) return { code: 0, msg: 'warm', data: null }; // Timer：兼容之前上传过的旧预热触发器
   const { OPENID } = cloud.getWXContext();

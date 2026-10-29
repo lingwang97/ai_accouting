@@ -4,12 +4,19 @@ const openfile = require('../../utils/openfile.js');
 const fmt = require('../../utils/format.js');
 const theme = require('../../utils/theme.js');
 const config = require('../../config.js');
+const preflightLocal = require('./preflight.js'); // 只能在手机上做的检测：集合权限试读、隐私指引、基础库（v3.72.2）
 
 const INTERVALS = [5, 10, 15, 30];
 const FUNC_LABEL = {
   login: '登录', account: '主家信息', records: '礼簿 / 工作台', payment: '随礼 / 确认',
   books: '礼簿管理', renqing: '人情往来', qrcode: '礼簿码', export: '导出'
 };
+
+/** 必需集合（与云端 collections.js 一致；手机端试读用） */
+const COLS_OF = () => ['users', 'accounts', 'records', 'print_templates', 'books', 'gifts_out', 'exports', 'members', 'invites', 'settings', 'subscriptions', 'reminders', 'person_alias', 'admin_logs', 'book_codes', 'trash_books', 'trash_records', 'rate_limits', 'sys_config'];
+
+/** 清单显示：勾选时间转成日期 */
+const fmtChecklist = list => (list || []).map(x => ({ ...x, atStr: x.at ? fmt.day(x.at) : '' }));
 
 Page({
   data: {
@@ -40,7 +47,10 @@ Page({
     adSlots: [],        // [{ key, label, on }]
     indexResults: [],   // [{ col, name, ok, existed, msg }]
     indexSummary: '',
-    pf: null, pfLoading: false, // 上线前检查结果
+    pf: null, pfLoading: false, // 上线前检查结果（v3.72.2：{ groups, bad, warn, ... }）
+    checklist: [], checkSaving: '', // 上线前手动清单
+    pfLast: null,       // 上次自动检查的待处理数（adminGet 带回，未在本次检查前用于顶部提醒）
+    launchTodo: 0,      // 顶部「上线前还有 N 项未完成」
     fontLoading: false, // 上传导出字体中
     themeStyle: ''
   },
@@ -73,8 +83,11 @@ Page({
         plans,
         planIdx: Math.max(0, plans.findIndex(p => p.key !== 'free')),
         ads: d.ads,
-        adSlots: Object.keys(d.adSlots).map(k => ({ key: k, label: d.adSlots[k], on: !!d.ads.slots[k] }))
+        adSlots: Object.keys(d.adSlots).map(k => ({ key: k, label: d.adSlots[k], on: !!d.ads.slots[k] })),
+        checklist: fmtChecklist(d.checklist || []),
+        pfLast: d.preflightLast || null
       });
+      this.updateTodo();
     } catch (e) {
       this.setData({ loaded: true });
     }
@@ -121,28 +134,60 @@ Page({
     } catch (e) { /* toast 已提示 */ }
   },
 
-  // —— 上线前检查：密钥来源、必需集合、WX_APPSECRET、版本号；fix=true 时建缺失集合 ——
+  // —— 上线前检查（v3.72.2）：云端自动检测 + 手机端检测（集合权限试读、隐私指引、基础库）+ 手动清单；fix=true 时建缺失集合 ——
   async onPreflight(e) {
     if (this.data.pfLoading) return;
     const fix = !!(e && e.currentTarget && e.currentTarget.dataset.fix);
     this.setData({ pfLoading: true });
+    wx.showLoading({ title: '检查中，约 10～30 秒', mask: true });
     try {
-      const r = await req.adminPreflight(fix);
-      const SRC = { env: '环境变量 PERSON_KEY_SECRET', db: '已自动生成并保存在数据库', default: '内置默认值（数据库读取失败时的兜底，请排查）', '': '尚未使用（人情往来页首次打开时自动生成）' };
-      const keyText = (SRC[r.key.source] !== undefined ? SRC[r.key.source] : r.key.source) + (r.key.createdAt ? '，创建于 ' + fmt.day(r.key.createdAt) : '');
+      const [r, local] = await Promise.all([req.adminPreflight(fix), preflightLocal.run(COLS_OF(), config.VERSION)]);
+      const all = r.items.concat(local);
+      const ORDER = ['数据库', '配置', '定时任务', '云函数', '小程序后台', '上线'];
+      const MARK = { ok: '✓', bad: '✗', warn: '！', manual: '○' };
+      const groups = ORDER.map(g => ({ name: g, items: all.filter(x => x.group === g).map(x => ({ ...x, mark: MARK[x.status] || '！' })) })).filter(g => g.items.length);
       this.setData({
         pf: {
-          keyText, keyOk: r.key.source === 'env' || r.key.source === 'db' || (!r.key.source && !r.key.generated),
-          missing: r.missing, colsOk: !r.missing.length, total: r.cols.length,
-          appSecret: r.hasAppSecret, version: config.VERSION, permCols: r.permCols.join('、'),
-          fontsOk: !r.fonts || r.fonts.ready, fontsMissing: r.fonts ? r.fonts.fonts.filter(f => !f.uploaded).map(f => f.label).join('、') : ''
+          groups,
+          bad: all.filter(x => x.status === 'bad').length,
+          warn: all.filter(x => x.status === 'warn' || x.status === 'manual').length,
+          colsOk: !r.missing.length,
+          fontsOk: !r.fonts || r.fonts.ready,
+          manualRuntime: (r.manualRuntime || []).join('、')
         }
       });
+      this.updateTodo();
       if (fix) wx.showToast({ title: r.missing.length ? '仍有集合缺失' : '集合已齐全', icon: 'none' });
     } catch (err) { /* toast 已提示 */ } finally {
+      wx.hideLoading();
       this.setData({ pfLoading: false });
     }
   },
+
+  /** 手动清单勾选 / 取消（云函数写入 settings.launch_checklist，记录勾选人和时间） */
+  async onCheckItem(e) {
+    const key = e.currentTarget.dataset.key;
+    if (this.data.checkSaving) return;
+    const item = this.data.checklist.find(x => x.key === key);
+    if (!item) return;
+    this.setData({ checkSaving: key });
+    try {
+      const r = await req.adminCheckItem(key, !item.done);
+      this.setData({ checklist: fmtChecklist(r.list) });
+      this.updateTodo();
+    } catch (err) { /* toast 已提示 */ } finally {
+      this.setData({ checkSaving: '' });
+    }
+  },
+
+  /** 顶部提醒：手动清单未勾的 + 自动检查待处理的（本次检查过用本次，否则用上次的摘要） */
+  updateTodo() {
+    const manual = this.data.checklist.filter(x => !x.done).length;
+    const pf = this.data.pf;
+    const auto = pf ? pf.bad + pf.warn : (this.data.pfLast ? this.data.pfLast.bad + this.data.pfLast.warn : 0);
+    this.setData({ launchTodo: manual + auto, launchTodoManual: manual, launchTodoAuto: auto, launchTodoUnchecked: !pf && !this.data.pfLast });
+  },
+  onTodoTap() { this.setData({ 'open.pf': true }); },
 
   // —— 导出字体：一次性上传到云存储（fontsetup 云函数，管理员） ——
   async onFontsUpload() {

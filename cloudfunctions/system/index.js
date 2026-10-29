@@ -5,7 +5,8 @@
 //   adminSetPlan 管理员：给某位主家开通 / 延期 / 取消套餐（以后接支付回调时由支付流程调用同一逻辑）
 //   ads          任何人：广告位配置（前端据此决定是否展示，宾客也会调用）
 //   adminSetAds  管理员：保存广告位配置
-//   adminPreflight / adminPreflightFix 管理员：上线前检查（密钥来源、集合、WX_APPSECRET）与建缺失集合
+//   adminPreflight / adminPreflightFix 管理员：上线前检查（v3.72.2 起逐项 ✓/✗/！并给出怎么修）与建缺失集合
+//   adminChecklist / adminCheckItem 管理员：上线前手动清单（勾选状态存 settings.launch_checklist）
 //   adminIndexes 管理员：一键创建数据库索引（调用云开发 HTTP API updateIndex，需在本函数环境变量配置 WX_APPSECRET）
 const cloud = require('wx-server-sdk');
 const { ok, err, failOf } = require('./common.js');
@@ -17,7 +18,9 @@ const { resolveCtx } = require('./ctx.js');
 const P = require('./plans.js');
 const Purge = require('./purge.js');
 
-exports.main = async (event) => {
+exports.main = async (event, context) => {
+  // 上线前检查（v3.72.2）：返回本函数内存 / 超时，带一次性凭据时探测云调用权限，见 meta.js
+  if (event && event.action === '__meta') return await require('./meta.js').handle(cloud, event, context, []);
   if (event && event.action === '__warm') return { code: 0, msg: 'warm', data: null };
   // 内部 action：只给 payment 云函数调用，不在前端 request.js 里出现；自带一次性凭据校验（见 internalWxaCode）
   if (event && event.action === '_wxaCode') return await internalWxaCode(event);
@@ -33,8 +36,10 @@ exports.main = async (event) => {
       case 'adminSetPlan': return await guard(OPENID, () => setPlan(OPENID, event.ownerOpenid, event.plan, event, 'admin'));
       case 'adminFindHosts': return await guard(OPENID, () => findHosts(event.keyword));
       case 'adminIndexes': return await guard(OPENID, () => ensureIndexes());
-      case 'adminPreflight': return await guard(OPENID, () => preflight(false));
-      case 'adminPreflightFix': return await guard(OPENID, () => preflight(true));
+      case 'adminPreflight': return await guard(OPENID, () => preflight(false, OPENID, context));
+      case 'adminPreflightFix': return await guard(OPENID, () => preflight(true, OPENID, context));
+      case 'adminChecklist': return await guard(OPENID, async () => ok({ list: await checklist() }));
+      case 'adminCheckItem': return await guard(OPENID, () => checkItem(OPENID, String(event.key || ''), event.done === true));
       // 数据清除：按账户（预览 / 备份 / 执行）、按礼簿、无主数据；操作日志
       case 'adminPurgePreview': return await guard(OPENID, () => purgePreview(OPENID, String(event.ownerOpenid || ''), event.guestRecords === true));
       case 'adminBackup': return await guard(OPENID, () => adminBackup(OPENID, String(event.ownerOpenid || '')));
@@ -76,10 +81,14 @@ async function adminGet() {
     P.readSetting(db, 'ads', P.DEFAULT_ADS)
   ]);
   const launch = await P.readSetting(db, 'launch', { launched: false });
+  const [list, last] = await Promise.all([checklist(), readRaw('preflight_last')]);
   return ok({
     warmup: P.normalizeWarmup(warmup), status, plans, warmable: P.WARMABLE,
     ads: P.normalizeAds(ads), adSlots: P.AD_SLOTS,
-    launched: launch.launched === true // 已标记正式上线：不再提供「清除全部测试数据」
+    launched: launch.launched === true, // 已标记正式上线：不再提供「清除全部测试数据」
+    // 上线前检查摘要（v3.72.2）：手动清单与上次自动检查的待处理数，管理员页顶部提醒
+    checklist: list,
+    preflightLast: last ? { at: last.at || null, bad: last.bad || 0, warn: last.warn || 0 } : null
   });
 }
 
@@ -519,10 +528,51 @@ async function adminLogs() {
 const REQUIRED_COLS = require('./collections.js').COLLECTIONS;
 
 /**
- * 上线前检查：只返回状态，不返回任何密钥内容
- * fix=true 时顺带创建缺失集合（索引请用「一键创建索引」）；集合权限云函数查不到，由前端列为手动确认项
+ * 上线前检查（v3.72.2 起逐项返回）：items = [{ group, label, status: ok|bad|warn|manual, text, fix }]
+ * 只返回状态，不返回任何密钥内容；fix=true 时顺带创建缺失集合（索引请用「一键创建索引」）。
+ * 集合的客户端权限云函数查不到，由管理员页在手机上逐个试读（前端检测）；控制台里才能看到的项目列为手动清单。
  */
-async function preflight(fix) {
+// 期望配置：与各云函数 config.json 一致（tests/v3722.test.js 校验）
+const EXPECT_TIMEOUT = { account: 60, system: 60, warmer: 60, export: 60, payment: 20, records: 20, books: 20, renqing: 20, qrcode: 20, login: 10 };
+const EXPECT_MEMORY = { export: 1024 };
+const MSG = 'security.msgSecCheck', IMG = 'security.imgSecCheck', SUB = 'subscribeMessage.send', WXA = 'wxacode.getUnlimited';
+const EXPECT_APIS = { account: [MSG, IMG], books: [MSG, IMG], login: [MSG, IMG], payment: [MSG, IMG, SUB, WXA], qrcode: [WXA], warmer: [SUB] };
+const META_FUNCS = ['account', 'books', 'export', 'login', 'payment', 'qrcode', 'records', 'renqing', 'warmer'];
+const WARMER_STALE_MS = 20 * 60 * 1000;      // warmer 每 5 分钟触发、同一实例 10 分钟最多写一次心跳
+const CLEANUP_STALE_MS = 26 * 3600 * 1000;   // export cleanup 每天 3:00
+
+/** 读 settings 原始文档（不合并默认值；带 _openid 的伪造文档视为不存在） */
+async function readRaw(id) {
+  try {
+    const d = (await db.collection('settings').doc(id).get()).data;
+    return d && !d._openid ? d : null;
+  } catch (e) { return null; }
+}
+
+const agoText = t => {
+  const m = Math.round((Date.now() - new Date(t).getTime()) / 60000);
+  return m < 60 ? `${Math.max(0, m)} 分钟前` : m < 48 * 60 ? `${Math.round(m / 60)} 小时前` : `${Math.round(m / 1440)} 天前`;
+};
+
+/** 调用云函数，超时 / 不存在返回 { error } */
+async function callFn(name, data, ms) {
+  try {
+    const r = await Promise.race([
+      cloud.callFunction({ name, data }),
+      new Promise((_r, rej) => setTimeout(() => rej(new Error('timeout')), ms))
+    ]);
+    return { result: r && r.result };
+  } catch (e) {
+    const m = String((e && (e.errMsg || e.message)) || e);
+    return { error: m, missing: /FUNCTION_NOT_FOUND|function not found|-501000|not exist|不存在/i.test(m) };
+  }
+}
+
+async function preflight(fix, admin, context) {
+  const items = [];
+  const add = (group, label, status, text, fixText) => items.push({ group, label, status, text, fix: fixText || '' });
+
+  // —— 数据库：集合、索引 ——
   const cols = await Promise.all(REQUIRED_COLS.map(async name => {
     const has = async () => { try { await db.collection(name).count(); return true; } catch (e) { return false; } };
     let exists = await has();
@@ -534,26 +584,179 @@ async function preflight(fix) {
     }
     return { name, exists, created };
   }));
-  // 密钥：只读来源状态与创建时间（renqing 首次使用时写入），不读 secret 字段
-  let key = { generated: false, createdAt: null, source: '', at: null };
-  try {
-    const d = (await db.collection('sys_config').doc('person_key').field({ createdAt: true }).get()).data;
-    if (d) { key.generated = true; key.createdAt = d.createdAt || null; }
-  } catch (e) { /* 未生成 */ }
-  try {
-    const s = (await db.collection('sys_config').doc('person_key_state').get()).data;
-    if (s) { key.source = String(s.source || ''); key.at = s.at || null; }
-  } catch (e) { /* 无 */ }
   const missing = cols.filter(c => !c.exists).map(c => c.name);
+  add('数据库', `必需集合（${cols.length} 个）`, missing.length ? 'bad' : 'ok', missing.length ? '缺 ' + missing.join('、') : '已齐全', '点「一键创建缺失集合」');
+
+  const idx = await readRaw('index_status');
+  const okNames = new Set((idx && idx.okNames) || []);
+  const idxMissing = INDEXES.filter(([c, n]) => !okNames.has(c + '.' + n)).map(([c, n]) => c + '.' + n);
+  if (!idx) add('数据库', `索引（${INDEXES.length} 条）`, 'warn', '还没有运行过一键建索引', '展开「数据库索引」点「一键创建 / 检查索引」');
+  else add('数据库', `索引（${INDEXES.length} 条）`, idxMissing.length ? 'bad' : 'ok',
+    idxMissing.length ? `缺 ${idxMissing.length} 条：${idxMissing.slice(0, 6).join('、')}${idxMissing.length > 6 ? '…' : ''}` : `已齐全（${agoText(idx.at)}检查）`,
+    '展开「数据库索引」重新点一次，按失败原因处理');
+
+  // —— 密钥与系统配置 ——
+  const secret = process.env.WX_APPSECRET;
+  if (!secret) add('配置', 'WX_APPSECRET（system 环境变量）', 'bad', '未配置：不能建索引，小程序码备用通道不可用', '云开发控制台 → 云函数 → system → 配置 → 环境变量添加 WX_APPSECRET');
+  else {
+    let tk;
+    try { tk = await getAccessToken(false); } catch (e) { tk = { reason: 'net' }; }
+    add('配置', 'WX_APPSECRET（system 环境变量）', tk.reason ? 'bad' : 'ok', tk.reason ? `已配置，但换取 access_token 失败（${tk.reason}）` : '已配置，可换取 access_token',
+      '核对 AppSecret（小程序后台重置过要同步更新环境变量）');
+  }
+
   const fonts = await fontStatus();
-  if (fix) await log('admin', 'preflightFix', { name: '上线前检查修复', created: cols.filter(c => c.created).map(c => c.name), missing });
-  return ok({
-    key, // source: env 环境变量 / db 自动生成 / default 旧默认值（数据库读不到时兜底）/ 空 尚未被使用
-    cols, missing,
-    hasAppSecret: !!process.env.WX_APPSECRET, // 只返回是否已配置
-    fonts, // 导出字体（云存储）登记情况：{ ready, fonts:[{key,label,uploaded}] }
-    permCols: REQUIRED_COLS
+  add('配置', '导出字体（云存储）', fonts.ready ? 'ok' : 'bad', fonts.ready ? '已就绪' : '未上传：' + fonts.fonts.filter(f => !f.uploaded).map(f => f.label).join('、'), '点「上传导出字体」（需先部署 fontsetup）');
+
+  // 往来人标识密钥：只读来源状态与创建时间，不读 secret
+  let keyDoc = null, keyState = null;
+  try { keyDoc = (await db.collection('sys_config').doc('person_key').field({ createdAt: true, _openid: true }).get()).data; } catch (e) { /* 未生成 */ }
+  try { keyState = (await db.collection('sys_config').doc('person_key_state').get()).data; } catch (e) { /* 无 */ }
+  const src = keyState && !keyState._openid ? String(keyState.source || '') : '';
+  if ((keyDoc && keyDoc._openid) || src === 'forged') add('配置', '往来人标识密钥', 'bad', '密钥文档是客户端伪造的（带 _openid），往来已停用', '云开发控制台 → sys_config 删除 person_key 文档，并把集合权限设为「所有用户不可读写」');
+  else if (src === 'env') add('配置', '往来人标识密钥', 'warn', '来自 renqing 环境变量 PERSON_KEY_SECRET', '保持不变：改动或删除会让已存的往来人标识全部失配');
+  else if (src === 'default') add('配置', '往来人标识密钥', 'bad', '曾用内置默认值兜底（数据库读不到）', '查看 renqing 日志排查 sys_config 读取失败');
+  else if (keyDoc) add('配置', '往来人标识密钥', 'ok', '已自动生成并保存在数据库' + (keyDoc.createdAt ? '（' + agoText(keyDoc.createdAt) + '）' : '') + '，未设环境变量', '不要再给 renqing 设置 PERSON_KEY_SECRET');
+  else add('配置', '往来人标识密钥', 'warn', '尚未生成', '打开一次「人情往来」页会自动生成');
+
+  // 套餐定义：settings.plans 文档存在时会覆盖代码默认值，缺的功能项按「开放」处理
+  const plansDoc = await readRaw('plans');
+  if (!plansDoc) add('配置', '套餐定义（settings.plans）', 'ok', '未单独设置，使用代码默认套餐', '');
+  else {
+    const lack = [];
+    Object.keys(P.DEFAULT_PLANS).forEach(k => {
+      const f = (plansDoc[k] && plansDoc[k].features) || null;
+      if (!f) { lack.push(`${k}（整个套餐）`); return; }
+      const miss = Object.keys(P.DEFAULT_PLANS[k].features).filter(x => !(x in f));
+      if (miss.length) lack.push(`${k}：${miss.join('、')}`);
+    });
+    add('配置', '套餐定义（settings.plans）', lack.length ? 'warn' : 'ok', lack.length ? '缺字段 ' + lack.join('；') : '免费版 / 专业版字段齐全',
+      '云数据库 settings.plans 补齐缺的字段（缺项按「不限制」处理），或删除该文档改用代码默认');
+  }
+
+  const admins = ((await P.readSetting(db, 'admins', { openids: [] })).openids || []).length;
+  add('配置', '管理员人数', admins > 2 ? 'warn' : 'ok', `${admins} 人`, admins > 2 ? '上线前精简到 1～2 人（settings.admins）' : '');
+
+  // —— 定时任务 ——
+  const warmup = P.normalizeWarmup(await P.readSetting(db, 'warmup', P.DEFAULT_WARMUP));
+  const MODE = { always: '始终预热', paid: '有付费用户或高峰模式时', peak: '仅高峰模式时' };
+  add('定时任务', '预热设置', warmup.enabled && warmup.mode === 'always' ? 'ok' : 'warn',
+    warmup.enabled ? `${MODE[warmup.mode]} · 每 ${warmup.intervalMin} 分钟 · ${warmup.functions.join('、') || '未选函数'}` : '已关闭',
+    '上线初期还没有付费用户，建议选「始终预热」，至少勾选 login、records、payment');
+  const beat = await readRaw('warmer_beat');
+  const beatOk = beat && Date.now() - new Date(beat.at).getTime() < WARMER_STALE_MS;
+  add('定时任务', 'warmer 触发器（每 5 分钟）', beatOk ? 'ok' : 'bad', beat ? `最近运行：${agoText(beat.at)}` : '没有运行记录',
+    '开发者工具右键 cloudfunctions/warmer/config.json →「上传触发器」；部署 v3.72.2 后约 10 分钟内会有记录');
+  const cb = await readRaw('export_cleanup_beat');
+  const cbOk = cb && Date.now() - new Date(cb.at).getTime() < CLEANUP_STALE_MS;
+  add('定时任务', 'export 清理触发器（每天 3:00）', cbOk ? 'ok' : 'warn', cb ? `最近运行：${agoText(cb.at)}` : '还没有运行记录（部署后要等到次日 3:00）',
+    '开发者工具右键 cloudfunctions/export/config.json →「上传触发器」');
+
+  // —— 云函数：内存 / 超时 / 云调用权限（各函数 __meta 自报；带一次性凭据才探测权限） ——
+  const nonce = 'metanonce_' + require('crypto').randomBytes(12).toString('hex');
+  try { await db.collection('settings').add({ data: { _id: nonce, kind: 'metaprobe', createdAt: Date.now(), openid: admin } }); } catch (e) { console.warn('写入探测凭据失败', e.message); }
+  const [metas, oldFns] = await Promise.all([
+    Promise.all(META_FUNCS.map(name => callFn(name, { action: '__meta', nonce }, 25000))),
+    Promise.all(['printtpl', 'fontsetup'].map(name => callFn(name, { action: '__warm' }, 15000)))
+  ]);
+  try { await db.collection('settings').doc(nonce).remove(); } catch (e) { /* warmer 会清理 */ }
+  const meta = {};
+  META_FUNCS.forEach((name, i) => { meta[name] = metas[i]; });
+  meta.system = { result: { code: 0, data: require('./meta.js').runtimeOf(context) } };
+  const PERM_TXT = { ok: '已开通', denied: '未开通', timeout: '超时未知' };
+  const manualRuntime = [];
+  Object.keys(EXPECT_TIMEOUT).forEach(name => {
+    const m = meta[name];
+    const d = m && m.result && m.result.code === 0 ? m.result.data : null;
+    if (!d) {
+      add('云函数', name, 'bad', m && m.missing ? '云函数不存在' : '没有响应（未部署 v3.72.2 或调用失败）', `重新部署 ${name}`);
+      return;
+    }
+    const probs = [];
+    let unknown = false;
+    if (!d.timeout) unknown = true;
+    else if (d.timeout < EXPECT_TIMEOUT[name]) probs.push(`超时 ${d.timeout} 秒（应为 ${EXPECT_TIMEOUT[name]}）`);
+    if (EXPECT_MEMORY[name]) {
+      if (!d.memory) unknown = true;
+      else if (d.memory < EXPECT_MEMORY[name]) probs.push(`内存 ${d.memory}MB（应为 ${EXPECT_MEMORY[name]}MB）`);
+    }
+    const apis = EXPECT_APIS[name] || [];
+    const perms = d.perms || {};
+    const deniedApis = apis.filter(a => perms[a] === 'denied');
+    const odd = apis.filter(a => perms[a] && perms[a] !== 'ok' && perms[a] !== 'denied');
+    if (deniedApis.length) probs.push('云调用未开通：' + deniedApis.join('、'));
+    if (apis.length && !d.perms) unknown = true;
+    const conf = [d.timeout ? `超时 ${d.timeout}s` : '', d.memory ? `内存 ${d.memory}MB` : ''].filter(Boolean).join(' · ');
+    const permTxt = apis.length && d.perms ? apis.map(a => a.split('.')[1] + (PERM_TXT[perms[a]] || perms[a])).join('，') : '';
+    if (unknown) manualRuntime.push(name);
+    add('云函数', name, probs.length ? 'bad' : (odd.length || unknown ? 'warn' : 'ok'),
+      probs.length ? probs.join('；') : [conf || '配置读不到', permTxt].filter(Boolean).join('；') + (odd.length ? '（部分探测结果未知）' : ''),
+      probs.length || unknown ? `云开发控制台 → 云函数 → ${name}：版本与配置改超时${EXPECT_MEMORY[name] ? ' / 内存 ' + EXPECT_MEMORY[name] + 'MB' : ''}；权限配置 → 云调用开启 ${apis.join('、') || '（无）'}` : '');
   });
+  ['printtpl', 'fontsetup'].forEach((name, i) => {
+    const r = oldFns[i];
+    const gone = r.error && r.missing;
+    const fontsNote = name === 'fontsetup' && !fonts.ready ? '（字体还没上传，先别删）' : '';
+    add('云函数', `旧函数 ${name}`, gone ? 'ok' : (name === 'fontsetup' && !fonts.ready ? 'ok' : 'warn'), gone ? '已删除' : '仍存在' + fontsNote,
+      gone || fontsNote ? '' : `云开发控制台 → 云函数 → 删除 ${name}`);
+  });
+
+  // —— 上线 ——
+  const launch = await P.readSetting(db, 'launch', { launched: false });
+  if (launch.launched === true) add('上线', '正式上线标记', 'ok', '已标记' + (launch.at ? '（' + agoText(launch.at) + '）' : ''), '');
+  else {
+    let rows = [];
+    try { const w = await wipeAll(admin, false, { keepAdmins: true }); rows = (w.data && w.data.rows) || []; } catch (e) { /* 统计失败 */ }
+    const n = rows.reduce((t, r) => t + r.count, 0);
+    add('上线', '正式上线标记', 'warn', n ? `未标记；还有测试数据 ${n} 条（${rows.slice(0, 3).map(r => r.label + ' ' + r.count).join('、')}…）` : '未标记',
+      n ? '上线前先「清除全部测试数据」，再「标记正式上线」' : '确认无误后点「标记正式上线」');
+  }
+
+  const bad = items.filter(x => x.status === 'bad').length;
+  const warn = items.filter(x => x.status === 'warn').length;
+  try { await P.writeSetting(db, 'preflight_last', { at: new Date(), bad, warn }); } catch (e) { /* 仅摘要 */ }
+  if (fix) await log('admin', 'preflightFix', { name: '上线前检查修复', created: cols.filter(c => c.created).map(c => c.name), missing });
+  return ok({ items, bad, warn, cols, missing, fonts, manualRuntime, permCols: REQUIRED_COLS, launched: launch.launched === true });
+}
+
+// —— 上线前手动清单（云函数查不到的控制台 / 后台 / 真机项目），勾选状态存 settings.launch_checklist ——
+const LAUNCH_ITEMS = [
+  { key: 'minlib', label: '小程序后台最低基础库设为 2.21.2', fix: '设置 → 基本设置 → 基础库最低版本设置' },
+  { key: 'category', label: '服务类目为「工具 > 记账」，不选金融 / 支付', fix: '设置 → 基本设置 → 服务类目' },
+  { key: 'privacy', label: '隐私保护指引逐项填写（照片、相册、蓝牙、摄像头、剪切板、头像）', fix: '见 docs/提审与隐私说明.md 第二节' },
+  { key: 'tmpl', label: '订阅消息模板与 config.js 三个模板 ID 一致', fix: '小程序后台 → 订阅消息 → 我的模板' },
+  { key: 'alarm', label: '云开发告警、数据库自动回档已开启', fix: '云开发控制台 → 运维 / 数据库 → 备份与回档' },
+  { key: 'storage', label: '云存储权限保持「所有用户可读，仅创建者可读写」', fix: '云开发控制台 → 存储 → 权限设置' },
+  { key: 'colperm', label: '19 个集合权限均为「所有用户不可读写」', fix: '云开发控制台 → 数据库 → 各集合 → 数据权限（本页「检测集合权限」可自动核对）' },
+  { key: 'e2e', label: '真机全链路：建礼簿 → 第二个微信扫码随礼 → 确认 → 回执 → 导出', fix: '用正式版或体验版走一遍' },
+  { key: 'printer', label: '58mm、80mm 打印机各打印一张小票', fix: '我的 → 打印机' },
+  { key: 'paycode', label: '收款码上传后用微信扫一扫能识别', fix: '主家信息页上传手机原图后，扫礼簿码进入随礼页扫码' },
+  { key: 'wipe', label: '已清除全部测试数据并标记正式上线', fix: '本页「数据清除」' }
+];
+
+async function checklist() {
+  const doc = (await readRaw('launch_checklist')) || {};
+  const st = doc.items || {};
+  const by = [...new Set(LAUNCH_ITEMS.map(i => st[i.key] && st[i.key].done && st[i.key].by).filter(Boolean))];
+  const names = {};
+  if (by.length) {
+    try {
+      (await db.collection('users').where({ openid: _.in(by) }).field({ openid: true, nickname: true }).get()).data.forEach(u => { names[u.openid] = u.nickname || '管理员'; });
+    } catch (e) { /* 只是显示名 */ }
+  }
+  return LAUNCH_ITEMS.map(i => {
+    const x = st[i.key] || {};
+    return { key: i.key, label: i.label, fix: i.fix, done: x.done === true, byName: x.done ? (names[x.by] || '管理员') : '', at: x.done ? (x.at || null) : null };
+  });
+}
+
+async function checkItem(admin, key, done) {
+  if (!LAUNCH_ITEMS.some(i => i.key === key)) return err('参数错误');
+  const doc = (await readRaw('launch_checklist')) || {};
+  const items = { ...(doc.items || {}) };
+  items[key] = done ? { done: true, by: admin, at: new Date() } : { done: false };
+  await P.writeSetting(db, 'launch_checklist', { items });
+  return ok({ list: await checklist() });
 }
 
 /** 导出字体是否已上传到云存储并登记（settings.export_fonts，由 fontsetup 云函数写入；不返回 fileID） */
@@ -628,6 +831,13 @@ async function ensureIndexes() {
     const exists = r.errcode !== 0 && /exist|duplicate|already/i.test(r.errmsg || '');
     return { col, name, ok: r.errcode === 0 || exists, existed: exists, msg: r.errcode === 0 || exists ? '' : `${r.errcode} ${r.errmsg || ''}` };
   }));
+  // 记下本次结果（v3.72.2），上线前检查据此列出缺失的索引
+  try {
+    await P.writeSetting(db, 'index_status', {
+      at: new Date(), okNames: results.filter(x => x.ok).map(x => x.col + '.' + x.name),
+      failed: results.filter(x => !x.ok).map(x => ({ col: x.col, name: x.name, msg: x.msg }))
+    });
+  } catch (e) { console.warn('记录索引结果失败', e.message); }
   return ok({ env, results, created: results.filter(x => x.ok && !x.existed).length, failed: results.filter(x => !x.ok).length });
 }
 

@@ -17,11 +17,11 @@ function ads(a, slots, dirty) {
   return dirty ? t + ' · 未保存' : t;
 }
 
-function pfBad(p) { return !!p && !(p.keyOk && p.colsOk && p.appSecret && p.fontsOk); }
-
-function pf(p) {
-  if (!p) return '未检查';
-  return pfBad(p) ? '已检查：有待处理项' : '已检查：全部正常';
+// 上线前检查摘要（v3.72.2）：n = 手动清单未勾 + 自动检查待处理
+function pf(p, n, last) {
+  if (n > 0) return '上线前检查：' + n + ' 项待处理' + (!p && !last ? '（自动检查未运行）' : '');
+  if (!p && !last) return '未检查';
+  return '上线前检查：全部完成';
 }
 
 function idx(summary) {
@@ -34,4 +34,4 @@ function plans(list) {
   return names.join(' / ') + ' · 手动开通 / 延期';
 }
 
-module.exports = { warm: warm, ads: ads, pf: pf, pfBad: pfBad, idx: idx, plans: plans };
+module.exports = { warm: warm, ads: ads, pf: pf, idx: idx, plans: plans };
