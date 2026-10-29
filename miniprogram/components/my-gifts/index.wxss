@@ -23,3 +23,6 @@ button.mg-op2:not([size=mini]) { margin-left: 20rpx; }
 .mg-link { margin-top: 12rpx; text-align: right; font-size: 26rpx; color: var(--primary); }
 .mg-empty { padding: 80rpx 0; }
 .ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 底部菜单页（往来）：遮罩止于自定义底部菜单上沿，弹层底部不再叠加安全区（菜单已占用）（v3.74.1） */
+.mask.mg-tab-mask { bottom: calc(50px + env(safe-area-inset-bottom)); }
+.sheet.mg-tab-sheet { max-height: 80vh; padding-bottom: 32rpx; }

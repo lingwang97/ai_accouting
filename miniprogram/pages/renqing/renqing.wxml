@@ -58,7 +58,7 @@
 
     <!-- 随礼记录：我作为宾客的随礼（等待确认 / 主家未确认收到 / 已取消 / 已入簿回执），与宾客「我的随礼记录」同一组件（v3.73.0） -->
     <block wx:elif="{{tab === 'receipts'}}">
-      <my-gifts id="mg" keyword="{{keyword}}" />
+      <my-gifts id="mg" keyword="{{keyword}}" in-tab="{{true}}" />
     </block>
 
     <!-- 我送出的礼 -->

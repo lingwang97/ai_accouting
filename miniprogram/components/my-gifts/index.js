@@ -18,7 +18,9 @@ const HINT = {
 
 Component({
   properties: {
-    keyword: { type: String, value: '', observer() { this.refilter(); } }
+    keyword: { type: String, value: '', observer() { this.refilter(); } },
+    // 用在底部菜单页（往来）时为 true：弹层停在自定义底部菜单上沿，避免「提交申请」被菜单盖住（v3.74.1）
+    inTab: { type: Boolean, value: false }
   },
   data: { appeal: null, loading: true, loadErr: '', list: [], waiting: [], rejected: [], cancelled: [], openId: '', empty: false },
   lifetimes: {
