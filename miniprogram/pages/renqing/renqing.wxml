@@ -5,18 +5,11 @@
   </view>
 
   <block wx:else>
-    <!-- 亲友办事提醒 -->
-    <view class="card remind">
-      <view class="rm-head">
-        <text class="rm-title">亲友办事提醒<text class="muted" wx:if="{{reminds.length}}">（{{reminds.length}}）</text></text>
-        <text class="link" bindtap="onAddRemind">＋ 加提醒</text>
-      </view>
-      <view class="rm-row {{item.hot ? 'hot' : ''}} {{item.past ? 'past' : ''}}" wx:for="{{reminds}}" wx:key="_id" wx:if="{{remindAll || index < 3}}" data-idx="{{index}}" bindtap="onRemind">
-        <text class="rm-name">{{item.name}} · {{item.event || item.typeLabel}}</text>
-        <text class="rm-date">{{item.dateStr}} · {{item.leftStr}}<text wx:if="{{item.remindStr && !item.past}}"> · {{item.remindStr}} 提醒</text></text>
-      </view>
-      <view class="rm-more" wx:if="{{reminds.length > 3}}" bindtap="onRemindAll">{{remindAll ? '收起' : '查看全部 ' + reminds.length + ' 条'}}</view>
-      <view class="muted small" wx:if="{{!reminds.length}}">记下亲友办事的日期，到时提醒你回礼</view>
+    <!-- 亲友办事提醒：一行提示条（无提醒时不显示），点开底部弹层；只在「收礼往来」显示 -->
+    <view class="tip-bar" wx:if="{{tab === 'people' && (reminds.length || doneList.length)}}" bindtap="onOpenRemind">
+      <image class="tip-icon" src="/assets/icons/bell-{{themeIcon || 'r'}}.svg" />
+      <text class="tip-text ell {{hotCount ? 'hot' : ''}}">{{remindTip}}</text>
+      <text class="tip-go">查看 ›</text>
     </view>
 
     <view class="seg">
@@ -28,13 +21,17 @@
     <view class="search-row">
       <input class="search" placeholder="{{tab === 'people' ? '输入姓名查往来' : (tab === 'receipts' ? '搜索主家 / 礼簿' : '搜索对方姓名')}}" value="{{keyword}}"
              bindinput="onKeyword" bindconfirm="onSearch" confirm-type="search" />
+      <view class="bell-btn" hover-class="btn-hover" wx:if="{{tab === 'people'}}" bindtap="onOpenRemind">
+        <image class="bell-img" src="/assets/icons/bell-{{themeIcon || 'r'}}.svg" />
+        <view class="bell-dot" wx:if="{{hotCount}}"></view>
+      </view>
       <view class="btn btn-primary add-btn" hover-class="btn-hover" wx:if="{{tab !== 'receipts'}}" bindtap="onAddGift">＋ 记送礼</view>
     </view>
 
     <loading show="{{loading && (tab === 'people' ? !shownPeople.length : (tab === 'receipts' ? !shownReceipts.length : !outList.length))}}" rows="4" />
 
     <!-- 收礼往来：按人（收送对比；逐笔在人详情里看） -->
-    <view class="card out-sum" wx:if="{{tab === 'people' && (people.length || inTotal)}}">共收到 {{inTotal}} 笔 · <text class="money">￥{{inSum}}</text></view>
+    <view class="card out-sum" wx:if="{{tab === 'people' && (hasPeople || inTotal)}}">共收到 {{inTotal}} 笔 · <text class="money">￥{{inSum}}</text></view>
     <view class="sub-row" wx:if="{{tab === 'people'}}">
       <view class="pf-chips">
         <view class="chip {{pFilter === item.v ? 'on' : ''}}" wx:for="{{pFilters}}" wx:key="v" data-v="{{item.v}}" bindtap="onPFilter">{{item.t}}</view>
@@ -55,7 +52,7 @@
         <view class="muted">收礼 {{item.inCount}} 次 ￥{{item.inSumStr}} · 送礼 {{item.outCount}} 次 ￥{{item.outSumStr}}</view>
       </view>
       <view class="muted center pad" wx:if="{{!loading && shownPeople.length === 0}}">
-        {{keyword ? '名单中没有「' + keyword + '」，按回车直接查询' : (pFilter !== 'all' && people.length ? '没有符合条件的往来人' : '暂无往来记录。宾客随礼入簿后会自动出现在这里，也可点「记送礼」登记你送出的礼')}}
+        {{keyword ? '名单中没有「' + keyword + '」，按回车直接查询' : (pFilter !== 'all' && hasPeople ? '没有符合条件的往来人' : '暂无往来记录。宾客随礼入簿后会自动出现在这里，也可点「记送礼」登记你送出的礼')}}
       </view>
     </block>
 
@@ -82,6 +79,37 @@
         <view class="muted">{{item.date}} · {{item.typeLabel}}<text wx:if="{{item.event}}"> · {{item.event}}</text></view>
       </view>
       <view class="muted center pad" wx:if="{{!loading && outList.length === 0}}">还没有送礼记录，点「记送礼」登记</view>
+      <view class="muted center pad" wx:if="{{outList.length > 0 && outList.length < outTotal}}">上拉加载更多</view>
     </block>
   </block>
+
+  <!-- 亲友办事提醒弹层 -->
+  <view class="mask tab-mask" wx:if="{{remindShow}}" catchtouchmove="noop" bindtap="onCloseRemind">
+    <view class="sheet tab-sheet" catchtap="noop">
+      <view class="rm-head">
+        <text class="sheet-title">亲友办事提醒<text class="muted" wx:if="{{reminds.length}}">（{{reminds.length}}）</text></text>
+        <text class="link" bindtap="onAddRemind">＋ 加提醒</text>
+      </view>
+      <scroll-view scroll-y class="rm-scroll {{doneOpen ? 'shrink' : ''}}" wx:if="{{reminds.length}}">
+        <view class="rm-row {{item.hot ? 'hot' : ''}} {{item.past ? 'past' : ''}}" wx:for="{{reminds}}" wx:key="_id" data-idx="{{index}}" bindtap="onRemind">
+          <text class="rm-name">{{item.name}} · {{item.event || item.typeLabel}}</text>
+          <text class="rm-date">{{item.dateStr}} · {{item.leftStr}}<text wx:if="{{item.remindStr && !item.past}}"> · {{item.remindStr}} 提醒</text></text>
+        </view>
+      </scroll-view>
+      <view class="rm-empty" wx:else>
+        <view class="muted">记下亲友办事的日期，到时提醒你回礼</view>
+        <view class="btn btn-primary rm-add" hover-class="btn-hover" bindtap="onAddRemind">＋ 加提醒</view>
+      </view>
+      <!-- 最近已处理：点错了可撤回 -->
+      <block wx:if="{{doneList.length}}">
+        <view class="rm-done-head"><text class="rm-done-title" bindtap="onToggleDone">最近已处理（{{doneList.length}}）<text class="muted">{{doneOpen ? '收起 ▴' : '展开 ▾'}}</text></text><text class="link" bindtap="onClearDone">清除</text></view>
+        <scroll-view scroll-y class="rm-scroll rm-done-scroll" wx:if="{{doneOpen}}">
+          <view class="rm-row past" wx:for="{{doneList}}" wx:key="_id" data-idx="{{index}}" bindtap="onUndoDone">
+            <text class="rm-name">{{item.name}} · {{item.event || item.typeLabel}}</text>
+            <text class="rm-date">{{item.dateStr}} · 点此撤回</text>
+          </view>
+        </scroll-view>
+      </block>
+    </view>
+  </view>
 </view>

@@ -20,8 +20,19 @@ const FIELD_LABELS = {
 const STYLES = [
   { v: 'card', label: '卡片' },
   { v: 'ticket', label: '票据' },
-  { v: 'simple', label: '简约' }
+  { v: 'simple', label: '简约' },
+  { v: 'elegant', label: '素雅' },                 // v3.62.0：灰白细边，白事也适用（免费）
+  { v: 'festive', label: '喜庆', premium: true },   // 红底金边
+  { v: 'longevity', label: '寿宴', premium: true }, // 暖黄底 + 寿字水印
+  { v: 'guofeng', label: '国风', premium: true },   // 宣纸底 + 双层细边
+  { v: 'business', label: '商务', premium: true }   // 深色顶栏
 ];
+/** 白事只能选这几种（与云函数 plans.js 的 RECEIPT_STYLES_FUNERAL 一致） */
+const FUNERAL_STYLES = ['elegant', 'simple', 'ticket'];
+/** 该事由可选的版式 */
+function stylesFor(bookType) {
+  return bookType === 'funeral' ? STYLES.filter(s => FUNERAL_STYLES.includes(s.v)) : STYLES;
+}
 
 const DEFAULT_TPL = {
   ...scenes.byType('other').receipt,
@@ -41,60 +52,40 @@ const SAMPLE = {
 /** 礼簿未自定义样式时，按事由类型套用场景默认（白事自动素色无红章） */
 function normalizeTpl(tpl, bookType) {
   // 已保存的样式里可能有已下线的字段（如旧版的「代随礼」）：只保留现有字段
-  if (tpl) return { ...DEFAULT_TPL, ...tpl, fields: (tpl.fields || DEFAULT_TPL.fields).filter(k => FIELD_LABELS[k]) };
-  return { ...DEFAULT_TPL, ...scenes.byType(bookType || 'other').receipt };
+  if (tpl) return fixForBook({ ...DEFAULT_TPL, ...tpl, fields: (tpl.fields || DEFAULT_TPL.fields).filter(k => FIELD_LABELS[k]) }, bookType);
+  return fixForBook({ ...DEFAULT_TPL, ...scenes.byType(bookType || 'other').receipt }, bookType);
 }
 
-/** 收据编号：到账日期 + 记录 ID 末 6 位 */
-function receiptNo(r) {
-  const d = fmt.day(r.paidAt || r.createdAt).replace(/-/g, '');
-  return `R${d}${String(r._id || '').slice(-6).toUpperCase()}`;
+/** 白事回执用的主色：素灰 / 黑色系（回执色板与校正共用） */
+const FUNERAL_COLORS = ['#333333', '#555555', '#777777', '#999999'];
+/** 是否灰黑色系（三个色值相差不超过 16） */
+function isGrey(hex) {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(hex || ''));
+  if (!m) return false;
+  const v = [1, 2, 3].map(i => parseInt(m[i], 16));
+  return Math.max(...v) - Math.min(...v) <= 16;
+}
+/**
+ * 白事礼簿的样式校正（v3.64.3）：版式只能是素雅 / 简约 / 票据，不是则改简约；主色不是灰黑色系则改 #333333。
+ * 旧模板（红色卡片、喜庆等）读取时即校正，不改库；非白事原样返回
+ */
+function fixForBook(t, bookType) {
+  if (bookType !== 'funeral') return t;
+  return {
+    ...t,
+    style: FUNERAL_STYLES.includes(t.style) ? t.style : 'simple',
+    color: isGrey(t.color) ? t.color : FUNERAL_COLORS[0]
+  };
 }
 
-/** 金额转人民币大写 */
-function amountUpper(n) {
-  const fen = Math.round(Number(n || 0) * 100);
-  if (fen === 0) return '零元整';
-  const digit = '零壹贰叁肆伍陆柒捌玖';
-  const unit = ['', '拾', '佰', '仟'];
-  const big = ['', '万', '亿'];
-  const yuan = Math.floor(fen / 100);
-  const jiao = Math.floor(fen / 10) % 10;
-  const f = fen % 10;
-
-  let s = '';
-  if (yuan > 0) {
-    const str = String(yuan);
-    let zero = false;
-    for (let i = 0; i < str.length; i++) {
-      const pos = str.length - 1 - i;
-      const d = Number(str[i]);
-      if (d === 0) {
-        zero = true;
-      } else {
-        if (zero) s += '零';
-        zero = false;
-        s += digit[d] + unit[pos % 4];
-      }
-      if (pos % 4 === 0 && pos > 0) {
-        // 万/亿 节：本节有非零数字才加单位
-        const sec = str.slice(Math.max(0, i - 3), i + 1);
-        if (Number(sec) > 0) s += big[pos / 4];
-      }
-    }
-    s += '元';
-  }
-  if (jiao === 0 && f === 0) return s + '整';
-  if (jiao > 0) s += digit[jiao] + '角';
-  else if (yuan > 0) s += '零';
-  if (f > 0) s += digit[f] + '分';
-  else s += '整'; // 到角为止，后写"整"
-  return s;
-}
+// 收据编号与金额大写放在 format.js（小票打印也要用，避免引入 request）
+const { receiptNo, amountUpper } = fmt;
 
 /** 生成展示模型（组件渲染与画图共用） */
-function buildModel(record, tpl, accountName) {
+function buildModel(record, tpl, accountName, opts) {
   const t = normalizeTpl(tpl, record.bookType);
+  // 套餐关闭会员版式后按「卡片」显示（opts.premiumOpen === false；宾客端由云函数同样降级，这里供设置页预览）
+  if (opts && opts.premiumOpen === false && STYLES.some(s => s.premium && s.v === t.style)) t.style = 'card';
   const values = {
     receiptNo: receiptNo(record),
     payee: accountName || '',
@@ -219,12 +210,50 @@ function draw(ctx, m, H) {
   const simple = m.style === 'simple';
 
   // 背景
-  ctx.fillStyle = m.style === 'card' ? color : '#FFFFFF';
+  const st = m.style;
+  const PAPER = { longevity: '#FFF8E1', guofeng: '#F6EFDD', festive: '#FFFDF5' };
+  ctx.fillStyle = st === 'card' || st === 'festive' ? color : (PAPER[st] || '#FFFFFF');
   ctx.fillRect(0, 0, W, H);
-  if (m.style === 'card') {
-    ctx.fillStyle = '#FFFFFF';
+  if (st === 'card' || st === 'festive') {
+    ctx.fillStyle = PAPER[st] || '#FFFFFF';
     roundRect(ctx, 24, 24, W - 48, H - 48, 24);
     ctx.fill();
+  }
+  if (st === 'festive') { // 金色双线内框
+    ctx.strokeStyle = '#D4AF37';
+    ctx.lineWidth = 4;
+    roundRect(ctx, 44, 44, W - 88, H - 88, 14); ctx.stroke();
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, 54, 54, W - 108, H - 108, 10); ctx.stroke();
+  }
+  if (st === 'longevity') { // 上下色带 + 寿字水印
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, W, 16);
+    ctx.fillRect(0, H - 16, W, 16);
+    ctx.save();
+    ctx.globalAlpha = 0.07;
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'bold 420px serif';
+    ctx.fillText('寿', W / 2, H / 2);
+    ctx.restore();
+  }
+  if (st === 'guofeng') { // 粗细双层边
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 5;
+    ctx.strokeRect(24, 24, W - 48, H - 48);
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(40, 40, W - 80, H - 80);
+  }
+  if (st === 'business') { // 深色顶栏
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, W, BUSINESS_HEAD);
+  }
+  if (st === 'elegant') { // 灰色细边
+    ctx.strokeStyle = '#BBBBBB';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(24, 24, W - 48, H - 48);
   }
   if (m.style === 'ticket') {
     ctx.fillStyle = color;
@@ -241,12 +270,18 @@ function draw(ctx, m, H) {
   // 标题
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillStyle = simple ? '#333333' : color;
-  ctx.font = 'bold 44px sans-serif';
-  ctx.fillText(m.title, W / 2, 110);
+  ctx.fillStyle = simple || st === 'elegant' ? '#333333' : st === 'business' ? '#FFFFFF' : color;
+  const tf = fitTitle(ctx, m.title, TITLE_MAX_W, st === 'guofeng' ? 'serif' : 'sans-serif');
+  ctx.font = tf.font;
+  ctx.fillText(tf.text, W / 2, st === 'business' ? BUSINESS_HEAD / 2 : 110); // 商务：标题在顶栏正中
   if (simple) {
     ctx.fillStyle = color;
     ctx.fillRect(W / 2 - 40, 150, 80, 6);
+  }
+  if (st === 'elegant') { // 标题下的细双线
+    ctx.fillStyle = '#999999';
+    ctx.fillRect(W / 2 - 60, 150, 120, 2);
+    ctx.fillRect(W / 2 - 60, 158, 120, 2);
   }
 
   // 金额
@@ -323,6 +358,21 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
+const BUSINESS_HEAD = 150; // 商务版顶栏高度（页面版 .title.hd 同为 150rpx，印章下移到顶栏之下）
+const TITLE_MAX_W = W - 120; // 标题最大宽度：留出边框 / 色带的位置
+/**
+ * 标题超宽：先把字号从 44 缩到最小 30，仍放不下再截断加省略号（标题最长 20 字，44px 约 880 宽，超出画布；商务顶栏的白字也不会被切）
+ * 返回 { font, text }，调用方设置 ctx.font 后绘制
+ */
+function fitTitle(ctx, text, maxW, family) {
+  for (let size = 44; size >= 30; size -= 2) {
+    ctx.font = `bold ${size}px ${family}`;
+    if (ctx.measureText(String(text)).width <= maxW) return { font: ctx.font, text: String(text) };
+  }
+  ctx.font = `bold 30px ${family}`;
+  return { font: ctx.font, text: fit(ctx, text, maxW) };
+}
+
 /** 超宽文字截断加省略号 */
 function fit(ctx, text, maxW) {
   let s = String(text);
@@ -358,6 +408,6 @@ function saveImage(filePath) {
 }
 
 module.exports = {
-  FIELD_LABELS, STYLES, DEFAULT_TPL, SAMPLE,
-  normalizeTpl, amountUpper, receiptNo, buildModel, toImage, saveImage, withAppCode
+  FIELD_LABELS, STYLES, FUNERAL_STYLES, stylesFor, DEFAULT_TPL, SAMPLE,
+  normalizeTpl, amountUpper, receiptNo, buildModel, toImage, saveImage, withAppCode, fitTitle, fixForBook, isGrey, FUNERAL_COLORS
 };

@@ -3,21 +3,29 @@
 // 每本礼簿各存一套电子回执 / 打印样式（receiptTpl / printTpl），避免喜事、白事样式串场
 // 份数与合计存在礼簿上（statCount / statFen，确认收到时累加），列表无需每次全量统计
 const cloud = require('wx-server-sdk');
+const { ok, err } = require('./common.js');
+const S = require('./secure.js'); // 内容安全审核（tools/cloud-shared/secure.js，失败放行）
+const { ownPayCode } = require('./paycode.js'); // 收款码归属（tools/cloud-shared/paycode.js）
+const { REC } = require('./status.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
 const books = db.collection('books');
 const accounts = db.collection('accounts');
 const records = db.collection('records');
-const { resolveCtx, canBook, restricted, can, workBook, soloBook } = require('./ctx.js');
+const { resolveCtx, canBook, restricted, readonly, can, workBook, soloBook } = require('./ctx.js');
 const trash = require('./trash.js');
+const P = require('./plans.js');
 
 const TYPES = ['wedding', 'birthday', 'baby', 'house', 'funeral', 'other'];
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 const RECEIPT_FIELDS = ['receiptNo', 'payee', 'payerName', 'relation', 'amountUpper', 'theme', 'remark', 'paidAt'];
-const RECEIPT_STYLES = ['card', 'ticket', 'simple'];
-const PRINT_FIELDS = ['title', 'divider', 'theme', 'payDay', 'time', 'payerName', 'relation', 'amount', 'remark', 'thanks'];
+const RECEIPT_STYLES = [...P.RECEIPT_STYLES_FREE, ...P.RECEIPT_STYLES_PREMIUM]; // v3.62.0：新增素雅（免费）与 4 种会员样式
+const PRINT_FIELDS = ['title', 'divider', 'theme', 'payDay', 'time', 'receiptNo', 'payerName', 'relation', 'payMethod', 'amount', 'amountUpper', 'remark', 'thanks'];
+const AMOUNT_SIZES = ['double', 'tall', 'normal'];
+const BORDER_VALUES = ['off', 'auto', 'hui', 'yun', 'xi', 'shou', 'fu', 'su']; // 小票花边（v3.60.0）：与前端 utils/bordertiles.js 一致
+const clampInt = (v, lo, hi, d) => { const n = Math.round(Number(v)); return isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
 
 /** 幂等建集合（init 未跑完时自愈；同一实例只尝试一次） */
 let colReady = false;
@@ -41,6 +49,8 @@ exports.main = async (event) => {
     const OWNER = ctx.ownerOpenid;
     // 记账人按权限：「管理礼簿」新建 / 修改 / 切换 / 归档，「回执与打印样式」改样式；只能操作负责的礼簿
     if (['save', 'setActive', 'archive'].includes(event.action) && !can(ctx, 'books')) return err('你没有管理礼簿的权限');
+    if (event.action === 'recalc' && !can(ctx, 'books')) return err('你没有管理礼簿的权限');
+    if (event.action === 'recalc' && !canBook(ctx, String(event.bookId || ''))) return err('礼簿不存在');
     if (event.action === 'saveTpl' && !can(ctx, 'style')) return err('你没有修改回执与打印样式的权限');
     if (event.action === 'save' && event.book && event.book._id && !canBook(ctx, String(event.book._id))) return err('礼簿不存在');
     if (event.action === 'save' && event.book && !event.book._id && ctx.bookIds) return err('你只负责部分礼簿，不能新建礼簿');
@@ -58,12 +68,13 @@ exports.main = async (event) => {
       case 'removePreview': return ctx.role === 'owner' ? await removeBook(OWNER, account, String(event.bookId || ''), false) : err('只有主家本人可以删除礼簿');
       case 'remove': return ctx.role === 'owner' ? await removeBook(OWNER, account, String(event.bookId || ''), true) : err('只有主家本人可以删除礼簿');
       // 回收站（只限主家本人）
-      case 'trashList': return ctx.role === 'owner' ? await trashList(OWNER) : err('只有主家本人可以查看回收站');
-      case 'trashRestore': return ctx.role === 'owner' ? await trashOp(OWNER, String(event.bookId || ''), 'restore') : err('只有主家本人可以恢复');
+      case 'trashList': return ctx.role === 'owner' ? await trashList(OWNER, account) : err('只有主家本人可以查看回收站');
+      case 'trashRestore': return ctx.role === 'owner' ? await trashOp(OWNER, String(event.bookId || ''), 'restore', undefined, account) : err('只有主家本人可以恢复');
       case 'trashPurge': return ctx.role === 'owner' ? await trashOp(OWNER, String(event.bookId || ''), 'purge', event.confirmName) : err('只有主家本人可以删除');
-      case 'stats': return await stats(OWNER, event.bookId);
+      case 'stats': return await stats(OWNER, event.bookId, ctx);
+      case 'recalc': return await recalc(OWNER, String(event.bookId || ''));
       case 'getTpl': return await getTpl(OWNER, account, event.bookId);
-      case 'saveTpl': return await saveTpl(OWNER, event.bookId, event.receiptTpl, event.printTpl);
+      case 'saveTpl': return await saveTpl(OWNER, event.bookId, event.receiptTpl, event.printTpl, OPENID);
       default: return err('未知 action');
     }
   } catch (e) {
@@ -95,13 +106,19 @@ async function list(openid, account, ctx) {
   if (stale) res = await books.where({ ownerOpenid: openid }).orderBy('createdAt', 'desc').limit(1000).get();
 
   const visible = res.data.filter(b => canBook(ctx, b._id)); // 礼台人员只看负责的场次
+  const showPdf = can(ctx, 'export') || readonly(ctx); // 家人共享与导出权限一致可看；没有「对账与导出」的记账人不返回存档文件
   return ok({
     activeBookId: canBook(ctx, workBook(ctx)) ? workBook(ctx) : '', // 机构模式记账人：自己选的一场
     restricted: restricted(ctx),
     perms: ctx.perms || [],
     list: visible.map(b => ({
       _id: b._id, name: b.name, type: b.type, date: b.date, location: b.location,
-      archived: b.archived, archivePdf: b.archivePdf || null,
+      archived: b.archived, archivePdf: showPdf ? (b.archivePdf || null) : null, // 存档 PDF 视同导出文件，需「对账与导出」
+      pdfTheme: (b.pdfTheme && b.pdfTheme.key) || '', // 传统礼簿 PDF 主题（空为默认红金）
+      pdfCustom: (b.pdfTheme && b.pdfTheme.key === 'custom' && b.pdfTheme.custom) || null,
+      pdfBase: (b.pdfTheme && b.pdfTheme.base) || '', // 自定义基于哪个预设修改（仅记录）
+      pdfBack: (b.pdfTheme && b.pdfTheme.back) || null, // 传统礼簿尾页设置
+      pdfBind: (b.pdfTheme && b.pdfTheme.bind) || '',  // 装订：none | single | double（空为默认不留边）
       hostName: b.hostName || '',             // 机构版：本场主家称呼
       hasPayCode: !!b.payCodeFileID,          // 机构版：本场单独设置了收款码
       pendingPayCode: !!b.pendingPayCode,     // 记账人提交的本场收款码待主家确认
@@ -144,7 +161,7 @@ async function migrateOrphans(openid, account) {
     .update({ data: { bookId: book._id, bookType: 'other' } });
   // 按刚归入的记录（固定 _id 集合）统计并累加，避免与并发确认重复计算
   const sums = await records.aggregate()
-    .match({ ownerOpenid: openid, status: 'paid', _id: _.in(ids) })
+    .match({ ownerOpenid: openid, status: REC.PAID, _id: _.in(ids) })
     .group({ _id: null, count: _.aggregate.sum(1), fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) })
     .end();
   const t = (sums.list && sums.list[0]) || { count: 0, fen: 0 };
@@ -155,27 +172,27 @@ async function migrateOrphans(openid, account) {
 }
 
 /**
- * 旧礼簿一次性补算份数与合计（并发安全）：
- *  先原子地标记 statReady 并记下分界时间 statSince，之后确认收到（paidAt ≥ statSince）由 payment 累加；
- *  再把分界之前入簿的礼金统计后累加上去，两部分互不重叠
+ * 旧礼簿一次性补算份数与合计（并发安全、中途失败可重试）：
+ *  先记下分界时间 since 并统计 since 之前入簿的礼金，再用「statReady 还不是 true」作条件、一次写入
+ *  statReady + statSince + 统计结果；之后确认收到（paidAt ≥ statSince）由 payment 累加，两部分互不重叠。
+ *  统计失败或写入前中断：statReady 仍为 false，下次打开礼簿列表会重新补算（不会出现「已标记就绪但合计为 0」）。
+ *  并发的两个补算：只有先写入的一个生效（返回 true），另一个条件不满足（返回 false），不会重复累加。
+ *  说明：统计开始到写入完成之间（通常不到 1 秒）确认入簿的礼金，因 statReady 尚为 false 不会被累加，
+ *  这是一次性补算（旧数据 / 累加失败后）的极小窗口；如需绝对准确可在礼簿页再次触发补算。
  */
 async function backfillStats(openid, bookId) {
   const since = new Date();
-  const mark = await books.where({ _id: bookId, ownerOpenid: openid, statReady: _.neq(true) })
-    .update({ data: { statReady: true, statSince: since, statCount: 0, statFen: 0 } });
-  if (mark.stats.updated !== 1) return false; // 已被其他请求补算
   const sums = await records.aggregate()
     .match(_.and([
-      { ownerOpenid: openid, status: 'paid', bookId },
+      { ownerOpenid: openid, status: REC.PAID, bookId },
       _.or([{ paidAt: _.lt(since) }, { paidAt: _.exists(false) }])
     ]))
     .group({ _id: null, count: _.aggregate.sum(1), fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) })
     .end();
   const t = (sums.list && sums.list[0]) || { count: 0, fen: 0 };
-  if (t.count) {
-    await books.doc(bookId).update({ data: { statCount: _.inc(t.count), statFen: _.inc(Math.round(t.fen)) } });
-  }
-  return true;
+  const mark = await books.where({ _id: bookId, ownerOpenid: openid, statReady: _.neq(true) })
+    .update({ data: { statReady: true, statSince: since, statCount: t.count || 0, statFen: Math.round(t.fen || 0) } });
+  return mark.stats.updated === 1;
 }
 
 async function create(openid, b, id) {
@@ -211,10 +228,18 @@ async function save(openid, account, input, ctx, caller) {
 
   const old = input._id ? await getBook(openid, String(input._id)) : null;
   if (input._id && !old) return err('礼簿不存在');
+  // 内容安全（v3.71.0）：礼簿名、地点、本场主家称呼（只审核有改动的）
+  {
+    const o = old || {};
+    const bad = await S.checkText(cloud, caller, [b.name !== o.name ? b.name : '', b.location !== (o.location || '') ? b.location : '', b.hostName !== undefined && b.hostName !== (o.hostName || '') ? b.hostName : '']);
+    if (bad) return bad;
+  }
   let pendingCode = false;
   if (b.payCodeFileID && b.payCodeFileID !== ((old && old.payCodeFileID) || '')) {
     // 收款码关系到钱进谁的账户：只能用本人刚上传的图片
     if (!ownPayCode(b.payCodeFileID, caller)) return err('收款码图片无效，请重新上传');
+    const badImg = await S.checkImage(cloud, b.payCodeFileID); // 内容安全（v3.71.0）
+    if (badImg) return badImg;
     if (ctx.role !== 'owner') {
       b.pendingPayCode = { fileID: b.payCodeFileID, by: (ctx.member && ctx.member.displayName) || (ctx.user && ctx.user.nickname) || '记账人', byOpenid: caller, at: new Date() };
       delete b.payCodeFileID;
@@ -223,6 +248,7 @@ async function save(openid, account, input, ctx, caller) {
   } else if (b.payCodeFileID !== undefined && ctx.role === 'owner' && old && old.pendingPayCode) {
     b.pendingPayCode = _.remove(); // 主家自己清除 / 保留原码：之前待确认的作废
   }
+  if (b.payCodeFileID === '' && ctx.role !== 'owner') delete b.payCodeFileID; // 记账人不能清空本场收款码，保持原值
   if (pendingCode) {
     await accounts.doc(account._id).update({ data: { payCodeCheck: true, payCodeBy: b.pendingPayCode.by } });
   }
@@ -238,6 +264,13 @@ async function save(openid, account, input, ctx, caller) {
     if (account.activeBookId === input._id) await syncThemeName(account, b.name);
     const { pendingPayCode, ...shown } = b;
     return ok({ book: { _id: input._id, ...shown }, pendingPayCode: pendingCode });
+  }
+  // v3.63.0 礼簿数额度（features.maxBooks，0 / 缺项不限；含已归档、不含回收站）：只限制新增
+  {
+    let plan = null;
+    try { plan = await P.planOf(db, openid); } catch (e) { /* 读套餐失败：按不限处理 */ }
+    const lim = P.limitOf(plan && plan.features, 'maxBooks');
+    if (isFinite(lim) && (await books.where({ ownerOpenid: openid }).count()).total >= lim) return err(P.quotaMsg(plan.name, 'books', lim, account.orgMode));
   }
   const book = await create(openid, b);
   let active = account.activeBookId || '';
@@ -281,7 +314,15 @@ async function archive(openid, account, bookId, archived, ctx) {
   const book = await getBook(openid, bookId);
   if (!book) return err('礼簿不存在');
   if (archived && account.activeBookId === book._id) return err('当前礼簿不能归档，请先切换到其他礼簿');
-  await books.doc(book._id).update({ data: { archived } });
+  // 取消归档：存档 PDF 已过期（之后礼簿会变），清掉字段并删文件；删文件失败不阻断取消归档（登记行保留，清除数据时仍会回收）
+  const stale = !archived && book.archived && book.archivePdf && book.archivePdf.fileID ? String(book.archivePdf.fileID) : '';
+  await books.doc(book._id).update({ data: stale ? { archived, archivePdf: _.remove() } : { archived } });
+  if (stale && stale.includes('/archives/')) {
+    try {
+      await cloud.deleteFile({ fileList: [stale] });
+      await db.collection('exports').where({ ownerOpenid: openid, fileID: stale }).remove();
+    } catch (e) { console.warn('取消归档：删除存档 PDF 失败', e.message); }
+  }
   let affected = [];
   if (archived) {
     const members = db.collection('members');
@@ -313,52 +354,73 @@ async function removeBook(openid, account, bookId, confirm) {
     ? !m.allBooks && Array.isArray(m.bookIds) && m.bookIds.length && m.bookIds.every(id => id === book._id)
     : soloBook(m, account) === book._id)).map(m => m.displayName || '记账人');
   const [paid, all] = await Promise.all([
-    records.aggregate().match({ ownerOpenid: openid, bookId: book._id, status: 'paid' })
+    records.aggregate().match({ ownerOpenid: openid, bookId: book._id, status: REC.PAID })
       .group({ _id: null, count: _.aggregate.sum(1), fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) }).end(),
     records.where({ ownerOpenid: openid, bookId: book._id }).count()
   ]);
   const st = (paid.list && paid.list[0]) || { count: 0, fen: 0 };
   const summary = { name: book.name, count: st.count, sum: Math.round(st.fen) / 100, total: all.total, affected };
-  if (!confirm) return ok({ ...summary, days: trash.TRASH_DAYS });
+  const days = await trashDaysOf(openid, account);
+  if (!confirm) return ok({ ...summary, days });
   const done = await trash.moveToTrash(db, openid, book._id, book, {
     aid: account._id, count: summary.count, sum: summary.sum, files: trash.filesOf(book, account, ownPayCode)
-  });
+  }, days);
   // 自己选了这一场的机构记账人：清掉选择
   await members.where({ aid: account._id, curBookId: book._id }).update({ data: { curBookId: '' } });
   return ok({ done, affected });
 }
 
+/** 当前设置的回收站保留天数（accounts.trashDays，受套餐 features.trashDays 限制；之后删除的礼簿按它计算到期时间） */
+async function trashDaysOf(openid, account) {
+  let features = {};
+  try { features = (await P.planOf(db, openid)).features; } catch (e) { /* 读套餐失败：按开放处理 */ }
+  return P.effectiveTrashDays(account && account.trashDays, features);
+}
+
 /** 回收站列表（含删除中 / 恢复中的） */
-async function trashList(openid) {
+async function trashList(openid, account) {
   let res = { data: [] };
   try {
     res = await db.collection('trash_books').where({ ownerOpenid: openid, _openid: _.exists(false) }).orderBy('deletedAt', 'desc').limit(100)
       .field({ name: true, type: true, hostName: true, count: true, sum: true, deletedAt: true, purgeAt: true, trashStatus: true }).get();
   } catch (e) { /* 集合还不存在 */ }
-  return ok({ list: res.data, days: trash.TRASH_DAYS });
+  return ok({ list: res.data, days: await trashDaysOf(openid, account) });
 }
 
 /** 回收站里的一本：恢复 / 彻底删除（须输入礼簿名称） */
-async function trashOp(openid, bookId, op, confirmName) {
+async function trashOp(openid, bookId, op, confirmName, account) {
   let t;
   try { t = (await db.collection('trash_books').doc(bookId).get()).data; } catch (e) { return err('回收站里没有这本礼簿'); }
   if (t.ownerOpenid !== openid || t._openid) return err('回收站里没有这本礼簿');
   if (op === 'restore') {
+    // v3.68.1：恢复也算新增一本，受礼簿数额度限制（恢复中途续跑的不再检查）
+    if (t.trashStatus !== 'restoring') {
+      let plan = null;
+      try { plan = await P.planOf(db, openid); } catch (e) { /* 读套餐失败：按不限处理 */ }
+      const lim = P.limitOf(plan && plan.features, 'maxBooks');
+      if (isFinite(lim) && (await books.where({ ownerOpenid: openid }).count()).total >= lim) {
+        return err('不能恢复：' + P.quotaMsg(plan.name, 'books', lim, account && account.orgMode));
+      }
+    }
     const r = await trash.restore(db, openid, bookId);
     return r.error ? err(r.error) : ok({ done: r.done });
   }
   if (t.trashStatus === 'restoring') return err('这本礼簿正在恢复，请稍后再试');
   if (String(confirmName || '').trim() !== t.name) return err('输入的礼簿名称不一致');
-  if (t.trashStatus === 'moving') await trash.moveToTrash(db, openid, bookId, null); // 先移完再删
+  if (t.trashStatus === 'moving') {
+    // 先移完再删：本次没移完（记录很多）就不能删，否则剩余礼金记录会成孤儿
+    const moved = await trash.moveToTrash(db, openid, bookId, null);
+    if (!moved) return err('这本礼簿仍在删除中，请稍后再试');
+  }
   await trash.purge(db, cloud, { ...t, _id: bookId });
   return ok({ purged: true });
 }
 
 /** 单本礼簿统计：合计、份数、按关系分组 */
-async function stats(openid, bookId) {
+async function stats(openid, bookId, ctx) {
   const book = await getBook(openid, bookId);
   if (!book) return err('礼簿不存在');
-  const match = { ownerOpenid: openid, status: 'paid', bookId: book._id };
+  const match = { ownerOpenid: openid, status: REC.PAID, bookId: book._id };
   const [total, byRel, byMethod] = await Promise.all([
     records.aggregate().match(match)
       .group({ _id: null, count: _.aggregate.sum(1), fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])), maxAmount: _.aggregate.max('$amount') })
@@ -380,8 +442,9 @@ async function stats(openid, bookId) {
     method[k].sum = Math.round(method[k].sum * 100 + m.fen) / 100;
   });
   const t = (total.list && total.list[0]) || { count: 0, fen: 0, maxAmount: 0 };
+  await checkDrift(openid, book, t.count || 0, Math.round(t.fen || 0)); // 本来就做了实时聚合，顺带核对累计合计
   return ok({
-    book: safeBook(book),
+    book: { ...safeBook(book), archivePdf: ctx && (can(ctx, 'export') || readonly(ctx)) ? (book.archivePdf || null) : null },
     count: t.count,
     sum: Math.round(t.fen) / 100,
     maxAmount: t.maxAmount || 0,
@@ -392,11 +455,45 @@ async function stats(openid, bookId) {
   });
 }
 
+/**
+ * 核对礼簿累计合计（statCount / statFen）与实时聚合：不一致时重读一次礼簿再比（排除刚入簿的并发），
+ * 仍不一致就把 statReady 置 false，下次打开礼簿列表自动重算。只在本来就做了聚合的接口里调用，失败不影响主流程。
+ */
+async function checkDrift(openid, book, count, fen) {
+  try {
+    if (!book || !book.statReady) return false;
+    if ((book.statCount || 0) === count && (book.statFen || 0) === fen) return false;
+    const fresh = (await books.doc(book._id).get()).data;
+    if (!fresh || fresh.ownerOpenid !== openid || !fresh.statReady) return false;
+    if ((fresh.statCount || 0) === count && (fresh.statFen || 0) === fen) return false;
+    await books.where({ _id: book._id, ownerOpenid: openid, statReady: true }).update({ data: { statReady: false } });
+    console.warn('礼簿合计与记录不一致，已标记重算', book._id, fresh.statCount, count, fresh.statFen, fen);
+    return true;
+  } catch (e) { console.warn('核对合计失败', e.message); return false; }
+}
+
+/** 重算合计：先置为待补算，再立即补算（并发安全：只有一个补算会写入，见 backfillStats） */
+async function recalc(openid, bookId) {
+  const book = await getBook(openid, bookId);
+  if (!book) return err('礼簿不存在');
+  await books.where({ _id: book._id, ownerOpenid: openid }).update({ data: { statReady: false } });
+  let wrote = false;
+  try {
+    wrote = await backfillStats(openid, book._id);
+  } catch (e) {
+    // 补算失败：statReady 保持 false，下次打开礼簿列表会自动重试
+    console.error('重算合计失败', e);
+    return err('重算失败，请稍后再试（下次打开礼簿列表会自动重算）');
+  }
+  const fresh = await getBook(openid, book._id);
+  return ok({ count: (fresh && fresh.statCount) || 0, sum: ((fresh && fresh.statFen) || 0) / 100, recalculated: wrote });
+}
+
 /** 返回给前端的礼簿：不带主家 openid、收款码文件路径和待确认收款码的提交人 */
 function safeBook(b) {
   return {
     _id: b._id, name: b.name, type: b.type, date: b.date || '', location: b.location || '',
-    archived: !!b.archived, archivePdf: b.archivePdf || null, hostName: b.hostName || '',
+    archived: !!b.archived, archivePdf: null, hostName: b.hostName || '',
     hasPayCode: !!b.payCodeFileID, pendingPayCode: !!b.pendingPayCode,
     count: b.statCount || 0, sum: (b.statFen || 0) / 100
   };
@@ -421,16 +518,36 @@ async function getTpl(openid, account, bookId) {
 }
 
 /** 保存礼簿的回执 / 打印样式（两者可只传其一） */
-async function saveTpl(openid, bookId, receiptTpl, printTpl) {
+async function saveTpl(openid, bookId, receiptTpl, printTpl, caller) {
   const book = await getBook(openid, bookId);
   if (!book) return err('礼簿不存在');
+  // 内容安全（v3.71.0）：回执标题 / 落款 / 页脚、小票标题 / 致谢语 / 页脚（回执宾客可见；只审核有改动的）
+  {
+    const rt = receiptTpl || {}, pt = printTpl || {}, orc = book.receiptTpl || {}, opr = book.printTpl || {};
+    const chg = (n, o) => { const v = String(n || '').trim(); return v && v !== String(o || '') ? v : ''; };
+    const bad = await S.checkText(cloud, caller || openid, [
+      receiptTpl ? chg(String(rt.title || '').slice(0, 20), orc.title) : '', receiptTpl ? chg(String(rt.stamp || '').slice(0, 4), orc.stamp) : '', receiptTpl ? chg(String(rt.footer || '').slice(0, 60), orc.footer) : '',
+      printTpl ? chg(String(pt.title || '').slice(0, 30), opr.title) : '', printTpl ? chg(String(pt.thanks || '').slice(0, 40), opr.thanks) : '', printTpl ? chg(String(pt.footer || '').replace(/\s+/g, ' ').slice(0, 30), opr.footer) : ''
+    ]);
+    if (bad) return bad;
+  }
   const data = {};
   if (receiptTpl) {
     const t = receiptTpl;
+    const style = RECEIPT_STYLES.includes(t.style) ? t.style : 'card';
+    const oldStyle = book.receiptTpl && book.receiptTpl.style;
+    if (style !== oldStyle) { // 与已存的一致时放行（只改别的项），宾客端按套餐降级显示
+      if (book.type === 'funeral' && !P.RECEIPT_STYLES_FUNERAL.includes(style)) return err('白事回执只能选素雅、简约、票据');
+      if (P.RECEIPT_STYLES_PREMIUM.includes(style)) {
+        let open = true;
+        try { open = P.featureOpen((await P.planOf(db, openid)).features, 'receiptStylePremium'); } catch (e) { /* 读套餐失败：按开放处理 */ }
+        if (!open) return err('该回执样式为会员功能');
+      }
+    }
     data.receiptTpl = _.set({
       title: String(t.title || '礼金回执').slice(0, 20),
       color: /^#[0-9a-fA-F]{6}$/.test(t.color || '') ? t.color : '#C8161D',
-      style: RECEIPT_STYLES.includes(t.style) ? t.style : 'card',
+      style,
       fields: Array.isArray(t.fields) ? t.fields.filter(f => RECEIPT_FIELDS.includes(f)).slice(0, 10) : RECEIPT_FIELDS,
       showStamp: t.showStamp !== false,
       stamp: String(t.stamp || '').slice(0, 4),
@@ -439,7 +556,7 @@ async function saveTpl(openid, bookId, receiptTpl, printTpl) {
   }
   if (printTpl) {
     const t = printTpl;
-    const fields = Array.isArray(t.fields) ? t.fields.filter(f => PRINT_FIELDS.includes(f)).slice(0, 12) : PRINT_FIELDS;
+    const fields = Array.isArray(t.fields) ? t.fields.filter(f => PRINT_FIELDS.includes(f)).slice(0, 14) : PRINT_FIELDS;
     if (fields.length === 0) return err('至少保留一个打印字段');
     data.printTpl = _.set({
       paperWidth: t.paperWidth === 48 ? 48 : 32,
@@ -447,7 +564,21 @@ async function saveTpl(openid, bookId, receiptTpl, printTpl) {
       title: String(t.title || '礼金回执').slice(0, 30),
       showDivider: t.showDivider !== false,
       thanks: String(t.thanks || '').slice(0, 40),
-      promo: t.promo !== false // 小票底部推广语
+      promo: t.promo !== false, // 小票底部推广语
+      // v3.56.0 新增；旧模板缺这些字段时前端按默认值补齐
+      footer: String(t.footer || '').replace(/\s+/g, ' ').slice(0, 30),
+      amountSize: AMOUNT_SIZES.includes(t.amountSize) ? t.amountSize : 'double',
+      titleAlign: t.titleAlign === 'left' ? 'left' : 'center',
+      titleBold: t.titleBold !== false,
+      showHandler: t.showHandler !== false,
+      // v3.57.0 小票二维码：qr 未设置时按事由默认（白事关）；qrMode：小程序码只能图片方式，native 预留给以后的普通链接二维码
+      ...(typeof t.qr === 'boolean' ? { qr: t.qr } : {}),
+      qrMode: t.qrMode === 'native' ? 'native' : 'image',
+      feedTop: clampInt(t.feedTop, 0, 4, 1),
+      feedBottom: clampInt(t.feedBottom, 2, 8, 5),
+      // v3.60.0 小票花边：缺字段 / 非法值一律视为 off；borderSide = 左右装饰字符，false 为仅上下花纹带
+      border: BORDER_VALUES.includes(t.border) ? t.border : 'off',
+      borderSide: t.borderSide !== false
     });
   }
   if (!Object.keys(data).length) return err('参数错误');
@@ -455,11 +586,6 @@ async function saveTpl(openid, bookId, receiptTpl, printTpl) {
   return ok({ saved: Object.keys(data) });
 }
 
-/** 是否为该用户本人上传到 paycodes/ 目录的收款码（与 account 云函数一致） */
-function ownPayCode(fileID, openid) {
-  const esc = String(openid || '').replace(/[^a-zA-Z0-9_-]/g, '');
-  return !!esc && new RegExp(`^cloud://[^/]+/paycodes/(book-)?${esc}-\\d+\\.(png|jpe?g|webp)$`, 'i').test(String(fileID || ''));
-}
 
 async function getBook(openid, bookId) {
   if (!/^[a-zA-Z0-9_-]{1,64}$/.test(String(bookId || ''))) return null;
@@ -476,5 +602,3 @@ async function syncThemeName(account, name) {
   await accounts.doc(account._id).update({ data: { 'theme.name': name } });
 }
 
-const ok = data => ({ code: 0, msg: 'ok', data });
-const err = msg => ({ code: 1, msg, data: null });

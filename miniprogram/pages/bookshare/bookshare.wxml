@@ -21,12 +21,12 @@
     <view class="share-desc">{{shareDesc}}</view>
     <button class="btn-primary" open-type="share">发给家人（微信好友 / 家庭群）</button>
   </block>
-  <view class="muted hint">7 天内有效，最多 5 人；对方接受后需你同意</view>
+  <view class="muted hint">7 天内有效，只能 1 人使用，对方接受后即失效。主家本人发的卡，接受后直接生效；经别人转发的卡，需主家同意后才生效</view>
 
   <view class="section-title" style="margin-top:36rpx">已共享的家人（{{viewers.length}}）</view>
   <view class="card">
     <view class="v-row" wx:for="{{viewers}}" wx:key="_id">
-      <image class="avatar" src="{{item.avatar || '/assets/avatar-default.png'}}" mode="aspectFill" />
+      <image class="avatar" src="{{item.avatar || '/assets/avatar-default.png'}}" mode="aspectFill" binderror="onAvatarErr" data-i="{{index}}" />
       <view class="v-info">
         <view>{{item.name}}</view>
         <view class="muted small">可查看：{{item.booksText}}</view>
@@ -38,7 +38,7 @@
   </view>
 
   <!-- 修改共享范围 -->
-  <view class="mask" wx:if="{{editor}}">
+  <view class="mask" wx:if="{{editor}}" catchtouchmove="noop">
     <view class="sheet">
       <view class="sheet-title">「{{editor.name}}」可查看的礼簿</view>
       <scroll-view scroll-y class="ed-list">

@@ -3,6 +3,7 @@ const req = require('../../utils/request.js');
 const fmt = require('../../utils/format.js');
 const scenes = require('../../utils/scenes.js');
 const theme = require('../../utils/theme.js');
+const fresh = require('../../utils/fresh.js');
 
 Page({
   data: {
@@ -13,11 +14,15 @@ Page({
     inTotal: 0,
     morePeople: 0,     // 名单只显示前 300 人时，其余人数
     reminds: [],       // 亲友办事提醒（未处理，最近的在前）
-    remindAll: false,  // 展开全部提醒
+    doneList: [],      // 最近已处理的提醒（可撤回）
+    doneOpen: false,   // 提醒弹层里「最近已处理」是否展开
+    remindShow: false, // 提醒弹层
+    hotCount: 0,       // 已到提醒时间 / 已过期未处理的条数
+    remindTip: '',     // 提示条文案
     receipts: [],      // 随礼回执
     shownReceipts: [],
     keyword: '',
-    people: [],
+    hasPeople: false, // 往来人名单本体放 this._people（不进 data，避免每次搜索 / 切换时传输整张名单）
     shownPeople: [],
     outList: [],
     outSum: '0.00',
@@ -26,17 +31,23 @@ Page({
     loggedIn: true
   },
 
+  onLoad() { theme.early(this); }, // 首帧前同步套主题色（v3.70.1）
+
   async onShow() {
     // 已退出登录：立即清空上一个账户的往来（不等登录状态恢复，也不再查询身份）
     if (getApp().isLoggedOut()) {
       getApp().refreshTabBar();
-      return this.setData({ loading: false, loggedIn: false, people: [], shownPeople: [], outList: [], receipts: [], shownReceipts: [], reminds: [] });
+      this._people = [];
+      return this.setData({ loading: false, loggedIn: false, hasPeople: false, shownPeople: [], outList: [], receipts: [], shownReceipts: [], reminds: [], doneList: [], hotCount: 0, remindTip: '', remindShow: false });
     }
     // 记账人身份不显示「往来」（切换身份后可能停留在本页）：回到工作台
     if ((await getApp().ensureRole()) === 'clerk') return wx.switchTab({ url: '/pages/index/index' });
     theme.apply(this); // 主题色跟当前礼簿事由走
     getApp().refreshTabBar();
     getApp().refreshBadge();
+    // 45 秒内且期间没有写操作：不重复拉往来 / 提醒（切页签、搜索仍会加载）
+    if (!fresh.needs(this)) return;
+    fresh.mark(this);
     this.load();
     // 办事提醒只在进入页面时刷新，切换标签不重复请求
     getApp().loginReady.then(() => { if (getApp().globalData.user) this.loadReminds(); });
@@ -45,7 +56,7 @@ Page({
   async load() {
     await getApp().loginReady;
     if (!getApp().globalData.user) {
-      return this.setData({ loading: false, loggedIn: false, people: [], shownPeople: [], outList: [], receipts: [], shownReceipts: [], reminds: [] });
+      return this.setData({ loading: false, loggedIn: false, hasPeople: false, shownPeople: [], outList: [], receipts: [], shownReceipts: [], reminds: [], doneList: [], hotCount: 0, remindTip: '', remindShow: false });
     }
     this.setData({ loading: true, loggedIn: true });
     try {
@@ -60,8 +71,9 @@ Page({
           outSumStr: fmt.money(p.outSum),
           balanceStr: fmt.money(Math.abs(p.balance))
         }));
+        this._people = people;
         this.setData({
-          people,
+          hasPeople: people.length > 0,
           // 合计以服务端数据库统计为准（全部记录）；旧版云函数未返回时按名单累加
           inTotal: inTotal !== undefined ? inTotal : people.reduce((t, p) => t + (p.inCount || 0), 0),
           inSum: fmt.money(inSum !== undefined ? inSum : people.reduce((t, p) => t + Math.round((p.inSum || 0) * 100), 0) / 100)
@@ -80,9 +92,27 @@ Page({
           outSum: fmt.money(res.sum),
           outTotal: res.total
         });
+        this._outPage = 2; // 下一页（上拉加载更多）
       }
     } catch (e) { /* toast 已提示 */ } finally {
       this.setData({ loading: false });
+    }
+  },
+
+  /** 送出的礼：上拉加载更多（每页 50 条） */
+  async onReachBottom() {
+    const d = this.data;
+    if (d.tab !== 'out' || d.loading || this._moreBusy || d.outList.length >= d.outTotal) return;
+    this._moreBusy = true;
+    try {
+      const res = await req.outList({ page: this._outPage || 2, pageSize: 50, keyword: d.keyword || undefined });
+      const start = this.data.outList.length;
+      const patch = { outTotal: res.total, outSum: fmt.money(res.sum) };
+      res.list.forEach((g, i) => { patch[`outList[${start + i}]`] = { ...g, amountStr: fmt.money(g.amount), typeLabel: scenes.label(g.eventType) }; });
+      this.setData(patch);
+      this._outPage = (this._outPage || 2) + 1;
+    } catch (e) { /* toast 已提示 */ } finally {
+      this._moreBusy = false;
     }
   },
 
@@ -90,7 +120,7 @@ Page({
     const k = (this.data.keyword || '').trim();
     const f = this.data.pFilter;
     this.setData({
-      shownPeople: this.data.people.filter(p => (!k || p.label.includes(k)) &&
+      shownPeople: (this._people || []).filter(p => (!k || p.label.includes(k)) &&
         (f === 'all' || (f === 'owe' ? p.balance > 0 : p.balance < 0)))
     });
   },
@@ -123,8 +153,12 @@ Page({
 
   onKeyword(e) {
     this.setData({ keyword: e.detail.value });
-    if (this.data.tab === 'people') this.filterPeople();
-    if (this.data.tab === 'receipts') this.filterReceipts();
+    // 筛选防抖 150ms：连续输入时只在停顿后过滤一次
+    clearTimeout(this._kwTimer);
+    this._kwTimer = setTimeout(() => {
+      if (this.data.tab === 'people') this.filterPeople();
+      if (this.data.tab === 'receipts') this.filterReceipts();
+    }, 150);
   },
 
   /** 搜索：名单里没有时也可直接查询该姓名 */
@@ -132,7 +166,11 @@ Page({
     const k = (this.data.keyword || '').trim();
     if (this.data.tab === 'out') return this.load();
     if (this.data.tab === 'receipts') return this.filterReceipts();
-    if (k && this.data.shownPeople.length === 0) this.openPerson('n:' + k);
+    if (k) { // 先同步过滤一次（防抖可能还没触发），再判断名单里有没有
+      clearTimeout(this._kwTimer);
+      this.filterPeople();
+      if (this.data.shownPeople.length === 0) this.openPerson('n:' + k); // setData 同步更新 this.data
+    }
   },
 
   onPerson(e) { this.openPerson(e.currentTarget.dataset.key); },
@@ -140,11 +178,10 @@ Page({
   // —— 亲友办事提醒 ——
   async loadReminds() {
     try {
-      const { list } = await req.remindList();
+      const { list, done } = await req.remindList();
       const today = fmt.day(new Date());
       const dayDiff = d => Math.round((new Date(d + 'T00:00:00') - new Date(today + 'T00:00:00')) / 86400000);
-      this.setData({
-        reminds: list.map(r => {
+      const reminds = list.map(r => {
           const n = dayDiff(r.date);
           return {
             ...r,
@@ -156,12 +193,65 @@ Page({
             hot: n >= 0 && Date.now() >= (r.remindAt ? new Date(r.remindAt).getTime() : new Date(`${r.notifyDay || r.date}T09:00:00`).getTime()), // 已到提醒时间
             past: n < 0
           };
-        })
+        });
+      // 已到提醒时间或已过期未处理的都算「待回礼」；否则显示最近一条
+      const hotCount = reminds.filter(r => r.hot || r.past).length;
+      const f = reminds[0];
+      const doneList = (done || []).map(r => ({ ...r, typeLabel: scenes.label(r.eventType), dateStr: r.date.slice(5).replace('-', '月') + '日' }));
+      this.setData({
+        reminds, hotCount, doneList,
+        remindTip: hotCount ? `${hotCount} 条待回礼` : (f ? `${f.name} · ${f.event || f.typeLabel} · ${f.leftStr}` : '')
       });
+      // 红点与提示条同口径：直接按本次结果更新，不必再请求
+      getApp().globalData.remindDot = hotCount > 0;
+      getApp().globalData.remindVer = Date.now(); // 云端红点缓存失效，轮询按最新提醒重算
+      getApp().refreshTabBar();
     } catch (e) { /* 静默 */ }
   },
-  onRemindAll() { this.setData({ remindAll: !this.data.remindAll }); },
-  onAddRemind() { wx.navigateTo({ url: '/pages/remind/remind' }); },
+  noop() {},
+  /** 清除全部「最近已处理」：二次确认后删除，无法撤回 */
+  onClearDone() {
+    if (!this.data.doneList.length) return;
+    wx.showModal({
+      title: '清除已处理',
+      content: '清除后这些已处理的提醒将被删除，无法撤回。确定清除吗？',
+      confirmText: '清除',
+      success: async res => {
+        if (!res.confirm) return;
+        try {
+          await req.remindClearDone();
+          wx.showToast({ title: '已清除', icon: 'success' });
+          this.setData({ doneOpen: false });
+          await this.loadReminds();
+          getApp().refreshBadge();
+        } catch (err) { /* toast 已提示 */ }
+      }
+    });
+  },
+  onToggleDone() { this.setData({ doneOpen: !this.data.doneOpen }); },
+  /** 撤回「已处理」：恢复为未处理（点错了），提示条、「往来」红点、底部菜单同步刷新 */
+  onUndoDone(e) {
+    const r = this.data.doneList[e.currentTarget.dataset.idx];
+    if (!r) return;
+    wx.showModal({
+      title: '撤回已处理',
+      content: `把「${r.name} · ${r.event || r.typeLabel}」恢复为待办提醒？`,
+      confirmText: '撤回',
+      success: async res => {
+        if (!res.confirm) return;
+        try {
+          await req.remindDone(r._id, false);
+          wx.showToast({ title: '已撤回', icon: 'success' });
+          await this.loadReminds();
+          getApp().refreshBadge(); // 红点与角标以服务端口径再校正一次
+        } catch (err) { /* toast 已提示 */ }
+      }
+    });
+  },
+  onOpenRemind() { this.setData({ remindShow: true }); },
+  onCloseRemind() { this.setData({ remindShow: false }); },
+  // 跳走前先关弹层；回来时 onShow 因写操作（dataDirtyAt）会重新拉提醒
+  onAddRemind() { this.setData({ remindShow: false }); wx.navigateTo({ url: '/pages/remind/remind' }); },
   onRemind(e) {
     const r = this.data.reminds[e.currentTarget.dataset.idx];
     if (!r) return;
@@ -170,15 +260,18 @@ Page({
       success: async res => {
         try {
           if (res.tapIndex === 0) {
+            // 带上提醒 id：送礼记录保存成功后才标记已处理，中途取消不会丢提醒
+            this.setData({ remindShow: false });
             wx.navigateTo({
-              url: `/pages/giftedit/giftedit?toName=${encodeURIComponent(r.name)}&toKey=${encodeURIComponent(r.personKey || '')}&eventType=${r.eventType}&event=${encodeURIComponent(r.event || '')}`
+              url: `/pages/giftedit/giftedit?remindId=${encodeURIComponent(r._id)}&toName=${encodeURIComponent(r.name)}&toKey=${encodeURIComponent(r.personKey || '')}&eventType=${r.eventType}&event=${encodeURIComponent(r.event || '')}`
             });
-            await req.remindDone(r._id, true);
+            return;
           } else if (res.tapIndex === 1) {
             await req.remindDone(r._id, true);
             wx.showToast({ title: '已处理', icon: 'success' });
           } else if (res.tapIndex === 2) {
             getApp().globalData.editRemind = r;
+            this.setData({ remindShow: false });
             return wx.navigateTo({ url: '/pages/remind/remind?edit=1' });
           } else {
             await req.remindDelete(r._id);

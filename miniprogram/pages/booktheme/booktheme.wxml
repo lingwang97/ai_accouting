@@ -1,0 +1,173 @@
+<view class="container wrap" style="{{themeStyle}}">
+  <block wx:if="{{book}}">
+    <view class="book-name">{{book.name}}</view>
+
+    <swiper wx:if="{{pv}}" class="pv-swiper" current="{{cur}}" bindchange="onSwipe" duration="250">
+      <!-- 封面 -->
+      <swiper-item>
+        <view class="pc" style="background:{{pv.bg}};border-color:{{pv.border}};color:{{pv.text}}">
+          <view class="pc-in" style="border-color:{{pv.border}}"></view>
+          <view class="pc-mark" wx:if="{{pv.mark}}" style="color:{{pv.border}}">{{pv.mark}}</view>
+          <block wx:if="{{pv.corners}}">
+            <view class="pc-cn pc-tl" style="color:{{pv.border}}">{{pv.corners[0]}}</view>
+            <view class="pc-cn pc-tr" style="color:{{pv.border}}">{{pv.corners[1]}}</view>
+            <view class="pc-cn pc-bl" style="color:{{pv.border}}">{{pv.corners[2]}}</view>
+            <view class="pc-cn pc-br" style="color:{{pv.border}}">{{pv.corners[3]}}</view>
+          </block>
+          <view class="pc-mid">
+            <view class="pc-title" style="color:{{pv.border}}">{{pv.title}}</view>
+            <view class="pc-line" style="background:{{pv.border}}"></view>
+            <view class="pc-sm" wx:for="{{pv.info}}" wx:key="*this">{{item}}</view>
+          </view>
+          <view class="pc-foot" style="color:{{pv.border}}" wx:if="{{pv.footer}}">{{pv.footer}}</view>
+          <view class="pc-brand">慧礼记</view>
+        </view>
+      </swiper-item>
+      <!-- 内页（右起，本礼簿前几位宾客） -->
+      <swiper-item>
+        <view class="pc pg" style="border-color:{{pg.line}}">
+          <view class="pc-mark" wx:if="{{pv.mark}}" style="color:{{pg.line}};opacity:.06">{{pv.mark}}</view>
+          <view class="pg-gut" wx:if="{{bind !== 'none'}}" style="{{pg.gut}}"><text>装订边</text></view>
+          <view class="pg-head" style="color:{{pg.line}}">{{pg.head}}</view>
+          <view class="pg-grid" style="{{pg.grid}};border-color:{{pg.line}};color:#222">
+            <view class="pg-slot" wx:for="{{pg.slots}}" wx:key="i" style="border-color:{{pg.line}}">
+              <view class="pg-nm" style="border-color:{{pg.line}}"><text class="pg-c" wx:for="{{item.name}}" wx:for-item="ch" wx:for-index="ci" wx:key="ci">{{ch}}</text></view>
+              <view class="pg-am">
+                <text class="pg-ca" wx:for="{{item.amt}}" wx:for-item="ch" wx:for-index="ci" wx:key="ci">{{ch}}</text>
+                <text class="pg-yen" wx:if="{{item.yen}}">{{item.yen}}</text>
+              </view>
+            </view>
+          </view>
+        </view>
+      </swiper-item>
+      <!-- 封底 -->
+      <swiper-item>
+        <view wx:if="{{!back.on}}" class="pc pc-none">不含封底</view>
+        <view wx:else class="pc" style="background:{{pv.bg}};border-color:{{pv.border}};color:{{pv.text}}">
+          <view class="pc-in" style="border-color:{{pv.border}}"></view>
+          <view class="pc-mark" wx:if="{{pv.mark}}" style="color:{{pv.border}}">{{pv.mark}}</view>
+          <block wx:if="{{pv.corners}}">
+            <view class="pc-cn pc-tl" style="color:{{pv.border}}">{{pv.corners[0]}}</view>
+            <view class="pc-cn pc-tr" style="color:{{pv.border}}">{{pv.corners[1]}}</view>
+            <view class="pc-cn pc-bl" style="color:{{pv.border}}">{{pv.corners[2]}}</view>
+            <view class="pc-cn pc-br" style="color:{{pv.border}}">{{pv.corners[3]}}</view>
+          </block>
+          <view class="pc-mid">
+            <view class="pc-title" wx:if="{{bk.foot}}" style="color:{{pv.border}};font-size:36rpx;letter-spacing:6rpx">{{bk.foot}}</view>
+            <view class="pc-line" wx:if="{{bk.foot}}" style="background:{{pv.border}}"></view>
+            <view class="pc-sign" wx:if="{{back.sign}}"><view>{{bk.sign}}</view></view>
+          </view>
+          <view class="pc-brand" wx:if="{{back.brand}}">慧礼记</view>
+        </view>
+      </swiper-item>
+    </swiper>
+    <view class="pv-tabs" wx:if="{{pv}}">
+      <view class="pv-tab {{cur === 0 ? 'on' : ''}}" data-i="0" bindtap="onTab">封面</view>
+      <view class="pv-tab {{cur === 1 ? 'on' : ''}}" data-i="1" bindtap="onTab">内页</view>
+      <view class="pv-tab {{cur === 2 ? 'on' : ''}}" data-i="2" bindtap="onTab">封底</view>
+    </view>
+    <view class="lock-tip" wx:if="{{lockTip}}">{{lockTip}}</view>
+    <view class="muted tip">示意图，字体和细节以「预览」或导出为准；内页为本礼簿前几位宾客{{pvSample ? '（暂无数据，用示例）' : ''}}</view>
+
+    <!-- 喜事：预设 + 自定义 -->
+    <view class="card" wx:if="{{!isFuneral}}">
+      <view class="section-title">主题</view>
+      <view wx:if="{{defTip}}" class="def-tip">{{defTip}}</view>
+      <view class="themes">
+        <view wx:for="{{presets}}" wx:key="key" class="th {{themeKey === item.key ? 'on' : ''}} {{themeKey === 'custom' && base === item.key ? 'base' : ''}}" data-k="{{item.key}}" bindtap="onPickTheme">
+          <view class="th-sw" style="background:{{item.main}};border-color:{{item.accent}}"><view class="th-in" style="background:{{item.accent}}"></view></view>
+          <view class="th-name">{{item.name}}</view>
+          <view class="th-scene">{{item.scene}}</view>
+          <view class="th-vip" wx:if="{{item.locked}}">会员</view>
+        </view>
+        <view class="th {{themeKey === 'custom' ? 'on' : ''}}" data-k="custom" bindtap="onPickTheme">
+          <view class="th-sw th-custom">＋</view>
+          <view class="th-name">自定义</view>
+          <view class="th-scene">{{base ? '基于预设修改' : '自选配色字体'}}</view>
+          <view class="th-vip" wx:if="{{!premiumOk}}">会员</view>
+        </view>
+      </view>
+      <view wx:if="{{themeKey !== 'custom'}}" class="edit-link" bindtap="onEditPreset">在此主题基础上修改 ›{{premiumOk ? '' : '（会员）'}}</view>
+    </view>
+
+    <view class="card cust" wx:if="{{!isFuneral && themeKey === 'custom'}}">
+      <view class="section-title">自定义</view>
+      <view class="cust-lb">主色（封面底色、格线）</view>
+      <view class="swatches">
+        <view wx:for="{{mainColors}}" wx:key="*this" class="sw {{cust.main === item ? 'on' : ''}}" style="background:{{item}}" data-f="main" data-v="{{item}}" bindtap="onCust"></view>
+      </view>
+      <input class="input" cursor-spacing="120" adjust-position="{{true}}" bindfocus="onKbOn" bindblur="onKbOff" value="{{cust.main}}" maxlength="7" placeholder="#RRGGBB" data-f="main" bindinput="onCustInput" />
+      <view class="cust-lb">辅色（边框、标题）</view>
+      <view class="swatches">
+        <view wx:for="{{accentColors}}" wx:key="*this" class="sw {{cust.accent === item ? 'on' : ''}}" style="background:{{item}}" data-f="accent" data-v="{{item}}" bindtap="onCust"></view>
+      </view>
+      <input class="input" cursor-spacing="120" adjust-position="{{true}}" bindfocus="onKbOn" bindblur="onKbOff" value="{{cust.accent}}" maxlength="7" placeholder="#RRGGBB" data-f="accent" bindinput="onCustInput" />
+      <view wx:if="{{custErr}}" class="cust-err">{{custErr}}</view>
+      <view class="cust-lb">字体</view>
+      <view class="chips"><view wx:for="{{fonts}}" wx:key="k" class="chip {{cust.font === item.k ? 'on' : ''}}" data-f="font" data-v="{{item.k}}" bindtap="onCust">{{item.n}}{{item.locked ? " · 会员" : ""}}</view></view>
+      <view class="cust-lb">角饰</view>
+      <view class="chips"><view wx:for="{{patterns}}" wx:key="k" class="chip {{cust.pattern === item.k ? 'on' : ''}}" data-f="pattern" data-v="{{item.k}}" bindtap="onCust">{{item.n}}</view></view>
+      <view class="cust-lb">水印字</view>
+      <view class="chips"><view wx:for="{{marks}}" wx:key="k" class="chip {{cust.mark === item.k ? 'on' : ''}}" data-f="mark" data-v="{{item.k}}" bindtap="onCust">{{item.n}}</view></view>
+      <view class="cust-lb">封面标题（不填用礼簿名）</view>
+      <input class="input" cursor-spacing="120" adjust-position="{{true}}" bindfocus="onKbOn" bindblur="onKbOff" value="{{cust.title}}" maxlength="20" placeholder="如：李王联姻志喜" data-f="title" bindinput="onCustInput" />
+      <view class="cust-lb">封面落款（不填则没有）</view>
+      <input class="input" cursor-spacing="120" adjust-position="{{true}}" bindfocus="onKbOn" bindblur="onKbOff" value="{{cust.footer}}" maxlength="8" placeholder="如：百年好合" data-f="footer" bindinput="onCustInput" />
+    </view>
+
+    <!-- 白事：颜色固定素灰，只能改字体、角饰、水印、标题、落款 -->
+    <view class="card cust" wx:if="{{isFuneral}}">
+      <view class="section-title">白事礼簿样式</view>
+      <view class="muted">颜色固定为素灰，不可更换；其余可按需设置</view>
+      <view wx:if="{{defTip}}" class="def-tip">{{defTip}}</view>
+      <view class="cust-lb">字体</view>
+      <view class="chips"><view wx:for="{{fonts}}" wx:key="k" class="chip {{fun.font === item.k ? 'on' : ''}}" data-f="font" data-v="{{item.k}}" bindtap="onFun">{{item.n}}{{item.locked ? " · 会员" : ""}}</view></view>
+      <view class="cust-lb">角饰</view>
+      <view class="chips"><view wx:for="{{fPatterns}}" wx:key="k" class="chip {{fun.pattern === item.k ? 'on' : ''}}" data-f="pattern" data-v="{{item.k}}" bindtap="onFun">{{item.n}}</view></view>
+      <view class="cust-lb">水印字</view>
+      <view class="chips"><view wx:for="{{fMarks}}" wx:key="k" class="chip {{fun.mark === item.k ? 'on' : ''}}" data-f="mark" data-v="{{item.k}}" bindtap="onFun">{{item.n}}</view></view>
+      <view class="cust-lb">封面标题（不填用礼簿名）</view>
+      <input class="input" cursor-spacing="120" adjust-position="{{true}}" bindfocus="onKbOn" bindblur="onKbOff" value="{{fun.title}}" maxlength="20" placeholder="如：某某先生奠仪簿" data-f="title" bindinput="onFunInput" />
+      <view class="cust-lb">封面落款</view>
+      <view class="chips">
+        <view class="chip {{fun.footer === '' ? 'on' : ''}}" data-f="footer" data-v="" bindtap="onFun">无</view>
+        <view wx:for="{{fFooters}}" wx:key="*this" class="chip {{fun.footer === item ? 'on' : ''}}" data-f="footer" data-v="{{item}}" bindtap="onFun">{{item}}</view>
+      </view>
+      <input class="input" cursor-spacing="120" adjust-position="{{true}}" bindfocus="onKbOn" bindblur="onKbOff" value="{{fun.footer}}" maxlength="8" placeholder="也可以自己写（8 字以内）" data-f="footer" bindinput="onFunInput" />
+    </view>
+
+    <!-- 尾页与装订 -->
+    <view class="card cust">
+      <view class="section-title">尾页与装订{{premiumOk ? "" : "（尾页设置为会员功能）"}}</view>
+      <view class="opt" bindtap="onBackLocked"><text>封底尾页</text><switch disabled="{{!premiumOk}}" checked="{{back.on}}" color="{{themePrimary || '#C8161D'}}" data-f="on" bindchange="onBackSwitch" /></view>
+      <block wx:if="{{back.on}}">
+        <view class="cust-lb">尾页落款</view>
+        <view class="chips">
+          <view class="chip {{back.footer === '' ? 'on' : ''}}" data-v="" bindtap="onBackFooter">自动</view>
+          <view class="chip {{back.footer === '-' ? 'on' : ''}}" data-v="-" bindtap="onBackFooter">无</view>
+          <block wx:if="{{isFuneral}}">
+            <view wx:for="{{fFooters}}" wx:key="*this" class="chip {{back.footer === item ? 'on' : ''}}" data-v="{{item}}" bindtap="onBackFooter">{{item}}</view>
+          </block>
+        </view>
+        <input class="input" cursor-spacing="120" adjust-position="{{true}}" bindfocus="onKbOn" bindblur="onKbOff" disabled="{{!premiumOk}}" value="{{back.footer === '-' ? '' : back.footer}}" maxlength="8" placeholder="自动：用封面落款，没有则按事由默认（白事无吉语）" data-f="footer" bindinput="onBackInput" />
+        <view class="opt" bindtap="onBackLocked"><text>记账人签名栏</text><switch disabled="{{!premiumOk}}" checked="{{back.sign}}" color="{{themePrimary || '#C8161D'}}" data-f="sign" bindchange="onBackSwitch" /></view>
+        <view class="opt" bindtap="onBackLocked"><text>显示「慧礼记」小字</text><switch disabled="{{!premiumOk}}" checked="{{back.brand}}" color="{{themePrimary || '#C8161D'}}" data-f="brand" bindchange="onBackSwitch" /></view>
+      </block>
+      <view class="cust-lb">装订</view>
+      <view class="chips"><view wx:for="{{binds}}" wx:key="k" class="chip {{bind === item.k ? 'on' : ''}}" data-k="{{item.k}}" bindtap="onBind">{{item.n}}</view></view>
+      <view class="muted tip">{{bindTip}}</view>
+      <view class="muted tip">已生成的存档 PDF 不会自动更新；之后新归档或重新生成的存档会按这里的设置</view>
+    </view>
+
+    <view class="muted tip" wx:if="{{!canSave}}">你没有管理礼簿权限，本次选择的主题只用于这次导出，不会保存</view>
+    <view class="muted tip" wx:else>确认导出后，主题会记在这本礼簿上，下次进入自动带出；礼簿归档存档也使用该主题</view>
+  </block>
+
+  <view class="bottom-bar" wx:if="{{book && !kb}}">
+    <view class="bb-row">
+      <button class="btn-outline pv-btn" disabled="{{exporting || previewing || pvLock}}" bindtap="onPreview">预览</button>
+      <button class="btn-primary ok-btn" loading="{{exporting}}" disabled="{{exporting || previewing}}" bindtap="onConfirm">确认并导出</button>
+    </view>
+  </view>
+  <loading show="{{loading}}" type="overlay" />
+</view>

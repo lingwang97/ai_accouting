@@ -9,7 +9,7 @@
 .cc-top { display: flex; justify-content: space-between; align-items: center; }
 .cc-tag { font-size: 22rpx; background: rgba(255, 255, 255, .22); border-radius: 999rpx; padding: 4rpx 16rpx; }
 .cc-type { font-size: 24rpx; opacity: .85; }
-.cc-name { font-size: 36rpx; font-weight: 700; margin-top: 20rpx; }
+.cc-name { font-size: 36rpx; font-weight: 700; margin-top: 20rpx; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .cc-sum { font-size: 64rpx; font-weight: 700; margin-top: 12rpx; }
 .cc-count { font-size: 24rpx; opacity: .85; }
 .cc-ops { display: flex; margin-top: 28rpx; }

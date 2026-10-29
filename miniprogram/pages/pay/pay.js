@@ -1,15 +1,17 @@
 // pages/pay/pay.js — 扫码随礼页（宾客落地页）
 // 步骤：form 登记 → transfer 向主家收款码转账 → waiting 等待主家确认 → success（显示回执）/ failed
 const req = require('../../utils/request.js');
+const { REC } = require('../../utils/status.js');
 const fmt = require('../../utils/format.js');
 const receipt = require('../../utils/receipt.js');
 const scenes = require('../../utils/scenes.js');
 const batch = require('../../utils/batch.js');
 const samename = require('../../utils/samename.js');
 const theme = require('../../utils/theme.js');
+const { GUEST_NOTIFY_TMPL_ID } = require('../../config.js');
 
-const POLL_MS = 3000;
-const POLL_MAX = 200; // 约 10 分钟
+const paypoll = require('../../utils/paypoll.js'); // 轮询退避：3 秒 → 5 秒 → 10 秒，最长 10 分钟（v3.71.0）
+const NAME_KEY = 'pay_last_name'; // 本机上次随礼用的姓名（宾客常去多家随礼，免得每次重填）
 const OPEN_KEY = 'pay_open'; // 本机最近一笔未点「我已完成转账」的随礼（{ aid, rid, record, payCodeUrl, at }）
 
 /** 页面展示用：金额文本、批次名单 */
@@ -33,6 +35,8 @@ Page({
     primary: theme.DEFAULT, // 开关颜色，加载主家信息后按主题更新
     account: null,
     loadErr: '',
+    loadErrNet: false,   // 读取失败是网络问题（v3.66.0）：显示「点此重试」，不说礼簿码无效
+    pollTimeout: false,  // 等待确认超过约 10 分钟、自动查询已停止（v3.66.0）：停止转圈并说明
     step: 'form',      // form | transfer | waiting | success | failed
     payerName: '',
     amount: '',
@@ -51,7 +55,10 @@ Page({
     showFallback: false, // 在现场时：在本机显示收款码（备用）
     codeSaved: false,    // 宾客手机付款：收款码是否已存入相册
     receiptModel: null,  // 到账后的留存收据
-    savingReceipt: false
+    savingReceipt: false,
+    who: '随礼人',       // 白事称「致奠人」、动作称「登记」（v3.65.2，与礼簿码页「奠仪」一致）
+    act: '随礼',
+    amountFocus: false
   },
 
   onLoad(options) {
@@ -70,7 +77,9 @@ Page({
     // 收款码图片默认收起，看不到 / 扫不到时点开，再存相册转账。
     // 不再按进入场景自动展开：wx.getEnterOptionsSync 取的是小程序启动时的场景，之前从聊天卡片打开过小程序后，
     // 再扫码或从礼簿码页进入随礼页也会被误判为「不在现场」而展开收款码
-    this.setData({ aid, onsite: true });
+    let last = '';
+    try { last = wx.getStorageSync(NAME_KEY) || ''; } catch (e) { /* 忽略 */ }
+    this.setData({ aid, onsite: true, payerName: typeof last === 'string' ? last : '' });
     this.loadAccount(aid).then(() => this.resumeOpen(aid));
   },
 
@@ -87,14 +96,14 @@ Page({
     if (!o || o.aid !== aid || Date.now() - o.at > 24 * 3600 * 1000 || this.data.step !== 'form') return;
     let status = '';
     try { status = (await req.payStatus(o.rid)).status; } catch (e) { return; }
-    if (status === 'transferred') {
+    if (status === REC.TRANSFERRED) {
       this.setData({ record: viewRecord(o.record), step: 'waiting' });
       return this.startPoll();
     }
-    if (status !== 'pending' && status !== 'cancelled') return this.clearOpen();
+    if (status !== REC.PENDING && status !== REC.CANCELLED) return this.clearOpen();
     const v = viewRecord(o.record);
     wx.showModal({
-      title: '有一笔未完成的随礼',
+      title: `有一笔未完成的${this.data.act}`,
       content: `${v.payerName} ￥${v.payStr}：已经转账了吗？转了请点「继续」，再点「我已完成转账」。`,
       confirmText: '继续',
       cancelText: '不用了',
@@ -102,7 +111,7 @@ Page({
         if (r.confirm) this.setData({ record: v, payCodeUrl: o.payCodeUrl || '', showFallback: false, codeSaved: false, step: 'transfer' });
         else if (r.cancel) {
           this.clearOpen();
-          if (status === 'pending') req.payCancel(o.rid).catch(() => {});
+          if (status === REC.PENDING) req.payCancel(o.rid).catch(() => {});
         }
       }
     });
@@ -123,18 +132,32 @@ Page({
 
   async loadAccount(aid) {
     try {
-      const { account } = await req.accountGetByAid(aid);
+      const { account } = await req.accountGetByAid(aid, { silent: true });
       const t = theme.forType(account.book && account.book.type, account.theme && account.theme.chosen ? account.theme.primary : '');
-      this.setData({ account, isFuneral: !!(account.book && account.book.type === 'funeral'), themeStyle: theme.styleOf(t), primary: t.primary });
+      const funeral = !!(account.book && account.book.type === 'funeral');
+      this.setData({ account, isFuneral: funeral, themeStyle: theme.styleOf(t), primary: t.primary, who: funeral ? '致奠人' : '随礼人', act: funeral ? '登记' : '随礼' });
       wx.setNavigationBarColor({ frontColor: '#ffffff', backgroundColor: t.primary, fail() {} });
-      wx.setNavigationBarTitle({ title: `向「${account.accountName}」随礼` });
+      wx.setNavigationBarTitle({ title: funeral ? `向「${account.accountName}」致奠` : `向「${account.accountName}」随礼` });
     } catch (e) {
-      this.setData({ loadErr: '礼簿码无效或主家已停用' });
+      // 网络失败与「礼簿码无效」区分开：网络问题可重试（宾客在宴会厅信号差很常见）
+      if (req.isNetErr(e)) this.setData({ loadErr: req.errText(e) + '，没能读取礼簿信息', loadErrNet: true });
+      else this.setData({ loadErr: (e && e.biz && e.message) || '礼簿码无效或主家已停用', loadErrNet: false });
     }
+  },
+  /** 读取礼簿信息失败（网络）：点此重试 */
+  onRetryLoad() {
+    if (!this.data.loadErrNet || this._reloading) return;
+    this._reloading = true;
+    this.setData({ loadErr: '', loadErrNet: false });
+    const done = () => { this._reloading = false; }; // 不用 finally，兼容低版本基础库
+    this.loadAccount(this.data.aid).then(() => this.resumeOpen(this.data.aid)).then(done, done);
   },
 
   onName(e) { this.setData({ payerName: e.detail.value }); },
   onAmount(e) { this.setData({ amount: e.detail.value }); },
+  /** 姓名键盘点「下一项」：跳到金额 */
+  onNameNext() { this.setData({ amountFocus: true }); },
+  onAmountBlur() { this.setData({ amountFocus: false }); },
   onRemark(e) { this.setData({ remark: e.detail.value }); },
   onBatchMode(e) {
     const on = e.detail.value;
@@ -160,18 +183,28 @@ Page({
     } else {
       const name = (this.data.payerName || '').trim();
       const amount = Number(this.data.amount);
-      if (!name) return wx.showToast({ title: '请填写随礼人姓名', icon: 'none' });
+      if (!name) return wx.showToast({ title: `请填写${this.data.who}姓名`, icon: 'none' });
       if (!Number.isFinite(amount) || amount <= 0) {
-        return wx.showToast({ title: '请选择或填写礼金', icon: 'none' });
+        return wx.showToast({ title: `请选择或填写${this.data.isFuneral ? '奠仪' : '礼金'}`, icon: 'none' });
       }
       payload = { payerName: name, amount, remark: this.data.remark, relation: this.data.relation };
     }
 
+    // 转账+现金只填了一位：按这一位的方式提交，不算混合
+    const pm = this.data.payMethod === 'mixed' && payload.items && payload.items.length === 1 ? payload.items[0].method : this.data.payMethod;
+    // 现金随礼没有「我已完成转账」这一步：在这里订阅入簿通知（必须在第一个 await 之前）
+    const subP = pm === 'cash' ? this.askGuestNotify() : null;
     this.setData({ submitting: true });
     try {
-      // 转账+现金只填了一位：按这一位的方式提交，不算混合
-      const pm = this.data.payMethod === 'mixed' && payload.items && payload.items.length === 1 ? payload.items[0].method : this.data.payMethod;
-      let res = await req.payCreate({ aid: this.data.aid, ...payload, payMethod: pm });
+      const guestNotify = subP ? await subP : false;
+      // 幂等键：弱网重试、连点都带同一个 reqId，服务端只记一条；表单内容变了换新的，提交成功后换新的
+      const sig = JSON.stringify([payload, pm]);
+      if (!this._reqId || this._reqSig !== sig) {
+        this._reqId = 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+        this._reqSig = sig;
+      }
+      const reqId = this._reqId;
+      let res = await req.payCreate({ aid: this.data.aid, ...payload, payMethod: pm, reqId, ...(guestNotify ? { guestNotify: true } : {}) });
       // 同名提醒：主家礼簿里已有别的宾客叫这个名字，请填区分信息后重新提交（取消则不提交）
       if (res.needTag) {
         for (const name of res.needTag) {
@@ -180,13 +213,26 @@ Page({
           if (payload.items) payload.items.forEach(x => { if (x.name === name) x.tag = tag; });
           else payload.tag = tag;
         }
-        res = await req.payCreate({ aid: this.data.aid, ...payload, payMethod: pm });
+        res = await req.payCreate({ aid: this.data.aid, ...payload, payMethod: pm, reqId, ...(guestNotify ? { guestNotify: true } : {}) });
         if (res.needTag) return wx.showToast({ title: '仍有同名，请修改姓名或区分信息', icon: 'none' });
       }
       const { record } = res;
+      this._reqId = ''; // 已创建，下一次提交换新 reqId
+      if (!payload.items) { try { wx.setStorageSync(NAME_KEY, payload.payerName); } catch (e) { /* 忽略 */ } } // 下次随礼自动填好姓名
       // 现金：不经收款码与转账，直接等待主家确认收到
       if (record.payMethod === 'cash') {
         this.setData({ record: viewRecord(record), step: 'waiting' });
+        this.startPoll();
+        return;
+      }
+      // 重复提交（弱网重试）时记录状态可能已推进：已转账等待确认 / 已入簿 / 被拒，直接进入对应步骤
+      if (record.status === REC.TRANSFERRED) {
+        this.setData({ record: viewRecord(record), step: 'waiting' });
+        this.startPoll();
+        return;
+      }
+      if (record.status === REC.PAID || record.status === REC.REJECTED) {
+        this.setData({ record: viewRecord(record) });
         this.startPoll();
         return;
       }
@@ -216,12 +262,31 @@ Page({
     if (!onsite && this.data.payCodeUrl && !this.data.codeSaved && (await this.savePayCode(true))) this.showScanGuide();
   },
 
+  /**
+   * 宾客「入簿通知」订阅（v3.66.1）：wx.requestSubscribeMessage 必须在点击的同步调用链里调用，
+   * 所以在 onTransferred / 现金「确认随礼」的第一个 await 之前调用；返回是否同意（拒绝 / 失败都按不同意，照常继续）
+   */
+  askGuestNotify() {
+    if (!GUEST_NOTIFY_TMPL_ID || typeof wx.requestSubscribeMessage !== 'function') return Promise.resolve(false);
+    return new Promise(resolve => {
+      try {
+        wx.requestSubscribeMessage({
+          tmplIds: [GUEST_NOTIFY_TMPL_ID],
+          success: r => resolve(r[GUEST_NOTIFY_TMPL_ID] === 'accept'),
+          fail: () => resolve(false)
+        });
+      } catch (e) { resolve(false); }
+    });
+  },
+
   /** 第 2 步：付款方转账完成 → 等待收款方确认 */
   async onTransferred() {
     if (this.data.submitting) return;
+    const subP = this.askGuestNotify(); // 必须在第一个 await 之前（见上）
     this.setData({ submitting: true });
     try {
-      await req.payTransferred(this.data.record._id);
+      const guestNotify = await subP;
+      await req.payTransferred(this.data.record._id, guestNotify);
       this.clearOpen();
       this.setData({ step: 'waiting' });
       this.startPoll();
@@ -230,16 +295,22 @@ Page({
     }
   },
 
+  /** 常见问题：教程页第 4 分页，默认展开「宾客常见问题」 */
+  goFaq() { wx.navigateTo({ url: '/pages/guide/guide?tab=faq&cat=guest' }); },
+
   /** 取消本次转账（尚未转账时） */
   onCancel() {
     wx.showModal({
-      title: '取消随礼',
-      content: '确定取消本次随礼吗？',
+      title: `取消${this.data.act}`,
+      content: `确定取消本次${this.data.act}吗？`,
       success: async res => {
         if (!res.confirm) return;
         try {
           await req.payCancel(this.data.record._id);
-        } catch (e) { /* 忽略 */ }
+        } catch (e) {
+          // 取消失败（已转账、已被确认等）：不重置表单（request.js 已提示原因），避免宾客以为取消了又重复提交
+          return;
+        }
         this.clearOpen();
         this.setData({ step: 'form', record: null, payCodeUrl: '' });
       }
@@ -249,40 +320,44 @@ Page({
   // —— 轮询收款方确认结果 ——
   startPoll() {
     this.stopPoll();
-    this._pollCount = 0;
-    this._timer = setInterval(() => this.poll(), POLL_MS);
-    this.poll();
+    this._pollAt = Date.now(); // 从头计时：回到页面、点「刷新状态」都重新从 3 秒开始
+    this._on = true;
+    if (this.data.pollTimeout) this.setData({ pollTimeout: false });
+    this.poll(this._gen);
   },
 
   stopPoll() {
+    this._on = false;
+    this._gen = (this._gen || 0) + 1; // 作废进行中的查询，其返回不再处理也不再排下一次
     if (this._timer) {
-      clearInterval(this._timer);
+      clearTimeout(this._timer);
       this._timer = null;
     }
   },
 
-  async poll() {
-    if (!this.data.record) return;
-    if (this._polling) return; // 网络慢时上一次查询未返回，不重叠
-    if (++this._pollCount > POLL_MAX) {
+  async poll(gen) {
+    if (!this.data.record || !this._on || gen !== this._gen) return;
+    const elapsed = Date.now() - this._pollAt;
+    if (elapsed > paypoll.MAX_MS) {
       this.stopPoll();
+      this.setData({ pollTimeout: true }); // 停止转圈，说明可以离开、之后去哪里看
       return;
     }
-    this._polling = true;
     try {
       const { status } = await req.payStatus(this.data.record._id);
-      if (status === 'paid') {
+      if (gen !== this._gen) return; // 期间已停止 / 重新开始
+      if (status === REC.PAID) {
         this.stopPoll();
         wx.vibrateShort({ type: 'medium', fail() {} });
         this.setData({ step: 'success' });
         this.loadReceipt();
-      } else if (status === 'rejected') {
+      } else if (status === REC.REJECTED) {
         this.stopPoll();
         this.setData({ step: 'failed', failReason: '主家未收到该笔转账，请与主家核实' });
       }
-    } catch (e) { /* 网络抖动，下次再试 */ } finally {
-      this._polling = false;
-    }
+    } catch (e) { /* 网络抖动，下次再试 */ }
+    // 逐步放慢：每次查询返回后再排下一次，网络慢时不会重叠
+    if (this._on && gen === this._gen) this._timer = setTimeout(() => this.poll(gen), paypoll.delay(Date.now() - this._pollAt));
   },
 
   /** 收款方确认后加载留存收据（失败时退回简单成功页） */

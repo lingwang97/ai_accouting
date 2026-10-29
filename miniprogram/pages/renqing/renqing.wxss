@@ -2,6 +2,7 @@
 /* 收礼往来：按人 / 按笔 + 按人时的筛选 */
 .sub-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20rpx; }
 .pf-chips { display: flex; }
+.pf-chips .chip:first-child { margin-left: 0; }
 .pf-chips .chip { margin-left: 12rpx; padding: 6rpx 20rpx; font-size: 24rpx; }
 .search-row { display: flex; margin-bottom: 20rpx; }
 .search-row .add-btn { margin-left: 16rpx; }
@@ -19,14 +20,28 @@
 .auto-tag { font-size: 20rpx; color: var(--primary); background: var(--primary-soft); border-radius: 6rpx; padding: 2rpx 10rpx; margin-left: 12rpx; font-weight: normal; }
 .link-r { color: var(--link); float: right; }
 .fold-more { text-align: center; color: var(--link); font-size: 26rpx; padding: 16rpx 0 24rpx; }
-/* 亲友办事提醒 */
-.remind { padding: 20rpx 24rpx; }
+/* 亲友办事提醒（弹层） */
 .rm-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8rpx; }
-.rm-title { font-size: 28rpx; font-weight: 600; }
-.rm-row { display: flex; justify-content: space-between; padding: 14rpx 0; border-top: 2rpx solid #f7f7f7; font-size: 26rpx; }
+/* 本页是 tab 页：自定义底部菜单盖在弹层之上，遮罩止于菜单上沿，弹层底部不再被挡住 */
+.mask.tab-mask { bottom: calc(50px + env(safe-area-inset-bottom)); }
+.sheet.tab-sheet { max-height: 80vh; padding-bottom: 32rpx; }
+.rm-scroll { max-height: 55vh; }
+.rm-row { display: flex; justify-content: space-between; padding: 20rpx 0; border-top: 2rpx solid #f7f7f7; font-size: 26rpx; }
 .rm-name { flex: 1; min-width: 6em; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin-right: 16rpx; }
 .rm-date { color: #888; white-space: nowrap; flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .rm-row.hot .rm-date { color: var(--primary); font-weight: 600; }
 .rm-row.past { opacity: .6; }
-.rm-more { text-align: center; color: var(--link); font-size: 24rpx; padding-top: 12rpx; }
+.rm-empty { text-align: center; padding: 40rpx 0 8rpx; font-size: 26rpx; }
+.rm-add:not([size=mini]) { margin-top: 28rpx; }
+/* 搜索行小铃铛（与搜索框等高） */
+.bell-btn { position: relative; flex-shrink: 0; width: 76rpx; margin-left: 16rpx; background: #fff; border-radius: var(--r-s); display: flex; align-items: center; justify-content: center; }
+.bell-img { width: 38rpx; height: 38rpx; }
+.bell-dot { position: absolute; top: 12rpx; right: 14rpx; width: 14rpx; height: 14rpx; border-radius: 50%; background: var(--danger); }
 .small { font-size: 24rpx; }
+
+.rm-done-head { display: flex; justify-content: space-between; align-items: center; padding: 24rpx 0 8rpx; margin-top: 12rpx; border-top: 2rpx solid #f0f0f0; font-size: 26rpx; color: #666; }
+.rm-done-title { flex: 1; min-width: 0; }
+.link-pad {}
+.rm-done-scroll { max-height: 24vh; }
+/* 展开「最近已处理」时压缩提醒列表，矮屏上弹层不再多层滚动 */
+.rm-scroll.shrink { max-height: 30vh; }

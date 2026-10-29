@@ -35,7 +35,7 @@
     <view class="t-title">需要主家邀请你</view>
     <view class="t-line">1. 请主家在「我的 → 记账人」里生成邀请卡，发给你的微信</view>
     <view class="t-line">2. 你在微信里点开邀请卡，填写真实姓名后接受</view>
-    <view class="t-line">3. 主家同意后，就可以开始记账了</view>
+    <view class="t-line">3. 主家本人发的卡，接受后直接进入工作台；经别人转发的卡，要等主家同意</view>
     <view class="t-ops">
       <view class="link" bindtap="goClerkGuide">看记账人教程 ›</view>
       <view class="link" bindtap="goHome">先去首页 ›</view>

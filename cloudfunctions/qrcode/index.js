@@ -1,10 +1,12 @@
 // 云函数 qrcode — 生成收款专属小程序码（文档 §5、§6.2）；action=app 生成电子回执上的小程序首页码
 const cloud = require('wx-server-sdk');
+const { ok, err } = require('./common.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const ENVS = ['develop', 'trial', 'release'];
-const { resolveCtx, canBook, readonly, trusted, can, workBook } = require('./ctx.js');
+const { shortCodeOf, resolveCtx, canBook, readonly, trusted, can, workBook } = require('./ctx.js');
 
 exports.main = async (event) => {
+  if (event && event.action === '__warm') return { code: 0, msg: 'warm', data: null }; // 预热（warmer 定时调用）：早返回，只唤醒实例
   const { OPENID } = cloud.getWXContext();
   if (!OPENID) return err('未获取到用户身份');
   try {
@@ -38,7 +40,13 @@ exports.main = async (event) => {
       scene = book._id;
     }
     // scene 最长 32 字符，云数据库 _id 本身就是 32 位，因此直接用 id 作 scene（不加 "aid=" 前缀）
-    if (scene.length > 32) return err('账户 ID 过长，无法生成小程序码');
+    // 默认礼簿 id（default_+aid）超长：改用短码，映射登记到 book_codes
+    if (scene.length > 32) {
+      const code = shortCodeOf(scene);
+      try { await db.createCollection('book_codes'); } catch (e) { /* 已存在 */ }
+      await db.collection('book_codes').doc(code).set({ data: { bookId: scene, ownerOpenid: ctx.ownerOpenid, createdAt: new Date() } });
+      scene = code;
+    }
 
     const wxacode = await cloud.openapi.wxacode.getUnlimited({
       scene,
@@ -74,7 +82,8 @@ exports.main = async (event) => {
     // 测试号无 openapi 权限时走此分支
     const msg = e.errCode === -1 || /openapi|40029|41004/i.test(String(e.errMsg || e.message))
       ? '测试号无法调用小程序码接口，请使用正式 AppID，或扫码收款码图片联调'
-      : '生成失败：' + (e.errMsg || e.message);
+      : '生成失败，请稍后重试';
+    console.error('qrcode gen failed', e && (e.errMsg || e.message)); // 原始错误只写日志，不返回前端
     return err(msg);
   }
 };
@@ -112,5 +121,3 @@ async function appCode(envVersion) {
   return ok({ url: f.tempFileURL });
 }
 
-const ok = data => ({ code: 0, msg: 'ok', data });
-const err = msg => ({ code: 1, msg, data: null });

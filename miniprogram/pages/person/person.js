@@ -31,6 +31,7 @@ Page({
   },
 
   onLoad(options) {
+    theme.early(this); // 首帧前同步套主题色（v3.70.1）
     // key：o:微信身份:姓名（宾客）或 n:姓名；兼容旧入口 name
     const key = decodeURIComponent(options.key || '') || ('n:' + decodeURIComponent(options.name || ''));
     this.setData({ key });

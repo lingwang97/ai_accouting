@@ -4,6 +4,43 @@ const envVersion = () => {
   try { return wx.getAccountInfoSync().miniProgram.envVersion; } catch (e) { return 'release'; }
 };
 
+// 只读 action：其余一律视为写操作，成功后记下时间（页面切回时据此判断是否必须刷新，见 utils/fresh.js）
+const READ_ACTIONS = ['get', 'list', 'query', 'people', 'outList', 'remindList', 'pending', 'pendingStat', 'dashboard',
+  'status', 'receipt', 'myReceipts', 'receiptByToken', 'issueQr', 'qrCheck', 'themes', 'check', 'getByAid', 'gen', 'app', 'plan', 'adminGet', 'detail',
+  'nameCheck', 'reconcile', 'orgSummary', 'removePreview', 'members', 'pendingMembers', 'getTpl', 'stats', 'trashList',
+  'viewers', 'payCodeReviews', 'inviteInfo', 'advGet',
+  // export 预览：只生成临时文件，不改礼簿 / 礼金数据（与导出不同，不触发页面强制刷新）
+  'bookPreview', 'bookPreviewData',
+  // system 只读：ads 读设置；admin*Preview / adminFindHosts / adminLogs / adminPreflight(不带 Fix) 只查不写（adminIndexes 会建索引，不列入）
+  'ads', 'adminFindHosts', 'adminLogs', 'adminPreflight', 'adminPurgePreview', 'adminBookPreview', 'adminOrphanPreview', 'adminWipePreview'];
+function markWrite(data) {
+  try {
+    if (data && READ_ACTIONS.indexOf(data.action) < 0) getApp().globalData.dataDirtyAt = Date.now();
+  } catch (e) { /* 忽略 */ }
+}
+
+const isTimeout = e => /timeout|timed out|超时/i.test(String((e && (e.errMsg || e.message)) || ''));
+
+/**
+ * 轮询接口的提示参数（v3.69.0）：aid 当前身份的主家信息 id（云端据此 15 秒内复用身份解析，切换身份后 aid 变化立即重新解析）；
+ * rv 往来提醒版本（往来页刷新提醒后变化，云端红点缓存随之失效）
+ */
+function pollHint() {
+  try {
+    const g = getApp().globalData;
+    return { aid: (g.account && g.account._id) || '', rv: String(g.remindVer || '') };
+  } catch (e) { return {}; }
+}
+
+/** 额度已满的提示（服务端 plans.quotaMsg 的统一后缀）；弹窗带「联系我们」，页面自己处理时用 silent */
+const isQuotaMsg = m => /开通会员可添加更多/.test(String(m || ''));
+function quotaModal(msg) {
+  wx.showModal({
+    title: '已达免费版上限', content: msg + '。已有的数据不受影响。', confirmText: '联系我们', cancelText: '知道了',
+    success: r => { if (r.confirm) wx.navigateTo({ url: '/pages/contact/contact' }); }
+  });
+}
+
 // opts.silent：失败不弹提示（非关键的附加内容，如回执上的小程序码）
 const call = (name, data = {}, opts = {}) =>
   new Promise((resolve, reject) => {
@@ -12,15 +49,22 @@ const call = (name, data = {}, opts = {}) =>
       data,
       success: res => {
         const r = res.result || {};
-        if (r.code === 0) resolve(r.data);
+        if (r.code === 0) { markWrite(data); resolve(r.data); }
         else {
-          if (!opts.silent) wx.showToast({ title: r.msg || '请求失败', icon: 'none' });
-          reject(new Error(r.msg || 'biz error'));
+          if (!opts.silent) {
+            if (isQuotaMsg(r.msg)) quotaModal(r.msg); // 免费版额度已满：弹窗说明并带「联系我们」（v3.66.7）
+            else wx.showToast({ title: r.msg || '请求失败', icon: 'none' });
+          }
+          const e = new Error(r.msg || 'biz error');
+          e.biz = true; // 业务错误（服务端明确拒绝）：与网络失败区分，见 isNetErr()
+          reject(e);
         }
       },
       fail: err => {
-        if (!opts.silent) wx.showToast({ title: '网络异常', icon: 'none' });
-        reject(err);
+        if (!opts.silent) wx.showToast({ title: isTimeout(err) ? '请求超时，请检查网络后重试' : '网络不佳，请稍后重试', icon: 'none' });
+        const e = err || {};
+        try { e.net = true; } catch (x) { /* 忽略 */ }
+        reject(e);
       }
     });
   });
@@ -32,16 +76,49 @@ function activeBookChanged() {
   } catch (e) { /* 忽略 */ }
 }
 
+// 入簿 / 确认 / 作废等写操作成功后：工作台缓存里的今日合计、待确认数已过期，清掉避免下次进入先显示旧数
+function dropDash(r) {
+  try { require('./cache.js').set('dashboard', null); } catch (e) { /* 忽略 */ }
+  return r;
+}
+
+/** 是否为网络失败（超时 / 断网 / 云函数未响应）：页面据此显示「网络不佳，点此重试」，而不是「没有数据」 */
+const isNetErr = e => !!(e && !e.biz && (e.net || e.errMsg));
+/**
+ * 页面上显示的错误说明（v3.66.0）：网络失败说清楚是网络问题（超时 / 连不上），业务错误用服务端的原话，其他用页面给的兜底文案
+ */
+function errText(e, fallback) {
+  if (isNetErr(e)) return isTimeout(e) ? '网络较慢，请求超时了' : '网络不佳，没能连上服务器';
+  if (e && e.biz && e.message) return e.message;
+  return fallback || '加载失败，请稍后重试';
+}
+
 module.exports = {
+  isQuotaMsg,
+  quotaModal,
+  isNetErr,
+  errText,
   login: userInfo => call('login', { action: 'login', userInfo }),
   loginCheck: () => call('login', { action: 'check' }),
   // withPayCode：需要预览收款码时才让云函数生成临时链接（主家信息页、礼簿码页）
-  accountGet: withPayCode => call('account', { action: 'get', withPayCode: !!withPayCode }),
+  accountGet: (withPayCode, opts) => call('account', { action: 'get', withPayCode: !!withPayCode }, opts),
   // 主家称呼等改动：工作台、我的、礼簿下拉的缓存都已过期
   accountSave: d => call('account', { action: 'save', ...d }).then(r => { ['books', 'dashboard', 'mine'].forEach(k => require('./cache.js').set(k, null)); return r; }),
-  accountGetByAid: aid => call('account', { action: 'getByAid', aid }),
-  receiptGet: (rid, batch) => call('payment', { action: 'receipt', rid, batch: !!batch }),
-  myReceipts: () => call('payment', { action: 'myReceipts' }),
+  pollLevelGet: () => call('account', { action: 'get' }, { silent: true }),
+  setPeak: on => call('account', { action: 'setPeak', on: !!on }),
+  advGet: () => call('account', { action: 'advGet' }, { silent: true }),
+  setTrashDays: days => call('account', { action: 'setTrashDays', days }),
+  setGiftNotify: on => call('account', { action: 'setGiftNotify', on: !!on }),
+  accountGetByAid: (aid, opts) => call('account', { action: 'getByAid', aid }, opts),
+  receiptGet: (rid, batch, opts) => call('payment', { action: 'receipt', rid, batch: !!batch }, opts),
+  myReceipts: opts => call('payment', { action: 'myReceipts' }, opts),
+  // 小票二维码（v3.57.0）：issueQr 静默（失败不弹提示，小票照常打印）
+  issueQr: rid => call('payment', { action: 'issueQr', rid, envVersion: envVersion() }, { silent: true }),
+  receiptByToken: (token, opts) => call('payment', { action: 'receiptByToken', token }, opts),
+  qrCheck: withRaster => call('payment', { action: 'qrCheck', envVersion: envVersion(), withRaster: !!withRaster }),
+  claimReceipt: token => call('payment', { action: 'claimReceipt', token }),
+  resetQr: rid => call('payment', { action: 'resetToken', rid }),
+  unclaim: rid => call('payment', { action: 'unclaim', rid }),
   bookList: () => call('books', { action: 'list' }),
   // 当前礼簿变化（切换 / 新建即设为当前）：通知礼簿页下次显示时切到新的当前礼簿
   // 修改已有礼簿：礼簿下拉、工作台缓存里的名称等已过期
@@ -54,6 +131,7 @@ module.exports = {
   bookSetActive: bookId => call('books', { action: 'setActive', bookId }).then(r => { activeBookChanged(); return r; }),
   // 机构模式记账人：切换自己正在记的一场（不影响主家和其他记账人）
   bookSetMine: bookId => call('books', { action: 'setMine', bookId }).then(r => { activeBookChanged(); return r; }),
+  bookRecalc: bookId => call('books', { action: 'recalc', bookId }).then(r => { ['books', 'dashboard'].forEach(k => require('./cache.js').set(k, null)); return r; }),
   bookArchive: (bookId, archived) => call('books', { action: 'archive', bookId, archived }),
   // 删除礼簿（主家本人，只能删已归档的）：先预览份数与合计，确认后移入回收站（done=false 时再调用接着移）
   bookRemovePreview: bookId => call('books', { action: 'removePreview', bookId }),
@@ -67,8 +145,8 @@ module.exports = {
   bookGetTpl: bookId => call('books', { action: 'getTpl', bookId }),
   bookSaveTpl: (bookId, tpls) => call('books', { action: 'saveTpl', bookId, ...tpls }),
   purgeAccount: () => call('account', { action: 'purge', confirm: 'DELETE' }),
-  inviteCreate: (type, opts) => call('account', { action: 'createInvite', type, ...(opts || {}) }),
-  inviteInfo: token => call('account', { action: 'inviteInfo', token }),
+  inviteCreate: (type, opts, callOpts) => call('account', { action: 'createInvite', type, ...(opts || {}) }, callOpts),
+  inviteInfo: (token, opts) => call('account', { action: 'inviteInfo', token }, opts),
   inviteAccept: (token, displayName) => call('account', { action: 'acceptInvite', token, displayName }),
   setHandlerName: (name, memberId) => call('account', { action: 'setHandlerName', name, memberId }),
   memberList: () => call('account', { action: 'members' }),
@@ -76,7 +154,7 @@ module.exports = {
   viewerList: () => call('account', { action: 'viewers' }),
   memberUpdate: (memberId, d) => call('account', { action: 'memberUpdate', memberId, ...d }),
   setOrgMode: (orgMode, orgName) => call('account', { action: 'setOrgMode', orgMode, orgName }),
-  // 外观设置：主题色（仅主家本人）
+  // 主题色（仅主家本人）
   setTheme: primary => call('account', { action: 'setTheme', primary }).then(r => { ['dashboard', 'mine'].forEach(k => require('./cache.js').set(k, null)); return r; }),
   orgSummary: month => call('records', { action: 'orgSummary', month }),
   reconcile: (bookId, day) => call('records', { action: 'reconcile', bookId, day }),
@@ -96,46 +174,57 @@ module.exports = {
   rqUnmerge: from => call('renqing', { action: 'unmerge', from }),
   rqMoveEntry: d => call('renqing', { action: 'moveEntry', ...d }),
   // 礼簿里同名的宾客（礼台记账前选择是哪一位）、给宾客设区分备注
-  bookNameCheck: names => call('records', { action: 'nameCheck', names }, { silent: true }),
+  bookNameCheck: (names, bookId) => call('records', { action: 'nameCheck', names, bookId: bookId || '' }, { silent: true }),
   setNameTag: (rid, tag) => call('records', { action: 'setNameTag', rid, tag }),
   // 亲友办事提醒
   remindList: () => call('renqing', { action: 'remindList' }),
   remindSave: (remind, subscribed) => call('renqing', { action: 'remindSave', remind, subscribed: !!subscribed, envVersion: envVersion() }),
   remindDone: (id, done) => call('renqing', { action: 'remindDone', id, done: done !== false }),
   remindDelete: id => call('renqing', { action: 'remindDelete', id }),
+  remindClearDone: () => call('renqing', { action: 'remindClearDone' }),
   outList: d => call('renqing', { action: 'outList', ...d }),
   outSave: gift => call('renqing', { action: 'outSave', gift }),
   outDelete: id => call('renqing', { action: 'outDelete', id }),
   rqQuery: key => call('renqing', { action: 'query', key }),
   rqPeople: () => call('renqing', { action: 'people' }),
   payCreate: d => call('payment', { action: 'create', envVersion: envVersion(), ...d }),
-  payTransferred: rid => call('payment', { action: 'transferred', rid, envVersion: envVersion() }),
+  // guestNotify：宾客同意了「入簿通知」订阅（v3.66.1），主家确认后发服务通知
+  payTransferred: (rid, guestNotify) => call('payment', { action: 'transferred', rid, envVersion: envVersion(), ...(guestNotify ? { guestNotify: true } : {}) }),
   payCancel: rid => call('payment', { action: 'cancel', rid }),
   payStatus: rid => call('payment', { action: 'status', rid }),
-  payConfirm: (rid, amount, amounts) => call('payment', { action: 'confirm', rid, amount, amounts }),
-  payConfirmBatch: rids => call('payment', { action: 'confirmBatch', rids }),
-  cashEntry: d => call('payment', { action: 'cashEntry', ...d }),
-  payReject: rid => call('payment', { action: 'reject', rid }),
-  payDismissStall: rid => call('payment', { action: 'dismissStall', rid }),
-  payVoid: rid => call('payment', { action: 'void', rid }),
-  recordList: d => call('records', { action: 'list', ...d }),
+  payConfirm: (rid, amount, amounts) => call('payment', { action: 'confirm', rid, amount, amounts }).then(dropDash),
+  payConfirmBatch: rids => call('payment', { action: 'confirmBatch', rids }).then(dropDash),
+  cashEntry: d => call('payment', { action: 'cashEntry', ...d }).then(dropDash),
+  payReject: rid => call('payment', { action: 'reject', rid }).then(dropDash),
+  payDismissStall: rid => call('payment', { action: 'dismissStall', rid }).then(dropDash),
+  payVoid: rid => call('payment', { action: 'void', rid }).then(dropDash),
+  payUnreject: rid => call('payment', { action: 'unreject', rid }).then(dropDash),
+  payAmend: (rid, fields) => call('payment', { action: 'amend', rid, ...fields }).then(dropDash),
+  recordList: (d, opts) => call('records', { action: 'list', ...d }, opts),
   markPrinted: rids => call('records', { action: 'markPrinted', rids }),
-  recordPending: () => call('records', { action: 'pending' }),
-  dashboard: () => call('records', { action: 'dashboard' }),
-  pendingStat: () => call('records', { action: 'pendingStat' }, { silent: true }),
+  recordPending: (withRejected, opts) => call('records', { action: 'pending', ...pollHint(), ...(withRejected ? { withRejected: true } : {}) }, opts),
+  dashboard: opts => call('records', { action: 'dashboard' }, opts),
+  pendingStat: () => call('records', { action: 'pendingStat', ...pollHint() }, { silent: true }),
+  // 待确认页轮询：带 withExtra 另返回 stall / rej 两个分组的条数
+  recordStat: d => call('records', { action: 'pendingStat', ...pollHint(), ...d }, { silent: true }),
+  pollHint,
   recordThemes: () => call('records', { action: 'themes' }),
   exportFile: d => call('export', d),
-  tplGet: () => call('printtpl', { action: 'get' }),
-  tplSave: tpl => call('printtpl', { action: 'save', tpl }),
+  // 传统礼簿 PDF 预览（3 页小 PDF）与示意图用的前几笔宾客数据
+  exportPreview: d => call('export', Object.assign({}, d, { action: 'bookPreview' })),
+  exportPreviewData: bookId => call('export', { action: 'bookPreviewData', bookId }, { silent: true }),
   qrcodeGen: (aid, bookId) => call('qrcode', { action: 'gen', aid, bookId, envVersion: envVersion() }),
   appCode: () => call('qrcode', { action: 'app', envVersion: envVersion() }, { silent: true }),
   // 套餐与系统设置（付费订阅预留）
   planGet: () => call('system', { action: 'plan' }, { silent: true }),
   adminGet: () => call('system', { action: 'adminGet' }),
   adminSetWarmup: warmup => call('system', { action: 'adminSetWarmup', warmup }),
-  adminSetPlan: (ownerOpenid, plan, days) => call('system', { action: 'adminSetPlan', ownerOpenid, plan, days }),
+  adminSetPlan: (ownerOpenid, plan, opts) => call('system', { action: 'adminSetPlan', ownerOpenid, plan, ...(opts || {}) }),
   adminFindHosts: keyword => call('system', { action: 'adminFindHosts', keyword }),
   adminIndexes: () => call('system', { action: 'adminIndexes' }),
+  adminPreflight: fix => call('system', { action: fix ? 'adminPreflightFix' : 'adminPreflight' }),
+  // 一次性：把导出字体上传到云存储（fontsetup 云函数，用完可删；未部署时 silent 由页面提示）
+  adminFontsUpload: () => call('fontsetup', { action: 'upload' }, { silent: true }),
   // 数据清除（管理员）
   adminPurgePreview: (ownerOpenid, guestRecords) => call('system', { action: 'adminPurgePreview', ownerOpenid, guestRecords: !!guestRecords }),
   adminBackup: ownerOpenid => call('system', { action: 'adminBackup', ownerOpenid }),

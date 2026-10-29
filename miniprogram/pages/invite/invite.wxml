@@ -1,4 +1,4 @@
-<view class="container center">
+<view class="container center" style="{{themeStyle}}">
   <view class="card box">
     <view class="seal"><view class="seal-inner">礼</view></view>
 
@@ -18,29 +18,30 @@
       </block>
       <block wx:elif="{{info.type === 'viewer'}}">
         <view class="books" wx:if="{{info.books.length}}">
-          <view class="bk" wx:for="{{info.books}}" wx:key="index"><text>{{item.name}}</text><text class="muted">{{item.count}} 份 · ￥{{item.sumStr}}</text></view>
+          <view class="bk" wx:for="{{info.books}}" wx:key="index"><text>{{item.name}}</text><text class="muted" wx:if="{{item.sumStr !== undefined && item.count !== undefined}}">{{item.count}} 份 · ￥{{item.sumStr}}</text></view>
         </view>
-        <view class="desc muted">主家同意后可以查看以上礼簿的明细、合计、统计、对账和导出；只能查看，不能修改。</view>
+        <view class="desc muted">可以查看以上礼簿的明细、合计、统计、对账和导出；只能查看，不能修改。主家本人发的卡接受后直接生效，经别人转发的卡需主家同意后才生效。</view>
       </block>
       <block wx:else>
         <view class="perm-label muted">可查看：{{info.allBooks ? '全部礼簿' : ''}}</view>
         <view class="books" wx:if="{{!info.allBooks && info.books.length}}">
-          <view class="bk" wx:for="{{info.books}}" wx:key="index"><text>{{item.name}}</text><text class="muted">{{item.count}} 份 · ￥{{item.sumStr}}</text></view>
+          <view class="bk" wx:for="{{info.books}}" wx:key="index"><text>{{item.name}}</text><text class="muted" wx:if="{{item.sumStr !== undefined && item.count !== undefined}}">{{item.count}} 份 · ￥{{item.sumStr}}</text></view>
         </view>
         <view class="perm-label muted" wx:if="{{info.perms && info.perms.length}}">可操作：</view>
         <view class="perms" wx:if="{{info.perms && info.perms.length}}">
           <text class="perm" wx:for="{{info.perms}}" wx:key="*this">{{item}}</text>
         </view>
-        <view class="desc muted">接受后需主家同意才生效</view>
+        <view class="desc muted">主家本人发的卡，接受后直接生效；经别人转发的卡，需主家同意后才生效</view>
       </block>
     </block>
 
-    <view class="err" wx:if="{{errMsg}}">{{errMsg}}</view>
+    <view class="err" wx:if="{{errMsg}}" bindtap="onRetryLoad">{{errMsg}}<text class="retry" wx:if="{{errNet}}">　点此重试</text></view>
 
     <block wx:if="{{info && !errMsg}}">
       <view class="dn" wx:if="{{loggedIn && info.type === 'clerk'}}">
         <view class="dn-label">你的真实姓名 <text class="req">*</text></view>
-        <input class="input" placeholder="如：李华（回执、小票上显示，主家据此辨认）" maxlength="12" value="{{displayName}}" bindinput="onDisplayName" />
+        <view class="muted dn-hint">回执、小票上显示，主家据此辨认</view>
+        <input class="input" placeholder="如：李华" maxlength="12" value="{{displayName}}" bindinput="onDisplayName" />
       </view>
       <button wx:if="{{!loggedIn}}" class="btn-primary" bindtap="goLogin">登录后接受</button>
       <button wx:else class="btn-primary" loading="{{accepting}}" bindtap="onAccept">

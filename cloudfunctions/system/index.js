@@ -5,8 +5,11 @@
 //   adminSetPlan 管理员：给某位主家开通 / 延期 / 取消套餐（以后接支付回调时由支付流程调用同一逻辑）
 //   ads          任何人：广告位配置（前端据此决定是否展示，宾客也会调用）
 //   adminSetAds  管理员：保存广告位配置
+//   adminPreflight / adminPreflightFix 管理员：上线前检查（密钥来源、集合、WX_APPSECRET）与建缺失集合
 //   adminIndexes 管理员：一键创建数据库索引（调用云开发 HTTP API updateIndex，需在本函数环境变量配置 WX_APPSECRET）
 const cloud = require('wx-server-sdk');
+const { ok, err } = require('./common.js');
+const { ownPayCode } = require('./paycode.js'); // 收款码归属（tools/cloud-shared/paycode.js）
 const https = require('https');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
@@ -16,6 +19,8 @@ const Purge = require('./purge.js');
 
 exports.main = async (event) => {
   if (event && event.action === '__warm') return { code: 0, msg: 'warm', data: null };
+  // 内部 action：只给 payment 云函数调用，不在前端 request.js 里出现；自带一次性凭据校验（见 internalWxaCode）
+  if (event && event.action === '_wxaCode') return await internalWxaCode(event);
   const { OPENID } = cloud.getWXContext();
   if (!OPENID) return err('未获取到用户身份');
   try {
@@ -25,9 +30,11 @@ exports.main = async (event) => {
       case 'adminSetAds': return await guard(OPENID, () => adminSetAds(event.ads));
       case 'adminGet': return await guard(OPENID, adminGet);
       case 'adminSetWarmup': return await guard(OPENID, () => adminSetWarmup(event.warmup));
-      case 'adminSetPlan': return await guard(OPENID, () => setPlan(event.ownerOpenid, event.plan, event.days, 'admin'));
+      case 'adminSetPlan': return await guard(OPENID, () => setPlan(OPENID, event.ownerOpenid, event.plan, event, 'admin'));
       case 'adminFindHosts': return await guard(OPENID, () => findHosts(event.keyword));
       case 'adminIndexes': return await guard(OPENID, () => ensureIndexes());
+      case 'adminPreflight': return await guard(OPENID, () => preflight(false));
+      case 'adminPreflightFix': return await guard(OPENID, () => preflight(true));
       // 数据清除：按账户（预览 / 备份 / 执行）、按礼簿、无主数据；操作日志
       case 'adminPurgePreview': return await guard(OPENID, () => purgePreview(OPENID, String(event.ownerOpenid || ''), event.guestRecords === true));
       case 'adminBackup': return await guard(OPENID, () => adminBackup(OPENID, String(event.ownerOpenid || '')));
@@ -118,41 +125,86 @@ async function findHosts(keyword) {
   return ok({ list });
 }
 
+/** 北京时间 YYYY-MM-DD 当天 23:59:59 对应的时间点；格式或日期不合法返回 null */
+function bjEndOfDay(str) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(str || ''));
+  if (!m) return null;
+  const y = +m[1], mo = +m[2], d = +m[3];
+  const chk = new Date(Date.UTC(y, mo - 1, d));
+  if (chk.getUTCFullYear() !== y || chk.getUTCMonth() !== mo - 1 || chk.getUTCDate() !== d) return null;
+  return new Date(Date.UTC(y, mo - 1, d, 23, 59, 59) - 8 * 3600 * 1000);
+}
+
+/** 在北京时间日历上加 n 个月（31 号加 1 个月落在月末，如 1/31 → 2/28），保持当天的时分秒 */
+function addMonthsBj(base, n) {
+  const t = new Date(base.getTime() + 8 * 3600 * 1000);
+  const day = t.getUTCDate();
+  t.setUTCDate(1);
+  t.setUTCMonth(t.getUTCMonth() + n);
+  const last = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0)).getUTCDate();
+  t.setUTCDate(Math.min(day, last));
+  return new Date(t.getTime() - 8 * 3600 * 1000);
+}
+
 /**
- * 开通 / 延期 / 取消套餐（订阅接口预留）
- * days > 0：在当前到期时间（未过期）或现在的基础上延长；plan='free' 为取消
+ * 开通 / 延期 / 缩短 / 取消套餐（v3.67.0）
+ * o.mode：
+ *   'add'   在当前到期时间（同套餐且未过期）或现在的基础上加 o.days 天，或 o.months 个月（日历月）；缺省按 o.days（默认 30 天，兼容旧调用）
+ *   'until' 直接指定到期日 o.until（YYYY-MM-DD，北京时间当天 23:59:59），可延长也可缩短；必须晚于现在
+ *   plan='free'（或 mode='cancel'）：取消，无到期日
+ * 到期日最晚为 5 年后。每次都写 admin_logs（旧 / 新套餐与到期、模式、主家名）。
  */
-async function setPlan(ownerOpenid, plan, days, source) {
+async function setPlan(admin, ownerOpenid, plan, o, source) {
+  o = o || {};
   ownerOpenid = String(ownerOpenid || '').trim();
   if (!/^[a-zA-Z0-9_-]{10,64}$/.test(ownerOpenid)) return err('openid 不正确');
   const plans = await P.readSetting(db, 'plans', P.DEFAULT_PLANS);
   if (!plans[plan]) return err('套餐不存在');
+  const cancel = plan === 'free' || o.mode === 'cancel';
+  const mode = cancel ? 'cancel' : o.mode === 'until' ? 'until' : 'add';
+  const now = new Date();
+  const maxAt = new Date(now.getTime() + 5 * 366 * 24 * 3600 * 1000);
   try { await db.createCollection('subscriptions'); } catch (e) { /* 已存在 */ }
   const col = db.collection('subscriptions');
   let cur = null;
   try { cur = (await col.doc(ownerOpenid).get()).data; } catch (e) { /* 无订阅 */ }
+  const before = await P.planOf(db, ownerOpenid);
   let expiresAt = null;
-  if (plan !== 'free') {
-    const n = Math.max(1, Math.min(3660, Number(days) || 30));
-    const base = cur && cur.plan === plan && cur.expiresAt && new Date(cur.expiresAt) > new Date()
-      ? new Date(cur.expiresAt) : new Date();
-    expiresAt = new Date(base.getTime() + n * 24 * 3600 * 1000);
+  if (mode === 'until') {
+    expiresAt = bjEndOfDay(o.until);
+    if (!expiresAt) return err('到期日格式不正确');
+    if (expiresAt <= now) return err('到期日不能是过去，要停用请选「取消」');
+    if (expiresAt > maxAt) return err('到期日最晚为 5 年后');
+  } else if (mode === 'add') {
+    const base = cur && cur.plan === plan && cur.expiresAt && new Date(cur.expiresAt) > now ? new Date(cur.expiresAt) : now;
+    if (Number(o.months) > 0) {
+      expiresAt = addMonthsBj(base, Math.min(60, Math.floor(Number(o.months))));
+    } else {
+      const n = Math.max(1, Math.min(3660, Math.floor(Number(o.days)) || 30));
+      expiresAt = new Date(base.getTime() + n * 24 * 3600 * 1000);
+    }
+    if (expiresAt > maxAt) return err('到期日最晚为 5 年后');
   }
-  await col.doc(ownerOpenid).set({ data: { plan, expiresAt, source, updatedAt: new Date() } });
+  await col.doc(ownerOpenid).set({ data: { plan: cancel ? 'free' : plan, expiresAt, source, updatedAt: now } });
   // 读回确认已生效
-  const now = await P.planOf(db, ownerOpenid);
-  return ok({ ownerOpenid, plan: now.plan, planName: now.name, expiresAt: now.expiresAt });
+  const after = await P.planOf(db, ownerOpenid);
+  let name = '';
+  try { name = String(((await db.collection('accounts').where({ ownerOpenid }).limit(1).get()).data[0] || {}).accountName || ''); } catch (e) { /* 无主家信息 */ }
+  await log(admin, 'setPlan', {
+    name, ownerOpenid, mode,
+    oldPlan: before.plan, oldExpiresAt: before.expiresAt || null,
+    newPlan: after.plan, newExpiresAt: after.expiresAt || null
+  });
+  return ok({
+    ownerOpenid, plan: after.plan, planName: after.name, expiresAt: after.expiresAt,
+    oldPlan: before.plan, oldPlanName: before.name, oldExpiresAt: before.expiresAt || null, mode
+  });
 }
 
 // —— 数据清除（管理员） ——
 const _ = db.command;
 const OPENID_RE = /^[a-zA-Z0-9_-]{10,64}$/;
 
-/** 是否为该用户本人上传到 paycodes/ 目录的收款码（与 account 云函数一致） */
-function ownPayCode(fileID, openid) {
-  const esc = String(openid || '').replace(/[^a-zA-Z0-9_-]/g, '');
-  return !!esc && new RegExp(`^cloud://[^/]+/paycodes/(book-)?${esc}-\\d+\\.(png|jpe?g|webp)$`, 'i').test(String(fileID || ''));
-}
 
 /** 被清除账户的显示信息（确认时输入的名称：主家称呼；没有主家信息时用微信昵称） */
 async function target(ownerOpenid) {
@@ -203,7 +255,13 @@ async function adminPurge(admin, e) {
       return err('请先备份，或确认不需要备份');
     }
   }
-  const res = await Purge.run(db, cloud, ownerOpenid, { guestRecords: e.guestRecords === true, subscription: true, ownPayCode });
+  let res;
+  try {
+    res = await Purge.run(db, cloud, ownerOpenid, { guestRecords: e.guestRecords === true, subscription: true, ownPayCode });
+  } catch (x) {
+    console.error('adminPurge 失败', x.errCode, x.message);
+    return err('清除未完成（可能超时），已删除的部分不会恢复，请再点一次继续清除');
+  }
   await log(admin, 'purgeAccount', { ownerOpenid, name: t.name, guestRecords: e.guestRecords === true, skipBackup: e.skipBackup === true, removed: res.removed, files: res.files });
   return ok(res);
 }
@@ -247,7 +305,15 @@ async function purgeBook(admin, bookId, confirmName) {
   const acc = (await db.collection('accounts').where({ ownerOpenid: book.ownerOpenid }).limit(1).get()).data[0];
   const prefix = acc && acc.payCodeFileID ? acc.payCodeFileID.split('/paycodes/')[0] : '';
   if (prefix) ['develop', 'trial', 'release'].forEach(env => files.push(`${prefix}/qrcodes/${bookId}-${env}.png`));
-  try { if (files.length) await cloud.deleteFile({ fileList: files }); } catch (e) { /* 忽略 */ }
+  // 默认礼簿（id 超过 32 字符）的礼簿码文件用短码命名（见 ctx.shortCodeOf）
+  if (prefix && bookId.length > 32) {
+    const code = 'k' + require('crypto').createHash('md5').update(bookId).digest('hex').slice(0, 24);
+    ['develop', 'trial', 'release'].forEach(env => files.push(`${prefix}/qrcodes/${code}-${env}.png`));
+  }
+  files.push(...(await Purge.qrCacheFiles(db, 'records', { ownerOpenid: book.ownerOpenid, bookId }))); // 小票二维码缓存（v3.59.1）
+  for (let i = 0; i < files.length; i += 50) {
+    try { await cloud.deleteFile({ fileList: files.slice(i, i + 50) }); } catch (e) { /* 忽略 */ }
+  }
   let records = 0;
   for (let i = 0; i < 200; i++) {
     const r = await db.collection('records').where({ ownerOpenid: book.ownerOpenid, bookId }).remove();
@@ -323,6 +389,12 @@ async function orphans(admin, doIt) {
         count += rs.length;
       }
     } else {
+      if (col === 'records') { // 无主礼金记录的小票二维码缓存（v3.59.1）
+        const qf = await Purge.qrCacheFiles(db, 'records', cond);
+        for (let i = 0; i < qf.length; i += 50) {
+          try { await cloud.deleteFile({ fileList: qf.slice(i, i + 50) }); files += Math.min(50, qf.length - i); } catch (e) { /* 忽略 */ }
+        }
+      }
       for (let i = 0; i < 200; i++) {
         let r;
         try { r = await db.collection(col).where(cond).remove(); } catch (e) { break; }
@@ -442,18 +514,85 @@ async function adminLogs() {
   }
 }
 
+// —— 上线前检查 ——
+// 必需集合（与 init 云函数的 COLLECTIONS 一致，另加 sys_config：往来人标识密钥，不属于任何用户，注销 / 清除测试数据都不会动它）
+const REQUIRED_COLS = require('./collections.js').COLLECTIONS;
+
+/**
+ * 上线前检查：只返回状态，不返回任何密钥内容
+ * fix=true 时顺带创建缺失集合（索引请用「一键创建索引」）；集合权限云函数查不到，由前端列为手动确认项
+ */
+async function preflight(fix) {
+  const cols = await Promise.all(REQUIRED_COLS.map(async name => {
+    const has = async () => { try { await db.collection(name).count(); return true; } catch (e) { return false; } };
+    let exists = await has();
+    let created = false;
+    if (!exists && fix) {
+      try { await db.createCollection(name); } catch (e) { /* 并发 / 已存在 */ }
+      exists = await has();
+      created = exists;
+    }
+    return { name, exists, created };
+  }));
+  // 密钥：只读来源状态与创建时间（renqing 首次使用时写入），不读 secret 字段
+  let key = { generated: false, createdAt: null, source: '', at: null };
+  try {
+    const d = (await db.collection('sys_config').doc('person_key').field({ createdAt: true }).get()).data;
+    if (d) { key.generated = true; key.createdAt = d.createdAt || null; }
+  } catch (e) { /* 未生成 */ }
+  try {
+    const s = (await db.collection('sys_config').doc('person_key_state').get()).data;
+    if (s) { key.source = String(s.source || ''); key.at = s.at || null; }
+  } catch (e) { /* 无 */ }
+  const missing = cols.filter(c => !c.exists).map(c => c.name);
+  const fonts = await fontStatus();
+  if (fix) await log('admin', 'preflightFix', { name: '上线前检查修复', created: cols.filter(c => c.created).map(c => c.name), missing });
+  return ok({
+    key, // source: env 环境变量 / db 自动生成 / default 旧默认值（数据库读不到时兜底）/ 空 尚未被使用
+    cols, missing,
+    hasAppSecret: !!process.env.WX_APPSECRET, // 只返回是否已配置
+    fonts, // 导出字体（云存储）登记情况：{ ready, fonts:[{key,label,uploaded}] }
+    permCols: REQUIRED_COLS
+  });
+}
+
+/** 导出字体是否已上传到云存储并登记（settings.export_fonts，由 fontsetup 云函数写入；不返回 fileID） */
+async function fontStatus() {
+  const LABEL = { sans: '黑体', serif: '宋体', brush: '毛笔字体' };
+  let fonts = {};
+  try {
+    const d = (await db.collection('settings').doc('export_fonts').get()).data;
+    if (d && !d._openid && d.fonts) fonts = d.fonts;
+  } catch (e) { /* 未登记 */ }
+  const list = Object.keys(LABEL).map(key => ({ key, label: LABEL[key], uploaded: !!(fonts[key] && fonts[key].fileID) }));
+  return { ready: list.every(f => f.uploaded), fonts: list };
+}
+
 // —— 数据库索引 ——
 // 与 docs/提审与隐私说明.md 第 1 条一致；direction "1" 升序、"-1" 降序
 const INDEXES = [
   ['records', 'owner_status_time', [['ownerOpenid', 1], ['status', 1], ['createdAt', -1]]],
+  ['records', 'owner_status_amount', [['ownerOpenid', 1], ['status', 1], ['amount', -1]]], // 礼簿页按金额排序
   ['records', 'owner_day_status', [['ownerOpenid', 1], ['payDay', 1], ['status', 1]]],
   ['records', 'owner_book_status', [['ownerOpenid', 1], ['bookId', 1], ['status', 1]]],
+  ['records', 'owner_book_time', [['ownerOpenid', 1], ['bookId', 1], ['createdAt', -1]]], // 礼簿页按礼簿筛选（默认排序）
+  ['records', 'owner_book_name', [['ownerOpenid', 1], ['bookId', 1], ['payerName', 1]]], // 礼簿页按姓名排序 / 只看重名
+  ['records', 'owner_book_amount', [['ownerOpenid', 1], ['bookId', 1], ['amount', -1]]], // 礼簿页按礼簿 + 金额排序
   ['records', 'payer_status_paid', [['payerOpenid', 1], ['status', 1], ['paidAt', -1]]],
   ['records', 'payer_time', [['payerOpenid', 1], ['createdAt', -1]]],
+  ['records', 'payer_status_time', [['payerOpenid', 1], ['status', 1], ['createdAt', -1]]], // 我的随礼记录「等待主家确认」（v3.66.0）
+  ['records', 'claimed_status_paid', [['claimedOpenid', 1], ['status', 1], ['paidAt', -1]]], // 我的随礼记录（小票二维码认领）
+  ['records', 'rcpt_token', [['rcptToken', 1]]], // 扫小票二维码按 token 查回执
   ['records', 'batch', [['batchId', 1]]],
+  ['records', 'guest_retry', [['guestNotify', 1], ['status', 1], ['paidAt', -1]]], // warmer 补发宾客入簿通知（v3.68.1）
+  ['records', 'owner_payer', [['ownerOpenid', 1], ['payerName', 1]]], // 往来按姓名查询 / nameCheck
+  ['trash_records', 'owner_book', [['ownerOpenid', 1], ['bookId', 1]]],
+  ['trash_books', 'status_purge', [['trashStatus', 1], ['purgeAt', 1]]], // warmer 到期清除 / 续跑未完成
+  ['person_alias', 'owner', [['ownerOpenid', 1]]],
   ['members', 'member', [['memberOpenid', 1]]],
   ['members', 'aid', [['aid', 1]]],
   ['accounts', 'owner', [['ownerOpenid', 1]]],
+  ['accounts', 'peak', [['peakUntil', -1]]], // warmer 判断是否有人开着高峰模式（v3.69.0）
   ['users', 'openid', [['openid', 1]]],
   ['books', 'owner_time', [['ownerOpenid', 1], ['createdAt', -1]]],
   ['gifts_out', 'owner_name', [['ownerOpenid', 1], ['toName', 1]]],
@@ -492,6 +631,80 @@ async function ensureIndexes() {
   return ok({ env, results, created: results.filter(x => x.ok && !x.existed).length, failed: results.filter(x => !x.ok).length });
 }
 
+// —— 内部 action `_wxaCode`：用 AppSecret 走 HTTPS 接口（getwxacodeunlimit）取小程序码图片（payment 的云调用权限缺失时的备用通道）——
+// （v3.57.1 的 `_urlLink` 已删除：URL Link 只开放给大陆非个人主体，个人主体报 85407。）
+// 为什么不用「没有 OPENID / SOURCE」判断：云函数之间 callFunction 时，被调用方的 getWXContext 可能沿用最初调用者的 OPENID，
+// SOURCE 的取值也没有可依赖的文档约定，据此判断可能把合法调用挡在外面，也可能被客户端直接调用绕过。
+// 所以改用一次性凭据：payment 先往 settings 集合写 urlnonce_xxx（该集合客户端不可读写，且带 _openid 的伪造文档会被忽略），
+// 这里读到、未过期（60 秒）、没有 _openid 才放行，并立即删除。客户端拿不到也伪造不出这个凭据。
+// 只允许固定页面，scene 只允许小程序码合法字符且 ≤32 位，防止被拿来批量生成任意码。
+const WXA_PAGES = ['pages/receipt/receipt', 'pages/index/index'];
+let tokenCache = null; // { token, exp } 实例内缓存 access_token（stable_token 有效期 2 小时，这里只缓存 90 分钟）
+
+async function internalWxaCode(event) {
+  const fail = reason => ({ code: 0, msg: 'ok', data: { image: '', reason } });
+  const id = String(event.nonce || '');
+  if (!/^urlnonce_[0-9a-f]{24}$/.test(id)) return err('无权调用');
+  let doc = null;
+  try { doc = (await db.collection('settings').doc(id).get()).data; } catch (e) { /* 不存在 */ }
+  if (!doc || doc._openid || doc.kind !== 'urllink' || Date.now() - Number(doc.createdAt || 0) > 60000) return err('无权调用');
+  try { await db.collection('settings').doc(id).remove(); } catch (e) { /* 忽略 */ }
+  const page = String(event.page || '');
+  const scene = String(event.scene || '');
+  if (!WXA_PAGES.includes(page) || !/^[A-Za-z0-9=_.-]{1,32}$/.test(scene)) return fail('bad-param');
+  const env = ['develop', 'trial', 'release'].includes(event.envVersion) ? event.envVersion : 'release';
+  try {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const tk = await getAccessToken(attempt > 0);
+      if (tk.reason) return fail(tk.reason);
+      // 280 = 官方允许的最小宽度；纯黑白（不自动配色、黑色线条、不透明底），热敏打印二值化后最清晰；check_path=false：未发布 / 体验版也能生成
+      const r = await postRaw(`https://api.weixin.qq.com/wxa/getwxacodeunlimit?access_token=${tk.token}`, {
+        scene, page, width: 280, check_path: false, env_version: env,
+        auto_color: false, line_color: { r: 0, g: 0, b: 0 }, is_hyaline: false
+      });
+      if (r.image) return { code: 0, msg: 'ok', data: { image: r.image.toString('base64') } };
+      if ((r.errcode === 40001 || r.errcode === 42001) && attempt === 0) { tokenCache = null; continue; } // access_token 失效：强制刷新后重试一次
+      return fail('http:' + r.errcode);
+    }
+  } catch (e) {
+    console.error('system._wxaCode', e && e.message);
+    return fail('net:' + String((e && e.message) || 'err').slice(0, 20));
+  }
+  return fail('http:retry');
+}
+
+/** 取 access_token（stable_token）；force 时强制刷新。失败返回 { reason }，reason 不含密钥 */
+async function getAccessToken(force) {
+  const secret = process.env.WX_APPSECRET;
+  if (!secret) return { reason: 'secret-missing' };
+  if (!force && tokenCache && tokenCache.exp > Date.now()) return { token: tokenCache.token };
+  const { APPID } = cloud.getWXContext();
+  const tk = await postJSON('https://api.weixin.qq.com/cgi-bin/stable_token', { grant_type: 'client_credential', appid: APPID, secret, force_refresh: !!force });
+  if (!tk.access_token) return { reason: 'token:' + tk.errcode }; // 如 40125 AppSecret 不正确（含被重置过）、40013 AppID 无效
+  tokenCache = { token: tk.access_token, exp: Date.now() + 90 * 60 * 1000 };
+  return { token: tk.access_token };
+}
+
+/** POST JSON，返回 { image: Buffer } 或 { errcode, errmsg }（getwxacodeunlimit 成功时直接返回图片二进制） */
+function postRaw(url, body) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify(body);
+    const req = https.request(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) }, timeout: 8000 }, res => {
+      const bufs = [];
+      res.on('data', c => bufs.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+      res.on('end', () => {
+        const buf = Buffer.concat(bufs);
+        const isImg = (buf[0] === 0x89 && buf[1] === 0x50) || (buf[0] === 0xff && buf[1] === 0xd8);
+        if (isImg) return resolve({ image: buf });
+        try { resolve(JSON.parse(buf.toString('utf8'))); } catch (e) { reject(new Error('返回解析失败')); }
+      });
+    });
+    req.on('timeout', () => req.destroy(new Error('请求超时')));
+    req.on('error', reject);
+    req.end(data);
+  });
+}
+
 function postJSON(url, body) {
   return new Promise((resolve, reject) => {
     const data = JSON.stringify(body);
@@ -506,5 +719,3 @@ function postJSON(url, body) {
   });
 }
 
-const ok = data => ({ code: 0, msg: 'ok', data });
-const err = msg => ({ code: 1, msg, data: null });

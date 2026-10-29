@@ -1,4 +1,4 @@
-// pages/account/account.js — 主家信息：称呼、微信收款码、快捷礼金（主题色在「我的 → 外观设置」）
+// pages/account/account.js — 主家信息：称呼、微信收款码、快捷礼金（主题色在「我的 → 主题色」）
 // 没有「修改主家信息」权限的记账人：只能申请更换收款码（codeOnly），主家确认后生效
 const req = require('../../utils/request.js');
 const theme = require('../../utils/theme.js');
@@ -28,6 +28,7 @@ Page({
   },
 
   onLoad(options) {
+    theme.early(this); // 首帧前同步套主题色（v3.70.1）
     // own=1：记账人新建自己的主家信息（不修改正在记账的主家）
     this._own = options.own === '1';
     if (this._own) wx.setNavigationBarTitle({ title: '新建我自己的礼簿' });
@@ -163,7 +164,7 @@ Page({
       const { account, pendingPayCode } = await req.accountSave({
         accountName: name,
         payCodeFileID: this.data.payCodeFileID,
-        // 新建主家信息时带上默认主题，之后在「外观设置」修改
+        // 新建主家信息时带上默认主题，之后在「主题色」页修改
         ...(this._own || !this._saved ? { theme: { name: this.data.themeName || '我的礼簿', primary: this.data.primary } } : {}),
         quickAmounts,
         confirmPayCode: true, // 主家在本页核对后保存：解除收款码提醒

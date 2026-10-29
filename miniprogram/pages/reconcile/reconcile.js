@@ -5,6 +5,9 @@ const theme = require('../../utils/theme.js');
 const receipt = require('../../utils/receipt.js');
 const perm = require('../../utils/perm.js');
 
+// 对账图最多画的行数：750 × (80 + 行数×52 + 60 + 小程序码 220) 不超过约 4000px，避免部分安卓机画布过高导出失败
+const MAX_LINES = 70;
+
 Page({
   data: {
     books: [],        // 可选礼簿（含已归档）
@@ -13,11 +16,17 @@ Page({
     r: null,          // 对账结果（已格式化）
     loading: true,
     saving: false,
+    canRecalc: false, // 有「管理礼簿」权限（列表里的礼簿都是负责范围内的，与 books.recalc 的服务端校验一致）
     themeStyle: ''
   },
 
   async onLoad(options) {
+    theme.early(this); // 首帧前同步套主题色（v3.70.1）
+    const acc0 = getApp().globalData.account;
+    this.setData({ org: !!(acc0 && acc0.orgMode), staffWord: acc0 && acc0.orgMode ? '礼台人员' : '记账人' }); // 机构模式称「礼台人员」
+    if (!(await perm.guard('export', '你没有对账与导出的权限', { viewer: true }))) return; // 文案同 records.reconcile
     try {
+      this.setData({ canRecalc: perm.can('books') && getApp().globalData.role !== 'viewer' });
       const { list, activeBookId } = await req.bookList();
       const books = list.map(b => ({ _id: b._id, name: b.hostName ? `${b.hostName} · ${b.name}` : b.name }));
       const want = options.bookId || activeBookId;
@@ -34,10 +43,12 @@ Page({
 
   async load() {
     const b = this.data.books[this.data.bookIdx];
+    const seq = this._seq = (this._seq || 0) + 1; // 连续切换礼簿 / 范围时，只采用最后一次的结果
     this.setData({ loading: true });
     try {
       const day = this.data.range === 'today' ? fmt.day(new Date()) : '';
       const r = await req.reconcile(b ? b._id : '', day);
+      if (seq !== this._seq) return;
       const m = x => ({ count: x.count, sumStr: fmt.money(x.sum) });
       this.setData({
         r: {
@@ -53,9 +64,9 @@ Page({
         }
       });
     } catch (e) {
-      this.setData({ r: null });
+      if (seq === this._seq) this.setData({ r: null });
     } finally {
-      this.setData({ loading: false });
+      if (seq === this._seq) this.setData({ loading: false });
     }
   },
 
@@ -67,6 +78,28 @@ Page({
   onRange(e) {
     this.setData({ range: e.currentTarget.dataset.v });
     this.load();
+  },
+
+  /** 重算整本礼簿的合计（与「按日筛选」无关）；二次确认后调用 books.recalc */
+  onRecalc() {
+    const b = this.data.books[this.data.bookIdx];
+    if (!b || this.data.recalcing) return;
+    wx.showModal({
+      title: '重算合计',
+      content: '将按这本礼簿全部已入簿的记录重新计算份数与合计（不是只算当前筛选的日期），不会修改任何礼金记录。确定重算吗？',
+      confirmText: '重算',
+      success: async r => {
+        if (!r.confirm) return;
+        this.data.recalcing = true;
+        try {
+          await req.bookRecalc(b._id);
+          wx.showToast({ title: '已重算', icon: 'success' });
+          await this.load();
+        } catch (e) { /* toast 已提示 */ } finally {
+          this.data.recalcing = false;
+        }
+      }
+    });
   },
 
   goPending() {
@@ -110,7 +143,9 @@ Page({
   async onSaveImage() {
     if (!this.data.r || this.data.saving) return;
     this.setData({ saving: true });
-    const lines = this.lines();
+    const all = this.lines();
+    const lines = fmt.clipLines(all, MAX_LINES);
+    if (lines.length < all.length) wx.showToast({ title: '内容较长，图片只含前面部分', icon: 'none' });
     const codeUrl = (await receipt.withAppCode({})).appCode || '';
     wx.createSelectorQuery().select('#reconCanvas').fields({ node: true }).exec(async res => {
       try {

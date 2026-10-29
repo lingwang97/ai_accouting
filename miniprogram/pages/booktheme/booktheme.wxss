@@ -1,0 +1,70 @@
+.wrap { padding-bottom: calc(160rpx + env(safe-area-inset-bottom)); }
+.book-name { font-size: 30rpx; font-weight: 600; margin-bottom: 16rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tip { margin: 12rpx 0 20rpx; line-height: 1.6; font-size: 24rpx; }
+.edit-link { margin-top: 16rpx; color: var(--primary); font-size: 26rpx; }
+.themes { display: flex; flex-wrap: wrap; margin: 0 -12rpx; }
+.th { width: 33.33%; box-sizing: border-box; padding: 12rpx; text-align: center; }
+.th-sw {
+  height: 96rpx; border-radius: 12rpx; border: 4rpx solid; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center; margin-bottom: 8rpx;
+}
+.th-in { width: 40rpx; height: 4rpx; }
+.th.on .th-sw { box-shadow: 0 0 0 4rpx var(--primary); }
+.th-name { font-size: 26rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.th.base .th-sw { box-shadow: 0 0 0 4rpx var(--primary); opacity: 0.85; }
+.th.base .th-name { color: var(--primary); font-weight: 600; }
+.def-tip { font-size: 24rpx; color: var(--primary); background: var(--fill); border-radius: 12rpx; padding: 12rpx 16rpx; margin-bottom: 12rpx; line-height: 1.5; }
+.th.on .th-name { color: var(--primary); font-weight: 600; }
+.th-scene { font-size: 22rpx; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.th-custom { border-color: var(--border); color: var(--text-2); font-size: 40rpx; background: var(--fill); }
+.cust-lb { font-size: 26rpx; color: var(--text-2); margin: 20rpx 0 10rpx; }
+.cust-err { color: var(--danger); font-size: 24rpx; margin-top: 10rpx; }
+.swatches { display: flex; flex-wrap: wrap; margin: 0 -8rpx 12rpx; }
+.sw { width: 64rpx; height: 64rpx; border-radius: 50%; margin: 6rpx 8rpx; border: 2rpx solid #ddd; box-sizing: border-box; }
+.sw.on { box-shadow: 0 0 0 4rpx var(--primary); }
+/* 示意预览：封面 / 内页 / 封底，swiper 高度固定，页面不跳动 */
+.pv-swiper { height: 420rpx; }
+.pc { position: relative; height: 400rpx; border: 4rpx solid; border-radius: 8rpx; box-sizing: border-box; overflow: hidden; }
+.pc-in { position: absolute; left: 10rpx; right: 10rpx; top: 10rpx; bottom: 10rpx; border: 2rpx solid; }
+.pc-mark { position: absolute; left: 0; right: 0; top: 50%; margin-top: -110rpx; text-align: center; line-height: 220rpx; font-size: 220rpx; opacity: .12; }
+.pc-cn { position: absolute; width: 36rpx; height: 36rpx; line-height: 36rpx; font-size: 28rpx; text-align: center; z-index: 2; }
+.pc-tl { left: 14rpx; top: 14rpx; }
+.pc-tr { right: 14rpx; top: 14rpx; }
+.pc-bl { left: 14rpx; bottom: 14rpx; }
+.pc-br { right: 14rpx; bottom: 14rpx; }
+.pc-mid { position: absolute; left: 0; right: 0; top: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 48rpx; box-sizing: border-box; }
+.pc-title { max-width: 100%; font-size: 44rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-line { width: 120rpx; height: 2rpx; margin: 14rpx 0; }
+.pc-sm { max-width: 100%; font-size: 22rpx; line-height: 1.6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-foot { position: absolute; bottom: 52rpx; left: 0; right: 0; text-align: center; font-size: 26rpx; letter-spacing: 6rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-brand { position: absolute; bottom: 28rpx; left: 0; right: 0; text-align: center; font-size: 18rpx; }
+.pc-sign { width: 80%; margin-top: 24rpx; font-size: 20rpx; text-align: center; }
+.pc-sign view { display: inline-block; max-width: 100%; min-width: 60%; padding: 0 12rpx; border-bottom: 2rpx solid; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-none { display: flex; align-items: center; justify-content: center; color: var(--text-3); font-size: 28rpx; background: var(--fill); border-color: var(--border); }
+/* 内页：右起 12 列，姓名 | 大写金额 | 小写；装订边用一侧斜纹示意 */
+.pg { background: #fff; }
+.pg-head { position: absolute; left: 0; right: 0; top: 10rpx; text-align: center; font-size: 20rpx; z-index: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pg-gut { position: absolute; top: 0; bottom: 0; width: 8%; background: repeating-linear-gradient(135deg, #f1f1f1 0, #f1f1f1 6rpx, #fff 6rpx, #fff 12rpx); z-index: 1; }
+.pg-gut text { position: absolute; left: 0; right: 0; top: 50%; text-align: center; font-size: 18rpx; color: #999; }
+.pg-grid { position: absolute; top: 44rpx; bottom: 20rpx; display: flex; flex-direction: row-reverse; border: 2rpx solid; box-sizing: border-box; background: transparent; }
+.pg-slot { flex: 1; display: flex; flex-direction: column; align-items: center; border-left: 2rpx solid; box-sizing: border-box; }
+.pg-slot:last-child { border-left: none; }
+.pg-nm { height: 40%; width: 100%; border-bottom: 2rpx solid; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; padding-top: 6rpx; }
+.pg-am { flex: 1; width: 100%; display: flex; flex-direction: column; align-items: center; padding-top: 6rpx; }
+.pg-c { font-size: 22rpx; line-height: 1.15; }
+.pg-ca { font-size: 15rpx; line-height: 1.15; }
+.pg-yen { font-size: 13rpx; margin-top: auto; padding-bottom: 4rpx; white-space: nowrap; }
+.pv-tabs { display: flex; flex-direction: row; justify-content: center; margin: 12rpx 0 4rpx; }
+.pv-tab { padding: 12rpx 28rpx; margin: 0 8rpx; border-radius: 999rpx; background: var(--fill); color: var(--text-2); font-size: 24rpx; }
+.pv-tab.on { background: var(--primary); color: #fff; }
+.btn-primary:not([size=mini]) { width: 100%; }
+
+.opt { display: flex; justify-content: space-between; align-items: center; padding: 14rpx 0; font-size: 28rpx; }
+.opt text { flex: 1; margin-right: 20rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.bb-row { display: flex; flex-direction: row; align-items: center; }
+.bb-row button.pv-btn.btn-outline:not(.btn):not([size=mini]) { width: 32%; margin-right: 16rpx; flex-shrink: 0; }
+.bb-row button.ok-btn.btn-primary:not(.btn):not([size=mini]) { width: auto; flex: 1; }
+
+.th-vip { display: inline-block; margin-top: 4rpx; font-size: 20rpx; color: var(--warn); background: var(--warn-bg); border: 2rpx solid var(--warn-border); border-radius: 999rpx; padding: 0 12rpx; line-height: 32rpx; }
+.lock-tip { margin: 0 0 16rpx; padding: 16rpx 20rpx; border-radius: 12rpx; background: var(--warn-bg); color: var(--warn); font-size: 24rpx; line-height: 1.6; }

@@ -5,7 +5,7 @@ const GRAY = '#4A4A4A';
 // 预设主题色 → 底部菜单选中图标的颜色版本（assets/icons/*-{key}.svg，由 tools/gen_icons.py 生成）
 const ICON_KEYS = { '#C8161D': 'r', '#4A4A4A': 'd', '#07C160': 'n', '#B8860B': 'y', '#2B7FFF': 'b', '#333333': 'k' };
 const STORE_KEY = 'theme_primary';
-// 主家可选的预设主题色（外观设置页使用）
+// 主家可选的预设主题色（主题色页使用）
 const PRESET_COLORS = ['#C8161D', '#07C160', '#B8860B', '#2B7FFF', '#333333'];
 
 function hexSoft(hex) {
@@ -62,10 +62,35 @@ function apply(page, bookType) {
   const app = getApp();
   if (bookType !== undefined) app.globalData.bookType = bookType || 'other';
   const t = current();
-  if (page && page.data.themeStyle !== styleOf(t)) page.setData({ themeStyle: styleOf(t) });
+  // themeIcon：主题图标后缀（bell-{themeIcon}.svg 等）；themePrimary：switch 等原生组件的颜色（不能用 CSS 变量）
+  if (page && (page.data.themeStyle !== styleOf(t) || page.data.themeIcon !== t.icon)) {
+    page.setData({ themeStyle: styleOf(t), themeIcon: t.icon, themePrimary: t.primary });
+  }
   wx.setNavigationBarColor({ frontColor: '#ffffff', backgroundColor: t.primary, fail() {} });
   app.refreshTabBar();
   return t;
 }
 
-module.exports = { forType, current, styleOf, apply, setAccount, make, PRESET_COLORS, DEFAULT };
+/**
+ * 页面 onLoad 最开始调用（首帧渲染前，同步）：按当前主题设导航栏颜色与 themeStyle，
+ * 避免导航栏、内容区先显示 app.json / app.wxss 的默认红再变成主题色（v3.70.1）。
+ * 不刷新底部菜单；onShow 的 apply 仍负责礼簿切换等后续变化。
+ * 宾客端页面（pay、receipt、qrcode）不调用：它们不跟随主家主题。
+ */
+function early(page) {
+  const t = current();
+  try {
+    wx.setNavigationBarColor({ frontColor: '#ffffff', backgroundColor: t.primary, animation: { duration: 0, timingFunc: 'linear' }, fail() {} });
+  } catch (e) { /* 忽略 */ }
+  if (page && typeof page.setData === 'function') {
+    try { page.setData({ themeStyle: styleOf(t), themeIcon: t.icon, themePrimary: t.primary }); } catch (e) { /* 忽略 */ }
+  }
+  return t;
+}
+
+/** 只设导航栏颜色（不套页面变量）：不走 apply 的页面（登录、邀请、我的随礼记录）也跟随当前主题 */
+function applyNav() {
+  wx.setNavigationBarColor({ frontColor: '#ffffff', backgroundColor: current().primary, fail() {} });
+}
+
+module.exports = { early, applyNav, forType, current, styleOf, apply, setAccount, make, PRESET_COLORS, DEFAULT };

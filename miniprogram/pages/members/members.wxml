@@ -1,13 +1,14 @@
+<wxs module="o" src="/utils/orgtext.wxs"></wxs>
 <view class="container" style="{{themeStyle}}">
   <view class="card intro muted">
-    为每位记账人设置负责的礼簿和可做的事；回执、小票上显示记账人姓名。
+    为每位{{orgMode ? '礼台人员设置负责的场次' : '记账人设置负责的礼簿'}}和可做的事；回执、小票上显示{{orgMode ? '礼台人员' : '记账人'}}姓名。
   </view>
 
   <view class="card join" wx:if="{{joins.length}}">
     <view class="section-title">申请加入（{{joins.length}}）</view>
     <view class="row" wx:for="{{joins}}" wx:key="_id">
-      <image class="avatar" src="{{item.avatar || '/assets/avatar-default.png'}}" mode="aspectFill" />
-      <view class="name">{{item.name}}<text class="tag">{{item.role === 'viewer' ? '家人共享' : '记账人'}}</text>
+      <image class="avatar" src="{{item.avatar || '/assets/avatar-default.png'}}" mode="aspectFill" binderror="onAvatarErr" data-p="joins[{{index}}].avatar" />
+      <view class="name">{{item.name}}<text class="tag">{{item.role === 'viewer' ? '家人共享' : (orgMode ? '礼台人员' : '记账人')}}</text>
         <view class="muted small" wx:if="{{item.nickname && item.nickname !== item.name}}">微信：{{item.nickname}}</view>
         <view class="muted small" wx:if="{{item.booksText}}">查看：{{item.booksText}}</view>
         <view class="muted small">{{item.from ? '「' + item.from + '」的邀请卡 · ' : ''}}{{item.timeStr}}</view>
@@ -20,7 +21,7 @@
   <view class="card">
     <view class="section-title">主家</view>
     <view class="row" wx:if="{{owner}}">
-      <image class="avatar" src="{{owner.avatar || '/assets/avatar-default.png'}}" mode="aspectFill" />
+      <image class="avatar" src="{{owner.avatar || '/assets/avatar-default.png'}}" mode="aspectFill" binderror="onAvatarErr" data-p="owner.avatar" />
       <view class="name">{{owner.name}}<text class="tag" wx:if="{{owner.me}}">我</text>
         <view class="muted small" wx:if="{{owner.nickname && owner.nickname !== owner.name}}">微信：{{owner.nickname}}</view>
       </view>
@@ -28,10 +29,10 @@
     </view>
   </view>
 
-  <view class="card">
+  <view class="card" wx:if="{{role !== 'viewer'}}">
     <view class="section-title">{{orgMode ? '礼台人员' : '记账人'}}（{{list.length}}）</view>
     <view class="row" wx:for="{{list}}" wx:key="_id">
-      <image class="avatar" src="{{item.avatar || '/assets/avatar-default.png'}}" mode="aspectFill" />
+      <image class="avatar" src="{{item.avatar || '/assets/avatar-default.png'}}" mode="aspectFill" binderror="onAvatarErr" data-p="list[{{index}}].avatar" />
       <view class="name">{{item.name}}<text class="tag" wx:if="{{item.me}}">我</text><text class="tag" wx:if="{{orgMode && item.title}}">{{item.title}}</text>
         <view class="muted small" wx:if="{{item.nickname && item.nickname !== item.name}}">微信：{{item.nickname}}</view>
         <view class="muted small">负责：{{item.booksText}} · {{item.permCount}} 项权限<text wx:if="{{item.timeStr}}"> · {{item.timeStr}} 加入</text></view>
@@ -46,14 +47,14 @@
 
   <view class="card" wx:if="{{canManage}}">
     <view class="section-title">邀请{{orgMode ? '礼台人员 · 负责的场次' : '记账人 · 负责的礼簿'}}与权限</view>
-    <view class="muted small" wx:if="{{!orgMode}}">每位记账人负责一本礼簿；同时办多场、分别安排人员请开启机构模式</view>
+    <view class="muted small" wx:if="{{!orgMode}}">每位记账人负责一本礼簿；同时办多场、分别安排人员请在「我的 → 高级功能」开启机构模式</view>
     <view class="book-row {{item.on && !inviteAll ? 'on' : ''}}" wx:for="{{inviteBooks}}" wx:key="_id" data-i="{{index}}" bindtap="onInviteBook">
       <view class="check {{item.on && !inviteAll ? 'on' : ''}}">{{item.on && !inviteAll ? '✓' : ''}}</view>
       <view class="b-info">{{item.name}}</view>
     </view>
     <view class="book-row {{inviteAll ? 'on' : ''}}" wx:if="{{myAllBooks && orgMode}}" bindtap="onInviteAll">
       <view class="check {{inviteAll ? 'on' : ''}}">{{inviteAll ? '✓' : ''}}</view>
-      <view class="b-info">全部礼簿<text class="muted small">（含以后新建的）</text></view>
+      <view class="b-info">{{o.t("全部礼簿", orgMode)}}<text class="muted small">（含以后新建的）</text></view>
     </view>
     <view class="perm-head">
       <text class="muted">权限</text>
@@ -68,9 +69,12 @@
       </view>
     </view>
     <view class="muted small invite-desc" wx:if="{{inviteDesc}}">{{inviteDesc}}</view>
+    <view class="risk-tip" wx:if="{{quotaMsg}}">{{quotaMsg}}。已有的{{orgMode ? '礼台人员' : '记账人'}}不受影响。<text class="link" bindtap="goContact">联系我们</text></view>
   </view>
   <button wx:if="{{canManage}}" class="btn-primary" open-type="share" data-type="clerk" disabled="{{!clerkToken}}">邀请{{orgMode ? '礼台人员' : '记账人'}}（发给微信好友）</button>
-  <view class="muted hint">7 天内有效，最多 5 人；对方接受后需你同意</view>
+  <!-- 主家本人发的卡点开即生效（记账人转发出去的卡才需主家同意，见 account.acceptInvite） -->
+  <view class="risk-tip" wx:if="{{canManage && role === 'owner'}}">拿到此卡的人点开即成为{{orgMode ? '礼台人员' : '记账人'}}并获得所选权限，请只发给信任的人，不要转发到群里。7 天内有效，只能 1 人使用，对方接受后即失效</view>
+  <view class="muted hint" wx:else>7 天内有效，只能 1 人使用，对方接受后即失效；需主家同意后才生效</view>
 
   <block wx:if="{{role === 'owner'}}">
     <view class="card transfer">
@@ -93,11 +97,12 @@
         <view class="stay-row">
           <view>
             <view>移交后继续为对方记账</view>
-            <view class="muted small">你会成为对方的记账人，可随时退出</view>
+            <view class="muted small">你会成为对方的{{orgMode ? '礼台人员' : '记账人'}}，可随时退出</view>
           </view>
           <switch checked="{{stayClerk}}" bindchange="onStayClerk" color="{{primary}}" />
         </view>
 
+        <view class="transfer-warn">移交卡只发给接收人本人！拿到卡片的人点开即可接收你选中的全部礼簿，请勿转发到群里。</view>
         <button wx:if="{{!transferToken}}" class="btn-primary" style="margin-top:20rpx" bindtap="onMakeTransfer">生成移交卡片</button>
         <block wx:else>
           <view class="transfer-desc">{{transferDesc}}</view>
@@ -111,7 +116,7 @@
   <button wx:if="{{role === 'clerk'}}" class="btn-danger btn-leave" bindtap="onLeave">退出，不再为这位主家记账</button>
 
   <!-- 设置负责的礼簿与权限（机构版另可设岗位） -->
-  <view class="mask" wx:if="{{editor}}">
+  <view class="mask" wx:if="{{editor}}" catchtouchmove="noop">
     <view class="sheet ed-sheet">
       <view class="ed-body">
       <view class="sheet-title">设置「{{editor.name}}」</view>
@@ -124,7 +129,7 @@
       <view class="muted" style="margin-top:20rpx">负责的礼簿{{orgMode ? '' : '（选一本）'}}</view>
       <view class="book-row {{editor.all ? 'on' : ''}}" wx:if="{{orgMode && (myAllBooks || editor.all)}}" bindtap="onEdAll">
         <view class="check {{editor.all ? 'on' : ''}}">{{editor.all ? '✓' : ''}}</view>
-        <view class="b-info">全部礼簿<text class="muted small">{{myAllBooks ? '（含以后新建的）' : '（你无权修改）'}}</text></view>
+        <view class="b-info">{{o.t("全部礼簿", orgMode)}}<text class="muted small">{{myAllBooks ? '（含以后新建的）' : '（你无权修改）'}}</text></view>
       </view>
       <scroll-view scroll-y class="ed-list">
         <view class="book-row {{item.on && !editor.all ? 'on' : ''}}" wx:for="{{editor.books}}" wx:key="_id" data-i="{{index}}" bindtap="onEdBook">
@@ -144,7 +149,7 @@
           <text class="perm-name">{{item.name}}</text>
         </view>
       </view>
-      <view class="muted small">记账人只能看到、操作负责的礼簿；能做哪些事由上面的权限决定，只能授予你自己拥有的权限</view>
+      <view class="muted small">{{orgMode ? '礼台人员只能看到、操作负责的场次' : '记账人只能看到、操作负责的礼簿'}}；能做哪些事由上面的权限决定，只能授予你自己拥有的权限</view>
       </view>
       <view class="sheet-btns ed-btns">
         <button class="btn btn-lg btn-plain" bindtap="onEdCancel">取消</button>

@@ -3,7 +3,7 @@
     <view class="section-title">已保存打印机</view>
     <block wx:if="{{savedDevice}}">
       <view class="dev-row">
-        <view>
+        <view class="dev-info">
           <view class="dev-name">{{savedDevice.name}}</view>
           <view class="muted">{{connected ? '已连接' : '未连接'}}</view>
         </view>
@@ -15,6 +15,13 @@
     </block>
     <view wx:else class="muted">暂无，请在下方扫描添加</view>
     <button class="btn-primary" style="margin-top:24rpx" loading="{{testing}}" bindtap="onTest">打印测试页</button>
+    <view class="slow-row">
+      <view class="slow-text">
+        <view>稳定模式</view>
+        <view class="muted">小票乱码、缺行或二维码打不全时打开，打印会变慢</view>
+      </view>
+      <switch checked="{{slow}}" bindchange="onSlow" color="{{primary}}" />
+    </view>
   </view>
 
   <view class="card">
@@ -24,7 +31,7 @@
     </view>
     <block wx:if="{{discovering}}">
       <view class="dev-row" wx:for="{{devices}}" wx:key="deviceId">
-        <view>
+        <view class="dev-info">
           <view class="dev-name">{{item.name}}</view>
           <view class="muted">{{item.deviceId}}</view>
         </view>

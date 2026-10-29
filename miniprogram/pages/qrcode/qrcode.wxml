@@ -12,15 +12,19 @@
 
     <view class="s-step"><text class="s-no" style="background:{{primary}}">2</text>微信「扫一扫」转账随礼</view>
     <image wx:if="{{payCodeUrl}}" class="s-qr" src="{{payCodeUrl}}" mode="aspectFit" data-url="{{payCodeUrl}}" bindtap="onPreview" />
+    <view class="muted s-tip" wx:elif="{{offline}}">收款码没保存到本机，联网后可显示</view>
     <view class="muted s-tip">转账后回到小程序点「我已完成转账」</view>
   </view>
-  <view class="s-ops">
+  <!-- 网络不佳时显示的是本机保存的礼簿码（v3.66.0）；点一下重新加载 -->
+  <view class="s-offline" wx:if="{{offline && offChecking}}">正在更新，先显示本机保存的礼簿码（{{offlineAt}}）</view>
+  <view class="s-offline" wx:elif="{{offline}}" bindtap="onRetry">网络不佳，显示的是本机保存的礼簿码（{{offlineAt}}）。宾客手机有网络即可扫码随礼 · 点此重新加载</view>
+  <view class="s-ops" wx:if="{{!offline}}">
     <view class="s-op" bindtap="onMakeCard">生成礼簿台卡</view>
     <view class="s-op" bindtap="onSave">保存礼簿码</view>
     <button class="s-op s-share" hover-class="none" open-type="share">分享给宾客</button>
   </view>
   <view class="s-hint">屏幕已调至最亮并保持常亮，离开本页自动恢复</view>
-  <view class="try s-try" wx:if="{{showTry}}" bindtap="onTry">自己试一下（模拟宾客随礼）›</view>
+  <view class="try s-try" wx:if="{{showTry && !offline}}" bindtap="onTry">自己试一下（模拟宾客随礼）›</view>
 </view>
 
 <!-- 加载失败：点击重试 -->
@@ -28,6 +32,8 @@
   <view class="warn">{{errMsg}}</view>
   <view class="muted">点击重试</view>
 </view>
+
+<loading show="{{loading && !account}}" type="overlay" />
 
 <!-- 台卡离屏画布 -->
 <canvas type="2d" id="card" class="card-canvas"></canvas>

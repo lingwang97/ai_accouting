@@ -6,6 +6,11 @@
 const req = require('../../utils/request.js');
 const theme = require('../../utils/theme.js');
 const perm = require('../../utils/perm.js');
+const cache = require('../../utils/cache.js');
+const fmt = require('../../utils/format.js');
+
+const OFF_PREFIX = require('../../utils/qroff.js').PREFIX; // 本机保存的礼簿码（离线兜底）：索引在页面缓存里，图片在 USER_DATA_PATH；切换身份 / 退出 / 清除数据时一并删除（utils/qroff.js）
+const OFF_REFRESH_MS = 24 * 3600 * 1000; // 礼簿码 / 收款码没变时，至少隔一天才重新下载保存一次
 
 const CARD_W = 750;
 const CARD_H = 1240;
@@ -18,7 +23,10 @@ Page({
     qrFileID: '',
     payCodeUrl: '',  // 个人收款码
     loading: true,
-    errMsg: ''
+    errMsg: '',
+    offline: false,   // 正显示本机保存的礼簿码（v3.66.0）
+    offChecking: false, // 本机保存的码正在联网更新中（v3.66.2：先显示再刷新，不等网络）
+    offlineAt: ''
   },
 
   async onLoad(options) {
@@ -28,12 +36,25 @@ Page({
     } catch (e) { /* 取不到按正式版：隐藏 */ }
     this._bookId = options.bookId || ''; // 机构版：本场礼簿码
     // 记账人需有「礼簿码与打印」权限
-    const role = await getApp().ensureRole();
-    if ((role === 'clerk' || role === 'viewer') && !perm.can('show')) {
+    const denied = r => (r === 'clerk' || r === 'viewer') && !perm.can('show');
+    const back = () => {
       wx.showToast({ title: '你没有「礼簿码与打印」权限', icon: 'none' });
-      return setTimeout(() => wx.navigateBack({ fail: () => wx.switchTab({ url: '/pages/index/index' }) }), 800);
+      setTimeout(() => wx.navigateBack({ fail: () => wx.switchTab({ url: '/pages/index/index' }) }), 800);
+    };
+    let role = getApp().globalData.role;
+    if (denied(role)) return back();
+    // v3.66.2：先显示本机保存的礼簿码（不等网络），再联网刷新；断网 / 弱网时主家照样能立刻出示
+    this.showOffline(true);
+    if (!role) {
+      role = await getApp().ensureRole(true); // 静默：失败不弹提示；网络失败返回空，按原样继续
+      if (denied(role)) { this.setData({ account: null, offline: false, offChecking: false, qrUrl: '', payCodeUrl: '' }); return back(); }
     }
     this.load();
+  },
+
+  /** 联网读取失败（非网络原因）：撤掉先显示的本机副本，改显示错误与重试 */
+  fail(msg) {
+    this.setData({ account: null, qrUrl: '', payCodeUrl: '', offline: false, offChecking: false, errMsg: msg });
   },
 
   onShow() {
@@ -52,8 +73,9 @@ Page({
   async load() {
     this.setData({ loading: true });
     try {
-      const { account } = await req.accountGet(true);
+      const { account } = await req.accountGet(true, { silent: true });
       if (!account) {
+        this.fail('');
         wx.showToast({ title: '请先完善主家信息', icon: 'none' });
         setTimeout(() => wx.redirectTo({ url: '/pages/account/account' }), 800);
         return;
@@ -66,20 +88,21 @@ Page({
       // 本场礼簿码；记账人一律由服务端决定（正在记的是主家当前礼簿时为主家礼簿码，否则为本场码），不用本地缓存
       if (this._bookId || getApp().globalData.role === 'clerk') return await this.loadBookQr(account);
 
-      // 记账人读不到主家上传的收款码图片，优先用云函数生成的链接
-      const payCodeUrl = account.payCodeUrl || await this.getTempUrl(account.payCodeFileID);
-      this.setData({ payCodeUrl });
-
-      try {
-        const qrFileID = await this.getQrFileID(account._id);
-        const qrUrl = await this.getTempUrl(qrFileID);
-        this.setData({ qrFileID, qrUrl, errMsg: '' });
-      } catch (e) {
-        this.setData({ qrUrl: '', errMsg: '登记码生成失败：' + ((e && e.message) || '请稍后重试') });
+      // 收款码链接与礼簿码并行取（v3.66.0，原先依次等待）；记账人读不到主家上传的收款码图片，优先用云函数生成的链接
+      const [payCodeUrl, qr] = await Promise.all([
+        account.payCodeUrl || this.getTempUrl(account.payCodeFileID, true),
+        this.getQrFileID(account._id).then(id => this.getTempUrl(id).then(url => ({ id, url }))).catch(e => ({ e }))
+      ]);
+      if (qr.e || !qr.url) {
+        // 网络失败（含取临时链接失败）：有本机保存的码就显示它；否则显示原因与重试
+        if (!(qr.e && req.isNetErr(qr.e) && this.showOffline())) this.fail('登记码生成失败：' + req.errText(qr.e, '请稍后重试'));
+      } else {
+        this.setData({ payCodeUrl, offline: false, offChecking: false, qrFileID: qr.id, qrUrl: qr.url, errMsg: '' });
+        this.saveOffline({ sig: [qr.id, account.payCodeFileID || '', account.accountName].join('|'), name: account.accountName, bookName: '', primary, qrFileID: qr.id, payFileID: account.payCodeFileID || '', qrUrl: qr.url, payCodeUrl });
       }
     } catch (e) {
-      // 读取主家信息失败（网络异常等）：显示错误，点击重试
-      this.setData({ errMsg: '加载失败：' + ((e && e.message) || '网络异常') });
+      // 读取主家信息失败：网络问题先显示本机保存的礼簿码；没有保存过则显示错误，点击重试
+      if (!(req.isNetErr(e) && this.showOffline())) this.fail('加载失败：' + req.errText(e, '请稍后重试'));
     } finally {
       this.setData({ loading: false });
     }
@@ -94,11 +117,16 @@ Page({
   async loadBookQr(account) {
     try {
       const r = await req.qrcodeGen(account._id, this._bookId || undefined);
-      const qrUrl = await this.getTempUrl(r.fileID);
+      // 礼簿码与收款码的临时链接并行取（v3.66.0）
+      const [qrUrl, payTmp] = await Promise.all([
+        this.getTempUrl(r.fileID),
+        !r.book && !account.payCodeUrl ? this.getTempUrl(account.payCodeFileID, true) : ''
+      ]);
       if (!r.book) {
         // 主家礼簿码（记账人正在记的就是主家当前礼簿）
-        const payCodeUrl = account.payCodeUrl || await this.getTempUrl(account.payCodeFileID);
-        this.setData({ qrFileID: r.fileID, qrUrl, payCodeUrl, errMsg: '' });
+        const payCodeUrl = account.payCodeUrl || payTmp;
+        this.setData({ qrFileID: r.fileID, qrUrl, payCodeUrl, errMsg: '', offline: false, offChecking: false });
+        this.saveOffline({ sig: [r.fileID, account.payCodeFileID || '', account.accountName].join('|'), name: account.accountName, bookName: '', primary: this.data.primary, qrFileID: r.fileID, payFileID: account.payCodeFileID || '', qrUrl, payCodeUrl });
         return;
       }
       // 标题显示主家（机构版为本场主家），下方显示礼簿名称，避免礼簿名显示两次
@@ -109,13 +137,63 @@ Page({
         primary: bookPrimary,
         account: { ...account, accountName: name },
         bookName: r.book ? r.book.name : '',
-        qrFileID: r.fileID, qrUrl, payCodeUrl: r.payCodeUrl || account.payCodeUrl || '', errMsg: ''
+        qrFileID: r.fileID, qrUrl, payCodeUrl: r.payCodeUrl || account.payCodeUrl || '', errMsg: '', offline: false, offChecking: false
       });
+      this.saveOffline({ sig: [r.fileID, r.book.payCodeFileID || account.payCodeFileID || '', name, r.book.name].join('|'), name, bookName: r.book.name, primary: bookPrimary, qrFileID: r.fileID, payFileID: r.book.payCodeFileID || account.payCodeFileID || '', qrUrl, payCodeUrl: r.payCodeUrl || account.payCodeUrl || '', title: '本场礼簿码' });
       wx.setNavigationBarTitle({ title: '本场礼簿码' });
       this._shareId = r.book._id;
+      this._shareWord = r.book.type === 'funeral' ? '奠仪' : '随礼'; // 白事不用「随礼」
     } catch (e) {
-      this.setData({ qrUrl: '', errMsg: '本场礼簿码生成失败：' + ((e && e.message) || '请稍后重试') });
+      if (!(req.isNetErr(e) && this.showOffline())) this.fail('本场礼簿码生成失败：' + req.errText(e, '请稍后重试'));
     }
+  },
+
+  // —— 离线兜底（v3.66.0）：成功显示后把礼簿码与收款码存到本机；之后网络不佳时先显示本机保存的，主家照样能出示 ——
+  offKey() { return OFF_PREFIX + (this._bookId || 'main'); },
+  /** 下载保存到本机（后台进行，失败忽略）；礼簿码 / 收款码 / 名称都没变且不到一天时跳过 */
+  async saveOffline(m) {
+    if (!m || !m.qrUrl) return;
+    const key = this.offKey();
+    const old = cache.get(key);
+    if (old && old.sig === m.sig && Date.now() - (old.at || 0) < OFF_REFRESH_MS) return;
+    try {
+      const fs = wx.getFileSystemManager();
+      const base = `${wx.env.USER_DATA_PATH}/${key}`;
+      // 优先用 fileID 下载（不受 downloadFile 合法域名限制，v3.66.2）；没有 fileID（如记账人只有云函数生成的收款码链接）再用链接
+      const keep = async (fileID, url, part) => {
+        let tmp = '';
+        if (fileID) { try { tmp = await downloadCloud(fileID); } catch (e) { tmp = ''; } }
+        if (!tmp && url) tmp = await downloadUrl(url);
+        if (!tmp) throw new Error('无可下载的图片');
+        const path = `${base}_${part}.png`;
+        try { fs.unlinkSync(path); } catch (e) { /* 不存在 */ }
+        await new Promise((ok, no) => fs.saveFile({ tempFilePath: tmp, filePath: path, success: ok, fail: no }));
+        return path;
+      };
+      // 收款码没取到不影响礼簿码：收款码失败时沿用同一收款码的旧副本（没有则空）
+      const [qr, pay] = await Promise.all([
+        keep(m.qrFileID, m.qrUrl, 'qr'),
+        (m.payFileID || m.payCodeUrl) ? keep(m.payFileID, m.payCodeUrl, 'pay').catch(() => '') : ''
+      ]);
+      const payKept = pay || (old && old.sig === m.sig ? old.pay || '' : '');
+      cache.set(key, { sig: m.sig, name: m.name, bookName: m.bookName || '', primary: m.primary || '', title: m.title || '', qr, pay: payKept, at: Date.now() });
+    } catch (e) { /* 保存失败不影响使用 */ }
+  },
+  /** 显示本机保存的礼簿码；没有保存过（或文件已被系统清理）返回 false */
+  showOffline(checking) {
+    const c = cache.get(this.offKey());
+    if (!c || !c.qr) return false;
+    try { wx.getFileSystemManager().accessSync(c.qr); } catch (e) { return false; }
+    const primary = c.primary || theme.current().primary;
+    this.setData({
+      account: { accountName: c.name }, bookName: c.bookName || '', primary,
+      qrUrl: c.qr, qrFileID: '', payCodeUrl: c.pay || '', errMsg: '',
+      offline: true, offChecking: !!checking, offlineAt: fmt.dateTime(c.at)
+    });
+    this.setNavColor(primary);
+    if (c.title) wx.setNavigationBarTitle({ title: c.title });
+    this.lightOn();
+    return true;
   },
 
   /** 主家礼簿码按账户 + 小程序版本缓存，避免每次进入都重新生成上传（只有主家本人走这里） */
@@ -135,8 +213,12 @@ Page({
     if (this._lit) return;
     this._lit = true;
     wx.getScreenBrightness({
-      success: res => { this._brightness = res.value; },
-      complete: () => wx.setScreenBrightness({ value: 1, fail() {} })
+      success: res => {
+        this._brightness = res.value;
+        // 回调回来时页面已经离开：立即恢复，不再调到最亮
+        if (!this._lit) wx.setScreenBrightness({ value: res.value, fail() {} });
+      },
+      complete: () => { if (this._lit) wx.setScreenBrightness({ value: 1, fail() {} }); }
     });
     wx.setKeepScreenOn({ keepScreenOn: true, fail() {} });
   },
@@ -150,12 +232,17 @@ Page({
     wx.setKeepScreenOn({ keepScreenOn: false, fail() {} });
   },
 
-  getTempUrl(fileID) {
-    return new Promise(resolve => {
+  /**
+   * 取临时链接。默认失败时抛出网络错误（调用方据此走本机副本 / 重试，v3.66.2：以前失败返回空串，会一直显示「生成中」）；
+   * lenient：失败返回空串（收款码取不到不影响礼簿码）
+   */
+  getTempUrl(fileID, lenient) {
+    return new Promise((resolve, reject) => {
+      if (!fileID) return resolve('');
       wx.cloud.getTempFileURL({
         fileList: [fileID],
         success: res => resolve((res.fileList[0] && res.fileList[0].tempFileURL) || ''),
-        fail: () => resolve('')
+        fail: err => (lenient ? resolve('') : reject({ net: true, errMsg: (err && err.errMsg) || 'getTempFileURL:fail' }))
       });
     });
   },
@@ -233,7 +320,13 @@ Page({
           ctx.fillRect(0, 0, CARD_W, 150);
           ctx.fillStyle = '#FFFFFF';
           ctx.textAlign = 'center';
-          ctx.font = 'bold 48px sans-serif';
+          // 称呼较长时按宽度缩小字号，保证不超出顶栏
+          let nameSize = 48;
+          ctx.font = `bold ${nameSize}px sans-serif`;
+          while (nameSize > 24 && ctx.measureText(account.accountName).width > CARD_W - 80) {
+            nameSize -= 2;
+            ctx.font = `bold ${nameSize}px sans-serif`;
+          }
           ctx.fillText(account.accountName, CARD_W / 2, 92);
 
           const step = (y, no, text, img) => {
@@ -269,7 +362,7 @@ Page({
   onShareAppMessage() {
     const a = this.data.account;
     return {
-      title: `向「${a ? a.accountName : ''}」随礼`,
+      title: `向「${a ? a.accountName : ''}」${this._shareWord || '随礼'}`,
       path: a ? `/pages/pay/pay?aid=${this._shareId || a._id}` : '/pages/index/index'
     };
   }

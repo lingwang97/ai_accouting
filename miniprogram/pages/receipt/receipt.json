@@ -1,6 +1,8 @@
 {
   "navigationBarTitleText": "电子回执",
   "usingComponents": {
-    "receipt-view": "/components/receipt-view/index"
+    "loading": "/components/loading/loading",
+    "receipt-view": "/components/receipt-view/index",
+    "ad-slot": "/components/ad-slot/index"
   }
 }

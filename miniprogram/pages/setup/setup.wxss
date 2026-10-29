@@ -2,7 +2,7 @@
 .bar { display: flex; align-items: flex-start; padding: 16rpx 8rpx 32rpx; }
 .bar-item { display: flex; flex-direction: column; align-items: center; width: 140rpx; flex-shrink: 0; }
 .bar-dot { width: 48rpx; height: 48rpx; line-height: 48rpx; border-radius: 50%; text-align: center; background: #ddd; color: #fff; font-size: 26rpx; font-weight: 600; }
-.bar-text { font-size: 24rpx; color: var(--text-3); margin-top: 10rpx; white-space: nowrap; }
+.bar-text { font-size: 24rpx; color: var(--text-3); margin-top: 10rpx; text-align: center; word-break: break-all; }
 .bar-item.on .bar-dot { background: var(--primary); }
 .bar-item.on .bar-text { color: var(--primary); font-weight: 600; }
 .bar-line { flex: 1; height: 4rpx; background: #ddd; margin-top: 22rpx; }

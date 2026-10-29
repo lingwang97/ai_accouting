@@ -14,7 +14,7 @@
 .chips { margin-bottom: -2rpx; }
 .add { color: var(--link); font-size: 28rpx; padding: 8rpx 0 16rpx; }
 .total { text-align: right; font-size: 30rpx; color: var(--text); }
-.total .num { font-weight: 700; color: #FF9F1C; }
+.total .num { font-weight: 700; color: var(--warn); }
 .total .money { font-weight: 700; }
 .head-r { display: flex; align-items: center; }
 .head-r .del { margin-left: 20rpx; }

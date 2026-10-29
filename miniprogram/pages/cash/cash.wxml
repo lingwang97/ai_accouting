@@ -1,13 +1,21 @@
+<wxs module="o" src="/utils/orgtext.wxs"></wxs>
 <view class="container" style="{{themeStyle}}">
   <picker wx:if="{{books.length}}" range="{{books}}" range-key="name" value="{{bookIdx}}" bindchange="onPickBook">
-    <view class="book-tip muted">记入{{orgMode ? '场次' : '礼簿'}}：<text class="book-name">{{bookIdx >= 0 ? books[bookIdx].name : '请选择'}} ▾</text> · 入簿即生效，自动打印回执</view>
+    <view class="book-tip muted">记入{{orgMode ? '场次' : '礼簿'}}：<text class="book-name">{{bookIdx >= 0 ? books[bookIdx].name : '请选择'}} ▾</text> · 入簿即生效</view>
   </picker>
-  <view wx:else class="book-tip muted">记入当前礼簿：<text class="book-name">{{bookName || '默认礼簿'}}</text> · 入簿即生效，自动打印回执</view>
+  <view wx:else class="book-tip muted">{{o.t("记入当前礼簿", orgMode)}}：<text class="book-name">{{bookName || o.t("默认礼簿", orgMode)}}</text> · 入簿即生效</view>
+  <!-- 打印机状态（v3.65.2）：已连接时入簿自动打印小票；未连接点一下重连，未配对去配对 -->
+  <view class="pr-row {{printerStatus}}" bindtap="onPrinterTap">
+    <text class="pr-text">{{printerStatus === 'connected' ? '打印机已连接，入簿自动打印小票' : (printerStatus === 'paired' ? '打印机未连接，入簿不会打印' : '未配对打印机，入簿不打印小票')}}</text>
+    <text class="pr-go" wx:if="{{printerStatus !== 'connected'}}">{{printerStatus === 'paired' ? '连接' : '去配对'}} ›</text>
+  </view>
 
+  <!-- 已登记摘要放在表单上方：登记后键盘自动弹起，也能看到刚记了几笔（v3.66.6） -->
+  <view class="done-sum" wx:if="{{doneCount > 0}}">本次已登记 {{doneCount}} 份 · 合计 ￥{{doneSum}}</view>
   <view class="card batch-switch">
     <view>
       <view>批次录入</view>
-      <view class="muted">一次登记多位随礼人，每人单独入簿、各打一张小票</view>
+      <view class="muted">一次登记多位{{funeral ? "致奠人" : "随礼人"}}，每人单独入簿、各打一张小票</view>
     </view>
     <switch checked="{{batchMode}}" bindchange="onBatchMode" color="{{primary}}" />
   </view>
@@ -15,7 +23,7 @@
     <view class="field">
       <text class="label">收款方式</text>
       <view class="chips">
-        <view class="chip {{payMethod === 'cash' ? 'on' : ''}}" data-m="cash" bindtap="onPayMethod">💵 现金</view>
+        <view class="chip {{payMethod === 'cash' ? 'on' : ''}}" data-m="cash" bindtap="onPayMethod">{{funeral ? "" : "💵 "}}现金</view>
         <view class="chip {{payMethod === 'wechat' ? 'on' : ''}}" data-m="wechat" bindtap="onPayMethod">微信</view>
         <view class="chip {{payMethod === 'mixed' ? 'on' : ''}}" wx:if="{{batchMode}}" data-m="mixed" bindtap="onPayMethod">转账+现金</view>
       </view>
@@ -25,8 +33,8 @@
     <batch-list wx:if="{{batchMode}}" id="batch" quick="{{quick}}" mixed="{{payMethod === 'mixed'}}" bindchange="onBatchChange" />
     <block wx:else>
       <view class="field">
-        <text class="label">随礼人 *</text>
-        <input class="input" placeholder="宾客姓名" maxlength="20" value="{{payerName}}" data-k="payerName" bindinput="onInput" />
+        <text class="label">{{funeral ? "致奠人" : "随礼人"}} *</text>
+        <input class="input" placeholder="宾客姓名" maxlength="20" value="{{payerName}}" data-k="payerName" bindinput="onInput" focus="{{nameFocus}}" bindblur="onNameBlur" confirm-type="next" bindconfirm="onNameNext" />
       </view>
       <view class="field">
         <text class="label">关系</text>
@@ -39,7 +47,7 @@
         <view class="chips">
           <view class="chip {{amount == item ? 'on' : ''}}" wx:for="{{quick}}" wx:key="*this" data-v="{{item}}" bindtap="onQuick">{{item}}</view>
         </view>
-        <input class="input" type="digit" maxlength="11" placeholder="其他金额" value="{{amount}}" data-k="amount" bindinput="onInput" />
+        <input class="input" type="digit" maxlength="11" placeholder="其他金额" value="{{amount}}" data-k="amount" bindinput="onInput" focus="{{amountFocus}}" bindblur="onAmountBlur" />
       </view>
       <view class="field">
         <text class="label">礼品/备注</text>
@@ -51,7 +59,7 @@
   <button class="btn-primary" loading="{{saving}}" bindtap="onSave">{{batchMode ? '全部入簿，登记下一批' : '入簿，登记下一位'}}</button>
 
   <view class="done" wx:if="{{done.length}}">
-    <view class="section-title">本次已登记 {{doneCount}} 份 · 合计 ￥{{doneSum}}</view>
+    <view class="section-title">本次登记明细（点一笔看回执）</view>
     <view class="done-item" wx:for="{{done}}" wx:key="_id" data-id="{{item._id}}" bindtap="onReceipt">
       <text>{{item.nameStr}}<text class="muted"> · {{item.methodStr}}</text></text>
       <text class="money">￥{{item.amountStr}}</text>

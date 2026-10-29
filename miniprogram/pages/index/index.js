@@ -10,8 +10,13 @@ const cache = require('../../utils/cache.js');
 const perm = require('../../utils/perm.js');
 const device = require('../../utils/device.js');
 const setup = require('../../utils/setup.js');
+const poller = require('../../utils/poller.js');
+const pollcfg = require('../../utils/pollcfg.js');
+const advperm = require('../../utils/advperm.js');
+const fresh = require('../../utils/fresh.js');
+const ble = require('../../utils/ble.js');
 
-const POLL_MS = 5000;
+const POLL_MS = 10000; // 连续无变化会自动放慢（见 utils/poller.js），刷新 / 操作后恢复
 const DISMISS_KEY = 'idx_dismissed';
 const NOTIFY_COOL_MS = 30 * 60 * 1000; // 关闭提醒提示后，至少 30 分钟内不再出现
 /**
@@ -33,7 +38,8 @@ const sumCls = str => (str.length >= 13 ? 'xlong' : str.length >= 10 ? 'long' : 
 
 Page({
   data: {
-    mode: 'loading',   // loading | host 工作台 | guest 扫码随礼
+    mode: 'loading',   // loading | host 工作台 | guest 扫码随礼 | neterr 首次加载网络失败（点此重试）
+    netErrText: '',
     loggedIn: false,
     account: null,
     role: 'none',
@@ -45,6 +51,7 @@ Page({
     otherPending: 0,   // 其他礼簿的待确认份数（提示用）
     todayBook: 0,      // 当前礼簿今日入簿份数
     printerName: '',
+    printerStatus: 'none', // connected 已连接 / paired 已配对未连接 / none 未配对
     pm: {},            // 当前身份的权限（记账人按各自权限显示操作）
     notifyTip: '',     // 新礼金提醒未开启 / 发送失败时的提示
     notifyOff: false,  // 提示已被关闭（见 notifyOff()）
@@ -52,8 +59,12 @@ Page({
     joins: [],         // 申请加入的进度 [{ aid, name, role, pending, dk }]
     dismissed: {},     // 本地已读签名：notify=提示文案；j_<aid>=已同意的身份。签名变化（文案 / 身份不同）再提醒
     setupCard: null,   // 已登录、选了办事收礼但还没建好主家信息：「开始办事 · 3 步」进度 { name, code, book }
-    themeStyle: ''
+    themeStyle: '',
+    peakText: '',  // 高峰模式剩余时间（空 = 未开启）：工作台顶部提示条
+    netBad: false  // 轮询网络失败：顶部提示条（不弹 toast），恢复后自动消失
   },
+
+  onLoad() { theme.early(this); }, // 首帧前同步套主题色（v3.70.1）
 
   onShow() {
     // 已退出登录：立即显示宾客首页，不先渲染上一个账户的工作台
@@ -80,34 +91,70 @@ Page({
         theme.apply(this, c.book ? c.book.type : 'other');
       }
     }
-    this.refresh();
+    // 切回页面：45 秒内且期间没有写操作时不重复拉整页（轮询仍会更新待确认数）；首次 / 下拉等强制刷新走 refresh()
+    if (fresh.needs(this) || this.data.mode === 'loading' || this.data.mode === 'neterr') this.refresh();
     this.startTimer();
+    this.startPeakTip();
+    this.watchPrinter();
   },
+  /** 打印机状态：重新判断，并订阅连接变化（页面停留时实时跟随） */
+  syncPrinter() {
+    const saved = wx.getStorageSync('printerDevice');
+    const status = ble.printerStatus(saved, !!ble.state.deviceId);
+    const name = (saved && saved.name) || '';
+    if (status !== this.data.printerStatus || name !== this.data.printerName) this.setData({ printerStatus: status, printerName: name });
+  },
+  watchPrinter() {
+    this.syncPrinter();
+    if (!this._onPrinter) this._onPrinter = () => this.syncPrinter();
+    ble.onStateChange(this._onPrinter);
+  },
+  unwatchPrinter() { if (this._onPrinter) ble.offStateChange(this._onPrinter); },
   startTimer() {
     this.clearTimer();
     this._pollMs = this.data.readonly ? POLL_MS_READONLY : POLL_MS;
-    this._timer = setInterval(() => this.refreshPending(true), this._pollMs);
+    // 智能刷新（v3.70.0）：有新转账后 10 分钟内 5 秒；高峰模式 3 秒；只读家人固定 30 秒（slow:false，不加速）
+    this._poller = poller.create(() => this.refreshPending(true), { base: this._pollMs, slow: !this.data.readonly, boost: pollcfg.boostMs, peak: pollcfg.peakMs, hold: pollcfg.peakOn });
+    this._poller.start();
   },
-  onHide() { this.clearTimer(); },
-  onUnload() { this.clearTimer(); },
+  onHide() { this.clearTimer(); this.stopPeakTip(); this.unwatchPrinter(); },
+  onUnload() { this.clearTimer(); this.stopPeakTip(); this.unwatchPrinter(); },
+  /** 高峰模式提示条（v3.65.0）：页面可见时每分钟刷新剩余时间，到期自动消失，并把轮询降回用户自己的档位 */
+  updatePeakTip() {
+    const text = pollcfg.peakOn() ? advperm.peakLeftText(pollcfg.peakUntil()) : '';
+    const was = !!this.data.peakText;
+    if (text !== this.data.peakText) this.setData({ peakText: text });
+    if (was && !text && this._poller) this.startTimer(); // 刚到期：fast 间隔按新状态重建
+  },
+  startPeakTip() {
+    this.stopPeakTip();
+    this.updatePeakTip();
+    this._peakTimer = setInterval(() => this.updatePeakTip(), 60000);
+  },
+  stopPeakTip() { if (this._peakTimer) { clearInterval(this._peakTimer); this._peakTimer = null; } },
+  goAdvanced() { wx.navigateTo({ url: '/pages/advanced/advanced' }); },
   clearTimer() {
-    if (this._timer) { clearInterval(this._timer); this._timer = null; }
+    if (this._poller) { this._poller.stop(); this._poller = null; }
   },
 
   async refresh() {
+    if (this._poller) this._poller.kick(); // 刷新 / 用户操作后恢复轮询频率
+    fresh.mark(this);
     const app = getApp();
-    const saved = wx.getStorageSync('printerDevice');
-    this.setData({ printerName: (saved && saved.name) || '' });
+    this.syncPrinter();
     try {
       // 一次取齐：主家信息、当前礼簿、今日、待确认；与启动时的登录检查并行发出
       const loggedOut = !!wx.getStorageSync(LOGOUT_KEY);
-      const dP = loggedOut ? null : req.dashboard().catch(() => null);
+      // 失败不弹 toast：页面自己说明（首次加载失败显示「网络不佳，点此重试」，有缓存时顶部提示条）
+      const dP = loggedOut ? null : req.dashboard({ silent: true }).catch(() => null);
       if (!app.globalData.user && !loggedOut) await app.loginReady;
+      if (!app.globalData.user && !loggedOut && app.loginFailed) await app.retryLogin(); // 登录检查因网络失败：再试一次
       const user = app.globalData.user;
       this.setData({ loggedIn: !!user });
-      if (!user) return this.toGuest();
+      // 登录检查连不上：不能断定是宾客，显示网络失败（v3.66.0；以前会退到「扫码随礼」宾客页，主家以为礼簿没了）
+      if (!user) return !loggedOut && app.loginFailed ? this.toNetErr(req.errText({ net: true })) : this.toGuest();
 
-      const d = (dP && (await dP)) || (await req.dashboard());
+      const d = (dP && (await dP)) || (await req.dashboard({ silent: true }));
       this.setData({ joins: (d.joins || []).map(j => ({ ...j, dk: 'j_' + j.aid })) }); // 申请加入的进度：待同意 / 已同意待切换
       app.globalData.account = d.account;
       app.globalData.role = d.role;
@@ -123,6 +170,7 @@ Page({
         b = list.find(x => x._id === activeBookId) || null;
       }
       this._lastNotify = d.lastNotify || null;
+      notify.setGift(d.giftNotify); // 新礼金提醒开关（默认关）：关闭的人不提示、不续订
       const view = {
         account: d.account,
         role: d.role,
@@ -133,9 +181,9 @@ Page({
         mySwitch: !!d.mySwitch,
         noBook: d.noBook || '', // ended 记账人负责的礼簿已结束；none 主家还没有当前礼簿
         canSwitch: !!d.mySwitch || (d.role !== 'clerk' || !(d.account && d.account.orgMode)) && perm.map(d.perms, d.role).books && !d.restricted,
-        notifyTip: notify.tipText(d.lastNotify),
+        notifyTip: notify.tipText(d.lastNotify, d.giftNotify),
         // 提示是否已被关闭：文案未变、且没有新的发送失败或距关闭不到 30 分钟
-        notifyOff: notifyOff(this.data.dismissed.notify, notify.tipText(d.lastNotify), d.lastNotify),
+        notifyOff: notifyOff(this.data.dismissed.notify, notify.tipText(d.lastNotify, d.giftNotify), d.lastNotify),
         book: b ? { ...b, typeLabel: scenes.label(b.type), sumStr: fmt.money(b.sum), sumCls: sumCls(fmt.money(b.sum)) } : null,
         todaySum: fmt.money(d.today.sum),
         todayCount: d.today.count,
@@ -145,9 +193,13 @@ Page({
         otherPending: d.pending.other || 0,
         joinCount: d.pendingMembers || 0  // 申请加入、待主家同意的人数
       };
-      this.setData({ mode: 'host', ...view });
+      this.setData({ mode: 'host', ...view, netBad: false, netErrText: '' });
       // 身份变化（是否只读）后按对应间隔重新轮询；页面已隐藏时不重启
-      if (this._timer && this._pollMs !== (view.readonly ? POLL_MS_READONLY : POLL_MS)) this.startTimer();
+      if (this._poller && this._pollMs !== (view.readonly ? POLL_MS_READONLY : POLL_MS)) this.startTimer();
+      // 高峰到期：每次启动 / 切身份同步一次（可能在别的设备上开关过），变了就重排轮询
+      // v3.66.0：dashboard 已带高峰到期，直接用；旧版云函数没带时再单独同步（pollLevel 自 v3.70.0 起恒为 off、不再使用）
+      (d.pollLevel !== undefined ? Promise.resolve(pollcfg.apply(d.pollLevel, d.peakUntil || 0)) : pollcfg.sync())
+        .then(changed => { this.updatePeakTip(); if (changed && this._poller) this.startTimer(); });
       cache.set('dashboard', view);
       // 刚通过创建向导建好：提示下一步
       if (app.globalData.justSetup) {
@@ -163,8 +215,32 @@ Page({
       app.setBadge(d.pending.count); // 同时刷新底部菜单：首个菜单显示为「工作台」
       theme.apply(this, b ? b.type : 'other');
     } catch (e) {
-      if (this.data.mode === 'loading') this.toGuest();
+      fresh.reset(this);
+      const net = req.isNetErr(e);
+      if (this.data.mode === 'loading' || this.data.mode === 'neterr') {
+        if (net) this.toNetErr(req.errText(e));
+        else {
+          if (e && e.biz && e.message) wx.showToast({ title: e.message, icon: 'none' });
+          this.toGuest();
+        }
+      } else if (net && !this.data.netBad) this.setData({ netBad: true }); // 正显示上次的数据：顶部提示，可点刷新
     }
+  },
+
+  /** 首次加载网络失败：不退到宾客页，显示重试（不清缓存、不清角标） */
+  toNetErr(text) {
+    this.setData({ mode: 'neterr', netErrText: text || '网络不佳' });
+  },
+  /** 「点此重试」/ 网络提示条 */
+  async onNetRetry() {
+    if (this._retrying) return;
+    this._retrying = true;
+    if (this.data.mode === 'neterr') this.setData({ mode: 'loading' });
+    try {
+      const app = getApp();
+      if (!app.globalData.user && app.loginFailed) await app.retryLogin();
+      await this.refresh();
+    } finally { this._retrying = false; }
   },
 
   toGuest() {
@@ -179,14 +255,27 @@ Page({
 
   /** 待确认份数与合计（服务端只做计数 + 聚合，不拉整张列表）；silent=true 为轮询，有新礼金时震动 */
   async refreshPending(silent) {
-    if (this.data.mode !== 'host') return;
+    if (this.data.mode !== 'host') return false;
     try {
       const pending = await req.pendingStat();
-      if (!pending) return;
+      if (this.data.netBad) this.setData({ netBad: false });
+      if (!pending) return false;
       if (silent && pending.count > this.data.pendingCount) wx.vibrateShort({ type: 'heavy', fail() {} });
-      this.setData({ pendingCount: pending.count, pendingSum: fmt.money(pending.sum), otherPending: pending.other || 0 });
+      const sum = fmt.money(pending.sum);
+      const other = pending.other || 0;
+      const d = this.data;
+      if (typeof pending.remindDue === 'boolean' && pending.remindDue !== !!getApp().globalData.remindDot) { // 往来红点随轮询更新
+        getApp().globalData.remindDot = pending.remindDue;
+        getApp().refreshTabBar();
+      }
+      if (pending.count === d.pendingCount && sum === d.pendingSum && other === d.otherPending) return false; // 没变化：不 setData
+      this.setData({ pendingCount: pending.count, pendingSum: sum, otherPending: other });
       getApp().setBadge(pending.count);
-    } catch (e) { /* 静默 */ }
+      return true;
+    } catch (e) {
+      if (req.isNetErr(e) && !this.data.netBad) this.setData({ netBad: true });
+      return false;
+    }
   },
 
   // —— 工作台操作 ——
@@ -220,7 +309,7 @@ Page({
     const max = list.length > 6 ? 5 : 6;
     const shown = list.slice(0, max);
     const items = shown.map(b => (b._id === cur ? '✓ ' : '') + (b.hostName ? `${b.hostName} · ${b.name}` : b.name));
-    if (list.length > max) items.push('更多礼簿…');
+    if (list.length > max) items.push(this.data.account && this.data.account.orgMode ? '更多场次…' : '更多礼簿…');
     if (!items.length) { this._switching = false; return this.goBooks(); }
     wx.showActionSheet({
       itemList: items,
@@ -229,6 +318,14 @@ Page({
         const b = shown[res.tapIndex];
         if (!b) return this.goBooks();
         if (b._id === cur) return;
+        if (!this.data.mySwitch) {
+          const curBook = this.data.book;
+          const ok = await require('../../utils/switchguard.js').confirmSwitch({
+            orgMode: !!(this.data.account && this.data.account.orgMode),
+            fromName: curBook && curBook.name, toName: b.name
+          });
+          if (!ok) return;
+        }
         try {
           await (this.data.mySwitch ? req.bookSetMine(b._id) : req.bookSetActive(b._id));
           require('../../utils/printer.js').clearTemplateCache(); // 打印样式跟礼簿走
@@ -290,6 +387,7 @@ Page({
     try { wx.setStorageSync('guide_tip_closed', true); } catch (e) { /* 忽略 */ }
     this.setData({ guideTip: false });
   },
+  goFaq() { wx.navigateTo({ url: '/pages/guide/guide?tab=faq&cat=guest' }); }, // 宾客首页：常见问题
   goMyReceipts() { wx.navigateTo({ url: '/pages/myreceipts/myreceipts' }); }, // 宾客首页
 
   /** 转发给好友 / 分享到朋友圈：落地首页（宾客扫码随礼，主家创建礼簿） */

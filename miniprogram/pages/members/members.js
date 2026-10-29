@@ -6,6 +6,7 @@ const perm = require('../../utils/perm.js');
 const fmt = require('../../utils/format.js');
 const scenes = require('../../utils/scenes.js');
 const theme = require('../../utils/theme.js');
+const avatarUtil = require('../../utils/avatar.js');
 
 Page({
   data: {
@@ -22,6 +23,7 @@ Page({
     myPerms: [],       // 我的权限（主家为全部）
     myAllBooks: false, // 我负责全部礼簿：才能邀请 / 设置「全部礼簿」
     inviteDesc: '',
+    quotaMsg: '',      // 记账人名额已满的提示（免费版）
     transferToken: '', // 移交：选好礼簿后生成
     showPicker: false, // 选择要移交的礼簿
     books: [],         // [{ _id, name, typeLabel, count, sumStr, on }]
@@ -34,6 +36,8 @@ Page({
     joins: [],         // 主家：通过邀请卡申请加入、待同意的记账人 / 家人
     loading: true
   },
+
+  onLoad() { theme.early(this); }, // 首帧前同步套主题色（v3.70.1）
 
   onShow() {
     this.setData({ primary: theme.apply(this).primary }); // 主题色跟当前礼簿事由走
@@ -62,7 +66,7 @@ Page({
       wx.setNavigationBarTitle({ title: orgMode ? '礼台人员' : '记账人' }); // 机构模式称「礼台人员」
       this.setData({
         role: r.role,
-        owner: r.owner || null,
+        owner: r.owner ? { ...r.owner, avatar: avatarUtil.safe(r.owner.avatar) } : null,
         orgMode,
         canManage: r.canManage !== false,
         myPerms,
@@ -70,6 +74,7 @@ Page({
         accountName: (account && account.accountName) || '',
         list: (r.list || []).map(m => ({
           ...m,
+          avatar: avatarUtil.safe(m.avatar),
           timeStr: m.createdAt ? fmt.day(m.createdAt) : '',
           booksText: !orgMode ? (bookName[m.soloBookId] || '已删除的礼簿')
             : m.allBooks || !(m.bookIds && m.bookIds.length) ? '全部礼簿' : m.bookIds.map(id => bookName[id] || '已删除的礼簿').join('、'),
@@ -79,7 +84,7 @@ Page({
       if (r.role === 'owner') {
         try {
           const j = await req.memberPending();
-          this.setData({ joins: (j.list || []).map(x => ({ ...x, booksText: (x.books || []).join('、'), timeStr: x.createdAt ? fmt.day(x.createdAt) : '' })) });
+          this.setData({ joins: (j.list || []).map(x => ({ ...x, avatar: avatarUtil.safe(x.avatar), booksText: (x.books || []).join('、'), timeStr: x.createdAt ? fmt.day(x.createdAt) : '' })) });
         } catch (e) { /* 忽略 */ }
       }
       if (r.canManage === false) return;
@@ -130,14 +135,21 @@ Page({
     const seq = (this._inviteSeq || 0) + 1;
     this._inviteSeq = seq;
     try {
-      const r = await req.inviteCreate('clerk', this.data.inviteAll ? { allBooks: true, perms } : { bookIds: ids, perms });
+      const r = await req.inviteCreate('clerk', this.data.inviteAll ? { allBooks: true, perms } : { bookIds: ids, perms }, { silent: true });
       if (seq !== this._inviteSeq) return; // 已有更新的选择
       const n = (r.perms || perms).length;
       this.setData({
+        quotaMsg: '',
         clerkToken: r.token,
         inviteDesc: (r.allBooks ? '负责全部礼簿（含以后新建的）' : `只负责：${r.books.map(b => b.name).join('、')}`) + ` · ${n} 项权限`
       });
-    } catch (e) { this.setData({ clerkToken: '' }); }
+    } catch (e) {
+      if (seq !== this._inviteSeq) return;
+      // 记账人名额已满（免费版 3 位）：页面里说明并带「联系我们」，分享按钮保持置灰；其他业务错误弹提示
+      const msg = (e && e.biz && e.message) || '';
+      if (req.isQuotaMsg(msg)) this.setData({ clerkToken: '', quotaMsg: msg, inviteDesc: '' });
+      else { this.setData({ clerkToken: '', quotaMsg: '' }); if (msg) wx.showToast({ title: msg, icon: 'none' }); }
+    }
   },
   onInvitePerm(e) {
     const i = e.currentTarget.dataset.i;
@@ -356,6 +368,8 @@ Page({
 
   /** 分享卡片：data-type 区分邀请记账人 / 移交主家 */
   onShareAppMessage(res) {
+    // 右上角菜单转发不带邀请卡：只有点页面上的分享按钮才发邀请 / 移交 / 共享
+    if (!res || res.from !== 'button') return { title: '慧礼记｜扫码随礼、自动记账、人情往来一本清', path: '/pages/index/index' };
     const type = (res && res.target && res.target.dataset && res.target.dataset.type) || 'clerk';
     const name = this.data.accountName;
     if (type === 'transfer') {
@@ -365,9 +379,19 @@ Page({
         path: `/pages/invite/invite?token=${this.data.transferToken}`
       };
     }
+    const path = `/pages/invite/invite?token=${this.data.clerkToken}`;
+    // 邀请卡只能 1 人使用：发出后马上换一张新的，避免下次又发出同一张（v3.66.7）
+    this.setData({ clerkToken: '' });
+    setTimeout(() => this.makeClerkInvite(), 300);
     return {
       title: `邀请你为「${name}」记账`,
-      path: `/pages/invite/invite?token=${this.data.clerkToken}`
+      path
     };
-  }
+  },
+
+  noop() {},
+  /** 头像加载失败：回落默认头像 */
+  onAvatarErr(e) { const p = e.currentTarget.dataset.p; if (p) this.setData({ [p]: '' }); },
+
+  goContact() { wx.navigateTo({ url: '/pages/contact/contact' }); }
 });

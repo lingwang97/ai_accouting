@@ -21,7 +21,9 @@ Page({
     payCodePreview: '', // 本次新选的图片
     payCodeFileID: '',
     payCodeChanged: false,
-    uploading: false
+    uploading: false,
+    recalcing: false,
+    loadFailed: false // 编辑时加载失败：禁止保存，避免被当成新建
   },
 
   onShow() {
@@ -29,6 +31,8 @@ Page({
   },
 
   async onLoad(options) {
+    theme.early(this); // 首帧前同步套主题色（v3.70.1）
+    this._editId = options.id || '';
     const acc = getApp().globalData.account;
     this.setData({ orgMode: !!(acc && acc.orgMode) });
     if (!options.id) {
@@ -38,9 +42,13 @@ Page({
     try {
       const { list } = await req.bookList();
       const b = list.find(x => x._id === options.id);
-      if (b) this.setData({ id: b._id, name: b.name, type: b.type, date: b.date, location: b.location || '', origType: b.type, hostName: b.hostName || '', hasPayCode: !!b.hasPayCode });
-    } catch (e) { /* toast 已提示 */ }
+      if (!b) throw new Error('礼簿不存在');
+      this.setData({ loadFailed: false, id: b._id, name: b.name, type: b.type, date: b.date, location: b.location || '', origType: b.type, hostName: b.hostName || '', hasPayCode: !!b.hasPayCode });
+    } catch (e) {
+      this.setData({ loadFailed: true });
+    }
   },
+  onRetryLoad() { this.onLoad({ id: this._editId }); },
 
   onName(e) { this.setData({ name: e.detail.value }); },
   onLocation(e) { this.setData({ location: e.detail.value }); },
@@ -78,7 +86,23 @@ Page({
   },
 
   /** 新建礼簿是否设为当前：返回 true / false，取消返回 null */
-  askSetActive() {
+  async askSetActive(newName) {
+    const r = await this.askSetActiveBase();
+    if (r !== true) return r;
+    const app = getApp();
+    const a = app.globalData.account || {};
+    if (a.orgMode) return true;
+    let fromName = '';
+    try {
+      const { list, activeBookId } = await req.bookList();
+      const cur = activeBookId && (list || []).find(b => b._id === activeBookId);
+      fromName = cur ? cur.name : '';
+    } catch (e) { return false; } // 读不到当前礼簿：照样创建，只是不设为当前
+    // 双重确认任一取消：照样创建，只是不设为当前（v3.66.5）
+    const ok = await require('../../utils/switchguard.js').confirmSwitch({ orgMode: false, fromName, toName: newName });
+    return ok;
+  },
+  askSetActiveBase() {
     const app = getApp();
     const a = app.globalData.account || {};
     const clerkOrg = app.globalData.role === 'clerk' && a.orgMode;
@@ -94,8 +118,28 @@ Page({
     }));
   },
 
+  /** 重算合计：需「管理礼簿」权限（服务端同样校验），先二次确认 */
+  onRecalc() {
+    if (this.data.recalcing || !this.data.id) return;
+    wx.showModal({
+      title: '重算合计',
+      content: '将按这本礼簿全部已入簿的记录重新计算份数与合计，不会修改任何礼金记录。确定重算吗？',
+      confirmText: '重算',
+      success: async r => {
+        if (!r.confirm) return;
+        this.setData({ recalcing: true });
+        try {
+          const res = await req.bookRecalc(this.data.id);
+          wx.showToast({ title: `已重算：${res.count} 份`, icon: 'none' });
+        } catch (e) { /* toast 已提示 */ } finally {
+          this.setData({ recalcing: false });
+        }
+      }
+    });
+  },
+
   async onSave() {
-    if (this.data.saving) return;
+    if (this.data.saving || this.data.loadFailed) return;
     const name = (this.data.name || '').trim();
     if (!name) return wx.showToast({ title: '请填写礼簿名称', icon: 'none' });
     if (this.data.uploading) return wx.showToast({ title: '收款码上传中，请稍候', icon: 'none' });
@@ -104,7 +148,7 @@ Page({
       const { id, type, date, location, origType, orgMode, hostName, payCodeChanged, payCodeFileID } = this.data;
       const org = orgMode ? { hostName: (hostName || '').trim(), ...(payCodeChanged ? { payCodeFileID } : {}) } : {};
       // 新建：询问是否设为当前（设为当前后，宾客扫主礼簿码的礼金会记到这本）
-      const setActive = id ? undefined : await this.askSetActive();
+      const setActive = id ? undefined : await this.askSetActive(name);
       if (setActive === null) return;
       const { book, pendingPayCode } = await req.bookSave({ _id: id || undefined, name, type, date, location, setActive, ...org });
       printer.clearTemplateCache(); // 新建即设为当前礼簿 / 事由类型可能变化

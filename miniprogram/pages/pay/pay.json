@@ -1,7 +1,11 @@
 {
   "navigationBarTitleText": "扫码随礼",
+  "navigationBarBackgroundColor": "#F7F7F7",
+  "navigationBarTextStyle": "black",
   "usingComponents": {
+    "loading": "/components/loading/loading",
     "receipt-view": "/components/receipt-view/index",
-    "batch-list": "/components/batch-list/index"
+    "batch-list": "/components/batch-list/index",
+    "ad-slot": "/components/ad-slot/index"
   }
 }

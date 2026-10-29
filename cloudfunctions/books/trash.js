@@ -16,7 +16,9 @@ async function moveDocs(db, from, to, cond, deadline) {
   for (;;) {
     const rows = (await src.where(cond).limit(100).get()).data;
     if (!rows.length) return true;
-    await Promise.all(rows.map(({ _id, ...doc }) => dst.doc(_id).set({ data: doc })));
+    for (let i = 0; i < rows.length; i += 20) { // 每组 20 个并发写，避免一次 100 个并发
+      await Promise.all(rows.slice(i, i + 20).map(({ _id, ...doc }) => dst.doc(_id).set({ data: doc })));
+    }
     await src.where({ _id: db.command.in(rows.map(r => r._id)) }).remove();
     if (rows.length < 100) return true;
     if (Date.now() > deadline) return false;
@@ -30,8 +32,9 @@ async function ensure(db, name) {
 /**
  * 删除（移入回收站）。book 为礼簿文档（首次调用）；续跑时 book 为 null，按 trash_books 里的进度继续
  * files：彻底删除时要一并删掉的文件（存档 PDF、本场收款码、各版本礼簿码）
+ * days：保留天数（v3.63.0 用户可选 15 / 30 / 60，到期时间 purgeAt 在这里固化；没传按 TRASH_DAYS）
  */
-async function moveToTrash(db, owner, bookId, book, extra) {
+async function moveToTrash(db, owner, bookId, book, extra, days) {
   await ensure(db, 'trash_books');
   await ensure(db, 'trash_records');
   const deadline = Date.now() + BUDGET_MS;
@@ -40,7 +43,7 @@ async function moveToTrash(db, owner, bookId, book, extra) {
     const { _id, ...doc } = book;
     const now = new Date();
     await tb.doc(bookId).set({
-      data: { ...doc, ...extra, trashStatus: 'moving', deletedAt: now, purgeAt: new Date(now.getTime() + TRASH_DAYS * 24 * 3600 * 1000) }
+      data: { ...doc, ...extra, trashStatus: 'moving', deletedAt: now, purgeAt: new Date(now.getTime() + (days > 0 ? days : TRASH_DAYS) * 24 * 3600 * 1000) }
     });
     await db.collection('books').doc(bookId).remove();
   }
@@ -58,16 +61,16 @@ async function restore(db, owner, bookId) {
   if (t.trashStatus !== 'restoring') {
     const { _id, trashStatus, deletedAt, purgeAt, files, count, sum, aid, ...doc } = t;
     await db.collection('books').doc(bookId).set({ data: { ...doc, archived: true } });
-    await tb.doc(bookId).update({ data: { trashStatus: 'restoring' } });
+    await tb.doc(bookId).update({ data: { trashStatus: 'restoring', restoringAt: new Date() } });
   }
   const done = await moveDocs(db, 'trash_records', 'records', { ownerOpenid: owner, bookId }, deadline);
   if (done) await tb.doc(bookId).remove();
   return { done };
 }
 
-/** 永久删除回收站里的一本：文件、礼金记录、礼簿 */
+/** 永久删除回收站里的一本：文件（含这本礼金记录的小票二维码缓存，v3.59.1）、礼金记录、礼簿 */
 async function purge(db, cloud, t) {
-  const files = (t.files || []).filter(Boolean);
+  const files = (t.files || []).filter(Boolean).concat(await qrCacheFiles(db, 'trash_records', { ownerOpenid: t.ownerOpenid, bookId: t._id }));
   for (let i = 0; i < files.length; i += 50) {
     try { await cloud.deleteFile({ fileList: files.slice(i, i + 50) }); } catch (e) { /* 忽略 */ }
   }
@@ -81,6 +84,23 @@ async function purge(db, cloud, t) {
   await db.collection('trash_books').doc(t._id).remove();
 }
 
+/**
+ * 小票二维码的光栅缓存文件（records / trash_records 的 rcptQrFileID，v3.58.0）：删记录前先取出来一并删除。
+ * 每页 1000 条，最多 20 页；集合不存在返回已取到的
+ */
+async function qrCacheFiles(db, col, cond) {
+  const files = [];
+  try {
+    for (let page = 0; page < 20; page++) {
+      const rows = (await db.collection(col).where({ ...cond, rcptQrFileID: db.command.exists(true) })
+        .field({ rcptQrFileID: true }).skip(page * 1000).limit(1000).get()).data;
+      rows.forEach(r => { if (r.rcptQrFileID && !r._openid) files.push(r.rcptQrFileID); });
+      if (rows.length < 1000) break;
+    }
+  } catch (e) { /* 集合不存在 */ }
+  return files;
+}
+
 /** 到期的永久删除（warmer 定时调用；每次最多 limit 本，没删完的下次继续） */
 async function purgeExpired(db, cloud, limit) {
   let res;
@@ -91,14 +111,46 @@ async function purgeExpired(db, cloud, limit) {
   return res.data.length;
 }
 
+/**
+ * 续跑卡住的移动：用户中途关闭页面 / 网络中断后，moving（删除）或 restoring（恢复）可能停在半途。
+ * warmer 定时调用：只处理停留超过 STUCK_MS 的（避免与用户正在进行的操作抢），每次最多 limit 本；剩余时间不足时由调用方不调用
+ */
+const STUCK_MS = 10 * 60 * 1000;
+async function resumeStuck(db, limit) {
+  let res;
+  try {
+    res = await db.collection('trash_books').where({ trashStatus: db.command.in(['moving', 'restoring']), _openid: db.command.exists(false) }).limit(20).get();
+  } catch (e) { return 0; } // 集合还不存在
+  const old = Date.now() - STUCK_MS;
+  let n = 0;
+  for (const t of res.data) {
+    if (n >= (limit || 3)) break;
+    const since = new Date(t.trashStatus === 'restoring' ? (t.restoringAt || t.deletedAt) : t.deletedAt).getTime() || 0;
+    if (since > old) continue;
+    try {
+      if (t.trashStatus === 'moving') await moveToTrash(db, t.ownerOpenid, t._id, null);
+      else await restore(db, t.ownerOpenid, t._id);
+      n++;
+    } catch (e) { console.warn('续跑回收站移动失败', t._id, e.message); }
+  }
+  return n;
+}
+
 /** 删除时登记的文件：存档 PDF、本人上传的本场收款码、各版本礼簿码 */
 function filesOf(book, account, ownPayCode) {
   const files = [];
   if (book.archivePdf && book.archivePdf.fileID) files.push(book.archivePdf.fileID);
   if (ownPayCode(book.payCodeFileID, book.ownerOpenid)) files.push(book.payCodeFileID);
   const prefix = account && account.payCodeFileID ? account.payCodeFileID.split('/paycodes/')[0] : '';
-  if (prefix) ENVS.forEach(env => files.push(`${prefix}/qrcodes/${book._id}-${env}.png`));
+  if (prefix) {
+    ENVS.forEach(env => files.push(`${prefix}/qrcodes/${book._id}-${env}.png`));
+    // 默认礼簿（id 超过 32 字符）的礼簿码文件用短码命名（见 ctx.shortCodeOf）
+    if (book._id.length > 32) {
+      const code = 'k' + require('crypto').createHash('md5').update(book._id).digest('hex').slice(0, 24);
+      ENVS.forEach(env => files.push(`${prefix}/qrcodes/${code}-${env}.png`));
+    }
+  }
   return files;
 }
 
-module.exports = { TRASH_DAYS, moveToTrash, restore, purge, purgeExpired, filesOf };
+module.exports = { TRASH_DAYS, moveToTrash, restore, purge, purgeExpired, resumeStuck, filesOf };

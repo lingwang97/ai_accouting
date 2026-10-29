@@ -22,7 +22,7 @@
   <view class="card">
     <block wx:if="{{!codeOnly}}">
       <view class="section-title">主家称呼</view>
-      <input class="input" placeholder="建议真实姓名,如：张三" value="{{accountName}}" bindinput="onNameInput" />
+      <input class="input" placeholder="建议真实姓名,如：张三" maxlength="20" value="{{accountName}}" bindinput="onNameInput" />
     </block>
     <view class="muted" wx:else>你只负责部分礼簿：可以为「{{accountName}}」上传新的收款码，主家确认采用后才生效，确认前宾客仍转到原收款码。</view>
 
@@ -41,7 +41,7 @@
   <view class="card" wx:if="{{!codeOnly}}">
     <view class="section-title">快捷礼金</view>
     <input class="input" placeholder="用逗号分隔，如：100,200,300,500,600,800,1000,1500,2000" value="{{quickText}}" bindinput="onQuickInput" />
-    <view class="muted" style="margin-top:12rpx">宾客随礼时可一键选择，清空后不显示快捷金额<text class="link-inline" wx:if="{{quickText}}" bindtap="onClearQuick">清空</text>；礼簿名称请到「我的 → 礼簿管理」设置；主题色请到「我的 → 外观设置」</view>
+    <view class="muted" style="margin-top:12rpx">宾客随礼时可一键选择，清空后不显示快捷金额<text class="link-inline" wx:if="{{quickText}}" bindtap="onClearQuick">清空</text>；礼簿名称请到「工作台 → 礼簿管理」设置；主题色请到「我的 → 主题色」</view>
   </view>
 
   <button class="btn-primary" loading="{{saving || uploading}}" bindtap="onSave">{{codeOnly ? '提交主家确认' : '保存'}}</button>

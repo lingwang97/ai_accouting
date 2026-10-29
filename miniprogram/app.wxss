@@ -6,8 +6,14 @@ page {
   --primary-soft: rgba(200, 22, 29, .1);
   --danger: #FA5151;
   --success: #07C160;
+  /* 警示橙（文字、徽章、提示条统一；#C25E00 在白底对比度约 4.9:1，原 #FA9D3B 仅约 2.2:1） */
+  --warn: #C25E00;
+  --warn-bg: #FFF7E6;
+  --warn-soft: rgba(194, 94, 0, .12);
+  --warn-border: #FFC069;
   --link: #576B95;
   --border: #e5e5e5;
+  --line: #f5f5f5;       /* 列表行之间的浅分隔线 */
   --fill: #f2f3f5;
   --text: #333;
   --text-2: #666;
@@ -133,3 +139,22 @@ button.btn-plain:not(.btn):not([size=mini]), button.btn-danger:not(.btn):not([si
 /* ===== 骨架屏（全局基类，页面直接用 .sk；列表页另可用 <loading> 组件） ===== */
 .sk { background: linear-gradient(90deg, #ECECEC 25%, #F5F5F5 50%, #ECECEC 75%); background-size: 400% 100%; animation: sk 1.4s ease infinite; border-radius: 12rpx; }
 @keyframes sk { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+
+/* 提示条（工作台、往来页共用） */
+.tip-bar {
+  display: flex; align-items: center; background: #fff; border-radius: 16rpx;
+  padding: 20rpx 24rpx; margin-bottom: 24rpx; border: 2rpx solid var(--primary-soft);
+}
+.tip-icon { width: 36rpx; height: 36rpx; flex-shrink: 0; margin-right: 12rpx; }
+.tip-text { flex: 1; font-size: 26rpx; color: #333; margin-right: 12rpx; }
+.tip-go { font-size: 26rpx; color: var(--primary); white-space: nowrap; }
+.tip-text.hot { color: var(--primary); font-weight: 600; }
+.tip-text.ell { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+/* 网络提示条（v3.65.2）：轮询失败时显示一条，恢复后自动消失；不弹 toast 打扰 */
+.net-bar { font-size: 24rpx; line-height: 1.5; color: var(--warn); background: var(--warn-bg); border: 2rpx solid var(--warn-border); border-radius: 12rpx; padding: 10rpx 20rpx; margin-bottom: 12rpx; text-align: center; }
+/* 网络失败（v3.66.0）：替代空状态 / 「无效」提示，点击重试 */
+.net-err { text-align: center; padding: 60rpx 24rpx; }
+.net-err .ne-title { font-size: 30rpx; color: var(--text); margin-bottom: 12rpx; }
+.net-err .ne-sub { font-size: 26rpx; color: var(--text-3); line-height: 1.6; }
+.net-err .ne-btn { display: inline-block; margin-top: 24rpx; padding: 12rpx 48rpx; border-radius: 40rpx; border: 2rpx solid var(--primary, #C8161D); color: var(--primary, #C8161D); font-size: 28rpx; }

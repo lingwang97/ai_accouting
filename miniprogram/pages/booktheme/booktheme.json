@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "传统礼簿主题",
+  "usingComponents": {
+    "loading": "/components/loading/loading"
+  }
+}

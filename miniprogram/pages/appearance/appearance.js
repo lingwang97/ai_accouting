@@ -1,4 +1,4 @@
-// pages/appearance/appearance.js — 外观设置：主家选择主题色，实时预览工作台、按钮与底部菜单
+// pages/appearance/appearance.js — 主题色：主家选择主题色，实时预览工作台、按钮与底部菜单
 const req = require('../../utils/request.js');
 const theme = require('../../utils/theme.js');
 
@@ -15,12 +15,14 @@ Page({
     colors: theme.PRESET_COLORS,
     primary: theme.DEFAULT,
     saved: theme.DEFAULT,  // 已保存的主题色，未改动时不可保存
-    pv: null,              // 预览主题 { primary, soft, icon }
+    pv: theme.make(theme.DEFAULT), // 预览主题 { primary, soft, icon }；先给默认值，首帧图标路径不为空
     pvStyle: '',           // 预览区域的 CSS 变量
     tabs: TABS,
     saving: false,
     themeStyle: ''
   },
+
+  onLoad() { theme.early(this); }, // 首帧前同步套主题色（v3.70.1）
 
   onShow() {
     theme.apply(this);

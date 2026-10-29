@@ -8,17 +8,47 @@ const PRINTER_PREFIX = ['Print', 'Xprinter', 'HM', 'MT', 'GB', 'HPRT', 'MTP', 'Z
 const state = {
   deviceId: '',
   serviceId: '',
-  charId: ''     // 可写特征值 UUID
+  charId: '',    // 可写特征值 UUID
+  writeType: '', // 'write' | 'writeNoResponse'：所选特征值支持的写入方式（iOS 读取 MTU 时要传）
+  chunk: 20      // 单包字节数：默认 20；协商 MTU 成功后为 MTU-3（安卓 v3.58.0，iOS v3.59.0）
 };
 
+const MTU_REQUEST = 185; // 请求的 MTU；打印机实际支持的由 setBLEMTU 的返回值决定
+const SLOW_KEY = 'printerSlow'; // 「稳定模式」（本机设置）：打印机乱码 / 缺行时打开，回到每包 20 字节、每包间隔 20ms（v3.58.0 之前的速度）
+// 限速（v3.59.0）：大包按每秒字节数发送，避免打印机串口缓冲溢出（便宜的蓝牙打印机串口常见 9600～115200 波特率）。
+// 20 字节小包仍是每包至少 20ms（约 1KB/s，原来的速度）；182 字节包间隔约 46ms，一张小程序码（约 9.8KB）约 2.5 秒
+const RATE_BPS = 4000;
+const MIN_GAP_MS = 20;
+const gapOf = len => Math.max(MIN_GAP_MS, Math.ceil(len * 1000 / RATE_BPS));
+
+function isSlow() { try { return !!wx.getStorageSync(SLOW_KEY); } catch (e) { return false; } }
+function setSlow(on) { try { wx.setStorageSync(SLOW_KEY, !!on); } catch (e) { /* 忽略 */ } if (on) state.chunk = 20; }
+
+
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/** 蓝牙错误码 → 提示（码以微信官方文档 wx.openBluetoothAdapter 等为准；不确定的统一兜底） */
+function errMsg(err, fallback) {
+  const code = err && err.errCode;
+  switch (code) {
+    case 10001: return device.notPhone() ? '当前设备不支持蓝牙打印，请在手机上操作' : '请打开手机蓝牙后重试';
+    case 10002: return '没有找到打印机，请确认已开机并靠近手机';
+    case 10003: return '连接打印机失败，请重试';
+    case 10006: return '打印机连接已断开';
+    case 10009: return '手机系统版本或权限不支持蓝牙，请检查系统蓝牙与定位权限';
+    case 10012: return '连接打印机超时，请靠近打印机后重试';
+    default:
+      if (code) return `蓝牙异常（错误码 ${code}）`;
+      return fallback || '蓝牙异常';
+  }
+}
 
 function openAdapter() {
   return new Promise((resolve, reject) => {
     wx.openBluetoothAdapter({
       success: resolve,
       // 电脑 / iPad 上不支持蓝牙打印，提示换手机操作
-      fail: () => reject(new Error(device.notPhone() ? '当前设备不支持蓝牙打印，请在手机上操作' : '请打开手机蓝牙后重试'))
+      fail: err => reject(new Error(errMsg(err, device.notPhone() ? '当前设备不支持蓝牙打印，请在手机上操作' : '请打开手机蓝牙后重试')))
     });
   });
 }
@@ -28,7 +58,7 @@ function startDiscovery() {
     wx.startBluetoothDevicesDiscovery({
       allowDuplicatesKey: false,
       success: resolve,
-      fail: () => reject(new Error('搜索蓝牙设备失败'))
+      fail: err => reject(new Error(errMsg(err, '搜索蓝牙设备失败')))
     });
   });
 }
@@ -66,22 +96,64 @@ function isPrinterLike(name) {
 }
 
 /** 连接设备并定位可写特征值；找不到 FF02 时遍历所有服务兜底 */
-function connect(deviceId) {
+async function connect(deviceId) {
+  await _closeOld();
   return new Promise((resolve, reject) => {
     wx.createBLEConnection({
       deviceId,
       timeout: 6000,
       success: () => {
-        state.deviceId = deviceId;
+        _setDevice(deviceId);
+        state.chunk = 20; // 每次连接先回到 20，再按协商结果提升
         _watchState();
-        _resolveWritable(deviceId).then(resolve).catch(e => {
+        _resolveWritable(deviceId).then(info => _negotiateMtu(deviceId).then(() => resolve(info))).catch(e => {
           disconnect();
           reject(e);
         });
       },
-      fail: () => reject(new Error('连接打印机失败，请重试'))
+      fail: err => reject(new Error(errMsg(err, '连接打印机失败，请重试')))
     });
   });
+}
+
+/** 连接新设备前先断开旧连接（等待回调，失败也不阻塞） */
+function _closeOld() {
+  if (!state.deviceId) return Promise.resolve();
+  const id = state.deviceId;
+  _setDevice('');
+  return new Promise(resolve => {
+    try {
+      wx.closeBLEConnection({ deviceId: id, complete: () => resolve() });
+    } catch (e) { resolve(); }
+  });
+}
+
+/**
+ * 连接状态订阅（v3.59.2，工作台「打印机」格子实时跟随）：连上、断开都通知 cb(connected)。
+ * 订阅时顺带注册系统断开监听，不依赖是否已连接过。
+ */
+const _listeners = [];
+function onStateChange(cb) {
+  if (typeof cb !== 'function') return;
+  if (_listeners.indexOf(cb) < 0) _listeners.push(cb);
+  try { _watchState(); } catch (e) { /* 忽略 */ }
+}
+function offStateChange(cb) {
+  const i = _listeners.indexOf(cb);
+  if (i >= 0) _listeners.splice(i, 1);
+}
+/** 统一修改连接设备并通知订阅者（只在连接与否发生变化时通知） */
+function _setDevice(id) {
+  const was = !!state.deviceId;
+  state.deviceId = id || '';
+  const now = !!state.deviceId;
+  if (was === now) return;
+  _listeners.slice().forEach(cb => { try { cb(now); } catch (e) { /* 忽略 */ } });
+}
+/** 打印机状态：connected 已连接 / paired 已配对未连接 / none 未配对（saved 为 printerDevice 缓存） */
+function printerStatus(saved, connected) {
+  if (connected) return 'connected';
+  return saved && (saved.deviceId || saved.name) ? 'paired' : 'none';
 }
 
 /** 打印机断电/走远时清空连接状态，下次打印自动重连 */
@@ -90,7 +162,58 @@ function _watchState() {
   if (_watching) return;
   _watching = true;
   wx.onBLEConnectionStateChange(res => {
-    if (!res.connected && res.deviceId === state.deviceId) state.deviceId = '';
+    if (!res.connected && res.deviceId === state.deviceId) _setDevice('');
+  });
+}
+
+/**
+ * 提升单包大小（二维码光栅约 10KB，20 字节一包要多等十几秒）；失败或超时保持 20。任何情况都不抛错，不影响连接。
+ *  - 安卓：wx.setBLEMTU 请求 185，成功后按返回的 MTU-3 发送；
+ *  - iOS：系统连接时已自动协商（setBLEMTU 在 iOS 上无效），用 wx.getBLEMTU（基础库 2.20.1+）读取协商结果（v3.59.0）；
+ *  - 「稳定模式」不提升，保持 20。
+ */
+function _negotiateMtu(deviceId) {
+  if (isSlow()) return Promise.resolve();
+  if (!device.isAndroid()) return _readMtu(deviceId);
+  if (typeof wx.setBLEMTU !== 'function') return Promise.resolve();
+  return new Promise(resolve => {
+    let done = false;
+    const finish = () => { if (!done) { done = true; resolve(); } };
+    setTimeout(finish, 3000); // 个别机型不回调
+    try {
+      wx.setBLEMTU({
+        deviceId,
+        mtu: MTU_REQUEST,
+        success: res => {
+          const mtu = Number(res && res.mtu) || MTU_REQUEST;
+          if (!done && mtu > 23) state.chunk = Math.min(mtu, 512) - 3;
+          finish();
+        },
+        fail: finish
+      });
+    } catch (e) { finish(); }
+  });
+}
+
+/** iOS：读取系统已协商的 MTU（writeType 与所选特征值一致）；不支持或失败保持 20 */
+function _readMtu(deviceId) {
+  if (typeof wx.getBLEMTU !== 'function') return Promise.resolve();
+  return new Promise(resolve => {
+    let done = false;
+    const finish = () => { if (!done) { done = true; resolve(); } };
+    setTimeout(finish, 3000);
+    try {
+      wx.getBLEMTU({
+        deviceId,
+        writeType: state.writeType || 'write',
+        success: res => {
+          const mtu = Number(res && res.mtu) || 0;
+          if (!done && mtu > 23) state.chunk = Math.min(mtu, 512) - 3;
+          finish();
+        },
+        fail: finish
+      });
+    } catch (e) { finish(); }
   });
 }
 
@@ -116,6 +239,7 @@ function _resolveWritable(deviceId) {
               if (ch) {
                 state.serviceId = sid;
                 state.charId = ch.uuid;
+                state.writeType = ch.properties.write ? 'write' : 'writeNoResponse';
                 resolve({ serviceId: sid, charId: ch.uuid });
               } else {
                 tryService(i + 1);
@@ -126,7 +250,7 @@ function _resolveWritable(deviceId) {
         };
         tryService(0);
       },
-      fail: () => reject(new Error('获取服务失败'))
+      fail: err => reject(new Error(errMsg(err, '获取服务失败')))
     });
   });
 }
@@ -134,14 +258,18 @@ function _resolveWritable(deviceId) {
 function disconnect() {
   if (state.deviceId) {
     try { wx.closeBLEConnection({ deviceId: state.deviceId }); } catch (e) { /* 忽略 */ }
-    state.deviceId = '';
+    _setDevice('');
   }
 }
 
-/** 分包写入（BLE 单包 ≤20 字节），返回 Promise */
-function writeBuffer(buffer) {
+/**
+ * 分包写入（单包默认 20 字节，安卓协商 MTU 成功后为 MTU-3），返回 Promise
+ * 失败时 reject 的 Error 带 written（已成功写入的字节数）与 errCode，供上层判断是否可整单重试
+ */
+function writeBuffer(buffer, chunkSize) {
   const data = new Uint8Array(buffer);
-  const CHUNK = 20;
+  const CHUNK = chunkSize || state.chunk || 20;
+  let written = 0;
   let p = Promise.resolve();
   for (let i = 0; i < data.length; i += CHUNK) {
     const slice = data.slice(i, i + CHUNK);
@@ -151,8 +279,13 @@ function writeBuffer(buffer) {
         serviceId: state.serviceId,
         characteristicId: state.charId,
         value: slice.buffer,
-        success: () => setTimeout(resolve, 20), // 打印机写缓冲需要间隔
-        fail: err => reject(err)
+        success: () => { written += slice.length; setTimeout(resolve, gapOf(slice.length)); }, // 打印机写缓冲需要间隔：按字节数限速
+        fail: err => {
+          const e = new Error(errMsg(err, '写入打印机失败'));
+          e.errCode = err && err.errCode;
+          e.written = written;
+          reject(e);
+        }
       });
     }));
   }
@@ -178,6 +311,7 @@ async function reconnectSaved() {
 module.exports = {
   PRINTER_PREFIX, state,
   openAdapter, startDiscovery, stopDiscovery, onFound, offFound, getDevices, isPrinterLike,
-  connect, disconnect, writeBuffer,
+  onStateChange, offStateChange, printerStatus,
+  connect, disconnect, writeBuffer, errMsg, isSlow, setSlow, gapOf, RATE_BPS,
   saveDevice, loadDevice, reconnectSaved, sleep
 };

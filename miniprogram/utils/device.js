@@ -22,4 +22,12 @@ function notPhone() {
   return isPC() || /ipad/i.test(String(info().model || ''));
 }
 
-module.exports = { isPC, notPhone };
+/** 安卓手机（蓝牙打印协商更大的 MTU 只在安卓上做；iOS 由系统自动协商，不调用 setBLEMTU） */
+function isAndroid() {
+  return String(info().platform || '').toLowerCase() === 'android';
+}
+
+/** 清掉缓存的设备信息（测试用） */
+function reset() { _info = null; }
+
+module.exports = { isPC, notPhone, isAndroid, reset };

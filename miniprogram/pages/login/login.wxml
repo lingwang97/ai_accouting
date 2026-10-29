@@ -1,4 +1,4 @@
-<view class="container login">
+<view class="container login" style="{{themeStyle}}">
   <!-- 印章式标识：中性墨色，喜事、白事都适用 -->
   <view class="seal">
     <view class="seal-inner">礼</view>
@@ -14,10 +14,11 @@
 
   <view class="card form">
     <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
-      <image class="avatar" src="{{avatar || '/assets/avatar-default.png'}}" mode="aspectFill" />
+      <image class="avatar" src="{{avatar || '/assets/avatar-default.png'}}" mode="aspectFill" binderror="onAvatarError" />
     </button>
     <view class="muted avatar-tip">点击设置头像</view>
-    <input class="input" type="nickname" placeholder="请输入昵称" value="{{nickname}}" bindinput="onNicknameInput" />
+    <input class="input" type="nickname" placeholder="请输入昵称" value="{{nickname}}" bindinput="onNicknameInput" bindblur="onNicknameBlur" bindnicknamereview="onNicknameReview" />
     <button class="btn-primary" loading="{{submitting}}" bindtap="onSubmit">登录 / 注册</button>
+    <view class="muted small agree-tip">登录即表示了解<text class="agree-link" bindtap="goPrivacy">《隐私说明》</text></view>
   </view>
 </view>

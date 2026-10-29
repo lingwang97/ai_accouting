@@ -1,0 +1,23 @@
+# 依赖：云函数由部署时（--r）在云端安装，本地不需要
+node_modules/
+# 日志与临时文件
+*.log
+npm-debug.log*
+*.tmp
+*.bak
+*.orig
+# 系统 / 编辑器
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+# 开发者工具本机配置（含个人设置，不入库）
+project.private.config.json
+# 本地一次性产物（预览二维码等）
+qr.txt
+# 导出字体上传工具的 base64 字体模块（由 python tools/gen_font_js.py 生成，约 15MB，不入库）
+cloudfunctions/fontsetup/font-*.js
+
+# agent 记忆只放项目根 .claude/，小程序目录下误建的不提交、不打包（v3.69.1）
+miniprogram/.claude/

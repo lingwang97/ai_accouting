@@ -17,7 +17,7 @@
 .hint { text-align: center; margin: 16rpx 0; line-height: 1.6; }
 .v-row { display: flex; align-items: center; padding: 16rpx 0; border-bottom: 2rpx solid #f5f5f5; }
 .v-row .avatar { margin-right: 16rpx; }
-.v-row .link { margin-left: 16rpx; flex-shrink: 0; }
+.v-row .link { margin-left: 12rpx; padding: 18rpx 14rpx; flex-shrink: 0; }
 .v-row:last-child { border-bottom: none; }
 .avatar { width: 64rpx; height: 64rpx; border-radius: 50%; background: #eee; flex-shrink: 0; }
 .v-info { flex: 1; min-width: 0; }

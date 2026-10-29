@@ -1,8 +1,9 @@
+<wxs module="o" src="/utils/orgtext.wxs"></wxs>
 <!-- 加载中 / 加载失败（点击重试） -->
 <view class="state-box" wx:if="{{!book}}" style="{{themeStyle}}">
   <block wx:if="{{!loadError}}"><loading show="{{true}}" type="spinner" /></block>
   <view wx:else bindtap="onRetry">
-    <view class="muted">礼簿加载失败</view>
+    <view class="muted">{{o.t("礼簿加载失败", orgMode)}}</view>
     <view class="btn btn-outline retry">点击重试</view>
   </view>
 </view>
@@ -20,7 +21,7 @@
   <view class="card">
     <view class="section-title">按方式统计 <text class="muted">（便于与现金点数核对）</text></view>
     <view class="rel-top"><text>微信转账</text><text><text class="muted">{{wechatCount}} 份 · </text>￥{{wechatSum}}</text></view>
-    <view class="rel-top"><text>💵 现金</text><text><text class="muted">{{cashCount}} 份 · </text>￥{{cashSum}}</text></view>
+    <view class="rel-top"><text>{{funeral ? "" : "💵 "}}现金</text><text><text class="muted">{{cashCount}} 份 · </text>￥{{cashSum}}</text></view>
   </view>
 
   <view class="card">
@@ -37,6 +38,6 @@
 
   <button wx:if="{{orgMode && pm.show}}" class="btn-primary" style="margin-bottom:24rpx" bindtap="goBookQr">本场礼簿码（双码展示 / 台卡）</button>
   <button class="btn-primary" bindtap="goRecords">查看礼金明细</button>
-  <button class="btn-outline" style="margin-top:24rpx" wx:if="{{canExport}}" bindtap="goExport">导出本礼簿</button>
-  <button class="btn-outline" style="margin-top:24rpx" wx:if="{{book.archivePdf || (!readonly && pm.books)}}" bindtap="onArchivePdf">{{book.archivePdf ? '查看存档 PDF' : '生成存档 PDF（长期保留）'}}</button>
+  <button class="btn-outline" style="margin-top:24rpx" wx:if="{{canExport}}" bindtap="goExport">{{o.t("导出本礼簿", orgMode)}}</button>
+  <button class="btn-outline" style="margin-top:24rpx" wx:if="{{(book.archivePdf && canExport) || (!readonly && pm.books && pm.export)}}" bindtap="onArchivePdf">{{book.archivePdf ? '查看存档 PDF' : '生成存档 PDF（长期保留）'}}</button>
 </view>

@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "慧礼记"
+  "navigationBarTitleText": "慧礼记",
+  "usingComponents": {
+    "ad-slot": "/components/ad-slot/index"
+  }
 }

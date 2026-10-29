@@ -15,6 +15,8 @@ Page({
     themeStyle: ''
   },
 
+  onLoad() { theme.early(this); }, // 首帧前同步套主题色（v3.70.1）
+
   onShow() {
     theme.apply(this);
     this.load();
@@ -29,7 +31,7 @@ Page({
       const picked = new Set(this.data.books.filter(b => b.on).map(b => b._id));
       this.setData({
         books: list.map(b => ({ _id: b._id, title: title(b), count: b.count, sumStr: fmt.money(b.sum), archived: !!b.archived, on: picked.has(b._id) })),
-        viewers: viewers.map(v => ({ ...v, booksText: v.bookIds.map(id => names[id] || '已删除的礼簿').join('、') }))
+        viewers: viewers.map(v => ({ ...v, avatar: require('../../utils/avatar.js').safe(v.avatar), booksText: v.bookIds.map(id => names[id] || '已删除的礼簿').join('、') }))
       });
     } catch (e) { /* toast 已提示 */ } finally {
       this.setData({ loading: false });
@@ -52,12 +54,19 @@ Page({
     } catch (e) { /* toast 已提示 */ }
   },
 
-  onShareAppMessage() {
+  noop() {},
+  onAvatarErr(e) { const i = e.currentTarget.dataset.i; this.setData({ [`viewers[${i}].avatar`]: '' }); },
+
+  onShareAppMessage(res) {
+    // 右上角菜单转发不带邀请卡：只有点页面上的分享按钮才发邀请 / 移交 / 共享
+    if (!res || res.from !== 'button') return { title: '慧礼记｜扫码随礼、自动记账、人情往来一本清', path: '/pages/index/index' };
     const acc = getApp().globalData.account;
     const names = this._names || [];
+    const path = `/pages/invite/invite?token=${this.data.token}`;
+    setTimeout(() => this.setData({ token: '' }), 300); // 共享卡只能 1 人使用：发出后回到「生成共享卡片」，给下一位重新生成（v3.66.7）
     return {
       title: `「${(acc && acc.accountName) || ''}」${names.length === 1 ? '的礼簿「' + names[0] + '」' : '的 ' + names.length + ' 本礼簿'}共享给你查看`,
-      path: `/pages/invite/invite?token=${this.data.token}`
+      path
     };
   },
 

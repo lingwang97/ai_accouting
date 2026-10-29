@@ -3,15 +3,11 @@
     "pages/index/index",
     "pages/records/records",
     "pages/mine/mine",
-    "pages/printer/printer",
     "pages/login/login",
     "pages/account/account",
     "pages/qrcode/qrcode",
     "pages/pay/pay",
-    "pages/printset/printset",
-    "pages/export/export",
     "pages/receipt/receipt",
-    "pages/receiptset/receiptset",
     "pages/myreceipts/myreceipts",
     "pages/books/books",
     "pages/bookedit/bookedit",
@@ -22,21 +18,35 @@
     "pages/remind/remind",
     "pages/pending/pending",
     "pages/cash/cash",
-    "pages/members/members",
     "pages/invite/invite",
-    "pages/admin/admin",
-    "pages/orgsummary/orgsummary",
-    "pages/reconcile/reconcile",
     "pages/bookshare/bookshare",
-    "pages/appearance/appearance",
-    "pages/guide/guide",
     "pages/welcome/welcome",
     "pages/start/start",
-    "pages/setup/setup",
-    "pages/trash/trash"
+    "pages/setup/setup"
   ],
+  "subpackages": [
+    { "root": "pages/admin", "pages": ["admin"] },
+    { "root": "pages/printer", "pages": ["printer"] },
+    { "root": "pages/booktheme", "pages": ["booktheme"] },
+    { "root": "pages/printset", "pages": ["printset"] },
+    { "root": "pages/receiptset", "pages": ["receiptset"] },
+    { "root": "pages/reconcile", "pages": ["reconcile"] },
+    { "root": "pages/orgsummary", "pages": ["orgsummary"] },
+    { "root": "pages/guide", "pages": ["guide"] },
+    { "root": "pages/trash", "pages": ["trash"] },
+    { "root": "pages/export", "pages": ["export"] },
+    { "root": "pages/appearance", "pages": ["appearance"] },
+    { "root": "pages/members", "pages": ["members"] },
+    { "root": "pages/contact", "pages": ["contact"] },
+    { "root": "pages/privacy", "pages": ["privacy"] },
+    { "root": "pages/advanced", "pages": ["advanced"] }
+  ],
+  "preloadRule": {
+    "pages/index/index": { "network": "wifi", "packages": ["pages/members", "pages/export", "pages/printer", "pages/reconcile"] },
+    "pages/mine/mine": { "network": "wifi", "packages": ["pages/members", "pages/export", "pages/printer", "pages/reconcile"] }
+  },
   "window": {
-    "backgroundTextStyle": "light",
+    "backgroundTextStyle": "dark",
     "navigationBarBackgroundColor": "#C8161D",
     "navigationBarTitleText": "慧礼记",
     "navigationBarTextStyle": "white"
@@ -74,8 +84,5 @@
   },
   "style": "v2",
   "lazyCodeLoading": "requiredComponents",
-  "sitemapLocation": "sitemap.json",
-  "usingComponents": {
-    "ad-slot": "/components/ad-slot/index"
-  }
+  "sitemapLocation": "sitemap.json"
 }

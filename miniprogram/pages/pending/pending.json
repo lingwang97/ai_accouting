@@ -1,5 +1,6 @@
 {
   "navigationBarTitleText": "待确认礼金",
+  "enablePullDownRefresh": true,
   "usingComponents": {
     "loading": "/components/loading/loading"
   }

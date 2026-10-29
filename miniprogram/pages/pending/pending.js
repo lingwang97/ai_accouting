@@ -1,13 +1,16 @@
 // pages/pending/pending.js — 待确认礼金：列表批量 / 逐笔大字 两种处理方式
 const req = require('../../utils/request.js');
+const { REC, isToConfirm } = require('../../utils/status.js');
 const fmt = require('../../utils/format.js');
 const confirm = require('../../utils/confirm.js');
 const notify = require('../../utils/notify.js');
 const theme = require('../../utils/theme.js');
 const perm = require('../../utils/perm.js');
 const { countOf, groupRecords } = require('../../utils/group.js');
+const poller = require('../../utils/poller.js');
+const pollcfg = require('../../utils/pollcfg.js');
 
-const POLL_MS = 5000;
+const POLL_MS = 10000; // 轮询只查计数（pendingStat，含「宾客未点完成」「最近未收到」两组的条数），任一变化才拉完整列表；另每 30 次兜底拉一次
 const MODE_KEY = 'pending_mode'; // 记住上次使用的处理方式
 
 Page({
@@ -28,14 +31,19 @@ Page({
     sheet: null,      // 列表模式批次明细弹层（当前打开的一组）
     notifyTip: '',    // 新礼金提醒未开启时提示
     busy: false,
-    canConfirm: true, // 没有「确认收礼」权限：只能查看列表
+    canConfirm: false, // 默认不显示确认操作，权限确定后才显示（有缓存身份时 onShow 同步设置，不闪烁）
+    roleReady: false,  // 权限是否已确定：未确定时不显示「没有权限」提示
     loaded: false,
     bookName: '',     // 当前礼簿名：待确认只处理当前礼簿
+    hiddenCount: 0,   // 待确认超过单次显示上限（100 笔）时，未显示的笔数
     otherCount: 0,    // 其他礼簿的待确认份数（提示回工作台切换）
-    unit: '礼簿'       // 机构模式称「场次」
+    unit: '礼簿',      // 机构模式称「场次」
+    netBad: false,    // 轮询网络失败：顶部提示条（不弹 toast）
+    loadErr: ''       // 首次加载失败的说明（v3.66.0）：不再显示「全部处理完了」，改为点此重试
   },
 
   onLoad() {
+    theme.early(this); // 首帧前同步套主题色（v3.70.1）
     this._list = [];  // 全部待确认（仅 JS 使用，不进 data，减少 setData 传输）
     let mode = 'list';
     try { mode = wx.getStorageSync(MODE_KEY) || 'list'; } catch (e) { /* 默认列表 */ }
@@ -43,16 +51,22 @@ Page({
   },
 
   onShow() {
+    this.clearTimer(); // 先清旧轮询，避免重复进入页面叠加
     theme.apply(this); // 主题色跟当前礼簿事由走
     const acc = getApp().globalData.account;
-    this.setData({ unit: acc && acc.orgMode ? '场次' : '礼簿' });
-    getApp().ensureRole().then(() => {
-      const canConfirm = perm.can('confirm');
-      this.setData(canConfirm ? { canConfirm } : { canConfirm, mode: 'list', selectMode: false });
-    });
+    const patch = { unit: acc && acc.orgMode ? '场次' : '礼簿', funeral: getApp().globalData.bookType === 'funeral' };
+    // 已有缓存身份：首次渲染前同步确定权限，避免先隐藏再闪出
+    if (getApp().globalData.role) Object.assign(patch, this.rolePatch());
+    this.setData(patch);
+    getApp().ensureRole().then(role => { if (role) this.setData(this.rolePatch()); }); // 查询失败（空串）时不下结论
     this.checkNotify();
     this.load(false);
-    this._timer = setInterval(() => this.load(true), POLL_MS);
+    this.resumeTimer();
+  },
+  /** 按当前身份算权限相关显示：没有确认权限时只能看列表 */
+  rolePatch() {
+    const canConfirm = perm.can('confirm');
+    return canConfirm ? { canConfirm, roleReady: true } : { canConfirm, roleReady: true, mode: 'list', selectMode: false };
   },
   /** 其他礼簿有待确认：回工作台切换当前礼簿 */
   goSwitch() { wx.switchTab({ url: '/pages/index/index' }); },
@@ -60,17 +74,50 @@ Page({
   onHide() { this.clearTimer(); },
   onUnload() { this.clearTimer(); },
   clearTimer() {
-    if (this._timer) { clearInterval(this._timer); this._timer = null; }
+    if (this._poller) this._poller.stop();
+  },
+
+  /** 轮询：先用轻接口查计数，变化了才拉完整列表 */
+  async poll() {
+    // 正在逐人改金额或查看批次明细：不刷新，避免列表在手下变动
+    if (this.data.busy || this.data.editor || this.data.sheet) return false;
+    this._tick = (this._tick || 0) + 1;
+    if (this._tick % 30 === 0) return this.load(true); // 兜底：条数没变但内容换了（如一组进、一组出）
+    let s;
+    try {
+      s = await req.recordStat({ withExtra: true });
+      if (this.data.netBad) this.setData({ netBad: false });
+    } catch (e) {
+      if (req.isNetErr(e) && !this.data.netBad) this.setData({ netBad: true });
+      return false;
+    }
+    if (Math.min(s.count, 100) !== countOf(this._list) || (s.other || 0) !== this.data.otherCount) return this.load(true);
+    // 两个分组靠条数变化触发刷新（宾客转账后超过 3 分钟未点完成会自己进入「未点完成」；未收到满 24 小时会自己移出）
+    if (s.stall >= 0 && Math.min(s.stall, 100) !== (this._stallN || 0)) return this.load(true);
+    if (s.rej >= 0 && Math.min(s.rej, 50) !== (this._rejN || 0)) return this.load(true);
+    return false;
   },
 
   /** 拉取待确认；silent=true 为轮询，有新礼金时震动 */
   async load(silent) {
-    if (this.data.busy) return;
+    if (this.data.busy) return false;
+    if (!silent && this._poller) this._poller.kick(); // 用户操作后恢复轮询频率
     try {
-      const { list, stalled, bookName, otherCount } = await req.recordPending();
+      // 轮询（silent）失败不弹 toast，由顶部提示条说明
+      const { list, stalled, rejected, bookName, otherCount, count } = await req.recordPending(true, { silent: true });
+      if (this.data.netBad || this.data.loadErr) this.setData({ netBad: false, loadErr: '' });
+      const hiddenCount = Math.max(0, (count || 0) - list.length); // 超过单次上限 100 笔的部分
+      // 轮询取回的内容与上次相同：不动界面（返回 false 让轮询放慢）
+      const sig = JSON.stringify([list.map(r => [r._id, r.status, r.amount, r.transferredAt]), (stalled || []).map(r => [r._id, r.status]), (rejected || []).map(r => r._id), bookName, otherCount, hiddenCount]);
+      if (silent && sig === this._sig) return false;
+      this._sig = sig;
+      this._stallN = (stalled || []).length; // 轮询用：两个分组的条数
+      this._rejN = (rejected || []).length;
       // 宾客没点「我已完成转账」的（含 24 小时内被自动取消的）：主家核对微信到账后可直接入簿
       this.setData({
-        stalled: groupRecords(stalled || []).map(g => ({ ...g, auto: g.status === 'cancelled', timeStr: fmt.time(g.createdAt) }))
+        stalled: groupRecords(stalled || []).map(g => ({ ...g, auto: g.status === REC.CANCELLED, timeStr: fmt.time(g.createdAt) })),
+        // 最近 24 小时内标记「未收到」的：点错了可以撤销
+        rejected: groupRecords(rejected || []).map(g => ({ ...g, timeStr: fmt.time(g.rejectedAt || g.createdAt) }))
       });
       if (silent && list.length > countOf(this._list)) wx.vibrateShort({ type: 'heavy', fail() {} });
       const picked = new Set(this._list.filter(r => r.picked).map(r => r._id));
@@ -80,20 +127,43 @@ Page({
         .sort((a, b) => new Date(a.transferredAt || a.createdAt) - new Date(b.transferredAt || b.createdAt));
       this._list = items;
       // 轮询只做一次 setData
-      const patch = { ...this.derive(), loaded: true, bookName: bookName || '', otherCount: otherCount || 0 };
+      const patch = { ...this.derive(), loaded: true, bookName: bookName || '', otherCount: otherCount || 0, hiddenCount };
       if (!items.length) patch.selectMode = false;
       this.setData(patch);
+      return true;
     } catch (e) {
-      this.setData({ loaded: true });
+      // 还没有任何数据：显示失败原因 + 重试，不显示「全部处理完了」（弱网时主家会误以为没有待确认）；已有列表：保留并顶部提示
+      const empty = !countOf(this._list) && !(this.data.stalled || []).length;
+      const patch = { loaded: true };
+      if (empty && !silent) patch.loadErr = req.errText(e, '待确认没加载出来');
+      else if (req.isNetErr(e)) patch.netBad = true;
+      else if (!silent) wx.showToast({ title: req.errText(e), icon: 'none' });
+      this.setData(patch);
+      return false;
     }
+  },
+
+  /** 加载失败「点此重试」 */
+  onRetryLoad() {
+    this.setData({ loadErr: '', loaded: false });
+    this._sig = '';
+    this.load(false);
+  },
+
+  /** 下拉刷新：强制重拉（含两个分组） */
+  async onPullDownRefresh() {
+    this._sig = ''; // 即使内容相同也重绘
+    await this.load(false);
+    wx.stopPullDownRefresh();
   },
 
   /** 从未成功收到提醒时，提示开启（确认礼金时会自动续订） */
   async checkNotify() {
     if (!notify.enabled()) return;
     try {
-      const { lastNotify } = await req.accountGet();
-      this.setData({ notifyTip: notify.tipText(lastNotify) });
+      const { lastNotify, giftNotify } = await req.accountGet();
+      notify.setGift(giftNotify);
+      this.setData({ notifyTip: notify.tipText(lastNotify, giftNotify) });
     } catch (e) { /* 静默 */ }
   },
 
@@ -178,6 +248,27 @@ Page({
       this.load(false);
     } catch (err) { /* toast 已提示 */ }
   },
+  /** 撤销「未收到」：整批恢复到标记前的状态（服务端 24 小时内有效） */
+  async onUnreject(e) {
+    const g = (this.data.rejected || []).find(x => x._id === e.currentTarget.dataset.id);
+    if (!g) return;
+    const ok = await new Promise(resolve => wx.showModal({
+      title: '撤销未收到',
+      content: `把 ${g.payerName} ￥${g.amountStr} 恢复为待确认？`,
+      confirmText: '撤销',
+      success: r => resolve(r.confirm),
+      fail: () => resolve(false)
+    }));
+    if (!ok) return;
+    const done = await this.run(async () => {
+      try { await req.payUnreject(g._id); return true; } catch (err) { return false; } // 失败 toast 已由 request.js 提示（如超过 24 小时）
+    });
+    if (done) {
+      wx.showToast({ title: '已撤销', icon: 'success' });
+      getApp().refreshBadge();
+    }
+    this.load(false);
+  },
   onStallAll() { this.setData({ stallAll: !this.data.stallAll }); },
 
   async onConfirm(e) {
@@ -185,7 +276,7 @@ Page({
     if (!g) return;
     const res = await this.run(() => confirm.confirmTransfer(g));
     if (res === 'edit') { this.onCloseSheet(); this.openEditor(g); }
-    else if (res) { this.removeLocal(g._id); if (g.status !== 'transferred') this.load(false); }
+    else if (res) { this.removeLocal(g._id); if (!isToConfirm(g)) this.load(false); }
   },
 
   /** 打开批次明细弹层（catchtap，不触发勾选） */
@@ -210,8 +301,8 @@ Page({
     const record = this.findById(e.currentTarget.dataset.id);
     if (!record) return;
     // 弹层里打开的是「宾客未点完成」中已自动取消的批次：按移除处理
-    if (record.status === 'cancelled') { this.onCloseSheet(); return this.onStallReject({ currentTarget: { dataset: { id: record._id } } }); }
-    if (await this.run(() => confirm.rejectTransfer(record))) { this.removeLocal(record._id); if (record.status !== 'transferred') this.load(false); }
+    if (record.status === REC.CANCELLED) { this.onCloseSheet(); return this.onStallReject({ currentTarget: { dataset: { id: record._id } } }); }
+    if (await this.run(() => confirm.rejectTransfer(record))) { this.removeLocal(record._id); if (!isToConfirm(record)) this.load(false); }
   },
 
   onToggleSelect() {
@@ -340,7 +431,9 @@ Page({
   },
   resumeTimer() {
     this.clearTimer();
-    this._timer = setInterval(() => this.load(true), POLL_MS);
+    // 智能刷新（v3.70.0）：有新转账后 10 分钟内 5 秒（加速窗口各页共用）；高峰模式 3 秒；间隔每次按当前身份取值，不用重建
+    if (!this._poller) this._poller = poller.create(() => this.poll(), { base: POLL_MS, boost: pollcfg.boostMs, peak: pollcfg.peakMs, hold: pollcfg.peakOn });
+    this._poller.start();
   },
 
   async onCardNo() {
@@ -367,6 +460,8 @@ Page({
   /** 本地立即移除已处理的一笔（或一批），逐笔模式自动切到下一笔 */
   removeLocal(id) {
     this._list = this._list.filter(r => r._id !== id);
+    this._sig = ''; // 本地已变：下次轮询无论如何刷新一次
+    if (this._poller) this._poller.kick();
     this.setData(this.derive());
   }
 });

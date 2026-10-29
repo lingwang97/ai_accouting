@@ -6,9 +6,12 @@
 .seg { margin-bottom: 20rpx; }
 .row-card .muted { margin-top: 6rpx; }
 .r-top { display: flex; justify-content: space-between; align-items: center; }
-.r-name { font-size: 32rpx; font-weight: 600; }
+.r-name { flex: 1; min-width: 0; font-size: 32rpx; font-weight: 600; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin-right: 16rpx; }
+.r-top .money, .st-row .money { flex-shrink: 0; white-space: nowrap; }
 .small { font-size: 22rpx; }
 .center { text-align: center; }
 .pad { padding: 40rpx 0; }
 .st-row { display: flex; justify-content: space-between; padding: 18rpx 0; border-bottom: 2rpx solid #f5f5f5; font-size: 30rpx; }
+.st-row > text:first-child { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin-right: 16rpx; }
+.st-row > text:last-child { flex-shrink: 0; white-space: nowrap; }
 .tip { margin-top: 20rpx; }

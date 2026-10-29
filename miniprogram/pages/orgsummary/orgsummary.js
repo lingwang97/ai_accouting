@@ -3,6 +3,7 @@ const req = require('../../utils/request.js');
 const fmt = require('../../utils/format.js');
 const scenes = require('../../utils/scenes.js');
 const theme = require('../../utils/theme.js');
+const perm = require('../../utils/perm.js');
 
 Page({
   data: {
@@ -16,7 +17,9 @@ Page({
     themeStyle: ''
   },
 
-  onLoad() {
+  async onLoad() {
+    theme.early(this); // 首帧前同步套主题色（v3.70.1）
+    if (!(await perm.guard('export', '你没有对账与导出的权限', { viewer: true }))) return; // 文案同 records.orgSummary
     // 最近 12 个月
     const months = ['全部'];
     const d = new Date();

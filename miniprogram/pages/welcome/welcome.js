@@ -23,6 +23,7 @@ Page({
   },
 
   onLoad(options) {
+    theme.early(this); // 首帧前同步套主题色（v3.70.1）
     const role = options.role === 'clerk' ? 'clerk' : 'host';
     this.setData({ role, slides: SLIDES[role] });
     try { wx.setStorageSync('guide_seen', true); } catch (e) { /* 忽略 */ }

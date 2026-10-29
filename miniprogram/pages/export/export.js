@@ -3,6 +3,7 @@ const req = require('../../utils/request.js');
 const fmt = require('../../utils/format.js');
 const openfile = require('../../utils/openfile.js');
 const theme = require('../../utils/theme.js');
+const perm = require('../../utils/perm.js');
 
 function presets() {
   const now = new Date();
@@ -26,6 +27,7 @@ Page({
     books: [{ _id: '', name: '按日期范围导出' }],
     bookIdx: 0,
     exporting: '',  // '' | 'pdf' | 'xlsx' | 'book'
+    viewer: false,    // 家人共享（只读）：只能按礼簿导出，不能备份
     pageLoading: true // 读取礼簿列表期间：转圈 + 不可操作
   },
 
@@ -33,18 +35,25 @@ Page({
     theme.apply(this); // 主题色跟当前礼簿事由走
   },
 
-  onLoad(options) {
+  async onLoad(options) {
+    theme.early(this); // 首帧前同步套主题色（v3.70.1）
+    const acc0 = getApp().globalData.account;
+    this.setData({ org: !!(acc0 && acc0.orgMode) });
+    if (!(await perm.guard('export', '你没有导出权限', { viewer: true }))) return; // 文案同 export 云函数
+    const viewer = getApp().globalData.role === 'viewer';
+    this.setData({ viewer });
     const list = presets();
     const month = list.find(p => p.key === 'month');
     this.setData({ presets: list, startDay: month.start, endDay: month.end, today: fmt.day(new Date()) });
-    this.loadBooks(options.bookId || '');
+    this.loadBooks(options.bookId || '', viewer);
   },
 
   /** 礼簿列表：选中某本礼簿时导出整本，不限日期 */
-  async loadBooks(bookId) {
+  async loadBooks(bookId, viewer) {
     try {
       const { list, activeBookId } = await req.bookList();
-      const books = [{ _id: '', name: '按日期范围导出' }, ...list];
+      // 家人共享只能按礼簿整本导出（服务端同样限制），不提供「按日期范围」
+      const books = viewer ? list : [{ _id: '', name: '按日期范围导出' }, ...list];
       const want = bookId || activeBookId;
       const idx = Math.max(0, books.findIndex(b => b._id === want));
       this.setData({ books, bookIdx: idx });
@@ -64,7 +73,12 @@ Page({
 
   onExportPdf() { this.doExport('pdf'); },
   onExportXlsx() { this.doExport('xlsx'); },
-  onExportBook() { this.doExport('book'); },
+  /** 传统礼簿 PDF：先到主题页选主题，确认后在那里导出 */
+  onExportBook() {
+    const b = this.data.books[this.data.bookIdx];
+    if (!b || !b._id) return wx.showToast({ title: '传统礼簿请选择一本礼簿整本导出', icon: 'none' });
+    wx.navigateTo({ url: `/pages/booktheme/booktheme?bookId=${b._id}` });
+  },
   onBackup() { this.doExport('backup'); },
 
   /** 云端生成文件 → 下载 → 打开预览（右上角可转发/保存） */
@@ -72,11 +86,10 @@ Page({
     if (this.data.exporting) return;
     const { startDay, endDay, books, bookIdx } = this.data;
     const bookId = books[bookIdx] ? books[bookIdx]._id : '';
-    if (format === 'book' && !bookId) return wx.showToast({ title: '传统礼簿请选择一本礼簿整本导出', icon: 'none' });
     if (format !== 'backup' && !bookId && startDay > endDay) return wx.showToast({ title: '开始日期不能晚于结束日期', icon: 'none' });
 
     this.setData({ exporting: format });
-    wx.showLoading({ title: '正在生成…', mask: true });
+    wx.showLoading({ title: '约需半分钟…', mask: true }); // 导出一般 10～30 秒，礼金多时接近 1 分钟（v3.65.2 提示预计时间）
     try {
       const params = format === 'backup' ? { format } : (bookId ? { format, bookId } : { format, startDay, endDay });
       const res = await req.exportFile(params);
@@ -84,6 +97,7 @@ Page({
       // 已下载到本机，立即删除云端文件，避免礼金明细通过链接外泄
       req.exportCleanup(res.fileID).catch(() => {});
       wx.hideLoading();
+      await openfile.notice(res);
       openfile.open(filePath, res.fileName);
     } catch (e) {
       wx.hideLoading();

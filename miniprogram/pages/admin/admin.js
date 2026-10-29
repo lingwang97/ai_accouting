@@ -3,11 +3,12 @@ const req = require('../../utils/request.js');
 const openfile = require('../../utils/openfile.js');
 const fmt = require('../../utils/format.js');
 const theme = require('../../utils/theme.js');
+const config = require('../../config.js');
 
 const INTERVALS = [5, 10, 15, 30];
 const FUNC_LABEL = {
   login: '登录', account: '主家信息', records: '礼簿 / 工作台', payment: '随礼 / 确认',
-  books: '礼簿管理', renqing: '人情往来', export: '导出'
+  books: '礼簿管理', renqing: '人情往来', qrcode: '礼簿码', export: '导出'
 };
 
 Page({
@@ -25,6 +26,11 @@ Page({
     planIdx: 1,
     subOpenid: '',
     subDays: '30',
+    subMode: 'add',     // add 加时间 | until 指定到期日 | cancel 取消订阅（v3.67.0）
+    subMonths: 0,       // 快捷：+1 / 3 / 12 个月（0 = 不用，按天数）
+    subUntil: '', today: '', maxDay: '',
+    open: { warmup: false, ads: false, pf: false, idx: false, plan: false, purge: false }, // 折叠块展开状态：每次进入都收起，不记忆（v3.67.0）
+    warmDirty: false, adsDirty: false, // 预热 / 广告有未保存改动（折叠时在摘要里提示）
     hostKeyword: '',
     hosts: [],          // 搜索结果 [{ ownerOpenid, accountName, orgName, planName, expiresStr }]
     hostIdx: -1,        // 选中的主家
@@ -34,12 +40,23 @@ Page({
     adSlots: [],        // [{ key, label, on }]
     indexResults: [],   // [{ col, name, ok, existed, msg }]
     indexSummary: '',
+    pf: null, pfLoading: false, // 上线前检查结果
+    fontLoading: false, // 上传导出字体中
     themeStyle: ''
   },
 
   onShow() { this.setData({ primary: theme.apply(this).primary }); },
 
+  onToggle(e) {
+    const k = e.currentTarget.dataset.k;
+    this.setData({ [`open.${k}`]: !this.data.open[k] });
+  },
+
   async onLoad() {
+    theme.early(this); // 首帧前同步套主题色（v3.70.1）
+    const d0 = new Date();
+    const day = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    this.setData({ today: day(d0), maxDay: day(new Date(d0.getFullYear() + 5, d0.getMonth(), d0.getDate())) });
     try {
       const d = await req.adminGet();
       const plans = Object.keys(d.plans).map(k => ({
@@ -63,12 +80,12 @@ Page({
     }
   },
 
-  onEnabled(e) { this.setData({ 'warmup.enabled': e.detail.value }); },
-  onMode(e) { this.setData({ 'warmup.mode': e.currentTarget.dataset.v }); },
-  onInterval(e) { this.setData({ 'warmup.intervalMin': Number(e.currentTarget.dataset.v) }); },
+  onEnabled(e) { this.setData({ 'warmup.enabled': e.detail.value, warmDirty: true }); },
+  onMode(e) { this.setData({ 'warmup.mode': e.currentTarget.dataset.v, warmDirty: true }); },
+  onInterval(e) { this.setData({ 'warmup.intervalMin': Number(e.currentTarget.dataset.v), warmDirty: true }); },
   onFunc(e) {
     const i = e.currentTarget.dataset.i;
-    this.setData({ [`funcs[${i}].on`]: !this.data.funcs[i].on });
+    this.setData({ [`funcs[${i}].on`]: !this.data.funcs[i].on, warmDirty: true });
   },
 
   async onSaveWarmup() {
@@ -77,7 +94,7 @@ Page({
     try {
       const warmup = { ...this.data.warmup, functions: this.data.funcs.filter(f => f.on).map(f => f.name) };
       const r = await req.adminSetWarmup(warmup);
-      this.setData({ warmup: r.warmup });
+      this.setData({ warmup: r.warmup, warmDirty: false });
       wx.showToast({ title: '已保存，下次触发生效', icon: 'none' });
     } catch (e) { /* toast 已提示 */ } finally {
       this.setData({ saving: false });
@@ -85,23 +102,65 @@ Page({
   },
 
   // —— 广告位（流量主） ——
-  onAdsEnabled(e) { this.setData({ 'ads.enabled': e.detail.value }); },
-  onAdsUnit(e) { this.setData({ 'ads.bannerUnit': e.detail.value.trim() }); },
-  onAdsFuneral(e) { this.setData({ 'ads.hideFuneral': e.detail.value }); },
-  onAdsPaid(e) { this.setData({ 'ads.paidHide': e.detail.value }); },
+  onAdsEnabled(e) { this.setData({ 'ads.enabled': e.detail.value, adsDirty: true }); },
+  onAdsUnit(e) { this.setData({ 'ads.bannerUnit': e.detail.value.trim(), adsDirty: true }); },
+  onAdsFuneral(e) { this.setData({ 'ads.hideFuneral': e.detail.value, adsDirty: true }); },
+  onAdsPaid(e) { this.setData({ 'ads.paidHide': e.detail.value, adsDirty: true }); },
   onAdSlot(e) {
     const i = e.currentTarget.dataset.i;
-    this.setData({ [`adSlots[${i}].on`]: !this.data.adSlots[i].on });
+    this.setData({ [`adSlots[${i}].on`]: !this.data.adSlots[i].on, adsDirty: true });
   },
   async onSaveAds() {
     const slots = {};
     this.data.adSlots.forEach(s => { slots[s.key] = s.on; });
     try {
       const r = await req.adminSetAds({ ...this.data.ads, slots });
-      this.setData({ ads: r.ads });
+      this.setData({ ads: r.ads, adsDirty: false });
       require('../../utils/ads.js').reset();
       wx.showToast({ title: '已保存（各端 10 分钟内生效）', icon: 'none' });
     } catch (e) { /* toast 已提示 */ }
+  },
+
+  // —— 上线前检查：密钥来源、必需集合、WX_APPSECRET、版本号；fix=true 时建缺失集合 ——
+  async onPreflight(e) {
+    if (this.data.pfLoading) return;
+    const fix = !!(e && e.currentTarget && e.currentTarget.dataset.fix);
+    this.setData({ pfLoading: true });
+    try {
+      const r = await req.adminPreflight(fix);
+      const SRC = { env: '环境变量 PERSON_KEY_SECRET', db: '已自动生成并保存在数据库', default: '内置默认值（数据库读取失败时的兜底，请排查）', '': '尚未使用（人情往来页首次打开时自动生成）' };
+      const keyText = (SRC[r.key.source] !== undefined ? SRC[r.key.source] : r.key.source) + (r.key.createdAt ? '，创建于 ' + fmt.day(r.key.createdAt) : '');
+      this.setData({
+        pf: {
+          keyText, keyOk: r.key.source === 'env' || r.key.source === 'db' || (!r.key.source && !r.key.generated),
+          missing: r.missing, colsOk: !r.missing.length, total: r.cols.length,
+          appSecret: r.hasAppSecret, version: config.VERSION, permCols: r.permCols.join('、'),
+          fontsOk: !r.fonts || r.fonts.ready, fontsMissing: r.fonts ? r.fonts.fonts.filter(f => !f.uploaded).map(f => f.label).join('、') : ''
+        }
+      });
+      if (fix) wx.showToast({ title: r.missing.length ? '仍有集合缺失' : '集合已齐全', icon: 'none' });
+    } catch (err) { /* toast 已提示 */ } finally {
+      this.setData({ pfLoading: false });
+    }
+  },
+
+  // —— 导出字体：一次性上传到云存储（fontsetup 云函数，管理员） ——
+  async onFontsUpload() {
+    if (this.data.fontLoading) return;
+    this.setData({ fontLoading: true });
+    wx.showLoading({ title: '上传中，请稍候', mask: true });
+    try {
+      await req.adminFontsUpload();
+      wx.hideLoading();
+      wx.showToast({ title: '字体已上传', icon: 'success' });
+      this.onPreflight();
+    } catch (e) {
+      wx.hideLoading();
+      // 云函数没部署 / 超时 / 无权限：给明确指引
+      wx.showModal({ title: '上传失败', content: (e && e.message && e.message !== 'biz error') ? e.message : '请确认已部署 fontsetup 云函数后重试', showCancel: false, confirmText: '知道了' });
+    } finally {
+      this.setData({ fontLoading: false });
+    }
   },
 
   // —— 数据库索引：一键创建（已存在的跳过） ——
@@ -136,7 +195,10 @@ Page({
     const i = Number(e.currentTarget.dataset.i);
     this.setData({ hostIdx: i, subOpenid: this.data.hosts[i].ownerOpenid, purgePv: null, purgeBackup: null, purgeBackedUp: false });
   },
-  onSubDays(e) { this.setData({ subDays: e.detail.value }); },
+  onSubDays(e) { this.setData({ subDays: e.detail.value, subMonths: 0 }); },
+  onSubMonths(e) { const n = Number(e.currentTarget.dataset.n); this.setData({ subMonths: this.data.subMonths === n ? 0 : n }); },
+  onSubMode(e) { this.setData({ subMode: e.currentTarget.dataset.m }); },
+  onSubUntil(e) { this.setData({ subUntil: e.detail.value }); },
   onPlan(e) { this.setData({ planIdx: Number(e.detail.value) }); },
 
   // —— 数据清除（不可恢复：预览 → 备份 → 输入名称确认） ——
@@ -327,29 +389,67 @@ Page({
   async loadLogs() {
     try {
       const { list } = await req.adminLogs();
-      const T = { purgeAccount: '清除账户', purgeBook: '删除礼簿', purgeOrphans: '清理无主数据', wipeAll: '清除全部测试数据', markLaunched: '标记正式上线' };
+      const T = { purgeAccount: '清除账户', purgeBook: '删除礼簿', purgeOrphans: '清理无主数据', wipeAll: '清除全部测试数据', markLaunched: '标记正式上线', setPlan: '订阅变更' };
+      const MODE = { add: '加时间', until: '指定到期日', cancel: '取消订阅' };
+      const pn = k => (this.data.plans.find(p => p.key === k) || {}).name || k || '';
+      const ps = (k, at) => `${pn(k)}${at ? '（到期 ' + fmt.day(at) + '）' : ''}`;
       this.setData({
         logs: list.map(l => ({
           _id: l._id,
           title: `${T[l.action] || l.action}${l.name ? '「' + l.name + '」' : ''}`,
           timeStr: fmt.dateTime(l.at),
-          detail: (l.removed || []).map(x => `${x.label} ${x.count}`).join('、') || '无数据'
+          detail: l.action === 'setPlan'
+            ? `${MODE[l.mode] || ''}：${ps(l.oldPlan, l.oldExpiresAt)} → ${ps(l.newPlan, l.newExpiresAt)}`
+            : (l.removed || []).map(x => `${x.label} ${x.count}`).join('、') || '无数据'
         }))
       });
     } catch (e) { /* toast 已提示 */ }
   },
 
   async onSetPlan() {
-    const p = this.data.plans[this.data.planIdx];
+    const mode = this.data.subMode;
+    const p = mode === 'cancel' ? { key: 'free', name: '免费版' } : this.data.plans[this.data.planIdx];
     if (!p) return;
     const openid = (this.data.subOpenid || '').trim();
     if (!openid) return wx.showToast({ title: '请填写主家 openid', icon: 'none' });
+    const opts = { mode };
+    if (mode === 'add') {
+      if (this.data.subMonths > 0) opts.months = this.data.subMonths;
+      else {
+        const d = Math.floor(Number(this.data.subDays));
+        if (!(d >= 1 && d <= 3660)) return wx.showToast({ title: '天数请填 1～3660', icon: 'none' });
+        opts.days = d;
+      }
+    }
+    if (mode === 'until') {
+      if (!this.data.subUntil) return wx.showToast({ title: '请选择到期日', icon: 'none' });
+      opts.until = this.data.subUntil;
+    }
+    const host = this.data.hosts[this.data.hostIdx];
+    const who = host ? '「' + host.accountName + '」' : '该主家';
+    // 指定到期日和取消会改变对方的会员状态，先确认（缩短要明确提示）
+    if (mode !== 'add') {
+      let content;
+      if (mode === 'cancel') content = `${who}将立即回到免费版，失去会员能力（已有数据不受影响）。`;
+      else {
+        const shorten = host && host.expiresStr && this.data.subUntil < host.expiresStr;
+        content = `${who}的${p.name}设为 ${this.data.subUntil} 到期。` + (shorten
+          ? `早于原到期日 ${host.expiresStr}，对方将提前失去会员能力。`
+          : host ? '' : '直接填 openid 时看不到原到期日；若早于原到期日，对方会提前失去会员能力。');
+      }
+      const okk = await new Promise(resolve => wx.showModal({
+        title: mode === 'cancel' ? '取消订阅' : '指定到期日', content, confirmText: mode === 'cancel' ? '取消订阅' : '确定', cancelText: '再想想',
+        success: r => resolve(!!r.confirm), fail: () => resolve(false)
+      }));
+      if (!okk) return;
+    }
     try {
-      const r = await req.adminSetPlan(openid, p.key, Number(this.data.subDays) || 30);
-      const host = this.data.hosts[this.data.hostIdx];
+      const r = await req.adminSetPlan(openid, p.key, opts);
+      const old = r.oldPlan === 'free' ? (r.oldPlanName || '免费版') : `${r.oldPlanName || r.oldPlan}${r.oldExpiresAt ? '，到期 ' + fmt.dateTime(r.oldExpiresAt) : ''}`;
+      const now = r.plan === 'free' ? (r.planName || '免费版') : `${r.planName || r.plan}${r.expiresAt ? '，到期 ' + fmt.dateTime(r.expiresAt) : ''}`;
       wx.showModal({
         title: '已生效',
-        content: `${host ? '「' + host.accountName + '」' : ''}当前套餐：${r.planName || r.plan}${r.expiresAt ? '，到期 ' + fmt.dateTime(r.expiresAt) : ''}。对方重新进入「我的」即可看到；开通机构版后在「主家信息」底部打开机构模式。`,
+        content: `${host ? '「' + host.accountName + '」' : ''}\n原：${old}\n现：${now}\n对方重新进入「我的」即可看到；开通机构版后在「我的 → 高级功能」打开机构模式。`,
         showCancel: false
       });
       if (host) this.onFindHosts(); // 刷新列表里的套餐显示

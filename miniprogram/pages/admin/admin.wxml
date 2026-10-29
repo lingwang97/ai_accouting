@@ -1,9 +1,13 @@
 <view class="container" style="{{themeStyle}}">
   <view class="card center muted" wx:if="{{loaded && !warmup}}">无管理员权限，或加载失败</view>
 
+  <wxs module="s" src="./admin.wxs"></wxs>
   <block wx:if="{{warmup}}">
-    <view class="section-title">预热（减少云函数冷启动）</view>
-    <view class="card">
+    <view class="fold " data-k="warmup" bindtap="onToggle">
+      <view class="fold-main"><view class="fold-title">预热（减少云函数冷启动）</view><view class="fold-sum {{warmDirty ? 'warn' : ''}}">{{s.warm(warmup, funcs, warmDirty)}}</view></view>
+      <text class="fold-arrow">{{open.warmup ? '▾' : '▸'}}</text>
+    </view>
+    <view class="card" wx:if="{{open.warmup}}">
       <view class="row between">
         <view>
           <view>启用预热</view>
@@ -16,7 +20,8 @@
         <view class="label">模式</view>
         <view class="chips">
           <view class="chip {{warmup.mode === 'always' ? 'on' : ''}}" data-v="always" bindtap="onMode">始终预热</view>
-          <view class="chip {{warmup.mode === 'paid' ? 'on' : ''}}" data-v="paid" bindtap="onMode">仅有付费用户时</view>
+          <view class="chip {{warmup.mode === 'paid' ? 'on' : ''}}" data-v="paid" bindtap="onMode">有付费用户或高峰模式时</view>
+          <view class="chip {{warmup.mode === 'peak' ? 'on' : ''}}" data-v="peak" bindtap="onMode">仅有人开高峰模式时</view>
         </view>
 
         <view class="label">间隔</view>
@@ -34,8 +39,11 @@
       <button class="btn-primary save" loading="{{saving}}" bindtap="onSaveWarmup">保存预热设置</button>
     </view>
 
-    <view class="section-title">广告位（流量主）</view>
-    <view class="card" wx:if="{{ads}}">
+    <view class="fold " data-k="ads" bindtap="onToggle">
+      <view class="fold-main"><view class="fold-title">广告位（流量主）</view><view class="fold-sum {{adsDirty ? 'warn' : ''}}">{{s.ads(ads, adSlots, adsDirty)}}</view></view>
+      <text class="fold-arrow">{{open.ads ? '▾' : '▸'}}</text>
+    </view>
+    <view class="card" wx:if="{{ads && open.ads}}">
       <view class="row between">
         <view>
           <view>展示广告</view>
@@ -60,8 +68,31 @@
       <button class="btn-primary save" bindtap="onSaveAds">保存广告设置</button>
     </view>
 
-    <view class="section-title">数据库索引</view>
-    <view class="card">
+    <view class="fold " data-k="pf" bindtap="onToggle">
+      <view class="fold-main"><view class="fold-title">上线前检查</view><view class="fold-sum {{s.pfBad(pf) ? 'bad' : ''}}">{{s.pf(pf)}}</view></view>
+      <text class="fold-arrow">{{open.pf ? '▾' : '▸'}}</text>
+    </view>
+    <view class="card" wx:if="{{open.pf}}">
+      <view class="muted small tip">检查往来人标识密钥、必需集合和 AppSecret 配置。缺失的集合可一键创建；索引请用下方「数据库索引」。</view>
+      <button class="btn-primary save" loading="{{pfLoading}}" bindtap="onPreflight">检查</button>
+      <block wx:if="{{pf}}">
+        <view class="idx-row"><text>往来人标识密钥</text><text class="{{pf.keyOk ? 'ok' : 'bad'}}">{{pf.keyText}}</text></view>
+        <view class="idx-row"><text>必需集合（{{pf.total}} 个）</text><text class="{{pf.colsOk ? 'ok' : 'bad'}}">{{pf.colsOk ? '已齐全' : '缺 ' + pf.missing.length + ' 个：' + pf.missing.join('、')}}</text></view>
+        <view class="idx-row"><text>WX_APPSECRET（system）</text><text class="{{pf.appSecret ? 'ok' : 'bad'}}">{{pf.appSecret ? '已配置' : '未配置，无法建索引'}}</text></view>
+        <view class="idx-row"><text>导出字体（云存储）</text><text class="{{pf.fontsOk ? 'ok' : 'bad'}}">{{pf.fontsOk ? '已就绪' : '未上传：' + pf.fontsMissing}}</text></view>
+        <button wx:if="{{!pf.fontsOk}}" class="btn-primary save" loading="{{fontLoading}}" bindtap="onFontsUpload">上传导出字体</button>
+        <view wx:if="{{!pf.fontsOk}}" class="muted small tip">传统礼簿 / 表格 PDF 需要字体。点一次即可（约 11MB，需等几十秒）；需先部署 fontsetup 云函数，上传成功后可在控制台删除它。</view>
+        <view class="idx-row"><text>小程序版本</text><text>{{pf.version}}</text></view>
+        <button wx:if="{{!pf.colsOk}}" class="btn-primary save" loading="{{pfLoading}}" data-fix="1" bindtap="onPreflight">一键创建缺失集合</button>
+        <view class="muted small tip">手动确认（云函数查不到集合权限）：在云开发控制台把下列集合都设为「所有用户不可读写」，其中 sys_config 存放密钥，尤其不能放开：{{pf.permCols}}。</view>
+      </block>
+    </view>
+
+    <view class="fold " data-k="idx" bindtap="onToggle">
+      <view class="fold-main"><view class="fold-title">数据库索引</view><view class="fold-sum {{''}}">{{s.idx(indexSummary)}}</view></view>
+      <text class="fold-arrow">{{open.idx ? '▾' : '▸'}}</text>
+    </view>
+    <view class="card" wx:if="{{open.idx}}">
       <view class="muted small tip">一键创建查询索引（已存在的会跳过）。首次使用需在云函数 system 的环境变量添加 WX_APPSECRET。</view>
       <button class="btn-primary save" loading="{{indexing}}" bindtap="onIndexes">一键创建 / 检查索引</button>
       <view class="idx-sum" wx:if="{{indexSummary}}">{{indexSummary}}</view>
@@ -71,8 +102,11 @@
       </view>
     </view>
 
-    <view class="section-title">套餐与订阅（预留）</view>
-    <view class="card">
+    <view class="fold " data-k="plan" bindtap="onToggle">
+      <view class="fold-main"><view class="fold-title">套餐与订阅（预留）</view><view class="fold-sum {{''}}">{{s.plans(plans)}}</view></view>
+      <text class="fold-arrow">{{open.plan ? '▾' : '▸'}}</text>
+    </view>
+    <view class="card" wx:if="{{open.plan}}">
       <view class="plan" wx:for="{{plans}}" wx:key="key">
         <view class="plan-name">{{item.name}} <text class="muted">（{{item.key}}）</text></view>
         <view class="muted small">{{item.featuresText}}</view>
@@ -90,24 +124,52 @@
       </view>
       <view class="muted small" style="margin:12rpx 0">也可直接填 openid（对方在「我的」长按版本号查看）</view>
       <input class="input" placeholder="主家 openid" value="{{subOpenid}}" bindinput="onSubOpenid" />
-      <view class="row">
+      <view class="seg" style="margin-top:20rpx">
+        <view class="seg-item {{subMode === 'add' ? 'on' : ''}}" data-m="add" bindtap="onSubMode">加时间</view>
+        <view class="seg-item {{subMode === 'until' ? 'on' : ''}}" data-m="until" bindtap="onSubMode">指定到期日</view>
+        <view class="seg-item {{subMode === 'cancel' ? 'on' : ''}}" data-m="cancel" bindtap="onSubMode">取消订阅</view>
+      </view>
+      <view class="row" wx:if="{{subMode !== 'cancel'}}">
         <picker range="{{plans}}" range-key="name" value="{{planIdx}}" bindchange="onPlan">
           <view class="input picker">{{plans[planIdx].name}} ▾</view>
         </picker>
-        <input class="input days" type="number" placeholder="天数" value="{{subDays}}" bindinput="onSubDays" />
-        <text class="muted">天</text>
       </view>
-      <button class="btn-outline save" bindtap="onSetPlan">确定</button>
+      <block wx:if="{{subMode === 'add'}}">
+        <view class="chips" style="margin-top:20rpx">
+          <view class="chip {{subMonths === 1 ? 'on' : ''}}" data-n="1" bindtap="onSubMonths">+1 个月</view>
+          <view class="chip {{subMonths === 3 ? 'on' : ''}}" data-n="3" bindtap="onSubMonths">+3 个月</view>
+          <view class="chip {{subMonths === 12 ? 'on' : ''}}" data-n="12" bindtap="onSubMonths">+1 年</view>
+        </view>
+        <view class="row">
+          <text class="muted">或按天数</text>
+          <input class="input days" type="number" placeholder="天数" value="{{subDays}}" bindinput="onSubDays" />
+          <text class="muted">天</text>
+        </view>
+        <view class="muted small tip">在对方当前到期日（未到期）或今天的基础上往后加，按日历月计算。</view>
+      </block>
+      <block wx:if="{{subMode === 'until'}}">
+        <view class="row">
+          <picker mode="date" value="{{subUntil}}" start="{{today}}" end="{{maxDay}}" bindchange="onSubUntil">
+            <view class="input picker">{{subUntil || '选择到期日'}} ▾</view>
+          </picker>
+        </view>
+        <view class="muted small tip">到期日当天 23:59:59 到期，可比原到期日更晚或更早；缩短会让对方立即失去会员能力。最晚 5 年后。</view>
+      </block>
+      <view class="muted small tip" wx:if="{{subMode === 'cancel'}}">取消后对方立即回到免费版，已有数据不受影响。</view>
+      <button class="{{subMode === 'cancel' ? 'btn-danger' : 'btn-outline'}} save" bindtap="onSetPlan">{{subMode === 'cancel' ? '取消该主家订阅' : '确定'}}</button>
     </view>
 
     <!-- 数据清除：不可恢复，均需预览、输入名称确认，并记操作日志 -->
-    <view class="section-title danger-title">数据清除（不可恢复）</view>
-    <view class="card">
+    <view class="fold danger-fold" data-k="purge" bindtap="onToggle">
+      <view class="fold-main"><view class="fold-title">数据清除</view><view class="fold-sum {{'bad'}}">{{'不可恢复，展开后先预览再确认'}}</view></view>
+      <text class="fold-arrow">{{open.purge ? '▾' : '▸'}}</text>
+    </view>
+    <view class="card" wx:if="{{open.purge}}">
       <view class="seg">
         <view class="seg-item {{purgeTab === 'account' ? 'on' : ''}}" data-t="account" bindtap="onPurgeTab">按账户</view>
         <view class="seg-item {{purgeTab === 'book' ? 'on' : ''}}" data-t="book" bindtap="onPurgeTab">按礼簿</view>
         <view class="seg-item {{purgeTab === 'orphan' ? 'on' : ''}}" data-t="orphan" bindtap="onPurgeTab">无主数据</view>
-        <view class="seg-item {{purgeTab === 'logs' ? 'on' : ''}}" data-t="logs" bindtap="onPurgeTab">日志</view>
+        <view class="seg-item {{purgeTab === 'logs' ? 'on' : ''}}" data-t="logs" bindtap="onPurgeTab">操作日志</view>
         <view class="seg-item {{purgeTab === 'wipe' ? 'on' : ''}}" wx:if="{{!launched}}" data-t="wipe" bindtap="onPurgeTab">全部</view>
       </view>
 
@@ -188,7 +250,7 @@
           <view>{{item.title}}</view>
           <view class="muted small">{{item.timeStr}} · {{item.detail}}</view>
         </view>
-        <view class="muted small" wx:if="{{!logs.length}}">暂无清除记录</view>
+        <view class="muted small" wx:if="{{!logs.length}}">暂无操作记录</view>
       </block>
     </view>
   </block>

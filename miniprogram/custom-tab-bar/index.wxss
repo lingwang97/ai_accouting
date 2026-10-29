@@ -13,3 +13,7 @@
   padding: 0 4px; border-radius: 8px; background: #FA5151; color: #fff; font-size: 10px; text-align: center;
   box-sizing: border-box;
 }
+
+.dot {
+  position: absolute; top: -2px; left: 19px; width: 8px; height: 8px; border-radius: 4px; background: #FA5151;
+}

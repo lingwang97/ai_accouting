@@ -17,6 +17,8 @@
 // 安全：所有数据都由云函数写入，云函数写入的文档没有 _openid 字段；带 _openid 的是客户端绕过云函数直接写库伪造的，
 // 一律忽略（集合权限另应设为「所有用户不可读写」）。
 
+const { MEMBER } = require('./status.js');
+
 /**
  * 记账人权限项（主家本人始终拥有全部；家人共享只读，一项都没有）
  * 只属于主家本人、不能授予的：移交、机构模式、外观设置、同意加入申请、确认收款码、清除数据
@@ -53,7 +55,7 @@ async function resolveCtx(db, openid) {
   ]);
   const user = (userRes && userRes.data[0]) || null;
   const own = (ownRes && ownRes.data[0]) || null;
-  const memberships = ((memRes && memRes.data) || []).filter(m => m.status !== 'pending');
+  const memberships = ((memRes && memRes.data) || []).filter(m => m.status !== MEMBER.PENDING);
 
   const asClerk = async m => {
     const acc = await safe(accounts.doc(m.aid).get());
@@ -169,4 +171,19 @@ function handlerName(ctx) {
   return (ctx.user && ctx.user.nickname) || '';
 }
 
-module.exports = { resolveCtx, handlerName, canBook, restricted, readonly, trusted, can, soloBook, workBook, PERMS, ALL_PERMS, DEFAULT_PERMS, cleanPerms };
+/**
+ * 礼簿短码：默认礼簿 _id（default_+32 位 aid=40 字符）超过小程序码 scene 32 字符上限，
+ * 用确定性短码（k + md5 前 24 位 = 25 字符）作 scene，映射存 book_codes 集合；旧的 32 位 id 码照旧可用
+ */
+const crypto = require('crypto');
+const shortCodeOf = bookId => 'k' + crypto.createHash('md5').update(String(bookId)).digest('hex').slice(0, 24);
+async function resolveCode(db, id) {
+  if (!/^k[0-9a-f]{24}$/.test(String(id || ''))) return id;
+  try {
+    const d = (await db.collection('book_codes').doc(id).get()).data;
+    if (trusted(d) && d.bookId) return d.bookId;
+  } catch (e) { /* 未登记 */ }
+  return id;
+}
+
+module.exports = { shortCodeOf, resolveCode, resolveCtx, handlerName, canBook, restricted, readonly, trusted, can, soloBook, workBook, PERMS, ALL_PERMS, DEFAULT_PERMS, cleanPerms };

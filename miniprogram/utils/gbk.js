@@ -1,14 +1,17 @@
 // utils/gbk.js — GBK 编码（热敏打印机中文字符必需）
-const TABLE = require('./gbk-table.js');
+// 码表较大：首次遇到非 ASCII 字符时才加载，冷启动与只打印纯数字 / 字母的场景不付出解析成本
+let TABLE = null;
+const table = () => TABLE || (TABLE = require('./gbk-table.js'));
 
 function encode(str) {
   const out = [];
   for (const ch of String(str)) {
     const cp = ch.codePointAt(0);
     if (cp < 0x80) {
-      out.push(cp);
+      // 文本中的控制字符（ESC/GS 等）会被打印机当指令执行：除换行外一律换成空格
+      out.push(cp < 0x20 && cp !== 0x0a || cp === 0x7f ? 0x20 : cp);
     } else {
-      const gbk = TABLE[cp];
+      const gbk = table()[cp];
       if (gbk !== undefined) {
         out.push((gbk >> 8) & 0xff, gbk & 0xff);
       } else {

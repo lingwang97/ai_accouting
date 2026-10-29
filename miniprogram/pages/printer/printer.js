@@ -10,23 +10,39 @@ Page({
     showAll: false,
     savedDevice: null,
     connected: false,
-    testing: false
+    testing: false,
+    slow: false // 稳定模式（本机）：打印机乱码 / 缺行时打开
   },
 
+  onLoad() { theme.early(this); }, // 首帧前同步套主题色（v3.70.1）
+
   onShow() {
-    theme.apply(this); // 主题色跟当前礼簿事由走
-    this.setData({ savedDevice: ble.loadDevice(), connected: printer.isConnected() });
+    const t = theme.apply(this); // 主题色跟当前礼簿事由走
+    this.setData({ primary: t.primary, savedDevice: ble.loadDevice(), connected: printer.isConnected(), slow: ble.isSlow() });
+  },
+
+  /** 稳定模式：每包 20 字节、按原速度发送；切换后断开，下次打印重新连接按新设置协商 */
+  onSlow(e) {
+    const on = !!e.detail.value;
+    ble.setSlow(on);
+    if (printer.isConnected()) ble.disconnect();
+    this.setData({ slow: on, connected: false });
   },
 
   onHide() {
-    ble.stopDiscovery();
-    ble.offFound();
-    this.setData({ discovering: false });
+    this._stopScan();
   },
 
   onUnload() {
+    this._stopScan();
+  },
+
+  /** 停止扫描并清定时器 */
+  _stopScan() {
+    clearTimeout(this._scanTimer);
     ble.stopDiscovery();
     ble.offFound();
+    if (this.data.discovering) this.setData({ discovering: false });
   },
 
   toggleShowAll() {
@@ -39,6 +55,12 @@ Page({
       await ble.openAdapter();
       this.setData({ devices: [], discovering: true });
       await ble.startDiscovery();
+      // 搜索 30 秒后自动停止，避免长时间扫描耗电
+      clearTimeout(this._scanTimer);
+      this._scanTimer = setTimeout(() => {
+        ble.stopDiscovery();
+        this.setData({ discovering: false });
+      }, 30000);
 
       ble.onFound(devs => {
         const list = this.data.devices.slice();
@@ -60,12 +82,14 @@ Page({
         });
       this.setData({ devices: this.data.devices });
     } catch (e) {
+      clearTimeout(this._scanTimer);
       wx.showToast({ title: e.message || '蓝牙不可用', icon: 'none' });
       this.setData({ discovering: false });
     }
   },
 
   onStopScan() {
+    clearTimeout(this._scanTimer);
     ble.stopDiscovery();
     this.setData({ discovering: false });
   },
@@ -75,7 +99,9 @@ Page({
     if (!dev) return;
     wx.showLoading({ title: '连接中' });
     try {
+      clearTimeout(this._scanTimer);
       ble.stopDiscovery();
+      this.setData({ discovering: false });
       await ble.connect(dev.deviceId);
       ble.saveDevice({ deviceId: dev.deviceId, name: dev.name });
       wx.hideLoading();

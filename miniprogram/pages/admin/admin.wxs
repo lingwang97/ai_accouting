@@ -1,0 +1,37 @@
+// 折叠标题行的一行摘要（随页面数据实时变化）
+var MODE = { always: '始终预热', paid: '仅付费时', peak: '仅高峰模式' };
+
+function warm(w, funcs, dirty) {
+  if (!w) return '';
+  var n = 0;
+  for (var i = 0; i < funcs.length; i++) { if (funcs[i].on) n++; }
+  var t = !w.enabled ? '已关闭' : (MODE[w.mode] || w.mode) + ' · 每 ' + w.intervalMin + ' 分钟 · ' + n + ' 个函数';
+  return dirty ? t + ' · 未保存' : t;
+}
+
+function ads(a, slots, dirty) {
+  if (!a) return '';
+  var n = 0;
+  for (var i = 0; i < slots.length; i++) { if (slots[i].on) n++; }
+  var t = a.enabled ? '已开启 · ' + n + ' 个位置' : '未开启';
+  return dirty ? t + ' · 未保存' : t;
+}
+
+function pfBad(p) { return !!p && !(p.keyOk && p.colsOk && p.appSecret && p.fontsOk); }
+
+function pf(p) {
+  if (!p) return '未检查';
+  return pfBad(p) ? '已检查：有待处理项' : '已检查：全部正常';
+}
+
+function idx(summary) {
+  return summary ? '已检查：' + summary : '未检查';
+}
+
+function plans(list) {
+  var names = [];
+  for (var i = 0; i < list.length; i++) { names.push(list[i].name); }
+  return names.join(' / ') + ' · 手动开通 / 延期';
+}
+
+module.exports = { warm: warm, ads: ads, pf: pf, pfBad: pfBad, idx: idx, plans: plans };

@@ -11,10 +11,12 @@
   <block wx:if="{{user}}">
     <!-- 用户信息与身份 -->
     <view class="card user-card">
-      <image class="avatar" src="{{user.avatar || '/assets/avatar-default.png'}}" mode="aspectFill" />
+      <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar"><image class="avatar" src="{{avatarSrc || '/assets/avatar-default.png'}}" mode="aspectFill" binderror="onAvatarError" /></button>
       <view class="info">
         <view class="name">{{user.nickname}}</view>
-        <view class="muted">{{account ? (role === 'clerk' ? '记账人 · 为「' + account.accountName + '」记账' : (role === 'viewer' ? '家人共享 · 查看「' + account.accountName + '」的礼簿' : '主家：' + account.accountName)) : '尚未完善主家信息'}}</view>
+        <view class="muted" wx:if="{{avatarBad}}">点头像可重新选择</view>
+        <view class="muted small" wx:else>点头像可更换</view>
+        <view class="muted">{{account ? (role === 'clerk' ? (account.orgMode ? '礼台人员' : '记账人') + ' · 为「' + account.accountName + '」记账' : (role === 'viewer' ? '家人共享 · 查看「' + account.accountName + '」的礼簿' : '主家：' + account.accountName)) : '尚未完善主家信息'}}</view>
         <view class="plan-tag" wx:if="{{planText}}">{{planText}}</view>
       </view>
       <view class="switch-id" wx:if="{{identities.length > 1 || role === 'clerk' || role === 'viewer'}}" bindtap="onSwitchIdentity">切换身份 ›</view>
@@ -36,14 +38,6 @@
       <view class="menu-item" bindtap="goMembers" wx:if="{{account}}">
         <image class="mi-icon" src="/assets/icons/people-m.svg" /><text class="mi-text">{{account.orgMode ? '礼台人员' : '记账人'}}</text><text class="arrow"><text class="muted">邀请 / 移交主家</text> ›</text>
       </view>
-      <view class="menu-item" wx:if="{{account && orgAllowed && role === 'owner'}}" bindtap="onOrgName">
-        <image class="mi-icon" src="/assets/icons/layers-m.svg" />
-        <view class="mi-text">
-          <view>机构模式</view>
-          <view class="muted">{{account.orgMode ? (account.orgName || '点此填写机构名称') : '一个账号办多场，每场单独设主家与收款码'}}</view>
-        </view>
-        <switch checked="{{account.orgMode}}" catchtap="noop" bindchange="onOrgSwitch" color="{{primary}}" />
-      </view>
     </view>
 
     </block>
@@ -60,16 +54,20 @@
       <view class="menu-item" bindtap="goAppearance" wx:if="{{account && role === 'owner'}}">
         <image class="mi-icon" src="/assets/icons/palette-m.svg" /><text class="mi-text">主题色</text><text class="arrow">›</text>
       </view>
+      <!-- 高级功能：机构模式、新礼金提醒、高峰模式等；所有有账户身份的角色都显示，无权限的项目在页内置灰并说明 -->
+      <view class="menu-item" bindtap="goAdvanced" wx:if="{{account}}">
+        <image class="mi-icon" src="/assets/icons/settings-m.svg" /><text class="mi-text">高级功能</text><text class="arrow">›</text>
+      </view>
     </view>
 
-    <block wx:if="{{account && ((role !== 'viewer' && pm.export) || role === 'owner')}}">
+    <block wx:if="{{account && (pm.export || role === 'viewer' || role === 'owner')}}">
       <view class="group-title">数据管理</view>
       <view class="card menu">
-        <view class="menu-item" bindtap="goExport" wx:if="{{role !== 'viewer' && pm.export}}">
-          <image class="mi-icon" src="/assets/icons/export-m.svg" /><text class="mi-text">导出与备份</text><text class="arrow">›</text>
+        <view class="menu-item" bindtap="goExport" wx:if="{{pm.export || role === 'viewer'}}">
+          <image class="mi-icon" src="/assets/icons/export-m.svg" /><text class="mi-text">{{role === 'viewer' ? '导出礼簿' : '导出与备份'}}</text><text class="arrow">›</text>
         </view>
         <view class="menu-item" bindtap="goTrash" wx:if="{{role === 'owner'}}">
-          <image class="mi-icon" src="/assets/icons/trash-m.svg" /><text class="mi-text">回收站</text><text class="arrow"><text class="muted">删除的礼簿保留 15 天</text> ›</text>
+          <image class="mi-icon" src="/assets/icons/trash-m.svg" /><text class="mi-text">回收站</text><text class="arrow"><text class="muted">删除的礼簿可恢复</text> ›</text>
         </view>
       </view>
     </block>
@@ -77,13 +75,13 @@
     <view class="group-title">帮助与隐私</view>
     <view class="card menu">
       <view class="menu-item" bindtap="goGuide">
-        <image class="mi-icon" src="/assets/icons/book-m.svg" /><text class="mi-text">使用教程</text><text class="arrow">›</text>
+        <image class="mi-icon" src="/assets/icons/book-m.svg" /><text class="mi-text">使用教程与常见问题</text><text class="arrow">›</text>
       </view>
-      <view class="menu-item" bindtap="onPrivacy">
-        <image class="mi-icon" src="/assets/icons/lock-m.svg" /><text class="mi-text">隐私说明</text><text class="arrow">›</text>
+      <view class="menu-item" bindtap="goPrivacy">
+        <image class="mi-icon" src="/assets/icons/lock-m.svg" /><text class="mi-text">隐私与数据</text><text class="arrow">›</text>
       </view>
-      <view class="menu-item purge" bindtap="confirmPurge">
-        <image class="mi-icon" src="/assets/icons/trash-m.svg" /><text class="mi-text">清除我的全部数据</text><text class="arrow">›</text>
+      <view class="menu-item" bindtap="goContact">
+        <image class="mi-icon" src="/assets/icons/chat-m.svg" /><text class="mi-text">联系我们</text><text class="arrow"><text class="muted">客服 / 意见反馈</text> ›</text>
       </view>
     </view>
 

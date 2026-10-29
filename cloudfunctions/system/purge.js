@@ -2,15 +2,21 @@
 // 源文件在 tools/cloud-shared/purge.js，由 tools/sync_shared.py 复制到 account、system 云函数目录，勿在云函数目录里直接修改。
 //
 // 范围（openid 为被清除的用户）：
-//   作为主家：主家信息（含合并别名）、礼簿、礼金记录、回收站里的礼簿与礼金记录、打印样式、导出 / 存档登记及文件、收款码与礼簿码图片、
+//   作为主家：主家信息（含合并别名）、礼簿、礼金记录、回收站里的礼簿与礼金记录、打印样式、导出 / 存档登记及文件、收款码与礼簿码图片、小票二维码缓存、
 //             记账人与家人共享关系、发出的邀请卡
-//   本人数据：送礼记录、办事提醒、同名合并记录、作为记账人 / 家人的加入关系、用户信息
+//   本人数据：送礼记录、办事提醒、同名合并记录、作为记账人 / 家人的加入关系、用户信息与头像文件、同名检查频率计数
 //   opts.subscription：套餐订阅（管理员清除时删，用户自己注销时保留开通记录）
 //   opts.guestRecords：他作为宾客在别人礼簿里的随礼记录（属于对方礼簿，默认不删）
 // 每类数据按条件反复删除直到删完，云函数中途超时后再执行一次即可继续。
 
 const ENVS = ['develop', 'trial', 'release'];
 const BATCH = 50; // cloud.deleteFile 单次最多 50 个文件
+
+/** 集合 / 文件不存在（-502005 等）：这类错误可以忽略，其余（超时、限流、网络）必须抛出，让调用方提示重试，不能当成「已删完」 */
+function isMissing(e) {
+  const code = String((e && (e.errCode !== undefined ? e.errCode : e.code)) || '');
+  return code === '-502005' || /DATABASE_COLLECTION_NOT_EXIST|STORAGE_FILE_NONEXIST|collection not exist|Db or Table not exist/i.test(String((e && (e.errMsg || e.message)) || ''));
+}
 
 /** 要清除的各类数据：[名称, 集合, 条件] */
 function targets(openid, opts) {
@@ -22,6 +28,7 @@ function targets(openid, opts) {
     ['送礼记录', 'gifts_out', { ownerOpenid: openid }],
     ['办事提醒', 'reminders', { ownerOpenid: openid }],
     ['打印样式', 'print_templates', { ownerOpenid: openid }],
+    ['礼簿短码', 'book_codes', { ownerOpenid: openid }],
     ['同名合并', 'person_alias', { ownerOpenid: openid }],
     ['记账人 / 家人', 'members', { ownerOpenid: openid }],
     ['加入的主家', 'members', { memberOpenid: openid }],
@@ -29,7 +36,8 @@ function targets(openid, opts) {
     ['发出的邀请卡', 'invites', { fromOpenid: openid }],
     ['主家信息', 'accounts', { ownerOpenid: openid }],
     ['合并的主家信息', 'accounts', { ownerOpenid: 'merged:' + openid }],
-    ['用户信息', 'users', { openid }]
+    ['用户信息', 'users', { openid }],
+    ['频率限制记录', 'rate_limits', { _id: 'nc_' + openid }] // 宾客同名检查的频率计数（v3.68.1）
   ];
   if (opts.guestRecords) list.unshift(['作为宾客的随礼', 'records', { payerOpenid: openid }]);
   return list;
@@ -66,8 +74,18 @@ async function fileIds(db, openid, ownPayCode) {
   if (prefix) {
     accs.map(a => a._id).concat(books.map(b => b._id)).forEach(id => {
       ENVS.forEach(env => files.push(`${prefix}/qrcodes/${id}-${env}.png`));
+      // 默认礼簿（id 超过 32 字符）的礼簿码文件用短码命名（见 ctx.shortCodeOf）
+      if (id.length > 32) {
+        const code = 'k' + require('crypto').createHash('md5').update(id).digest('hex').slice(0, 24);
+        ENVS.forEach(env => files.push(`${prefix}/qrcodes/${code}-${env}.png`));
+      }
     });
   }
+  // 头像（v3.68.1）：users.avatar 指向 avatars/ 下的文件，且没有别的用户在用时才删
+  files.push(...(await avatarFiles(db, openid)));
+  // 小票二维码的光栅缓存：正常礼金记录 + 回收站里的礼金记录（v3.59.1 补回收站）
+  files.push(...(await qrCacheFiles(db, 'records', { ownerOpenid: openid })));
+  files.push(...(await qrCacheFiles(db, 'trash_records', { ownerOpenid: openid })));
   // 回收站里的礼簿：删除时登记的文件（存档 PDF、本场收款码、礼簿码）
   try {
     (await db.collection('trash_books').where({ ownerOpenid: openid }).field({ files: true }).limit(1000).get()).data
@@ -76,13 +94,43 @@ async function fileIds(db, openid, ownPayCode) {
   return [...new Set(files.filter(Boolean))];
 }
 
+/** 本人头像文件（avatars/ 目录、没有被别人引用）；读取失败返回空 */
+async function avatarFiles(db, openid) {
+  try {
+    const u = (await db.collection('users').where({ openid }).field({ avatar: true }).limit(1).get()).data[0];
+    const f = u && !u._openid ? String(u.avatar || '') : '';
+    if (!/^cloud:\/\/[^/]+\/avatars\//.test(f)) return [];
+    const others = (await db.collection('users').where({ avatar: f, openid: db.command.neq(openid) }).count()).total;
+    return others ? [] : [f];
+  } catch (e) { return []; }
+}
+
+/**
+ * 小票二维码的光栅缓存文件（records / trash_records 的 rcptQrFileID，v3.58.0）：删记录前先取出来一并删除。
+ * 每页 1000 条，最多 20 页；集合不存在返回已取到的
+ */
+async function qrCacheFiles(db, col, cond) {
+  const files = [];
+  try {
+    for (let page = 0; page < 20; page++) {
+      const rows = (await db.collection(col).where({ ...cond, rcptQrFileID: db.command.exists(true) })
+        .field({ rcptQrFileID: true }).skip(page * 1000).limit(1000).get()).data;
+      rows.forEach(r => { if (r.rcptQrFileID && !r._openid) files.push(r.rcptQrFileID); });
+      if (rows.length < 1000) break;
+    }
+  } catch (e) { /* 集合不存在 */ }
+  return files;
+}
+
 async function deleteFiles(cloud, ids) {
   let n = 0;
   for (let i = 0; i < ids.length; i += BATCH) {
     try {
       const res = await cloud.deleteFile({ fileList: ids.slice(i, i + BATCH) });
       n += (res.fileList || []).filter(f => f.status === 0).length;
-    } catch (e) { /* 文件已不存在等，忽略 */ }
+    } catch (e) {
+      if (!isMissing(e)) throw e; // 文件已不存在可忽略；其他错误抛出，避免文件残留却提示已清除
+    }
   }
   return n;
 }
@@ -96,7 +144,7 @@ async function run(db, cloud, openid, opts = {}) {
     let total = 0;
     for (let i = 0; i < 200; i++) {
       let res;
-      try { res = await db.collection(col).where(cond).remove(); } catch (e) { break; } // 集合不存在
+      try { res = await db.collection(col).where(cond).remove(); } catch (e) { if (isMissing(e)) break; throw e; } // 只忽略集合不存在
       total += res.stats.removed;
       if (!res.stats.removed) break;
     }
@@ -107,11 +155,17 @@ async function run(db, cloud, openid, opts = {}) {
   // 导出 / 存档文件及登记
   for (let i = 0; i < 100; i++) {
     let rows = [];
-    try { rows = (await db.collection('exports').where({ ownerOpenid: openid }).limit(BATCH).get()).data; } catch (e) { break; }
+    try { rows = (await db.collection('exports').where({ ownerOpenid: openid }).limit(BATCH).get()).data; } catch (e) { if (isMissing(e)) break; throw e; }
     if (!rows.length) break;
     files += await deleteFiles(cloud, rows.filter(r => !r._openid).map(r => r.fileID));
     await db.collection('exports').where({ _id: db.command.in(rows.map(r => r._id)) }).remove();
     if (rows.length < BATCH) break;
+  }
+  // 他在小票二维码上认领过的随礼记录属于对方礼簿：不删，只解除认领，避免对方礼簿里残留他的标识
+  for (let i = 0; i < 200; i++) {
+    let res;
+    try { res = await db.collection('records').where({ claimedOpenid: openid }).update({ data: { claimedOpenid: '' } }); } catch (e) { if (isMissing(e)) break; throw e; }
+    if (!res.stats.updated) break;
   }
   const removed = [];
   for (const [label, col, cond] of targets(openid, opts)) {
@@ -125,4 +179,4 @@ async function run(db, cloud, openid, opts = {}) {
   return { removed, files };
 }
 
-module.exports = { preview, run };
+module.exports = { preview, run, isMissing, targets, qrCacheFiles, deleteFiles, avatarFiles };

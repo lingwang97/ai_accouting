@@ -1,6 +1,8 @@
 // 云函数 renqing — 人情往来：我送出的礼（手动登记）+ 按姓名查双方往来
 // 收到的礼来自 records（status=paid），送出的礼存 gifts_out
 const cloud = require('wx-server-sdk');
+const { ok, err } = require('./common.js');
+const { REC } = require('./status.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
@@ -8,31 +10,16 @@ const giftsOut = db.collection('gifts_out');
 const records = db.collection('records');
 
 const crypto = require('crypto');
+const { mergePage } = require('./outpage.js');
 const { MAX_AMOUNT } = require('./limits.js'); // 单笔金额上限（tools/cloud-shared/limits.js）
 
 /*
  * 往来人标识 o:<微信身份>:<姓名> 里含宾客（或主家）的 openid，不直接交给前端：
  * 出参里的 o: 标识确定性加密为 h:<密文>:<姓名>，入参再解密还原，云函数内部和数据库仍用 o: 标识
  */
-const KEY_SECRET = crypto.createHash('sha256').update('huilj.person-key.v1').digest();
-const KEY_IV = Buffer.alloc(16, 0); // 固定 IV：同一个人每次得到同一个标识，前端可用来比较
-function hideKey(k) {
-  const m = /^o:([\w-]{1,64}):(.*)$/.exec(k);
-  if (!m) return k;
-  const c = crypto.createCipheriv('aes-256-cbc', KEY_SECRET, KEY_IV);
-  const enc = Buffer.concat([c.update(m[1], 'utf8'), c.final()]).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  return `h:${enc}:${m[2]}`;
-}
-function showKey(k) {
-  const m = /^h:([\w-]{1,128}):(.*)$/.exec(k);
-  if (!m) return k;
-  try {
-    const d = crypto.createDecipheriv('aes-256-cbc', KEY_SECRET, KEY_IV);
-    const b64 = m[1].replace(/-/g, '+').replace(/_/g, '/');
-    const oid = Buffer.concat([d.update(Buffer.from(b64, 'base64')), d.final()]).toString('utf8');
-    return /^[\w-]{1,64}$/.test(oid) ? `o:${oid}:${m[2]}` : '';
-  } catch (e) { return ''; }
-}
+// 密钥：环境变量 PERSON_KEY_SECRET > 集合 sys_config/person_key（首次使用自动生成）> 旧默认值（仅数据库读不到时兜底），见 personkey.js
+const PK = require('./personkey.js').create(db);
+
 /** 递归替换对象里的标识：出参 hideKey，入参 showKey */
 function mapKeys(v, fn) {
   if (typeof v === 'string') return fn(v);
@@ -63,8 +50,9 @@ exports.main = async (event) => {
   if (!OPENID) return err('未获取到用户身份');
   try {
     await ensureCol('gifts_out');
-    event = mapKeys(event, showKey); // 前端传回的 h: 标识还原为 o:
-    return mapKeys(await route(OPENID, event), hideKey); // 返回前把 o: 标识加密
+    const key = await PK.getKey();
+    event = mapKeys(event, k => PK.showKeyWith(key, k)); // 前端传回的 h: 标识还原为 o:
+    return mapKeys(await route(OPENID, event), k => PK.hideKeyWith(key, k)); // 返回前把 o: 标识加密
   } catch (e) {
     console.error('renqing', event.action, e);
     return err('人情往来操作失败，请稍后重试');
@@ -79,6 +67,7 @@ async function route(OPENID, event) {
       case 'remindSave': return await remindSave(OPENID, event.remind, event.subscribed === true, event.envVersion);
       case 'remindDone': return await remindDone(OPENID, event.id, event.done !== false);
       case 'remindDelete': return await remindDelete(OPENID, event.id);
+      case 'remindClearDone': return await remindClearDone(OPENID);
       case 'outSave': return await outSave(OPENID, event.gift);
       case 'outDelete': return await outDelete(OPENID, event.id);
       case 'query': return await query(OPENID, event.key || (event.name ? 'n:' + event.name : ''));
@@ -100,7 +89,7 @@ const reminders = db.collection('reminders');
 async function remindList(openid) {
   await ensureCol('reminders');
   const [todo, done] = await Promise.all([
-    reminders.where({ ownerOpenid: openid, done: false }).orderBy('date', 'asc').limit(100).get(),
+    reminders.where({ ownerOpenid: openid, done: false }).orderBy('date', 'asc').limit(200).get(), // 与新建上限（200）一致
     reminders.where({ ownerOpenid: openid, done: true }).orderBy('date', 'desc').limit(20).get()
   ]);
   return ok({ list: todo.data, done: done.data });
@@ -164,6 +153,13 @@ async function remindDelete(openid, id) {
   return ok({ removed: 1 });
 }
 
+/** 清除本人所有已处理的提醒（只删 done:true，待办不动；返回删除条数） */
+async function remindClearDone(openid) {
+  await ensureCol('reminders');
+  const res = await reminders.where({ ownerOpenid: openid, done: true }).remove();
+  return ok({ removed: (res.stats && res.stats.removed) || 0 });
+}
+
 /** YYYY-MM-DD 加减天数 */
 function shiftDay(day, n) {
   const t = new Date(day + 'T00:00:00Z');
@@ -171,24 +167,54 @@ function shiftDay(day, n) {
   return t.toISOString().slice(0, 10);
 }
 
-/** 我送出的礼：手动登记 + 用慧礼记扫码随礼且主家已确认入簿的（自动），合并分页 */
+/**
+ * 我送出的礼：手动登记 + 用慧礼记扫码随礼且主家已确认入簿的（自动），合并分页
+ * 分页方案：手动登记由数据库按 date、createdAt、_id 倒序只取前 offset+size 条，自动送礼（条数少）整体取回，
+ * 两路按同一全序合并后切片（见 outpage.js，本地模拟验证不重不漏）；total / sum 用 count + 聚合，不再每页拉全量
+ */
 async function outList(openid, event) {
   const page = Math.max(1, Number(event.page) || 1);
   const pageSize = Math.min(50, Math.max(1, Number(event.pageSize) || 20));
-  const [manual, auto] = await Promise.all([
-    fetchAll(giftsOut, { ownerOpenid: openid }, {
-      toName: true, toKey: true, relation: true, event: true, eventType: true, amount: true, date: true, remark: true, createdAt: true
-    }),
+  const offset = (page - 1) * pageSize;
+  const kw = String(event.keyword || '').trim().slice(0, 20);
+  const cond = kw
+    ? { ownerOpenid: openid, toName: db.RegExp({ regexp: kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), options: '' }) }
+    : { ownerOpenid: openid };
+  const need = Math.min(offset + pageSize, MAX_ROWS);
+  const FIELDS = { toName: true, toKey: true, relation: true, event: true, eventType: true, amount: true, date: true, remark: true, createdAt: true };
+  const topManual = async () => {
+    const out = [];
+    while (out.length < need) {
+      const want = Math.min(1000, need - out.length);
+      const res = await giftsOut.where(cond).field(FIELDS)
+        .orderBy('date', 'desc').orderBy('createdAt', 'desc').orderBy('_id', 'desc')
+        .skip(out.length).limit(want).get();
+      out.push(...res.data);
+      if (res.data.length < want) break;
+    }
+    return out;
+  };
+  const manualSum = async () => {
+    try {
+      const r = await giftsOut.aggregate().match(cond)
+        .group({ _id: null, fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) }).end();
+      return Math.round(((r.list && r.list[0]) || { fen: 0 }).fen);
+    } catch (e) { // 聚合失败：退回只取金额字段累加
+      const rows = await fetchAll(giftsOut, cond, { amount: true });
+      return rows.reduce((t, g) => t + Math.round(g.amount * 100), 0);
+    }
+  };
+  const [top, cnt, fenManual, autoAll] = await Promise.all([
+    topManual(),
+    giftsOut.where(cond).count(),
+    manualSum(),
     autoGiven(openid)
   ]);
-  let all = manual.concat(auto);
-  const kw = String(event.keyword || '').trim().slice(0, 20);
-  if (kw) all = all.filter(g => String(g.toName).includes(kw));
-  all.sort((a, b) => String(b.date).localeCompare(String(a.date)) || (new Date(b.createdAt) - new Date(a.createdAt)));
-  const fen = all.reduce((t, g) => t + Math.round(g.amount * 100), 0);
+  const auto = kw ? autoAll.filter(g => String(g.toName).includes(kw)) : autoAll;
+  const fen = fenManual + auto.reduce((t, g) => t + Math.round(g.amount * 100), 0);
   return ok({
-    list: all.slice((page - 1) * pageSize, page * pageSize).map(({ ownerOpenid, ...g }) => g), // 不把主家的 openid 给前端
-    total: all.length,
+    list: mergePage(top, auto, offset, pageSize).map(({ ownerOpenid, ...g }) => g), // 不把主家的 openid 给前端
+    total: cnt.total + auto.length,
     sum: fen / 100,
     page,
     pageSize
@@ -199,7 +225,7 @@ async function outList(openid, event) {
  * 自动"送出的礼"：我作为宾客扫码随礼、主家已确认入簿的记录
  */
 async function autoGiven(openid) {
-  const recs = await fetchAll(records, { payerOpenid: openid, status: 'paid' }, {
+  const recs = await fetchAll(records, { payerOpenid: openid, status: REC.PAID }, {
     aid: true, ownerOpenid: true, amount: true,
     relation: true, remark: true, themeName: true, bookType: true, payDay: true, paidAt: true, createdAt: true,
     batchIdx: true
@@ -281,9 +307,10 @@ let truncated = false; // 本次统计是否因超过 MAX_ROWS 被截断（每�
 async function fetchAll(col, cond, fields) {
   const out = [];
   while (out.length < MAX_ROWS) {
-    const res = await col.where(cond).field(fields).orderBy('_id', 'asc').skip(out.length).limit(100).get(); // 固定顺序，翻页不重不漏
+    const want = Math.min(1000, MAX_ROWS - out.length); // 云函数单次最多 1000 条
+    const res = await col.where(cond).field(fields).orderBy('_id', 'asc').skip(out.length).limit(want).get(); // 固定顺序，翻页不重不漏
     out.push(...res.data);
-    if (res.data.length < 100) break;
+    if (res.data.length < want) break;
   }
   if (out.length >= MAX_ROWS) truncated = true;
   return out;
@@ -293,7 +320,7 @@ async function fetchAll(col, cond, fields) {
 async function buildPersons(openid) {
   let aliases = {};
   const [recs, gifts, auto] = await Promise.all([
-    fetchAll(records, { ownerOpenid: openid, status: 'paid' }, {
+    fetchAll(records, { ownerOpenid: openid, status: REC.PAID }, {
       payerOpenid: true, payerName: true, amount: true, nameTag: true, personKey: true,
       relation: true, remark: true, themeName: true, bookType: true, payDay: true, createdAt: true
     }),
@@ -347,13 +374,22 @@ async function buildPersons(openid) {
   }
 
   // 自动送礼：对方（主家）若也随过礼给我，按微信身份并入同一人
+  // 按「主家 openid」预建索引（key 形如 o:<openid>:<姓名>），避免每条自动记录都遍历全部往来人；保留「第一个匹配」语义
+  const byOwner = new Map();
+  const indexPerson = p => {
+    const m = /^o:([^:]+):/.exec(p.key);
+    if (m && !byOwner.has(m[1])) byOwner.set(m[1], p);
+  };
+  persons.forEach(indexPerson);
   for (const g of auto) {
     const entry = {
       _id: g._id, rid: g.rid, auto: true, date: g.date, event: g.event, eventType: g.eventType,
       relation: g.relation, remark: g.remark, amount: g.amount, counted: true
     };
-    const same = [...persons.values()].find(p => p.key.startsWith(`o:${g.ownerOpenid}:`));
-    (same || get(g.toKey, g.toName)).given.push(entry);
+    const same = byOwner.get(String(g.ownerOpenid));
+    const target = same || get(g.toKey, g.toName);
+    if (!same) indexPerson(target);
+    target.given.push(entry);
   }
 
   // 只有姓名的条目：归到"姓名"这个人（主家可在往来明细里合并 / 移动）
@@ -468,7 +504,7 @@ async function moveEntry(openid, e) {
 const PEOPLE_MAX = 300;
 async function people(openid) {
   truncated = false;
-  const cond = { ownerOpenid: openid, status: 'paid' }; // 与 buildPersons 收礼口径一致：本人礼簿已入簿
+  const cond = { ownerOpenid: openid, status: REC.PAID }; // 与 buildPersons 收礼口径一致：本人礼簿已入簿
   const [persons, cnt, agg] = await Promise.all([
     buildPersons(openid),
     records.where(cond).count(),
@@ -524,5 +560,3 @@ async function query(openid, key) {
 }
 
 const escapeReg = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const ok = data => ({ code: 0, msg: 'ok', data });
-const err = msg => ({ code: 1, msg, data: null });

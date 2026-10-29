@@ -31,6 +31,7 @@ Page({
   },
 
   onLoad(options) {
+    theme.early(this); // 首帧前同步套主题色（v3.70.1）
     const app = getApp();
     this.setData({ today: fmt.day(new Date()) });
     if (options.edit && app.globalData.editRemind) {
@@ -121,6 +122,7 @@ Page({
         _id: d._id || undefined, name: d.name.trim(), personKey: d.personKey, eventType: d.eventType,
         event: d.event, date: d.date, remindAt: `${d.remindDay} ${d.remindTime}`, note: d.note, location: d.location
       }, subscribed);
+      getApp().refreshBadge(); // 往来红点立即更新
       wx.showToast({ title: '已保存', icon: 'success' });
       setTimeout(() => wx.navigateBack(), 500);
     } catch (e) { /* toast 已提示 */ } finally {
@@ -137,6 +139,7 @@ Page({
         if (!res.confirm) return;
         try {
           await req.remindDelete(this.data._id);
+          getApp().refreshBadge();
           wx.showToast({ title: '已删除', icon: 'success' });
           setTimeout(() => wx.navigateBack(), 500);
         } catch (e) { /* toast 已提示 */ }

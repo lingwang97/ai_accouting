@@ -1,7 +1,8 @@
+<wxs module="o" src="/utils/orgtext.wxs"></wxs>
 <view class="container" style="{{themeStyle}}">
   <view class="card head">
     <picker range="{{books}}" range-key="name" value="{{bookIdx}}" bindchange="onBook">
-      <view class="book-pick">{{books[bookIdx].name || '当前礼簿'}} ▾</view>
+      <view class="book-pick">{{books[bookIdx].name || o.t('当前礼簿', org)}} ▾</view>
     </picker>
     <view class="seg">
       <view class="seg-item {{range === 'all' ? 'on' : ''}}" data-v="all" bindtap="onRange">全部</view>
@@ -15,6 +16,7 @@
       <view class="muted">已入簿</view>
       <view class="t-sum money">￥{{r.paid.sumStr}}</view>
       <view class="muted">{{r.paid.count}} 份</view>
+      <view class="recalc-link" wx:if="{{canRecalc}}" bindtap="onRecalc">{{o.t("合计和礼簿页对不上？重算整本礼簿的合计 ›", org)}}</view>
     </view>
 
     <!-- 按支付方式 -->
@@ -55,7 +57,7 @@
 
     <!-- 按记账人 -->
     <view class="card" wx:if="{{r.handlers.length}}">
-      <view class="section-title">按记账人</view>
+      <view class="section-title">按{{staffWord || '记账人'}}</view>
       <view class="h-row" wx:for="{{r.handlers}}" wx:key="name">
         <view class="row"><text>{{item.name}}</text><text><text class="muted">{{item.count}} 份 · </text>￥{{item.sumStr}}</text></view>
         <view class="muted small" wx:if="{{item.cashCount}}">其中现金 {{item.cashCount}} 份 · ￥{{item.cashSumStr}}</view>
@@ -70,6 +72,6 @@
   </block>
 
   <loading show="{{loading && !r}}" rows="4" />
-  <view class="muted center pad" wx:if="{{!loading && !r}}">暂无可对账的礼簿</view>
+  <view class="muted center pad" wx:if="{{!loading && !r}}">{{o.t("暂无可对账的礼簿", org)}}</view>
   <canvas type="2d" id="reconCanvas" class="offscreen"></canvas>
 </view>

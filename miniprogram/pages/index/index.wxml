@@ -1,9 +1,14 @@
+<wxs module="o" src="/utils/orgtext.wxs"></wxs>
 <view class="page tab-page" style="{{themeStyle}}">
   <!-- ===== 工作台：主家 / 记账人 ===== -->
   <block wx:if="{{mode === 'host'}}">
     <view class="role-line ro" wx:if="{{readonly}}">只读 · 家人共享「{{account.accountName}}」的礼簿</view>
     <view class="role-line" wx:elif="{{account.orgMode}}">机构 · {{account.orgName || account.accountName}}<text wx:if="{{role === 'clerk'}}"> · 礼台人员</text></view>
     <view class="role-line" wx:elif="{{role === 'clerk'}}">记账人 · 为「{{account.accountName}}」记账</view>
+
+    <!-- 高峰模式进行中：点击进高级功能（可提前关闭），到期自动消失 -->
+    <view class="net-bar" wx:if="{{netBad}}" bindtap="onNetRetry">网络不稳定，数据可能不是最新 · 点此刷新</view>
+    <view class="peak-bar" wx:if="{{peakText}}" bindtap="goAdvanced">高峰模式进行中 · 剩 {{peakText}} ›</view>
 
     <!-- 主家待办（不可忽略，处理后才消失）：收成一行小红点，不占首屏 -->
     <view class="todo-line" wx:if="{{role === 'owner' && (account.payCodeCheck || joinCount)}}">
@@ -13,7 +18,7 @@
 
     <!-- 老用户：使用教程入口，✕ 关闭后不再显示 -->
     <view class="tip-bar guide-tip" wx:if="{{guideTip}}" bindtap="goGuide">
-      <text class="tip-text">第一次使用？看看使用教程 ›</text>
+      <text class="tip-text">使用教程 / 常见问题 ›</text>
       <text class="guide-close" catchtap="onCloseGuideTip">✕</text>
     </view>
 
@@ -27,14 +32,14 @@
       </view>
     </block>
     <!-- 没有可记的礼簿 -->
-    <view class="warn-card" wx:if="{{noBook === 'ended'}}">你负责的礼簿已结束（归档、删除或移交），暂时不能出示礼簿码和登记，请联系主家重新安排</view>
-    <view class="warn-card" wx:elif="{{noBook === 'none' && !readonly}}" bindtap="goBooks">还没有当前礼簿：请先在「礼簿管理」里新建或选择一本，宾客的礼金才知道记到哪里 ›</view>
+    <view class="warn-card" wx:if="{{noBook === 'ended'}}">{{o.t("你负责的礼簿已结束（归档、删除或移交），暂时不能出示礼簿码和登记，请联系主家重新安排", account.orgMode)}}</view>
+    <view class="warn-card" wx:elif="{{noBook === 'none' && !readonly}}" bindtap="goBooks">{{o.t("还没有当前礼簿：请先在「礼簿管理」里新建或选择一本，宾客的礼金才知道记到哪里 ›", account.orgMode)}}</view>
 
     <!-- 当前礼簿 -->
     <view class="book-card" bindtap="goRecords">
       <view class="bc-top">
         <view class="bc-title" catchtap="{{canSwitch ? 'onSwitchBook' : ''}}">
-          <view class="bc-name">{{book ? (book.hostName ? book.hostName + ' · ' + book.name : book.name) : '我的礼簿'}}</view>
+          <view class="bc-name">{{book ? (book.hostName ? book.hostName + ' · ' + book.name : book.name) : o.t('我的礼簿', account.orgMode)}}</view>
           <view class="bc-meta" wx:if="{{book}}">{{book.typeLabel}}<text wx:if="{{book.date}}"> · {{book.date}}</text></view>
         </view>
         <view class="bc-switch-btn" wx:if="{{canSwitch}}" hover-class="bc-switch-hover" catchtap="onSwitchBook">⇅ 切换{{account.orgMode ? '场次' : '礼簿'}}</view>
@@ -45,7 +50,7 @@
         <text class="bc-cnt">{{book ? book.count : 0}} 份</text>
       </view>
       <view class="bc-foot">
-        <text wx:if="{{todayCount !== (book ? book.count : 0) || todayBook !== (book ? book.count : 0)}}">今日新增{{restricted ? '' : '（全部礼簿）'}} ￥{{todaySum}} · {{todayCount}} 份</text>
+        <text wx:if="{{todayCount !== (book ? book.count : 0) || todayBook !== (book ? book.count : 0)}}">今日新增{{restricted ? '' : o.t('（全部礼簿）', account.orgMode)}} ￥{{todaySum}} · {{todayCount}} 份</text>
         <text>明细 ›</text>
       </view>
     </view>
@@ -58,7 +63,7 @@
 
     <!-- 提醒未开启（家人共享不提醒） -->
     <view class="tip-bar" wx:if="{{notifyTip && !readonly && !notifyOff}}" bindtap="onSubscribe">
-      <image class="tip-icon" src="/assets/icons/bell-r.svg" />
+      <image class="tip-icon" src="/assets/icons/bell-{{themeIcon || 'r'}}.svg" />
       <text class="tip-text">{{notifyTip}}</text>
       <text class="tip-go">开启 ›</text>
       <text class="guide-close" catchtap="onCloseNotify">✕</text>
@@ -108,12 +113,12 @@
       <view class="g-item" hover-class="g-hover" wx:if="{{pm.show}}" bindtap="goPrinter">
         <view class="g-icon"><image src="/assets/icons/printer-w.svg" /></view>
         <view class="g-title">打印机</view>
-        <view class="g-sub {{printerName ? 'ok' : ''}}">{{printerName ? '已连接' : '未连接'}}</view>
+        <view class="g-sub {{printerStatus === 'connected' ? 'ok' : (printerStatus === 'paired' ? 'warn' : '')}}">{{printerStatus === 'connected' ? '已连接' : (printerStatus === 'paired' ? '已配对 · 未连接' : '未配对')}}</view>
       </view>
       <view class="g-item" hover-class="g-hover" wx:if="{{pm.export}}" bindtap="goReconcile">
         <view class="g-icon"><image src="/assets/icons/receipt-w.svg" /></view>
         <view class="g-title">一键对账</view>
-        <view class="g-sub">按方式、记账人汇总</view>
+        <view class="g-sub">按方式、{{account.orgMode ? '礼台人员' : '记账人'}}汇总</view>
       </view>
       <view class="g-item" hover-class="g-hover" bindtap="goBooks">
         <view class="g-icon"><image src="/assets/icons/book-w.svg" /></view>
@@ -127,6 +132,17 @@
       </view>
     </view>
     <ad-slot slot="workbench" book-type="{{book ? book.type : ''}}" />
+    <!-- 提示条关闭后：页面底部常驻低调入口 -->
+    <view class="guide-foot" wx:if="{{!guideTip}}" bindtap="goGuide">使用教程与常见问题 ›</view>
+  </block>
+
+  <!-- ===== 首次加载网络失败（v3.66.0）：不退到宾客页，点此重试 ===== -->
+  <block wx:elif="{{mode === 'neterr'}}">
+    <view class="card net-err" bindtap="onNetRetry">
+      <view class="ne-title">工作台没加载出来</view>
+      <view class="ne-sub">{{netErrText}}，请检查网络后重试</view>
+      <view class="ne-btn">点此重试</view>
+    </view>
   </block>
 
   <!-- ===== 加载中骨架（首次打开、没有缓存时） ===== -->
@@ -182,7 +198,10 @@
       <view class="step"><text class="num">4</text><text>主家确认收到，礼金入簿并生成回执</text></view>
     </view>
 
-    <view class="my-receipts" bindtap="goMyReceipts">我的随礼记录 ›</view>
+    <view class="my-receipts">
+      <text class="mr-link" bindtap="goMyReceipts">我的随礼记录 ›</text>
+      <text class="mr-link" bindtap="goFaq">常见问题 ›</text>
+    </view>
 
     <view class="card host-entry">
       <view>

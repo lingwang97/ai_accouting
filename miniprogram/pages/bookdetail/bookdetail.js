@@ -24,6 +24,7 @@ Page({
   },
 
   async onLoad(options) {
+    theme.early(this); // 首帧前同步套主题色（v3.70.1）
     const app = getApp();
     this.setData({ id: options.id });
     const role = await app.ensureRole(); // 冷启动时 role 为空，先读取身份
@@ -50,6 +51,7 @@ Page({
       this.setData({
         book: s.book,
         typeLabel: scenes.label(s.book.type),
+        funeral: s.book.type === 'funeral',
         sum: fmt.money(total),
         count: s.count,
         avg: fmt.money(s.count ? total / s.count : 0),

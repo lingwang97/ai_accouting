@@ -1,15 +1,20 @@
 .sum-row { display: flex; justify-content: space-between; align-items: flex-start; }
 .sum { font-size: 60rpx; margin: 8rpx 0; }
 .sum.long { font-size: 44rpx; }
-.pending-hint { color: #FF9F1C; }
+.pending-hint { color: var(--warn); }
 .search-row { display: flex; align-items: center; margin-top: 20rpx; }
-.search-row .rel-btn, .search-row .export-btn { margin-left: 16rpx; }
+.search-row .rel-btn, .search-row .search-btn { margin-left: 16rpx; }
 .search {
   flex: 1; background: var(--fill);
   border-radius: 999rpx; padding: 16rpx 28rpx;
 }
-.export-btn { border-radius: 999rpx; }
-.record.transferred { border-left: 8rpx solid #FF9F1C; }
+.search-btn { border-radius: 999rpx; }
+.dup-n { font-size: 22rpx; color: var(--warn); font-weight: normal; }
+.filter-row { display: flex; align-items: center; margin-top: 16rpx; }
+.filter-row .st-seg { flex: 1; min-width: 0; background: var(--fill); }
+.filter-row .st-seg .seg-item { padding: 8rpx 0; }
+.filter-row .rel-btn { margin-left: 16rpx; }
+.record.transferred { border-left: 8rpx solid var(--warn); }
 .record.pending { opacity: .7; }
 .r-top { display: flex; justify-content: space-between; margin-bottom: 8rpx; }
 .payer { font-weight: 600; flex: 1; min-width: 3em; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -23,29 +28,41 @@
   border-top: 2rpx solid #f5f5f5;
 }
 .r-actions .flex1, .r-actions .link, .r-actions .btn, .r-actions .muted, .r-actions .badge:not(:first-child) { margin-left: 24rpx; }
+.r-actions .link { margin-left: 0; }
 /* 窄屏换行：保持右对齐，换行后行间留 12rpx；左侧状态徽章与 flex1 占位撑开（flex1 min-width 0 可收缩） */
-.r-actions .link, .r-actions .badge { margin-top: 6rpx; margin-bottom: 6rpx; white-space: nowrap; }
+.r-actions .badge { margin-top: 6rpx; margin-bottom: 6rpx; white-space: nowrap; }
+/* 操作链接：触控区高 72rpx、左右各 16rpx 内边距（间距由内边距提供，相邻链接不易误触） */
+.r-actions .link { margin-left: 0; padding: 0 16rpx; line-height: 72rpx; white-space: nowrap; }
 .r-actions .badge:first-child { margin-right: auto; }
 .r-actions .flex1 { min-width: 0; }
 .flex1 { flex: 1; }
 .badge { font-size: 22rpx; padding: 4rpx 14rpx; border-radius: 6rpx; }
 /* 已入簿 / 已打印：语义成功色 */
 .badge.ok { background: #07C16022; color: var(--success); }
-.badge.warn { background: #FF9F1C22; color: #FF9F1C; }
+.badge.warn { background: var(--warn-soft); color: var(--warn); }
 .badge.gray { background: #eee; color: var(--text-3); }
 .pad { padding: 40rpx 0; }
 
 .book-pick { font-size: 30rpx; font-weight: 600; color: var(--text); margin-bottom: 8rpx; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .rel-btn { padding: 0 20rpx; line-height: 64rpx; border-radius: var(--r-s); background: var(--fill); color: var(--text-2); font-size: 26rpx; white-space: nowrap; }
 .rel-btn.on { background: var(--primary-soft); color: var(--primary); }
-.declared { color: #FF9F1C; }
+.declared { color: var(--warn); }
 .xfer-tag { font-size: 22rpx; color: #1677FF; background: #E6F4FF; border-radius: 6rpx; padding: 2rpx 10rpx; margin-right: 12rpx; }
-.cash-tag { font-size: 22rpx; color: #FF9F1C; background: #FFF7E6; border-radius: 6rpx; padding: 2rpx 10rpx; margin-right: 12rpx; }
-.cash-entry { margin-top: 20rpx; text-align: center; padding: 18rpx 0; border-radius: var(--r-s); border: 2rpx dashed #FF9F1C; color: #FF9F1C; font-size: 28rpx; }
-.book-manage { font-size: 24rpx; color: var(--link); }
+.cash-tag { font-size: 22rpx; color: var(--warn); background: var(--warn-bg); border-radius: 6rpx; padding: 2rpx 10rpx; margin-right: 12rpx; }
 
 /* 骨架屏（.sk 基类在 app.wxss） */
 .sk-l1 { height: 34rpx; width: 55%; margin-bottom: 18rpx; }
 .sk-l2 { height: 24rpx; width: 80%; }
 /* 「未收到」「确认收到」两个按钮大小一致 */
 button.r-op:not([size=mini]) { width: 160rpx; padding: 0; margin-left: 24rpx; }
+
+.long-tip { padding: 0 0 24rpx; }
+/* 回到顶部：浮在右下，避开底部菜单与安全区 */
+.to-top { position: fixed; right: 24rpx; bottom: calc(50px + env(safe-area-inset-bottom) + 24rpx); z-index: 4; padding: 0 28rpx; line-height: 72rpx; border-radius: 36rpx; background: #fff; color: var(--primary); font-size: 26rpx; box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, .18); }
+.amended { color: var(--primary); }
+.amend-tip { margin-bottom: 16rpx; }
+.small { font-size: 24rpx; }
+
+/* 修改弹层：本页是 tab 页，自定义底部菜单盖在弹层之上，遮罩止于菜单上沿，「取消 / 保存」不再被挡住（同往来页） */
+.mask.tab-mask { bottom: calc(50px + env(safe-area-inset-bottom)); }
+.sheet.tab-sheet { max-height: 86vh; padding-bottom: 32rpx; }

@@ -25,11 +25,20 @@
 .version { text-align: center; font-size: 22rpx; padding: 24rpx 0 8rpx; }
 
 .switch-id { color: var(--link); font-size: 26rpx; margin-left: auto; padding-left: 16rpx; white-space: nowrap; }
-.plan-tag { display: inline-block; margin-top: 8rpx; font-size: 22rpx; color: #B8860B; background: #FFF7E6; border-radius: 6rpx; padding: 2rpx 12rpx; }
+.plan-tag { display: inline-block; margin-top: 8rpx; font-size: 22rpx; color: var(--warn); background: var(--warn-bg); border-radius: 6rpx; padding: 2rpx 12rpx; }
 
 /* 长昵称 / 长主家名不挤掉「切换身份」 */
 .user-card .info { flex: 1; min-width: 0; }
 .user-card .info .name, .user-card .info .muted { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .user-card .switch-id { flex-shrink: 0; }
 
-.menu-item.purge .mi-text { color: var(--danger); }
+
+/* 菜单行右侧说明（如蓝牙名称）过长时省略，不把左侧标题挤成竖排 */
+text.mi-text { white-space: nowrap; flex-shrink: 0; }
+.menu-item .arrow { flex-shrink: 1; min-width: 0; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; margin-left: 12rpx; }
+
+/* 头像做成 chooseAvatar 按钮（点头像可更换）；原生 button 的 184px 宽度要用同样的选择器覆盖 */
+.avatar-btn { background: none; padding: 0; line-height: 1; border-radius: 50%; flex-shrink: 0; margin: 0 28rpx 0 0; }
+.avatar-btn::after { border: none; }
+button.avatar-btn:not([size=mini]) { width: 110rpx; height: 110rpx; margin: 0 28rpx 0 0; }
+.avatar-btn .avatar { margin: 0; display: block; }

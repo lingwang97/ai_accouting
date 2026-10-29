@@ -1,4 +1,17 @@
-<view class="container">
+<view class="container" style="{{themeStyle}}">
+  <!-- 等待主家确认（v3.66.0）：最近 3 天自己扫码登记、还没入簿的 -->
+  <block wx:if="{{waiting.length}}">
+    <view class="section-title wait-title">等待主家确认（{{waiting.length}}）</view>
+    <view class="card item wait" wx:for="{{waiting}}" wx:key="_id" data-i="{{index}}" bindtap="onWaitTip">
+      <view class="top">
+        <text class="shop">{{item.accountName || '主家'}}</text>
+        <text class="money">￥{{item.amountStr}}</text>
+      </view>
+      <view class="muted">{{item.timeStr}} · 随礼人 {{item.payerName}}</view>
+      <view class="wait-st">{{item.stText}}</view>
+    </view>
+    <view class="section-title wait-title" wx:if="{{list.length}}">已入簿</view>
+  </block>
   <view class="card item" wx:for="{{list}}" wx:key="_id" data-id="{{item._id}}" bindtap="onOpen">
     <view class="top">
       <text class="shop">{{item.accountName || '主家'}}<text class="muted" wx:if="{{item.themeName}}"> · {{item.themeName}}</text></text>
@@ -7,7 +20,12 @@
     <view class="muted">{{item.timeStr}} · 随礼人 {{item.payerName}}</view>
     <view class="link">查看回执 ›</view>
   </view>
-  <view class="muted center pad" wx:if="{{!loading && list.length === 0}}">暂无随礼记录，主家确认收到后自动生成回执</view>
+  <view class="card net-err" wx:if="{{!loading && loadErr}}" bindtap="onRetryLoad">
+    <view class="ne-title">随礼记录没加载出来</view>
+    <view class="ne-sub">{{loadErr}}，请检查网络后重试</view>
+    <view class="ne-btn">点此重试</view>
+  </view>
+  <view class="muted center pad" wx:elif="{{!loading && list.length === 0 && waiting.length === 0}}">暂无随礼记录，主家确认收到后自动生成回执</view>
   <loading show="{{loading && !list.length}}" rows="3" />
   <view class="host-cta" wx:if="{{!loading}}" bindtap="goHostEntry">我家也要办事？免费创建电子礼簿，宾客扫码随礼自动记账 ›</view>
   <ad-slot slot="myreceipts" />
