@@ -101,9 +101,9 @@
         <view class="g-sub">双码展示 · 台卡</view>
       </view>
       <view class="g-item" hover-class="g-hover" wx:if="{{pm.confirm}}" bindtap="goPending">
-        <view class="g-icon"><image src="/assets/icons/check-w.svg" /><text class="g-badge" wx:if="{{pendingCount > 0}}">{{pendingCount}}</text></view>
+        <view class="g-icon"><image src="/assets/icons/check-w.svg" /><text class="g-badge" wx:if="{{pendingCount + appealCount > 0}}">{{pendingCount + appealCount}}</text></view>
         <view class="g-title">待确认礼金</view>
-        <view class="g-sub {{pendingCount > 0 ? 'hot' : ''}}">{{pendingCount > 0 ? pendingCount + ' 份 ￥' + pendingSum : '暂无'}}</view>
+        <view class="g-sub {{pendingCount + appealCount > 0 ? 'hot' : ''}}">{{pendingCount > 0 ? pendingCount + ' 份 ￥' + pendingSum : (appealCount > 0 ? '' : '暂无')}}{{appealCount > 0 ? (pendingCount > 0 ? ' · ' : '') + '申诉 ' + appealCount : ''}}</view>
       </view>
       <view class="g-item" hover-class="g-hover" wx:if="{{pm.desk}}" bindtap="goCash">
         <view class="g-icon"><image src="/assets/icons/cash-w.svg" /></view>

@@ -47,6 +47,7 @@ Page({
     todaySum: '0.00',
     todayCount: 0,
     pendingCount: 0,
+    appealCount: 0,  // 宾客申诉待处理数（v3.74.2，「待确认礼金」宫格角标与说明一并显示）
     pendingSum: '0.00',
     otherPending: 0,   // 其他礼簿的待确认份数（提示用）
     todayBook: 0,      // 当前礼簿今日入簿份数
@@ -191,6 +192,7 @@ Page({
         pendingCount: d.pending.count,
         pendingSum: fmt.money(d.pending.sum),
         otherPending: d.pending.other || 0,
+        appealCount: d.pending.appeal != null ? d.pending.appeal : (app.globalData.appealN || 0), // 工作台数据不含申诉数时，先用启动时取到的数，轮询会校正
         joinCount: d.pendingMembers || 0  // 申请加入、待主家同意的人数
       };
       this.setData({ mode: 'host', ...view, netBad: false, netErrText: '' });
@@ -269,8 +271,9 @@ Page({
         getApp().globalData.remindDot = pending.remindDue;
         getApp().refreshTabBar();
       }
-      if (pending.count === d.pendingCount && sum === d.pendingSum && other === d.otherPending) return false; // 没变化：不 setData
-      this.setData({ pendingCount: pending.count, pendingSum: sum, otherPending: other });
+      const appeal = pending.appeal || 0;
+      if (pending.count === d.pendingCount && sum === d.pendingSum && other === d.otherPending && appeal === d.appealCount) return false; // 没变化：不 setData
+      this.setData({ pendingCount: pending.count, pendingSum: sum, otherPending: other, appealCount: appeal });
       getApp().setBadge(pending.count);
       return true;
     } catch (e) {
