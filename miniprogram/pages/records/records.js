@@ -34,6 +34,8 @@ Page({
     loading: false,
     keyword: '',
     books: [{ _id: '', name: '全部礼簿' }],
+    noBook: false,    // 登录后一本礼簿都没有（v3.71.1）：空态引导创建
+    canCreate: false, // 有创建礼簿的权限才显示按钮
     bookIdx: 0,
     relations: ['全部关系', ...scenes.RELATIONS],
     relIdx: 0,
@@ -63,7 +65,7 @@ Page({
     if (app.isLoggedOut()) {
       this._booksAt = 0;
       this._bookPicked = false;
-      this.setData({ loggedIn: false, list: [], books: [{ _id: '', name: '全部礼簿' }], bookIdx: 0 });
+      this.setData({ loggedIn: false, list: [], books: [{ _id: '', name: this.allName() }], bookIdx: 0, noBook: false });
       app.refreshTabBar();
       return;
     }
@@ -73,7 +75,7 @@ Page({
     const acc = app.globalData.account;
     this.setData({ unit: acc && acc.orgMode ? '场次' : '礼簿' });
     if (!app.globalData.user) {
-      this.setData({ loggedIn: false, list: [], books: [{ _id: '', name: '全部礼簿' }], bookIdx: 0 });
+      this.setData({ loggedIn: false, list: [], books: [{ _id: '', name: this.allName() }], bookIdx: 0, noBook: false });
       return;
     }
     // 切换过身份：丢弃上一身份的礼簿与明细，重新加载
@@ -81,7 +83,7 @@ Page({
       if (this._idVer !== undefined) {
         this._booksAt = 0;
         this._bookPicked = false;
-        this.setData({ books: [{ _id: '', name: '全部礼簿' }], bookIdx: 0, list: [] });
+        this.setData({ books: [{ _id: '', name: this.allName() }], bookIdx: 0, list: [], noBook: false });
       }
       this._idVer = app.globalData.identityVer;
     }
@@ -124,6 +126,10 @@ Page({
     if (!this._poller) this._poller = poller.create(() => this.silentRefresh(), { base: POLL_MS, boost: pollcfg.boostMs, peak: pollcfg.peakMs, hold: pollcfg.peakOn });
     this._poller.start();
   },
+
+  allName() { return this.data.unit === '场次' ? '全部场次' : '全部礼簿'; },
+
+  goCreate() { wx.navigateTo({ url: '/pages/setup/setup' }); },
 
   selectedBookId() {
     const b = this.data.books[this.data.bookIdx];
@@ -242,7 +248,7 @@ Page({
         app.globalData.account = account;
         app._accountChecked = true;
       }
-      if (!app.globalData.account) return; // 宾客没有礼簿
+      if (!app.globalData.account) { this.setData({ noBook: true, canCreate: true }); return; } // 宾客没有礼簿：可去完善主家信息
       const res = await req.bookList();
       this._booksAt = Date.now();
       cache.set('books', res);
@@ -253,7 +259,8 @@ Page({
   applyBooks({ list, activeBookId }) {
     const app = getApp();
     // 机构模式：显示「本场主家 · 礼簿名」
-    const books = [{ _id: '', name: '全部礼簿' }, ...list.map(b => ({ ...b, name: b.hostName ? `${b.hostName} · ${b.name}` : b.name }))];
+    const acc = app.globalData.account;
+    const books = [{ _id: '', name: acc && acc.orgMode ? '全部场次' : '全部礼簿' }, ...list.map(b => ({ ...b, name: b.hostName ? `${b.hostName} · ${b.name}` : b.name }))];
     const pick = app.globalData.recordsBookId;
     app.globalData.recordsBookId = '';
     let want = activeBookId;
@@ -263,7 +270,7 @@ Page({
     } else if (this._bookPicked) {
       want = this.data.books[this.data.bookIdx]._id; // 保留用户手动选择
     }
-    this.setData({ books, bookIdx: Math.max(0, books.findIndex(b => b._id === want)) });
+    this.setData({ books, bookIdx: Math.max(0, books.findIndex(b => b._id === want)), noBook: list.length === 0, canCreate: !!perm.current().books });
   },
 
   onBook(e) {

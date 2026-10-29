@@ -32,6 +32,7 @@ Page({
     if (d.pass === false) wx.showToast({ title: '昵称不合规', icon: 'none' });
   },
   onAvatarError() { this.setData({ avatar: '' }); },
+  goPrivacy() { wx.navigateTo({ url: '/pages/privacy/privacy' }); },
 
   async onSubmit() {
     if (this.data.submitting) return;

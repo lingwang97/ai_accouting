@@ -80,5 +80,5 @@ test('底部菜单初始值取当前主题；app.json 默认导航色仍为红�
   const s = read('miniprogram/custom-tab-bar/index.js');
   assert.ok(/color: theme\.current\(\)\.primary,/.test(s) && /iconOn: theme\.current\(\)\.icon/.test(s));
   assert.strictEqual(JSON.parse(read('miniprogram/app.json')).window.navigationBarBackgroundColor, '#C8161D');
-  assert.ok(/VERSION: '3\.71\.0'/.test(read('miniprogram/config.js')));
+  assert.ok(/VERSION: '3\.71\.1'/.test(read('miniprogram/config.js')));
 });

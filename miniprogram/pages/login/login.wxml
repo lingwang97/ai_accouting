@@ -19,5 +19,6 @@
     <view class="muted avatar-tip">点击设置头像</view>
     <input class="input" type="nickname" placeholder="请输入昵称" value="{{nickname}}" bindinput="onNicknameInput" bindblur="onNicknameBlur" bindnicknamereview="onNicknameReview" />
     <button class="btn-primary" loading="{{submitting}}" bindtap="onSubmit">登录 / 注册</button>
+    <view class="muted small agree-tip">登录即表示了解<text class="agree-link" bindtap="goPrivacy">《隐私说明》</text></view>
   </view>
 </view>
