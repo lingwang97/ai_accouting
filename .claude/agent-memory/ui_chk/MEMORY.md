@@ -42,3 +42,21 @@ v3.64.3：receipt.fixForBook 白事校正版式/主色；buildModel premiumOpen 
 v3.65.0：index 高峰模式提示条 + 每分钟刷新；advperm.peakLeftText。
 新坑：switch 取消/失败复位必须强制刷新；白事红色印章未处理（用户可自行关）；待真机：switch 复位、canvas 5 种版式、鸿蒙 NEXT。
 提交署名用系统提醒的 Sonnet 5.5（主会话曾写 Opus 5.5，以系统提醒为准）。
+
+## 2026-10-27 检查 v3.66.5（只读，未改代码；f031afb..HEAD 增量 + 全页复核）
+已核实无问题（别再报）：新增 modal 按钮字数均 <=4；net-bar/peak-bar 在 index 同文档流堆叠不重叠；requestSubscribeMessage 在 pay 的 tap 首个 await 前；wx.cloud.downloadFile/getFileSystemManager 基础库 2.21.2 均支持；index neterr 态与 tabBar 留白正常。
+本次问题（W 编号）：W1 pending/records 轮询失败时 net-bar 与 net-err 同时出现；W2 advanced giftOn 默认 false 未用 notify.giftOn() 缓存预置，弱网时显示成关；W3 qrcode 离线副本无收款码时第 2 步空白；W4 pay.js:187-189 toast 未随白事用词（随礼人/礼金）；W5 books.js 删除/归档弹窗、mine.wxml:17 机构模式仍说记账人/礼簿；W6 pay.js:140 仍用主色 setNavigationBarColor（funeral 灰 + 白字需确认）；W7 cash 自动聚焦后键盘遮挡已登记列表，iOS focus 待真机。
+
+## 2026-10-28 全面检查 v3.67.0（只读，未改代码，编号 X1-X14）
+已核实无问题（别再报）：modal 按钮字数/success toast/actionSheet 项数全合规；无 flex gap；资源图标无缺失；canvas 1:1 无 dpr；admin.wxs 为 ES5；底部 bottom-bar 留白均够；members 弹层固定底栏仍在；records/renqing tab-mask 仍在。
+本次问题：X1 头像存的是 chooseAvatar 临时路径（login.js:16/32，云函数只存字符串），重启/他人设备全灰圆；X2 guide.js:buildFaq `open: !!(kw||...)` 搜索时点分类/问题折叠无效，宽词全展开；X3 pending/members/bookshare 的 .mask 缺 catchtouchmove（records/renqing 有）→ 背景滚动穿透；X4 app.json backgroundTextStyle=light 且无 backgroundColor，records/pending/reconcile/orgsummary/myreceipts 下拉刷新点点看不见；X5 mine.wxml:68 回收站「保留 15 天」写死（会员可选 30/60）；X6 login nickname 只绑 bindinput（待真机：快捷填入后立即点登录是否取到值）；X7 admin.wxss:3 `.row .btn` margin 被 button.btn:not([size=mini]) 压掉（搜索按钮贴输入框）；X8 orgsummary r-name/st-row 无省略；X9 books/members/cash/index/reconcile/export 机构模式仍用「礼簿/记账人/当前礼簿」；X10 cash 页白事仍「随礼人」「💵」，pay 失败页 ❌/⚠️/📷 emoji；X11 FAQ answer break-all 切英文词；X12 login/invite/myreceipts 未调 setNavigationBarColor（白事灰内容配红导航）；X13 硬编码色 #B8860B/#FFD591/rgba(255,159,28)/#d94c4c/#f0b429 未走 --warn；X14 reconcile 画布高度随 handlers 无上限。
+
+## 已修复 v3.67.1 - v3.67.3（X1-X14 全部，别再报）
+v3.67.1(70f34b6)：FAQ 搜索态可收起(前5条展开)、pending/members/bookshare 遮罩 catchtouchmove、backgroundTextStyle dark、mine 回收站副标题、admin 按钮间距、orgsummary 省略。
+v3.67.2(28e1513)：头像上传云存储(utils/avatar.js)+mine 点头像重选+binderror 回落；昵称 bindblur；utils/orgtext.js/.wxs 机构用词；白事 cash 致奠人、去 emoji。
+v3.67.3(5f6b407)：FAQ 长答案分句+pre-wrap；theme.applyNav；警示色变量；reconcile 图 70 行上限(format.clipLines)；点击区；invite placeholder。
+坑：在 bash 里用 python heredoc 写含反斜杠的字符串会被吃掉/变真换行，要用 chr(92) 或直接 cat heredoc 写文件。提交署名用 Sonnet 5.5。
+
+## 2026-10-29 上线前检查 v3.71.0（只读，未改代码，编号 Y1-Y9）
+已核实无问题（别再报）：modal 按钮字数/success toast/actionSheet 项数全合规；无 flex gap；各页 onLoad 已调 theme.early（pay/qrcode/receipt 宾客页刻意不调）；index .page.tab-page 留白在；mock 示意图 CSS 均带省略；advanced 去掉刷新卡后布局正常；v3.71.0 违规提示=toast 17 字 icon none（可两行）；pay 等待页 pollTimeout 文案/刷新状态正常。
+本次问题：Y1 index.wxss:118 `.he-btn{margin-left}` 被 `button.btn:not([size=mini])` 压掉（宾客首页「我是主家」卡文字贴按钮）；Y2 login 页无隐私说明/协议入口（隐私页只在 我的→隐私与数据，未登录进不去）；Y3 privacy.js 设备权限漏写摄像头扫码、剪贴板、内容安全检测、头像上传云存储；Y4 「联系我们开通会员」在 iOS 上有虚拟商品引导站外购买的审核风险（faq.js:157、advperm.js、request.js:39）；Y5 records.js:66/84/256 「全部礼簿」机构模式未换词；Y6 records 无礼簿时顶部 picker 显示「全部礼簿 ▾」+「暂无礼金记录」引导弱；Y7 mine 头像可点但无提示；Y8 advanced.wxss 残留 .a-opt 等刷新档死样式；Y9 records.wxml:91 首次加载骨架与「加载中…」同时出现。
