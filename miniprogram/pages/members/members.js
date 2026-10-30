@@ -1,10 +1,9 @@
-// pages/members/members.js — 记账人管理：邀请记账人（选负责的礼簿与权限）、设置礼簿与权限、移除、退出；主家本人可"移交给主家"
+// pages/members/members.js — 记账人管理：邀请记账人（选负责的礼簿与权限）、设置礼簿与权限、移除、退出（移交给主家见 pages/transfer）
 // 每位记账人各自设置：负责的礼簿（或全部礼簿，含以后新建的）+ 权限（见 utils/perm.js）；只能授予自己拥有的礼簿和权限
 // 非机构模式：每位记账人只负责一本礼簿（单选，存 soloBookId）；机构模式才能多选、选全部礼簿
 const req = require('../../utils/request.js');
 const perm = require('../../utils/perm.js');
 const fmt = require('../../utils/format.js');
-const scenes = require('../../utils/scenes.js');
 const theme = require('../../utils/theme.js');
 const avatarUtil = require('../../utils/avatar.js');
 
@@ -24,11 +23,6 @@ Page({
     myAllBooks: false, // 我负责全部礼簿：才能邀请 / 设置「全部礼簿」
     inviteDesc: '',
     quotaMsg: '',      // 记账人名额已满的提示（免费版）
-    transferToken: '', // 移交：选好礼簿后生成
-    showPicker: false, // 选择要移交的礼簿
-    books: [],         // [{ _id, name, typeLabel, count, sumStr, on }]
-    stayClerk: true,   // 移交后继续为对方记账
-    transferDesc: '',  // 已生成卡片的说明
     orgMode: false,    // 机构模式：可设置岗位与负责场次
     canManage: true,   // 有「邀请与管理记账人」权限
     titles: ['礼台', '收银', '主管'],
@@ -324,61 +318,12 @@ Page({
     });
   },
 
-  // —— 移交：先选礼簿，再生成卡片 ——
-  async onPickBooks() {
-    try {
-      const { list } = await req.bookList(); // 含已归档的礼簿，也可以移交
-      const all = list;
-      this.setData({
-        showPicker: true,
-        transferToken: '',
-        books: all.map(b => ({
-          _id: b._id, name: b.name, typeLabel: scenes.label(b.type), count: b.count || 0,
-          sumStr: fmt.money(b.sum || 0), archived: !!b.archived, on: false
-        }))
-      });
-    } catch (e) { /* toast 已提示 */ }
-  },
-  onToggleBook(e) {
-    const i = e.currentTarget.dataset.i;
-    this.setData({ [`books[${i}].on`]: !this.data.books[i].on, transferToken: '' });
-  },
-  onPickAll() {
-    const all = this.data.books.some(b => !b.on);
-    this.setData({ books: this.data.books.map(b => ({ ...b, on: all })), transferToken: '' });
-  },
-  onStayClerk(e) { this.setData({ stayClerk: e.detail.value, transferToken: '' }); },
-  onCancelPick() { this.setData({ showPicker: false, transferToken: '' }); },
-
-  /** 生成移交卡片（分享按钮需要先拿到链接） */
-  async onMakeTransfer() {
-    const picked = this.data.books.filter(b => b.on);
-    if (!picked.length) return wx.showToast({ title: '请选择要移交的礼簿', icon: 'none' });
-    try {
-      const r = await req.inviteCreate('transfer', { bookIds: picked.map(b => b._id), stayClerk: this.data.stayClerk });
-      this._transferNames = picked.map(b => b.name);
-      this.setData({
-        transferToken: r.token,
-        transferDesc: r.full
-          ? '全部礼簿整体移交：主家信息、收款码、已印好的礼簿码一起转给对方'
-          : `移交 ${picked.length} 本：${this._transferNames.join('、')}；其余礼簿留在你这里`
-      });
-    } catch (e) { /* toast 已提示 */ }
-  },
-
-  /** 分享卡片：data-type 区分邀请记账人 / 移交主家 */
+  /** 分享卡片：邀请记账人（移交已挪到 transfer 页） */
   onShareAppMessage(res) {
-    // 右上角菜单转发不带邀请卡：只有点页面上的分享按钮才发邀请 / 移交 / 共享
+    // 右上角菜单转发不带邀请卡：只有点页面上的分享按钮才发邀请
     if (!res || res.from !== 'button') return { title: '慧礼记｜扫码随礼、自动记账、人情往来一本清', path: '/pages/index/index' };
     const type = (res && res.target && res.target.dataset && res.target.dataset.type) || 'clerk';
     const name = this.data.accountName;
-    if (type === 'transfer') {
-      const names = this._transferNames || [];
-      return {
-        title: names.length === 1 ? `礼簿「${names[0]}」移交给你，请确认接收` : `「${name}」的 ${names.length || ''} 本礼簿移交给你，请确认接收`,
-        path: `/pages/invite/invite?token=${this.data.transferToken}`
-      };
-    }
     const path = `/pages/invite/invite?token=${this.data.clerkToken}`;
     // 邀请卡只能 1 人使用：发出后马上换一张新的，避免下次又发出同一张（v3.66.7）
     this.setData({ clerkToken: '' });

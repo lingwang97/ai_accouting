@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "移交主家",
+  "usingComponents": {
+    "loading": "/components/loading/loading"
+  }
+}

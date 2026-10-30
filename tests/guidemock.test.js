@@ -47,7 +47,7 @@ test('示意图：「我的」菜单 4 组 12 行与 mine.wxml 一致', () => {
   M.MENU.forEach(g => assert.ok(groups.includes(g.g), '「我的」页没有分组：' + g.g));
   // 反过来：页面上的菜单项（管理员区的「系统设置」除外）都要画进示意图
   rows.filter(t => t !== '系统设置').forEach(t => {
-    const ok = flat.includes(t) || ['收款码（申请更换）', '礼台人员', '导出礼簿'].includes(t);
+    const ok = flat.includes(t) || ['收款码（申请更换）', '礼台人员', '导出礼簿', '移交主家'].includes(t);
     assert.ok(ok, '示意图缺少「我的」页的菜单项：' + t);
   });
 });

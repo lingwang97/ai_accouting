@@ -76,43 +76,6 @@
   <view class="risk-tip" wx:if="{{canManage && role === 'owner'}}">拿到此卡的人点开即成为{{orgMode ? '礼台人员' : '记账人'}}并获得所选权限，请只发给信任的人，不要转发到群里。7 天内有效，只能 1 人使用，对方接受后即失效</view>
   <view class="muted hint" wx:else>7 天内有效，只能 1 人使用，对方接受后即失效；需主家同意后才生效</view>
 
-  <block wx:if="{{role === 'owner'}}">
-    <view class="card transfer">
-      <view class="section-title">移交给主家</view>
-      <view class="muted">礼簿是你替别人建的？可以把选中的礼簿（含全部礼金记录、回执样式、存档）移交给真正的主家，没选的留在你这里。</view>
-      <button wx:if="{{!showPicker}}" class="btn-outline" style="margin-top:20rpx" bindtap="onPickBooks">选择要移交的礼簿</button>
-
-      <block wx:if="{{showPicker}}">
-        <view class="pick-head">
-          <text class="muted">选择礼簿</text>
-          <text class="link" bindtap="onPickAll">全选 / 全不选</text>
-        </view>
-        <view class="book-row {{item.on ? 'on' : ''}}" wx:for="{{books}}" wx:key="_id" data-i="{{index}}" bindtap="onToggleBook">
-          <view class="check {{item.on ? 'on' : ''}}">{{item.on ? '✓' : ''}}</view>
-          <view class="b-info">
-            <view>{{item.name}}<text class="muted small"> · {{item.typeLabel}}<text wx:if="{{item.archived}}"> · 已归档</text></text></view>
-            <view class="muted small">{{item.count}} 份 · ￥{{item.sumStr}}</view>
-          </view>
-        </view>
-        <view class="stay-row">
-          <view>
-            <view>移交后继续为对方记账</view>
-            <view class="muted small">你会成为对方的{{orgMode ? '礼台人员' : '记账人'}}，可随时退出</view>
-          </view>
-          <switch checked="{{stayClerk}}" bindchange="onStayClerk" color="{{primary}}" />
-        </view>
-
-        <view class="transfer-warn">移交卡只发给接收人本人！拿到卡片的人点开即可接收你选中的全部礼簿，请勿转发到群里。</view>
-        <button wx:if="{{!transferToken}}" class="btn-primary" style="margin-top:20rpx" bindtap="onMakeTransfer">生成移交卡片</button>
-        <block wx:else>
-          <view class="transfer-desc">{{transferDesc}}</view>
-          <button class="btn-primary" open-type="share" data-type="transfer">发给主家本人</button>
-        </block>
-        <view class="link center cancel" bindtap="onCancelPick">取消</view>
-      </block>
-    </view>
-  </block>
-
   <button wx:if="{{role === 'clerk'}}" class="btn-danger btn-leave" bindtap="onLeave">退出，不再为这位主家记账</button>
 
   <!-- 设置负责的礼簿与权限（机构版另可设岗位） -->
