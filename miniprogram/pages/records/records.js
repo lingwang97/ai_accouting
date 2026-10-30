@@ -23,7 +23,8 @@ function amendDone(cur, fields) {
 }
 
 const PAGE_SIZE = 20;
-const SORT_KEYS = ['time_desc', 'time_asc', 'amount_desc', 'amount_asc', 'name', 'dup'];
+// 「只看重名」不再是排序项（v3.77.3）：独立的「重名」开关，开启时请求 sort:'dup'（云端按姓名排列重名记录）
+const SORT_KEYS = ['time_desc', 'time_asc', 'amount_desc', 'amount_asc', 'name'];
 const ST_KEYS = ['all', 'confirm', 'rejected', 'paid'];
 const UNREJECT_MS = 24 * 3600 * 1000; // 与服务端一致：标记未收到后 24 小时内可撤销
 const POLL_MS = 10000; // 页面停留时自动刷新待确认转账
@@ -48,8 +49,9 @@ Page({
     bookIdx: 0,
     relations: ['全部关系', ...scenes.RELATIONS],
     relIdx: 0,
-    sorts: ['最新', '最早', '金额高→低', '金额低→高', '按姓名', '只看重名'],
+    sorts: ['最新', '最早', '金额高→低', '金额低→高', '按姓名'],
     sortIdx: 0,
+    dupOn: false,     // 只看重名开关：开启时排序下拉置灰，显示「按姓名排列」；关闭后恢复 sortIdx
     statuses: ['全部', '待确认', '未收到', '已入簿'],
     stIdx: 0,
     loggedIn: true,
@@ -295,7 +297,8 @@ Page({
     const book = this.data.books[this.data.bookIdx];
     if (book && book._id) params.bookId = book._id;
     if (this.data.relIdx > 0) params.relation = this.data.relations[this.data.relIdx];
-    if (this.data.sortIdx > 0) params.sort = SORT_KEYS[this.data.sortIdx];
+    if (this.data.dupOn) params.sort = 'dup';
+    else if (this.data.sortIdx > 0) params.sort = SORT_KEYS[this.data.sortIdx];
     if (this.data.stIdx > 0) params.status = ST_KEYS[this.data.stIdx];
     return params;
   },
@@ -338,7 +341,8 @@ Page({
   },
 
   onSort(e) {
-    this.setData({ sortIdx: Number(e.detail.value) });
+    if (this.data.dupOn) return;
+    this.setData({ sortIdx: Math.min(Math.max(0, Number(e.detail.value) || 0), SORT_KEYS.length - 1) });
     this.reload();
     wx.pageScrollTo({ scrollTop: 0, duration: 0 });
   },
@@ -347,6 +351,13 @@ Page({
     const i = Number(e.currentTarget.dataset.i);
     if (i === this.data.stIdx) return;
     this.setData({ stIdx: i });
+    this.reload();
+    wx.pageScrollTo({ scrollTop: 0, duration: 0 });
+  },
+
+  /** 「重名」开关：点一下只看重名，再点取消（恢复之前选的排序） */
+  onDup() {
+    this.setData({ dupOn: !this.data.dupOn });
     this.reload();
     wx.pageScrollTo({ scrollTop: 0, duration: 0 });
   },

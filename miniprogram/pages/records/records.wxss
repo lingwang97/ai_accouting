@@ -3,12 +3,12 @@
 .sum.long { font-size: 44rpx; }
 .pending-hint { color: var(--warn); }
 .search-row { display: flex; align-items: center; margin-top: 20rpx; }
-.search-row .rel-btn, .search-row .search-btn { margin-left: 16rpx; }
+.search-row .rel-btn, .search-row .search-btn { margin-left: 12rpx; }
 .search {
-  flex: 1; background: var(--fill);
-  border-radius: 999rpx; padding: 16rpx 28rpx;
+  flex: 1; min-width: 0; background: var(--fill);
+  border-radius: 999rpx; padding: 16rpx 20rpx;
 }
-.search-btn { border-radius: 999rpx; }
+.search-btn { border-radius: 999rpx; flex-shrink: 0; white-space: nowrap; }
 .dup-n { font-size: 22rpx; color: var(--warn); font-weight: normal; }
 .filter-row { display: flex; align-items: center; margin-top: 16rpx; }
 .filter-row .st-seg { flex: 1; min-width: 0; background: var(--fill); }
@@ -53,6 +53,10 @@
 .book-pick { font-size: 30rpx; font-weight: 600; color: var(--text); margin-bottom: 8rpx; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .rel-btn { padding: 0 20rpx; line-height: 64rpx; border-radius: var(--r-s); background: var(--fill); color: var(--text-2); font-size: 26rpx; white-space: nowrap; }
 .rel-btn.on { background: var(--primary-soft); color: var(--primary); }
+/* 筛选 / 排序按钮前的小图标（v3.77.3）：与文字垂直居中；320 宽屏下搜索行收紧内边距 */
+.ft-btn { display: flex; align-items: center; flex-shrink: 0; padding: 0 14rpx; font-size: 24rpx; }
+.ft-ic { width: 26rpx; height: 26rpx; margin-right: 6rpx; flex-shrink: 0; }
+.rel-btn.dis { color: var(--text-3, #999); opacity: .8; }
 .declared { color: var(--warn); }
 .xfer-tag { font-size: 22rpx; color: #1677FF; background: #E6F4FF; border-radius: 6rpx; padding: 2rpx 10rpx; margin-right: 12rpx; }
 .cash-tag { font-size: 22rpx; color: var(--warn); background: var(--warn-bg); border-radius: 6rpx; padding: 2rpx 10rpx; margin-right: 12rpx; }

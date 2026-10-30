@@ -17,18 +17,19 @@
       </view>
     </view>
     <view class="search-row">
-      <input class="search" placeholder="搜索宾客姓名" value="{{keyword}}" bindinput="onSearchInput" bindconfirm="onSearch" confirm-type="search" />
+      <input class="search" placeholder="搜索姓名" value="{{keyword}}" bindinput="onSearchInput" bindconfirm="onSearch" confirm-type="search" />
       <picker range="{{relations}}" value="{{relIdx}}" bindchange="onRelation">
-        <view class="rel-btn {{relIdx > 0 ? 'on' : ''}}">{{relIdx > 0 ? relations[relIdx] : '关系'}} ▾</view>
+        <view class="rel-btn ft-btn {{relIdx > 0 ? 'on' : ''}}"><image class="ft-ic" src="/assets/icons/filter-{{relIdx > 0 ? (themeIcon || 'r') : 'g'}}.svg" /><text>{{relIdx > 0 ? relations[relIdx] : '关系'}} ▾</text></view>
       </picker>
+      <view class="rel-btn ft-btn {{dupOn ? 'on' : ''}}" bindtap="onDup"><image class="ft-ic" src="/assets/icons/filter-{{dupOn ? (themeIcon || 'r') : 'g'}}.svg" /><text>重名</text></view>
       <view class="btn btn-sm btn-primary search-btn" bindtap="onSearch">搜索</view>
     </view>
     <view class="filter-row">
       <view class="seg st-seg">
         <view class="seg-item {{stIdx === index ? 'on' : ''}}" wx:for="{{statuses}}" wx:key="*this" data-i="{{index}}" bindtap="onStatus">{{item}}</view>
       </view>
-      <picker range="{{sorts}}" value="{{sortIdx}}" bindchange="onSort">
-        <view class="rel-btn {{sortIdx > 0 ? 'on' : ''}}">{{sorts[sortIdx]}} ▾</view>
+      <picker range="{{sorts}}" value="{{sortIdx}}" bindchange="onSort" disabled="{{dupOn}}">
+        <view class="rel-btn ft-btn {{dupOn ? 'dis' : (sortIdx > 0 ? 'on' : '')}}"><image class="ft-ic" src="/assets/icons/sort-{{!dupOn && sortIdx > 0 ? (themeIcon || 'r') : 'g'}}.svg" /><text>{{dupOn ? '按姓名排列' : sorts[sortIdx] + ' ▾'}}</text></view>
       </picker>
     </view>
   </view>
@@ -97,7 +98,7 @@
     </view>
   </view>
 
-  <view class="muted center pad" wx:if="{{sortIdx === 5 && dupTruncated}}">重名较多，仅显示部分，可配合搜索缩小范围</view>
+  <view class="muted center pad" wx:if="{{dupOn && dupTruncated}}">重名较多，仅显示部分，可配合搜索缩小范围</view>
   <view class="net-err" wx:if="{{!loading && list.length === 0 && loadErr}}" bindtap="onRetryLoad">
     <view class="ne-title">礼簿没加载出来</view>
     <view class="ne-sub">{{loadErr}}，请检查网络后重试</view>
@@ -107,7 +108,7 @@
     <view class="muted">{{canCreate ? '还没有' + unit + '，去创建' : '还没有' + unit + '，请联系主家创建'}}</view>
     <button wx:if="{{canCreate}}" class="btn-primary" style="margin-top:24rpx" bindtap="goCreate">创建{{unit}}</button>
   </view>
-  <view class="muted center pad" wx:elif="{{!loading && list.length === 0}}">{{sortIdx === 5 ? '没有重名的记录' : (keyword || relIdx > 0 || stIdx > 0 ? '没有符合条件的记录' : '暂无礼金记录')}}</view>
+  <view class="muted center pad" wx:elif="{{!loading && list.length === 0}}">{{dupOn ? '没有重名的记录' : (keyword || relIdx > 0 || stIdx > 0 ? '没有符合条件的记录' : '暂无礼金记录')}}</view>
     <view class="muted center small long-tip" wx:if="{{!loading && list.length >= 200}}">已加载 {{list.length}} 条，可用搜索或筛选缩小范围</view>
   <view class="muted center pad" wx:if="{{loading && list.length > 0}}">加载中…</view>
   <view class="to-top" wx:if="{{showTop}}" bindtap="onTop">↑ 顶部</view>

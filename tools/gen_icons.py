@@ -35,16 +35,23 @@ ICONS = {
     'bell': '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
     'scan': '<path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/>',
     'gift': '<polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>',
+    # 筛选 / 排序（v3.77.3，礼簿页搜索行）：只生成灰色（未选中）+ 主题色变体
+    'filter': '<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>',
+    'sort': '<path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3"/>',
     'layers': '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
 }
 
 # 底部菜单只需要的颜色
 TAB_ICONS = {'home', 'book', 'people', 'user'}
+# 只生成部分颜色的图标（其余图标沿用旧行为）
+ONLY_VARIANTS = {'filter': 'grdnybk', 'sort': 'grdnybk'}
 
 os.makedirs(ROOT, exist_ok=True)
 n = 0
 for name, body in ICONS.items():
     for v, color in COLORS.items():
+        if name in ONLY_VARIANTS and v not in ONLY_VARIANTS[name]:
+            continue
         svg = ('<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" '
                f'stroke="{color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">{body}</svg>')
         with open(os.path.join(ROOT, f'{name}-{v}.svg'), 'w', encoding='utf-8', newline='\n') as f:
