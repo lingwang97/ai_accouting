@@ -205,7 +205,8 @@ Page({
       }
       const reqId = this._reqId;
       let allowDup = false;
-      const send = () => req.payCreate({ aid: this.data.aid, ...payload, payMethod: pm, reqId, dupCheck: true, ...(guestNotify ? { guestNotify: true } : {}), ...(allowDup ? { allowDup: true } : {}) });
+      // silent：失败提示由下面 catch 统一处理（限流只弹一个固定说明弹窗，其余错误照常 toast，v3.76.1）
+      const send = () => req.payCreate({ aid: this.data.aid, ...payload, payMethod: pm, reqId, dupCheck: true, ...(guestNotify ? { guestNotify: true } : {}), ...(allowDup ? { allowDup: true } : {}) }, { silent: true });
       let res = await send();
       // 疑似重复（v3.76.0）：30 分钟内已登记过同名同额，问一下是不是真要再登记一笔（取消则不提交）
       if (res.dupOf) {
@@ -257,8 +258,8 @@ Page({
       this.saveOpen(record, payCodeUrl);
     } catch (e) {
       // 被限流（v3.75.1）：这次没有登记成功，提醒稍等再提交，别直接扫礼台收款码转账（主家会对不上是谁的钱）
-      if (e && e.biz && /稍等几秒/.test(e.message || '')) this.busyTip(e.message);
-      /* 其他错误 toast 已提示 */
+      if (e && e.biz && /稍等几秒/.test(e.message || '')) this.busyTip();
+      else if (e && (e.biz || req.isNetErr(e))) req.showErr(e); // 其他请求错误（额度、网络、业务拒绝）照常提示；程序内部异常不弹
     } finally {
       this.setData({ submitting: false });
     }
@@ -269,11 +270,12 @@ Page({
    * 不再登记时告诉宾客去哪里看刚才那笔
    */
   askDup(dup) {
-    const st = { pending: '还没点「我已完成转账」', transferred: '正在等主家确认', paid: '主家已确认入簿' }[dup.status] || '已登记';
+    const cash = this.data.payMethod === 'cash';
+    const st = { pending: cash ? '礼台还没确认' : '还没点「我已完成转账」', transferred: '正在等主家确认', paid: '主家已确认入簿' }[dup.status] || '已登记';
     return new Promise(resolve => {
       wx.showModal({
         title: `你刚登记过${this.data.act === '登记' ? '' : '这笔'}`,
-        content: `${dup.minutes} 分钟前已登记 ${dup.name} ￥${fmt.money(dup.amount)}（${st}）。确定要再登记一笔吗？同一笔礼金不要重复登记。`,
+        content: `${dup.minutes} 分钟前已登记 ${dup.name} ￥${fmt.money(dup.amount)}（${st}）。确定要再登记一笔吗？同一笔${this.data.isFuneral ? '奠仪' : '礼金'}不要重复登记。`,
         confirmText: '再登记',
         cancelText: '不用了',
         success: r => {
@@ -288,13 +290,13 @@ Page({
     });
   },
 
-  /** 限流提示弹窗：说明还没登记成功（v3.75.1） */
-  busyTip(msg) {
+  /** 限流提示弹窗：说明还没登记成功（v3.75.1）；固定文案，不拼云端原话（v3.76.1，避免与 toast 重复） */
+  busyTip() {
     wx.showModal({
       title: '还没有登记成功',
       content: this.data.payMethod === 'cash'
-        ? `${msg}。请过几秒再点一次提交。`
-        : `${msg}。请过几秒再点一次提交，等登记成功、页面显示收款码后再转账，不要直接扫礼台的收款码转账。`,
+        ? '现在提交的人较多，这次还没有登记成功。请过几秒再点一次提交。'
+        : '现在提交的人较多，这次还没有登记成功。请过几秒再点一次提交，等登记成功、页面显示收款码后再转账，不要直接扫礼台的收款码转账。',
       confirmText: '知道了',
       showCancel: false
     });

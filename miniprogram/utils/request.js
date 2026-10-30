@@ -202,7 +202,8 @@ module.exports = {
   outDelete: id => call('renqing', { action: 'outDelete', id }),
   rqQuery: key => call('renqing', { action: 'query', key }),
   rqPeople: () => call('renqing', { action: 'people' }),
-  payCreate: d => call('payment', { action: 'create', envVersion: envVersion(), ...d }),
+  // opts.silent：宾客提交页自己处理限流提示（v3.76.1）
+  payCreate: (d, opts) => call('payment', { action: 'create', envVersion: envVersion(), ...d }, opts),
   // guestNotify：宾客同意了「入簿通知」订阅（v3.66.1），主家确认后发服务通知
   payTransferred: (rid, guestNotify) => call('payment', { action: 'transferred', rid, envVersion: envVersion(), ...(guestNotify ? { guestNotify: true } : {}) }),
   payCancel: rid => call('payment', { action: 'cancel', rid }),
