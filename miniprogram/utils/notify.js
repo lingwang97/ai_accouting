@@ -6,6 +6,7 @@ const { NOTIFY_TMPL_ID } = require('../config.js');
 const enabled = () => !!NOTIFY_TMPL_ID;
 let always = false; // 已勾选"总是保持"并同意：可在点击中静默续订
 const ON_KEY = 'notify_on_at'; // 本机最近一次同意订阅的时间
+const TMPL_KEY = 'notify_tmpl'; // 本机同意订阅时的模板 ID（v3.77.1 换新模板：开启过但订阅的不是当前模板的，提示重新开启）
 // 新礼金提醒默认关闭（v3.66.3）：是否开启存在服务端 users.giftNotify（按人），这里缓存一份给 renewSilently 同步判断
 const GIFT_KEY = 'gift_notify';
 let gift = false;
@@ -46,7 +47,7 @@ function subscribe() {
       tmplIds: [NOTIFY_TMPL_ID],
       success: res => {
         const ok = res[NOTIFY_TMPL_ID] === 'accept';
-        if (ok) { try { wx.setStorageSync(ON_KEY, Date.now()); } catch (e) { /* 忽略 */ } }
+        if (ok) { try { wx.setStorageSync(ON_KEY, Date.now()); wx.setStorageSync(TMPL_KEY, NOTIFY_TMPL_ID); } catch (e) { /* 忽略 */ } }
         refresh();
         resolve(ok);
       },
@@ -83,13 +84,14 @@ function renewSilently() {
  */
 function tipText(lastNotify, giftOn) {
   if (!enabled() || giftOn !== true) return '';
-  let onAt = 0;
-  try { onAt = Number(wx.getStorageSync(ON_KEY)) || 0; } catch (e) { /* 忽略 */ }
+  let onAt = 0, tmpl = '';
+  try { onAt = Number(wx.getStorageSync(ON_KEY)) || 0; tmpl = String(wx.getStorageSync(TMPL_KEY) || ''); } catch (e) { /* 忽略 */ }
+  if (tmpl !== NOTIFY_TMPL_ID) return '新礼金提醒已升级，请点此重新开启（需重新允许一次）'; // v3.77.1：之前订阅的是旧模板，不会再收到提醒
   const at = lastNotify && lastNotify.at ? new Date(lastNotify.at).getTime() : 0;
   if (onAt > at) return ''; // 刚开启过，还没有新的发送结果
   if (!lastNotify) return '开启新礼金微信提醒，宾客转账后第一时间知道';
   if (lastNotify.ok) return '';
-  if (lastNotify.code === 43101) return '新礼金提醒次数已用完，点此重新开启';
+  if (lastNotify.code === 43101) return '新礼金提醒次数已用完或需更新，点此重新开启（也可到「我的 → 高级功能」）';
   if (String(lastNotify.code) === '-604101') return '新礼金提醒发送失败：云函数无发送权限，请联系开发者';
   return `新礼金提醒上次发送失败（${lastNotify.code}），点此重新开启`;
 }

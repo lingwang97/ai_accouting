@@ -645,18 +645,19 @@ async function notifyOwner(recOrId, envVersion, remark) {
   const to = await recipientsOf(rec);
   if (!to.length) return;
   const all = rec.batchId ? await batchRecords(rec.batchId, { ownerOpenid: rec.ownerOpenid }) : null;
-  let show = rec;
-  if (all) {
-    show = {
-      ...rec,
-      payerName: rec.payerName,
-      amount: all.reduce((t, r) => t + Math.round(r.amount * 100), 0) / 100,
-      remark: all.some(r => r.batchPay === 'mixed')
-        ? `${all.length}人·转账${centStr(all.filter(r => r.payMethod !== 'cash'))}+现金${centStr(all.filter(r => r.payMethod === 'cash'))}`
-        : `${all.length}人一起随礼`
-    };
+  // v3.77.1 新模板：thing1 主家+礼簿 / thing4 随礼人（批次「张三等3人」）/ amount7 金额（批次合计）/ time9 时间 / thing3 提醒事由（白事用「奠仪」）
+  const funeral = rec.bookType === 'funeral';
+  let show = { hostName: rec.hostName || '', themeName: rec.themeName || '', payerName: rec.payerName, amount: rec.amount, reason: funeral ? '奠仪待确认' : '新礼金待确认' };
+  if (!show.hostName && rec.aid) {
+    try { show.hostName = ((await db.collection('accounts').doc(rec.aid).get()).data || {}).accountName || ''; } catch (e) { /* 只写礼簿名 */ }
   }
-  if (remark) show = { ...show, remark }; // 申诉提醒：备注写「宾客申诉，请再核对」
+  if (all && all.length > 1) {
+    const first = all.slice().sort((a, b) => (a.batchIdx || 0) - (b.batchIdx || 0))[0];
+    show.payerName = `${first.payerName}等${all.length}人`;
+    show.amount = all.reduce((t, r) => t + Math.round(r.amount * 100), 0) / 100;
+    show.reason = `${all.length}人一起${funeral ? '奠仪' : '随礼'}待确认`;
+  }
+  if (remark) show.reason = remark; // 申诉提醒：「宾客申诉，请再核对」
   const data = notify.build(show, bjTime(rec.transferredAt || new Date()));
   await Promise.all(to.map(async touser => {
     let result;
