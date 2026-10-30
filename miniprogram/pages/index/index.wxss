@@ -65,6 +65,7 @@
 }
 .g-title { font-size: 32rpx; font-weight: 600; color: #333; }
 .g-sub { font-size: 24rpx; color: var(--text-3); margin-top: 6rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.g-sub2 { margin-top: 2rpx; } /* 有待确认又有申诉时第二行（v3.74.4），原来一行放不下会被省略号吞掉申诉数 */
 .g-sub.hot { color: var(--danger); font-weight: 600; }
 .g-sub.ok { color: var(--success); }
 .g-sub.warn { color: var(--warn); }

@@ -17,7 +17,7 @@
   </block>
 
   <block wx:if="{{rejected.length}}">
-    <view class="section-title mg-title">主家未确认收到（{{rejected.length}}）</view>
+    <view class="section-title mg-title">{{rejTitle}}（{{rejected.length}}）</view>
     <view class="mg-sub">近 30 天内、用当前微信登记的记录</view>
     <view class="card mg-item" wx:for="{{rejected}}" wx:key="_id" data-id="{{item._id}}" bindtap="onToggle">
       <view class="mg-top">
@@ -25,7 +25,7 @@
         <text class="mg-money">￥{{item.amountStr}}</text>
       </view>
       <view class="muted">{{item.payerName}} · 登记于 {{item.regStr}}</view>
-      <view class="mg-st bad">{{item.stText}}（{{item.timeStr}}）</view>
+      <view class="mg-st bad {{item.funeral ? 'fun' : ''}}">{{item.stText}}（{{item.timeStr}}）</view>
       <view class="mg-reason" wx:if="{{item.reasonText}}">原因：{{item.reasonText}}</view>
       <view class="mg-appeal" wx:if="{{item.canAppeal}}">
         <button class="btn btn-primary btn-sm" data-id="{{item._id}}" catchtap="onAppealOpen">我确实转了，请再核对</button>
@@ -90,5 +90,5 @@
     <view class="ne-btn">点此重试</view>
   </view>
   <view class="muted center mg-empty" wx:elif="{{!loading && empty}}">{{keyword ? '没有找到「' + keyword + '」' : '暂无随礼记录。扫码随礼后，等待确认、已入簿等进度都会出现在这里；需用登记时的同一个微信查看'}}</view>
-  <loading show="{{loading && empty}}" rows="3" />
+  <loading show="{{loading && !list.length && !waiting.length && !rejected.length && !cancelled.length}}" rows="3" />
 </view>

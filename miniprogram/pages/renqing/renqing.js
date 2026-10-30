@@ -126,6 +126,17 @@ Page({
     this.filterPeople();
   },
 
+  /** 下拉刷新（v3.74.4）：「随礼记录」栏刷新组件，其他栏重新拉当前栏数据 */
+  onPullDownRefresh() {
+    const done = () => wx.stopPullDownRefresh();
+    if (this.data.tab === 'receipts') {
+      const mg = this.selectComponent('#mg');
+      return (mg ? mg.reload() : Promise.resolve()).then(done, done);
+    }
+    if (!this.data.loggedIn) return done();
+    Promise.resolve(this.load()).then(done, done);
+  },
+
   /** 切换页签（收礼往来即按人） */
   onTab(e) {
     let t = e.currentTarget.dataset.t;

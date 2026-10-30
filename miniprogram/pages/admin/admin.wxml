@@ -81,7 +81,7 @@
       <view class="muted small tip">自动检查集合、索引、密钥、AppSecret、导出字体、套餐、触发器、各云函数超时 / 内存 / 云调用权限，并在本机试读集合权限、检测隐私指引。✓ 正常　✗ 必须处理　！建议处理　○ 需手动确认。</view>
       <button class="btn-primary save" loading="{{pfLoading}}" bindtap="onPreflight">{{pf ? '重新检查' : '开始检查'}}</button>
       <block wx:if="{{pf}}">
-        <view class="pf-sum {{pf.bad ? 'bad' : (pf.warn ? 'warn' : 'ok')}}">{{pf.bad ? pf.bad + ' 项必须处理' : '没有必须处理的项'}}{{pf.warn ? '，' + pf.warn + ' 项建议处理' : ''}}</view>
+        <view class="pf-sum {{pf.bad ? 'bad' : (pf.warn ? 'warn' : 'ok')}}">{{pf.bad ? pf.bad + ' 项必须处理' : '没有必须处理的项'}}{{pf.warn ? '，' + pf.warn + ' 项建议处理' : ''}}{{pf.manual ? '，' + pf.manual + ' 项需手动确认' : ''}}</view>
         <block wx:for="{{pf.groups}}" wx:for-item="g" wx:key="name">
           <view class="pf-group">{{g.name}}</view>
           <view class="pf-row" wx:for="{{g.items}}" wx:key="label">

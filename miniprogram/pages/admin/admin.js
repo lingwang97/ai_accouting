@@ -150,7 +150,8 @@ Page({
         pf: {
           groups,
           bad: all.filter(x => x.status === 'bad').length,
-          warn: all.filter(x => x.status === 'warn' || x.status === 'manual').length,
+          warn: all.filter(x => x.status === 'warn').length, // 「○ 需手动确认」不计入待处理数（与云端摘要口径一致，v3.74.4）
+          manual: all.filter(x => x.status === 'manual').length,
           colsOk: !r.missing.length,
           fontsOk: !r.fonts || r.fonts.ready,
           manualRuntime: (r.manualRuntime || []).join('、')

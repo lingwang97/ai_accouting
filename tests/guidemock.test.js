@@ -36,13 +36,13 @@ function loadGuide(org) {
   return inst;
 }
 
-test('示意图：「我的」菜单 4 组 11 行与 mine.wxml 一致', () => {
+test('示意图：「我的」菜单 4 组 12 行与 mine.wxml 一致', () => {
   const src = read('pages/mine/mine.wxml');
   const rows = textsOf(src, 'mi-text');
   const groups = textsOf(src, 'group-title');
   const flat = [].concat(...M.MENU.map(g => g.items));
   assert.strictEqual(M.MENU.length, 4);
-  assert.strictEqual(flat.length, 11);
+  assert.strictEqual(flat.length, 12);
   flat.forEach(t => assert.ok(rows.includes(t), '「我的」页没有菜单项：' + t));
   M.MENU.forEach(g => assert.ok(groups.includes(g.g), '「我的」页没有分组：' + g.g));
   // 反过来：页面上的菜单项（管理员区的「系统设置」除外）都要画进示意图
@@ -91,7 +91,7 @@ test('教程：每一步的高亮项都在示意图里，普通 / 机构模式�
           if (m.hl) assert.ok(m.items.includes(m.hl), k + ' 高亮格不存在：' + m.hl);
         } else if (m.type === 'menu') {
           const flat = [].concat(...m.groups.map(x => x.items));
-          assert.strictEqual(flat.length, 11, k);
+          assert.strictEqual(flat.length, 12, k);
           if (m.hl) {
             assert.ok(flat.includes(m.hl), k + ' 高亮菜单项不存在：' + m.hl);
             assert.ok(m.groups.some(x => x.show && x.items.includes(m.hl)), k + ' 高亮项所在组要展开');

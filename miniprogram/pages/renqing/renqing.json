@@ -1,5 +1,6 @@
 {
   "navigationBarTitleText": "人情往来",
+  "enablePullDownRefresh": true,
   "usingComponents": {
     "loading": "/components/loading/loading",
     "my-gifts": "/components/my-gifts/index"

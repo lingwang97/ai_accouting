@@ -270,6 +270,15 @@ Page({
     return guestsub.ask();
   },
 
+  /** 「我的随礼记录」在当前身份下的位置：记账人 / 机构模式在「我的」，主家在「往来」，宾客在首页（v3.74.4） */
+  myGiftsWhere() {
+    const app = getApp();
+    const g = app.globalData || {};
+    const acc = g.user && g.account;
+    if (!acc) return '首页「我的随礼记录」';
+    return g.role === 'clerk' || acc.orgMode ? '「我的 → 随礼记录」' : '「往来 → 随礼记录」';
+  },
+
   /** 第 2 步：付款方转账完成 → 等待收款方确认 */
   async onTransferred() {
     if (this.data.submitting) return;
@@ -344,7 +353,7 @@ Page({
         this.loadReceipt();
       } else if (status === REC.REJECTED) {
         this.stopPoll();
-        this.setData({ step: 'failed', failReason: (this.data.isFuneral ? '主家暂未核实到账' : '主家未收到该笔转账') + (reasonText ? `（${reasonText}）` : '') + '，请与主家核实。这笔记录之后可在「我的随礼记录」查看' });
+        this.setData({ step: 'failed', failReason: (this.data.isFuneral ? '主家暂未核实到账' : '主家未收到该笔转账') + (reasonText ? `（${reasonText}）` : '') + '，请与主家核实。这笔记录之后可在' + this.myGiftsWhere() + '查看' });
       }
     } catch (e) { /* 网络抖动，下次再试 */ }
     // 逐步放慢：每次查询返回后再排下一次，网络慢时不会重叠

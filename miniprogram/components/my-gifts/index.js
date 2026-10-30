@@ -11,10 +11,18 @@ const HINT = {
   pending: '这笔还没点「我已完成转账」。如果已经转账，请再扫一次主家的礼簿码，按提示点「继续」→「我已完成转账」；没转账可以不用管，过一段时间会自动取消。',
   rejected: '主家没有确认收到这笔。如果你已经转账，请先和主家联系核对（可点「分享给主家」）；确认没转成功，可以点「重新登记」。',
   rejectedFuneral: '主家暂时没有核实到这笔。如果你已经转账，请先和主家联系核对（可点「分享给主家」）；确认没转成功，可以点「重新登记」。',
+  keptFuneral: '主家核对后仍未核实到账。如果你确实已转账，请直接联系主家（可点「分享给主家」）；确认没转成功，可以点「重新登记」。',
   kept: '主家核对后仍维持未收到。如果你确实已转账，请直接联系主家（可点「分享给主家」）；确认没转成功，可以点「重新登记」。',
   cancelAuto: '超过 30 分钟没点「我已完成转账」，已自动取消。如果已经转账，请再扫一次主家的礼簿码重新登记。',
   cancelSelf: '这笔登记已取消。'
 };
+
+/** 「未确认」一栏的标题：全是白事记录用「暂未核实到账」，不说「未收到」；喜事 / 其他用「未确认收到」；混合时用中性说法（v3.74.4） */
+function rejTitleOf(list) {
+  const fun = (list || []).filter(r => r.funeral).length;
+  if (fun && fun === list.length) return '主家暂未核实到账';
+  return fun ? '主家未确认到账' : '主家未确认收到';
+}
 
 Component({
   properties: {
@@ -22,7 +30,7 @@ Component({
     // 用在底部菜单页（往来）时为 true：弹层停在自定义底部菜单上沿，避免「提交申请」被菜单盖住（v3.74.1）
     inTab: { type: Boolean, value: false }
   },
-  data: { appeal: null, loading: true, loadErr: '', list: [], waiting: [], rejected: [], cancelled: [], openId: '', empty: false },
+  data: { rejTitle: '主家未确认收到', appeal: null, loading: true, loadErr: '', list: [], waiting: [], rejected: [], cancelled: [], openId: '', empty: false },
   lifetimes: {
     attached() { this.reload(); }
   },
@@ -38,13 +46,13 @@ Component({
           if (w.status === REC.PENDING) return '还没点「我已完成转账」';
           if (w.status === REC.REJECTED) {
             if (w.appealStatus === 'open') return '已申请再核对，等待主家处理';
-            if (w.appealStatus === 'kept') return '主家核对后维持未收到' + (w.appealReply ? `：${w.appealReply}` : '');
+            if (w.appealStatus === 'kept') return (w.funeral ? '核对后仍未核实到账' : '主家核对后维持未收到') + (w.appealReply ? `：${w.appealReply}` : '');
             return w.funeral ? '主家暂未核实到账' : '主家未确认收到';
           }
           return w.auto ? '超时自动取消' : '已取消';
         };
         const hintOf = w => {
-          if (w.status === REC.REJECTED) return w.appealStatus === 'kept' ? HINT.kept : (w.funeral ? HINT.rejectedFuneral : HINT.rejected);
+          if (w.status === REC.REJECTED) return w.appealStatus === 'kept' ? (w.funeral ? HINT.keptFuneral : HINT.kept) : (w.funeral ? HINT.rejectedFuneral : HINT.rejected);
           if (w.status === REC.CANCELLED) return w.auto ? HINT.cancelAuto : HINT.cancelSelf;
           return HINT[w.status] || '';
         };
@@ -87,6 +95,7 @@ Component({
       const k = String(this.properties.keyword || '').trim();
       const pick = arr => (k ? arr.filter(r => [r.accountName, r.payerName, r.themeName].some(x => (x || '').includes(k))) : arr);
       const d = { list: pick(raw.list), waiting: pick(raw.waiting), rejected: pick(raw.rejected), cancelled: pick(raw.cancelled) };
+      d.rejTitle = rejTitleOf(d.rejected);
       d.empty = !d.list.length && !d.waiting.length && !d.rejected.length && !d.cancelled.length;
       this.setData(d);
     },

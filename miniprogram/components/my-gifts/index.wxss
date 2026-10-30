@@ -6,7 +6,8 @@
 .mg-gray { color: #888; }
 .mg-st { margin-top: 8rpx; font-size: 26rpx; }
 .mg-st.warn { color: var(--warn, #C25E00); }
-.mg-st.bad { color: #FA5151; }
+.mg-st.bad { color: var(--danger, #FA5151); }
+.mg-st.bad.fun { color: #888; } /* 白事：素灰，不用红色（v3.74.4） */
 .mg-more { margin-left: 16rpx; font-size: 24rpx; color: #888; }
 .mg-more2 { display: block; margin: 12rpx 0 0; text-align: right; font-size: 24rpx; color: #888; }
 .mg-reason { margin-top: 6rpx; font-size: 26rpx; }
