@@ -95,7 +95,7 @@ Page({
     try { o = wx.getStorageSync(OPEN_KEY); } catch (e) { /* 忽略 */ }
     if (!o || o.aid !== aid || Date.now() - o.at > 24 * 3600 * 1000 || this.data.step !== 'form') return;
     let status = '';
-    try { status = (await req.payStatus(o.rid)).status; } catch (e) { return; }
+    try { status = (await req.payStatus(o.rid, { silent: true })).status; } catch (e) { return; }
     if (status === REC.TRANSFERRED) {
       this.setData({ record: viewRecord(o.record), step: 'waiting' });
       return this.startPoll();
@@ -246,9 +246,25 @@ Page({
         step: 'transfer'
       });
       this.saveOpen(record, payCodeUrl);
-    } catch (e) { /* toast 已提示 */ } finally {
+    } catch (e) {
+      // 被限流（v3.75.1）：这次没有登记成功，提醒稍等再提交，别直接扫礼台收款码转账（主家会对不上是谁的钱）
+      if (e && e.biz && /稍等几秒/.test(e.message || '')) this.busyTip(e.message);
+      /* 其他错误 toast 已提示 */
+    } finally {
       this.setData({ submitting: false });
     }
+  },
+
+  /** 限流提示弹窗：说明还没登记成功（v3.75.1） */
+  busyTip(msg) {
+    wx.showModal({
+      title: '还没有登记成功',
+      content: this.data.payMethod === 'cash'
+        ? `${msg}。请过几秒再点一次提交。`
+        : `${msg}。请过几秒再点一次提交，等登记成功、页面显示收款码后再转账，不要直接扫礼台的收款码转账。`,
+      confirmText: '知道了',
+      showCancel: false
+    });
   },
 
   onToggleFallback() {
@@ -344,7 +360,7 @@ Page({
       return;
     }
     try {
-      const { status, reasonText } = await req.payStatus(this.data.record._id);
+      const { status, reasonText } = await req.payStatus(this.data.record._id, { silent: true });
       if (gen !== this._gen) return; // 期间已停止 / 重新开始
       if (status === REC.PAID) {
         this.stopPoll();

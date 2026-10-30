@@ -62,14 +62,39 @@ function askActual(record, fn) {
 async function doConfirm(record, actual) {
   let r;
   try {
-    r = await req.payConfirm(record._id, actual);
+    r = await req.payConfirm(record._id, actual, undefined, { silent: true });
   } catch (e) {
-    return false; // request.js 已 toast
+    // 上一次其实已入簿、只是没收到结果（弱网超时后重点）：核对后按成功处理并补打（v3.75.1）
+    if (await settledPaid(record, e, '已记入礼簿')) return true;
+    req.showErr(e);
+    return false;
   }
   wx.showToast({ title: '已记入礼簿', icon: 'success' }); // 成功图标最多显示 7 个字
   getApp().refreshBadge();
   // 打印放到后台（v3.65.2）：不等打印 / 重连，马上可以确认下一笔；打印异常时合并成一条提示
   printLater(r.list || [r.record || { ...record, amount: actual || record.amount }], '已记入礼簿');
+  return true;
+}
+
+/** 服务端报「当前状态不可操作」（条件更新没命中）：是不是已经入簿了 */
+const STALE_RE = /当前状态不可操作/;
+
+/**
+ * 确认超时后重试：服务端条件更新不再命中、报「当前状态不可操作」。重新读一次这笔（批次为整批）：
+ * 已入簿就按成功处理，并打印其中还没打印过的小票；读不到或不是已入簿返回 false，由调用方照常提示
+ */
+async function settledPaid(record, e, head) {
+  if (!(e && e.biz && STALE_RE.test(e.message || ''))) return false;
+  const ids = isGroup(record) ? record.records.map(x => x._id) : [record._id];
+  const now = [];
+  try {
+    for (const id of ids) now.push((await req.recordDetail(id, { silent: true })).record);
+  } catch (x) { return false; }
+  if (!now.length || !now.every(x => x && x.status === REC.PAID)) return false;
+  wx.showToast({ title: head, icon: 'success' });
+  getApp().refreshBadge();
+  const todo = now.filter(x => !x.printed);
+  if (todo.length) printLater(todo, head);
   return true;
 }
 
@@ -143,8 +168,10 @@ function keepAppeal(record) {
 async function confirmGroupAmounts(group, amounts) {
   let r;
   try {
-    r = await req.payConfirm(group._id, undefined, amounts);
+    r = await req.payConfirm(group._id, undefined, amounts, { silent: true });
   } catch (e) {
+    if (await settledPaid(group, e, '已按实收入簿')) return true;
+    req.showErr(e);
     return false;
   }
   wx.showToast({ title: '已按实收入簿', icon: 'success' });
@@ -288,6 +315,7 @@ async function autoPrint(list) {
 }
 
 module.exports = {
+  _settledPaid: settledPaid,      // 仅供测试
   confirmTransfer,
   confirmDirect: doConfirm,       // 不弹核对框直接入簿（逐笔大字模式，卡片上已显示金额）
   askActualAmount: askActual,     // 金额不符：输入实际到账金额入簿

@@ -13,7 +13,7 @@ const guestNotify = require('./guestnotify.js').create(db, cloud); // 宾客入�
 const P = require('./plans.js');
 const { nameCheckMap } = require('./namecheck.js');
 const { MAX_AMOUNT, MAX_MSG } = require('./limits.js'); // 单笔礼金上限（tools/cloud-shared/limits.js）
-const { srvCol, resolveCode, resolveCtx, handlerName, canBook, readonly, can, workBook, soloBook, trusted } = require('./ctx.js');
+const { srvCol, resolveCode, resolveCtx, handlerName, canBook, readonly, can, workBook, soloBook, trusted, isMissing } = require('./ctx.js');
 const statusCache = require('./statuscache.js'); // 宾客查询状态的实例内 3 秒缓存（v3.75.0）
 const accounts = db.collection('accounts');
 // 礼金记录：where / aggregate 自动排除带 _openid 的伪造记录（v3.72.0，见 ctx.srvCol）；add / doc 原样
@@ -154,10 +154,10 @@ async function create(openid, event) {
   if (!replay) {
     // 防刷（v3.72.0 原子计数，并发也不能绕过）：同一付款人每分钟最多 RATE_MAX 次（一个批次算一次）；
     // 同一本礼簿每分钟最多 BOOK_RATE_MAX 次（防止多个微信号一起刷同一主家）
-    if (!(await takeSlot('rp_' + openid, 60 * 1000, RATE_MAX, 1, now))) return err('操作太频繁，请稍后再试');
-    if (!(await takeSlot('rb_' + (book ? book._id : accountId), 60 * 1000, BOOK_RATE_MAX, 1, now))) return err('现在随礼的人较多，请稍等片刻再试');
+    if (!(await takeSlot('rp_' + openid, 60 * 1000, RATE_MAX, 1, now))) return err(BUSY_MSG);
+    if (!(await takeSlot('rb_' + (book ? book._id : accountId), 60 * 1000, BOOK_RATE_MAX, 1, now))) return err(CROWD_MSG);
     // 同名检查也计入频率：防止反复提交试探某人是否随过礼（按本次比对的姓名个数计）
-    if (!(await sameNameQuota(openid, items.filter(x => !x.nameTag).length, now))) return err('操作太频繁，请稍后再试');
+    if (!(await sameNameQuota(openid, items.filter(x => !x.nameTag).length, now))) return err(BUSY_MSG);
   }
   // 内容安全（v3.71.0）：宾客填写的姓名、备注、区分备注主家会看到
   { const bad = await S.checkText(cloud, openid, items.flatMap(x => [x.payerName, x.remark, x.nameTag])); if (bad) return bad; }
@@ -256,7 +256,7 @@ async function create(openid, event) {
 /**
  * 同名检查的频率限制：每位宾客每 10 分钟（固定时间桶）最多比对 NAME_CHECK_MAX 个姓名；返回「需要填区分信息」的请求不建记录，也计入
  */
-const NAME_CHECK_MAX = 20;
+const NAME_CHECK_MAX = 40; // v3.75.1：20 → 40（批次 10 人遇同名要提交两次，再重试一次就会被拦）
 async function sameNameQuota(openid, n, now) {
   if (!n) return true;
   return takeSlot('nc_' + openid, 10 * 60 * 1000, NAME_CHECK_MAX, n, now);
@@ -524,7 +524,10 @@ async function transferred(openid, rid, envVersion, guestNotify) {
   const res = await payerUpdate(openid, rid,
     [{ status: REC.PENDING }, { status: REC.CANCELLED, autoCancelled: true }], REC.TRANSFERRED, out, extra);
   // 复用 payerUpdate 已读到的记录，不再重复读库（v3.60.3）
-  if (res.code === 0 && res.data.changed) await notifyOwner(out.rec || rid, envVersion);
+  // 提醒失败不影响结果（v3.75.1）：状态已改成已转账，不能因为发提醒出错让宾客看到「操作失败」
+  if (res.code === 0 && res.data.changed) {
+    try { await notifyOwner(out.rec || rid, envVersion); } catch (e) { console.warn('新礼金提醒失败', e.message); }
+  }
   return res;
 }
 
@@ -1053,8 +1056,11 @@ async function ownerUpdate(ctx, rid, fromList, to, actualAmount, pre, opts) {
   if (!validId(rid)) return err('记录不存在');
   const openid = ctx.ownerOpenid; // 数据属于主家，记账人代为操作
   const hasAmt = to === REC.PAID && actualAmount !== undefined && actualAmount !== null;
-  const r0 = (pre && pre._id === rid) ? pre : ((ctx.bookIds || to !== REC.VOID || hasAmt) ? await getRecord(rid) : null);
-  if (ctx.bookIds && (!r0 || !canBook(ctx, r0.bookId))) return err('该礼金不在你负责的场次');
+  // 先读一次记录（v3.75.1 起作废也读）：更新成功后万一读不回来，用它加上本次写入的字段累加合计、返回给前端打印
+  const r0 = (pre && pre._id === rid) ? pre : await getRecord(rid);
+  if (!r0) return err('记录不存在');
+  if (r0.ownerOpenid !== openid) return err('无权操作该账目');
+  if (ctx.bookIds && !canBook(ctx, r0.bookId)) return err('该礼金不在你负责的场次');
   // 确认 / 拒绝只能在当前礼簿内进行（作废已入簿的不限）
   if (r0 && to !== REC.VOID && notCurrentBook(ctx, r0)) return err(switchMsg(ctx));
   // 处理宾客申诉入簿（v3.74.0）：只有「已申诉待处理」的未收到记录可以直接入簿
@@ -1101,10 +1107,12 @@ async function ownerUpdate(ctx, rid, fromList, to, actualAmount, pre, opts) {
   if (to === REC.PAID) data.autoCancelled = _.remove();
   const res = await records.where(_.and([{ _id: rid, ownerOpenid: openid }, statusCond]))
     .update({ data });
-  const rec = await getRecord(rid);
-  if (!rec) return err('记录不存在');
-  if (rec.ownerOpenid !== openid) return err('无权操作该账目');
   if (res.stats.updated !== 1) return err('当前状态不可操作，请刷新');
+  // 状态已改：读回最新记录；读库失败（高峰限流等）不能当成「记录不存在」而漏掉合计累加与打印（v3.75.1），
+  // 用更新前读到的记录 + 本次写入的字段代替
+  let rec = null;
+  try { rec = await getRecord(rid); } catch (e) { console.warn('入簿后读记录失败，按本次写入的字段继续', rid, e.message); }
+  if (!rec) rec = { ...r0, ...plainOf(data), status: to };
   // 礼簿份数与合计累加：入簿 +1，作废 -1（旧版创建的礼簿没有 statSince，照常累加）
   if (rec.bookId && (to === REC.PAID || to === REC.VOID)) {
     const sign = to === REC.PAID ? 1 : -1;
@@ -1209,18 +1217,42 @@ async function amend(ctx, event) {
   return ok({ rid, changed: true, record: shown(fresh || { ...rec, ...next, amendLog: log }) });
 }
 
+/**
+ * 读一条礼金记录：不存在（或是客户端伪造的）返回 null；
+ * 网络 / 超时 / 数据库限流等其他错误抛出（带 ctxFail，v3.75.1），由 failOf 返回 code 2「网络异常，请重试」——
+ * 不能当成「记录不存在」：宾客会以为没登记上而重复登记，确认收礼会漏累加合计
+ */
 async function getRecord(rid) {
   if (!validId(rid)) return null;
+  let d;
   try {
-    const d = (await records.doc(rid).get()).data;
-    return trusted(d) ? d : null; // 带 _openid 的是客户端伪造的记录（v3.72.0）：当作不存在
+    d = (await records.doc(rid).get()).data;
   } catch (e) {
-    return null;
+    if (isMissing(e)) return null;
+    throw netFail(e);
   }
+  return trusted(d) ? d : null; // 带 _openid 的是客户端伪造的记录（v3.72.0）：当作不存在
+}
+function netFail(e) {
+  const x = new Error('读记录失败：' + String((e && (e.errMsg || e.message)) || e).slice(0, 200));
+  x.ctxFail = true;
+  return x;
+}
+/** 更新数据里的普通值（去掉 _.remove() 等数据库指令），用于拼出更新后的记录 */
+function plainOf(data) {
+  const out = {};
+  Object.keys(data).forEach(k => {
+    const v = data[k];
+    if (v === null || typeof v !== 'object' || v instanceof Date || Array.isArray(v)) out[k] = v;
+  });
+  return out;
 }
 
-const RATE_MAX = 3;        // 同一付款人每分钟最多发起次数（批次算一次）
-const BOOK_RATE_MAX = 60;  // 同一本礼簿每分钟最多发起次数（所有宾客合计；婚宴高峰约每秒 1 人，足够）
+const RATE_MAX = 5;         // 同一付款人每分钟最多发起次数（批次算一次；v3.75.1 由 3 放宽：同名提醒要提交两次，再加一次弱网重试）
+const BOOK_RATE_MAX = 150; // 同一本礼簿每分钟最多发起次数（所有宾客合计；v3.75.1 由 60 放宽，大型宴席集中入场不误伤）
+// 被限流时的提示（v3.75.1）：说明这次没有登记成功、稍等几秒再提交即可；前端 pay 页识别「稍等几秒」弹窗提醒先别转账
+const BUSY_MSG = '提交太频繁，请稍等几秒再试';
+const CROWD_MSG = '现在登记的人较多，请稍等几秒再试';
 const BATCH_PEOPLE = 10; // 批次录入最多人数
 const RELATIONS = ['亲戚', '朋友', '同事', '同学', '邻里', '其他'];
 

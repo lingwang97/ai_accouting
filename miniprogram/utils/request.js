@@ -91,6 +91,13 @@ function dropDash(r) {
 
 /** 是否为网络失败（超时 / 断网 / 云函数未响应）：页面据此显示「网络不佳，点此重试」，而不是「没有数据」 */
 const isNetErr = e => !!(e && !e.biz && (e.net || e.errMsg));
+/** 页面用 silent 调用后自己决定要不要提示时，按 request.js 默认的方式提示这个错误（v3.75.1） */
+function showErr(e) {
+  if (isNetErr(e)) return wx.showToast({ title: isTimeout(e) ? '请求超时，请检查网络后重试' : '网络不佳，请稍后重试', icon: 'none' });
+  const msg = (e && e.message) || '请求失败';
+  if (isQuotaMsg(msg)) return quotaModal(msg);
+  wx.showToast({ title: msg, icon: 'none' });
+}
 /**
  * 页面上显示的错误说明（v3.66.0）：网络失败说清楚是网络问题（超时 / 连不上），业务错误用服务端的原话，其他用页面给的兜底文案
  */
@@ -105,6 +112,7 @@ module.exports = {
   quotaModal,
   isNetErr,
   errText,
+  showErr,
   login: userInfo => call('login', { action: 'login', userInfo }),
   loginCheck: () => call('login', { action: 'check' }),
   // withPayCode：需要预览收款码时才让云函数生成临时链接（主家信息页、礼簿码页）
@@ -198,8 +206,10 @@ module.exports = {
   // guestNotify：宾客同意了「入簿通知」订阅（v3.66.1），主家确认后发服务通知
   payTransferred: (rid, guestNotify) => call('payment', { action: 'transferred', rid, envVersion: envVersion(), ...(guestNotify ? { guestNotify: true } : {}) }),
   payCancel: rid => call('payment', { action: 'cancel', rid }),
-  payStatus: rid => call('payment', { action: 'status', rid }),
-  payConfirm: (rid, amount, amounts) => call('payment', { action: 'confirm', rid, amount, amounts }).then(dropDash),
+  // 宾客等待页轮询用 silent（v3.75.1）：偶尔失败下次再查，不弹提示吓到宾客
+  payStatus: (rid, opts) => call('payment', { action: 'status', rid }, opts),
+  // opts.silent：确认超时后重试遇到「状态已变」时由 utils/confirm.js 自己核对（v3.75.1）
+  payConfirm: (rid, amount, amounts, opts) => call('payment', { action: 'confirm', rid, amount, amounts }, opts).then(dropDash),
   payConfirmBatch: rids => call('payment', { action: 'confirmBatch', rids }).then(dropDash),
   cashEntry: d => call('payment', { action: 'cashEntry', ...d }).then(dropDash),
   // reason / note：标记未收到的原因（选填，v3.73.0）
@@ -211,7 +221,9 @@ module.exports = {
   payAppeal: (rid, note, ref, guestNotify) => call('payment', { action: 'appeal', rid, envVersion: envVersion(), ...(note ? { note } : {}), ...(ref ? { ref } : {}), ...(guestNotify ? { guestNotify: true } : {}) }),
   // 主家 / 记账人处理申诉：decision accept 入簿（amount 为实际金额）/ keep 维持未收到（note 为给宾客的回复）
   payResolveAppeal: (rid, decision, amount, note) => call('payment', { action: 'resolveAppeal', rid, decision, ...(amount ? { amount } : {}), ...(note ? { note } : {}) }).then(dropDash),
-  payAmend: (rid, fields) => call('payment', { action: 'amend', rid, ...fields }).then(dropDash),
+  payAmend: (rid, fields, opts) => call('payment', { action: 'amend', rid, ...fields }, opts).then(dropDash),
+  // 单条记录详情（主家 / 记账人）：确认、修改超时后核对最新状态（v3.75.1）
+  recordDetail: (rid, opts) => call('records', { action: 'detail', rid }, opts),
   recordList: (d, opts) => call('records', { action: 'list', ...d }, opts),
   markPrinted: rids => call('records', { action: 'markPrinted', rids }),
   recordPending: (withRejected, opts) => call('records', { action: 'pending', ...pollHint(), ...(withRejected ? { withRejected: true } : {}) }, opts),

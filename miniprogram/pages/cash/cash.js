@@ -165,11 +165,14 @@ Page({
       // 转账+现金只填了一位：按这一位的方式提交，不算混合
       if (payload.payMethod === 'mixed' && payload.items && payload.items.length === 1) payload.payMethod = payload.items[0].method;
       // 一次调用完成同名检查 + 入簿（v3.66.0）：礼簿里没有同名直接入簿；有同名时云端只返回名单，选好是哪一位后再提交
-      let res = await req.cashEntry({ ...payload, reqId: this.reqIdOf(payload), nameCheck: true });
+      // 幂等键按选同名之前的原始表单确定（v3.75.1）：选完同名的第二次调用、以及超时后重点「入簿」（表单重建）都带同一个 reqId，
+      // 云端发现这个 reqId 已入簿就跳过同名检查、直接返回原记录，不会因为「本场已有同名（其实是刚记的这一笔）」再记一次
+      const reqId = this.reqIdOf(payload);
+      let res = await req.cashEntry({ ...payload, reqId, nameCheck: true });
       if (res.needPick) {
         const picked = await this.pickSameName(payload, b ? b._id : '', res.map || {});
         if (!picked) return; // 取消即中止，不提示
-        res = await req.cashEntry({ ...payload, reqId: this.reqIdOf(payload) });
+        res = await req.cashEntry({ ...payload, reqId });
       }
       const { record, list } = res;
       this._reqId = ''; // 已入簿，下一位换新 reqId
@@ -194,7 +197,7 @@ Page({
 
   /**
    * 幂等键：弱网下超时重试、重复点击都带同一个 reqId，服务端不会重复入簿；成功后才换新的
-   * 内容变了（重试前改过表单、选了同名的哪一位）就换新的，避免把修改后的内容当成重复提交
+   * 只按原始表单内容（选同名之前）计算：表单改了就换新的，避免把修改后的内容当成重复提交；选同名不换（v3.75.1）
    */
   reqIdOf(payload) {
     const sig = JSON.stringify(payload);

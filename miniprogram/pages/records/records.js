@@ -14,6 +14,13 @@ const poller = require('../../utils/poller.js');
 const pollcfg = require('../../utils/pollcfg.js');
 const fresh = require('../../utils/fresh.js');
 
+/** 修改是否已生效：最新记录里要改的字段都已是新值（v3.75.1，超时后重试用） */
+function amendDone(cur, fields) {
+  return Object.keys(fields).every(k => (k === 'amount'
+    ? Math.round(Number(cur.amount) * 100) === Math.round(Number(fields.amount) * 100)
+    : String(cur[k] || '') === String(fields[k] || '')));
+}
+
 const PAGE_SIZE = 20;
 const SORT_KEYS = ['time_desc', 'time_asc', 'amount_desc', 'amount_asc', 'name', 'dup'];
 const ST_KEYS = ['all', 'confirm', 'paid'];
@@ -536,11 +543,25 @@ Page({
     if (!Object.keys(fields).length) return this.setData({ amend: null });
     this.setData({ busy: true });
     try {
-      await req.payAmend(a.rid, fields);
+      await req.payAmend(a.rid, fields, { silent: true });
       this.setData({ amend: null });
       wx.showToast({ title: '已修改', icon: 'success' });
       this.reload();
-    } catch (err) { /* toast 已提示（如已被他人修改、权限不足） */ } finally {
+    } catch (err) {
+      // 「刚被修改」：可能是上一次超时其实已改成功（v3.75.1）——读回最新内容，和这次要改的一致就按成功处理，否则提示并刷新
+      if (err && err.biz && /刚被修改/.test(err.message || '')) {
+        let cur = null;
+        try { cur = (await req.recordDetail(a.rid, { silent: true })).record; } catch (x) { /* 读不到按原提示 */ }
+        if (cur && cur.status === REC.PAID && amendDone(cur, fields)) {
+          this.setData({ amend: null });
+          wx.showToast({ title: '已修改', icon: 'success' });
+          this.reload();
+        } else {
+          req.showErr(err);
+          if (cur) { this.setData({ amend: null }); this.reload(); } // 别人改过：关掉弹层，按最新内容重新打开再改
+        }
+      } else req.showErr(err); /* 如权限不足、已归档 */
+    } finally {
       this.setData({ busy: false });
     }
   },

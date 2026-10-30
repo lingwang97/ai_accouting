@@ -68,12 +68,12 @@ const minute = () => Math.floor(Date.now() / 60000);
 const fullBucket = (key, n) => [minute(), minute() + 1].map(b => ({ _id: `${key}_${b}`, n, at: new Date() }));
 const create = extra => quiet(() => loadFunction('payment').main({ action: 'create', aid: 'acc1', payerName: '张三', amount: 100, ...extra }));
 
-test('create：付款人本分钟已满 3 次 → 操作太频繁；同一 reqId 上次已写入的重试直接走幂等、不计数', async () => {
+test('create：付款人本分钟已满 5 次（v3.75.1 起）→ 稍等几秒；同一 reqId 上次已写入的重试直接走幂等、不计数', async () => {
   seedGuest();
-  db.seed('rate_limits', fullBucket('rp_g-me', 3));
+  db.seed('rate_limits', fullBucket('rp_g-me', 5));
   let r = await create({ reqId: 'req-0001-abcd' });
   assert.strictEqual(r.code, 1);
-  assert.strictEqual(r.msg, '操作太频繁，请稍后再试');
+  assert.strictEqual(r.msg, '提交太频繁，请稍等几秒再试');
   // 上次已写入（前端没收到结果）：记录 _id = q + md5(主家:付款人:reqId) 前 24 位 + 00
   const key = crypto.createHash('md5').update(OWNER + ':g-me:req-0001-abcd').digest('hex').slice(0, 24);
   db.seed('records', [{ _id: 'q' + key + '00', ownerOpenid: OWNER, payerOpenid: 'g-me', payerName: '张三', amount: 100, status: 'transferred', bookId: 'b1' }]);
@@ -87,23 +87,23 @@ test('create：付款人本分钟已满 3 次 → 操作太频繁；同一 reqId
 
 test('create：伪造的同 _id 记录（带 _openid）不算重放，照常计数', async () => {
   seedGuest();
-  db.seed('rate_limits', fullBucket('rp_g-me', 3));
+  db.seed('rate_limits', fullBucket('rp_g-me', 5));
   const key = crypto.createHash('md5').update(OWNER + ':g-me:req-0002-abcd').digest('hex').slice(0, 24);
   db.seed('records', [{ _id: 'q' + key + '00', _openid: 'g-me', ownerOpenid: OWNER, status: 'paid' }]);
   const r = await create({ reqId: 'req-0002-abcd' });
-  assert.strictEqual(r.msg, '操作太频繁，请稍后再试');
+  assert.strictEqual(r.msg, '提交太频繁，请稍等几秒再试');
 });
 
-test('create：同一本礼簿本分钟已满 BOOK_RATE_MAX(60) → 提示稍等；条件更新用 n <= max-k 与 _.inc', async () => {
+test('create：同一本礼簿本分钟已满 BOOK_RATE_MAX(150，v3.75.1 起) → 提示稍等；条件更新用 n <= max-k 与 _.inc', async () => {
   seedGuest();
-  db.seed('rate_limits', fullBucket('rb_b1', 60));
+  db.seed('rate_limits', fullBucket('rb_b1', 150));
   db.log.length = 0;
   const r = await create({});
   assert.strictEqual(r.code, 1);
-  assert.strictEqual(r.msg, '现在随礼的人较多，请稍等片刻再试');
+  assert.strictEqual(r.msg, '现在登记的人较多，请稍等几秒再试');
   const up = db.log.find(l => l.op === 'update' && l.col === 'rate_limits');
   assert.strictEqual(up.cond.n.__op, 'lte');
-  assert.strictEqual(up.cond.n.v, 2);
+  assert.strictEqual(up.cond.n.v, 4);
   assert.strictEqual(up.data.n.__op, 'inc');
 });
 
