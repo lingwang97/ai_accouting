@@ -37,7 +37,7 @@ test('智能刷新：没有变化按标准（10 秒起，约 1 分钟后放慢�
     for (let i = 0; i < 6; i++) { h.advance(h.next()); await h.tick(); }
     assert.strictEqual(h.next(), 30000);
     h.advance(5 * 60 * 1000); await h.tick();
-    assert.strictEqual(h.next(), 60000);
+    assert.strictEqual(h.next(), 120000);
   } finally { h.restore(); }
 });
 
@@ -72,7 +72,7 @@ test('kick（用户操作 / 回到页面）：恢复标准 10 秒，不是 5 秒
   try {
     h.p.start();
     h.advance(6 * 60 * 1000); await h.tick();
-    assert.strictEqual(h.next(), 60000);
+    assert.strictEqual(h.next(), 120000);
     h.p.kick();
     assert.strictEqual(h.next(), 10000, '没有加速窗口：kick 回到 10 秒');
     h.setChange(true); h.advance(10000); await h.tick(); h.setChange(false);

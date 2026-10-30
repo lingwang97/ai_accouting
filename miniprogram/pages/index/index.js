@@ -138,6 +138,11 @@ Page({
     if (this._poller) { this._poller.stop(); this._poller = null; }
   },
 
+  /** 下拉刷新（v3.74.5）：重新拉工作台全部数据（待确认数、今日、当前礼簿等），并让轮询恢复到起始间隔 */
+  async onPullDownRefresh() {
+    try { await this.refresh(); } finally { wx.stopPullDownRefresh(); }
+  },
+
   async refresh() {
     if (this._poller) this._poller.kick(); // 刷新 / 用户操作后恢复轮询频率
     fresh.mark(this);
