@@ -128,3 +128,5 @@ button.btn-big:not([size=mini]) { width: 100%; font-size: 40rpx; font-weight: 60
 @keyframes slideL { from { transform: translateX(60rpx); opacity: .3; } to { transform: none; opacity: 1; } }
 @keyframes slideR { from { transform: translateX(-60rpx); opacity: .3; } to { transform: none; opacity: 1; } }
 .ap-book { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rej-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0; }
+.rej-arrow { font-size: 24rpx; color: var(--text-3); font-weight: normal; }

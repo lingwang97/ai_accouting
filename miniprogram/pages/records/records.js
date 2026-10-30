@@ -9,6 +9,7 @@ const theme = require('../../utils/theme.js');
 const cache = require('../../utils/cache.js');
 const perm = require('../../utils/perm.js');
 const { REC } = require('../../utils/status.js');
+const { REASON } = require('../../utils/trail.js');
 const samename = require('../../utils/samename.js');
 const poller = require('../../utils/poller.js');
 const pollcfg = require('../../utils/pollcfg.js');
@@ -23,11 +24,12 @@ function amendDone(cur, fields) {
 
 const PAGE_SIZE = 20;
 const SORT_KEYS = ['time_desc', 'time_asc', 'amount_desc', 'amount_asc', 'name', 'dup'];
-const ST_KEYS = ['all', 'confirm', 'paid'];
+const ST_KEYS = ['all', 'confirm', 'rejected', 'paid'];
+const UNREJECT_MS = 24 * 3600 * 1000; // 与服务端一致：标记未收到后 24 小时内可撤销
 const POLL_MS = 10000; // 页面停留时自动刷新待确认转账
 
 const STATUS_TEXT = {
-  pending: '未转账', transferred: '待确认', paid: '已入簿', void: '已作废'
+  pending: '未转账', transferred: '待确认', paid: '已入簿', void: '已作废', rejected: '未收到'
 };
 
 Page({
@@ -48,7 +50,7 @@ Page({
     relIdx: 0,
     sorts: ['最新', '最早', '金额高→低', '金额低→高', '按姓名', '只看重名'],
     sortIdx: 0,
-    statuses: ['全部', '待确认', '已入簿'],
+    statuses: ['全部', '待确认', '未收到', '已入簿'],
     stIdx: 0,
     loggedIn: true,
     readonly: false,  // 家人共享：只读
@@ -570,6 +572,27 @@ Page({
     const r = this.data.list[e.currentTarget.dataset.idx];
     if (r) require('../../utils/trail.js').show(r);
   },
+  /** 未收到：撤销（24 小时内，仍限当前礼簿，批次整批恢复） */
+  async onUnreject(e) {
+    const r = this.data.list[e.currentTarget.dataset.idx];
+    if (!r || this.data.busy) return;
+    const ok = await new Promise(resolve => wx.showModal({
+      title: '撤销未收到',
+      content: `把 ${r.payerName} ￥${r.amountStr} 恢复为待确认？`,
+      confirmText: '撤销',
+      success: m => resolve(m.confirm),
+      fail: () => resolve(false)
+    }));
+    if (!ok) return;
+    try {
+      await req.payUnreject(r._id);
+      wx.showToast({ title: '已撤销', icon: 'success' });
+      getApp().refreshBadge();
+      this.reload();
+    } catch (err) { /* toast 已提示 */ }
+  },
+  /** 未收到：宾客已申诉，去待确认页核对（其他礼簿的申诉在该页顶部提示条里） */
+  onGoAppeal() { wx.navigateTo({ url: '/pages/pending/pending' }); },
   /** 查看修改记录（最近 20 次） */
   onAmendLog(e) {
     const r = this.data.list[e.currentTarget.dataset.idx];
@@ -604,8 +627,14 @@ Page({
 });
 
 function decorate(r) {
+  const rej = r.status === REC.REJECTED;
   return {
     ...r,
+    ...(rej ? {
+      rejTimeStr: fmt.dateTime(r.rejectedAt || r.createdAt),
+      reasonStr: [REASON[r.rejectReason] || '', r.rejectNote || ''].filter(Boolean).join('：'),
+      canUnreject: !!r.rejectedAt && Date.now() - new Date(r.rejectedAt).getTime() < UNREJECT_MS
+    } : {}),
     amountStr: fmt.money(r.amount),
     nameStr: samename.nameStr(r.payerName, r.nameTag),
     declaredStr: r.declaredAmount ? fmt.money(r.declaredAmount) : '',

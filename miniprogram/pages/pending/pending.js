@@ -9,6 +9,9 @@ const perm = require('../../utils/perm.js');
 const { countOf, groupRecords } = require('../../utils/group.js');
 const poller = require('../../utils/poller.js');
 const trail = require('../../utils/trail.js');
+const foldseen = require('../../utils/foldseen.js');
+const REJ_FOLD_KEY = 'pend_rej_fold'; // 「最近标记未收到」是否收起（本机记住，默认收起）
+const REJ_SEEN_KEY = 'pend_rej_seen'; // 见过的未收到记录 _id，出现新的自动展开一次
 const pollcfg = require('../../utils/pollcfg.js');
 
 const POLL_MS = 10000; // 轮询只查计数（pendingStat，含「宾客未点完成」「最近未收到」两组的条数），任一变化才拉完整列表；另每 30 次兜底拉一次
@@ -37,6 +40,7 @@ Page({
     loaded: false,
     bookName: '',     // 当前礼簿名：待确认只处理当前礼簿
     hiddenCount: 0,   // 待确认超过单次显示上限（100 笔）时，未显示的笔数
+    rejFold: true,    // 「最近标记未收到」收起（v3.77.2）
     appealsOther: [], // 其他礼簿的宾客申诉（v3.77.0）
     showOtherAp: false,
     otherCount: 0,    // 其他礼簿的待确认份数（提示回工作台切换）
@@ -117,10 +121,19 @@ Page({
       this._sig = sig;
       this._stallN = (stalled || []).length; // 轮询用：两个分组的条数
       this._rejN = (rejected || []).length;
+      // 最近标记未收到：默认收起，本机记住；出现没见过的记录自动展开一次（v3.77.2）
+      let folded = true, seen = [];
+      try { const f = wx.getStorageSync(REJ_FOLD_KEY); folded = f === '' || f === undefined ? true : f === true; seen = wx.getStorageSync(REJ_SEEN_KEY) || []; } catch (e) { /* 忽略 */ }
+      const fs = foldseen.next(seen, (rejected || []).map(r => r._id), folded);
+      if (fs.seen.length !== seen.length || fs.folded !== folded) {
+        try { wx.setStorageSync(REJ_SEEN_KEY, fs.seen); wx.setStorageSync(REJ_FOLD_KEY, fs.folded); } catch (e) { /* 忽略 */ }
+      }
+      this._rejFold = fs.folded;
       this._appN = (appeals || []).length; // 全部礼簿的申诉数（v3.77.0），与 recordStat 的 appeal 同口径
       getApp().setAppeal(this._appN);
       // 宾客没点「我已完成转账」的（含 24 小时内被自动取消的）：主家核对微信到账后可直接入簿
       this.setData({
+        rejFold: this._rejFold,
         stalled: groupRecords(stalled || []).map(g => ({ ...g, auto: g.status === REC.CANCELLED, timeStr: fmt.time(g.createdAt) })),
         // 最近 24 小时内标记「未收到」的：点错了可以撤销
         rejected: groupRecords(rejected || []).map(g => ({ ...g, timeStr: fmt.time(g.rejectedAt || g.createdAt), reasonStr: trail.REASON[g.rejectReason] || '' })),
@@ -280,6 +293,11 @@ Page({
       getApp().refreshBadge();
     }
     this.load(false);
+  },
+  onRejFold() {
+    const f = !this.data.rejFold;
+    this.setData({ rejFold: f });
+    try { wx.setStorageSync(REJ_FOLD_KEY, f); } catch (e) { /* 忽略 */ }
   },
   onOtherAp() { this.setData({ showOtherAp: !this.data.showOtherAp }); },
   /** 宾客申诉：核对后入簿 / 维持未收到（含其他礼簿的） */

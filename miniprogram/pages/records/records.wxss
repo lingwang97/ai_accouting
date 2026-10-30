@@ -12,7 +12,7 @@
 .dup-n { font-size: 22rpx; color: var(--warn); font-weight: normal; }
 .filter-row { display: flex; align-items: center; margin-top: 16rpx; }
 .filter-row .st-seg { flex: 1; min-width: 0; background: var(--fill); }
-.filter-row .st-seg .seg-item { padding: 8rpx 0; }
+.filter-row .st-seg .seg-item { padding: 8rpx 0; font-size: 24rpx; } /* 四个按钮：320 宽屏下每格约 60px，两个字+小字号放得下 */
 .filter-row .rel-btn { margin-left: 16rpx; }
 .record.transferred { border-left: 8rpx solid var(--warn); }
 .record.pending { opacity: .7; }
@@ -41,6 +41,13 @@
 .badge.ok { background: #07C16022; color: var(--success); }
 .badge.warn { background: var(--warn-soft); color: var(--warn); }
 .badge.gray { background: #eee; color: var(--text-3); }
+.badge.bad { background: #FA515122; color: var(--danger, #FA5151); }
+.r-actions.rej-box { flex-wrap: wrap; }
+.rej-info { flex: 1; min-width: 0; font-size: 24rpx; }
+.rej-ap { color: var(--warn); }
+.rej-ops { width: 100%; display: flex; justify-content: flex-end; margin-top: 8rpx; }
+.rej-ops .link, .rej-ops .muted { margin-left: 28rpx; }
+.record.rejected { border-left: 8rpx solid var(--danger, #FA5151); }
 .pad { padding: 40rpx 0; }
 
 .book-pick { font-size: 30rpx; font-weight: 600; color: var(--text); margin-bottom: 8rpx; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

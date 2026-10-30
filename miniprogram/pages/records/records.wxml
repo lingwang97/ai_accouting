@@ -68,6 +68,22 @@
       <text class="muted">宾客尚未完成转账</text>
     </view>
 
+    <!-- 未收到（v3.77.2）：时间、原因、申诉状态、处理经过；24 小时内可撤销；宾客已申诉的去待确认页核对 -->
+    <view class="r-actions rej-box" wx:elif="{{item.status === 'rejected'}}">
+      <text class="badge bad">{{item.statusText}}</text>
+      <view class="muted rej-info">{{item.rejTimeStr}} 标记{{item.reasonStr ? ' · ' + item.reasonStr : ''}}<text wx:if="{{item.appealStatus === 'open'}}" class="rej-ap"> · 宾客已申诉，待核对</text><text wx:elif="{{item.appealStatus === 'kept'}}"> · 已维持未收到</text></view>
+      <view class="rej-ops" wx:if="{{!readonly}}">
+        <view class="link" data-idx="{{index}}" bindtap="onTrail">处理经过</view>
+        <block wx:if="{{pm.confirm}}">
+          <view class="link" wx:if="{{item.appealStatus === 'open'}}" bindtap="onGoAppeal">去核对</view>
+          <block wx:elif="{{item.canUnreject}}">
+            <text class="muted" wx:if="{{curBook !== null && item.bookId && item.bookId !== curBook}}">切换{{unit}}后可撤销</text>
+            <view class="link" wx:else data-idx="{{index}}" bindtap="onUnreject">撤销未收到</view>
+          </block>
+        </block>
+      </view>
+    </view>
+
     <!-- 已入簿 -->
     <view class="r-actions" wx:elif="{{item.status === 'paid'}}">
       <text class="badge ok">{{item.statusText}}</text>

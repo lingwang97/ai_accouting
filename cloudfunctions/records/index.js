@@ -461,7 +461,8 @@ async function list(openid, event, ctx) {
   const paidCond = withKw({ ...base, status: REC.PAID });
   // 状态筛选只影响列表行与 listTotal；顶部合计 / 笔数 / 待确认数仍是整本口径
   // confirm = 待确认页同口径（status 'transferred'，行内有确认按钮）；paid = 已入簿；其余 = 全部
-  const stFilter = event.status === 'confirm' ? [REC.TRANSFERRED] : event.status === 'paid' ? [REC.PAID] : LISTED.slice();
+  // v3.77.2：rejected = 主家标记「未收到」的（不限 24 小时；「全部」口径不变，仍不含未收到）
+  const stFilter = event.status === 'confirm' ? [REC.TRANSFERRED] : event.status === 'paid' ? [REC.PAID] : event.status === 'rejected' ? [REC.REJECTED] : LISTED.slice();
   const listCond = withKw({ ...base, status: _.in(stFilter) });
   const pendingCond = withKw({ ...base, status: REC.TRANSFERRED });
 
@@ -509,7 +510,8 @@ async function list(openid, event, ctx) {
 
   const totalFen = (sumRes.list && sumRes.list[0] && sumRes.list[0].totalFen) || 0;
   return ok({
-    list: listRes.data.map(r => { const o = strip(r); if (dupCount) o.dupN = dupCount[r.payerName] || 0; return o; }),
+    // 家人共享（只读）看不到标记人与处理日志（v3.77.2 未收到筛选）
+    list: listRes.data.map(r => { const o = strip(r); if (dupCount) o.dupN = dupCount[r.payerName] || 0; if (readonly(ctx)) { delete o.rejectedBy; delete o.trail; } return o; }),
     dupTruncated,
     total: totalRes.total,          // 已确认笔数
     pendingCount: pendingRes.total, // 待确认笔数
