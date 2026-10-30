@@ -162,6 +162,14 @@ async function create(openid, event) {
   // 内容安全（v3.71.0）：宾客填写的姓名、备注、区分备注主家会看到
   { const bad = await S.checkText(cloud, openid, items.flatMap(x => [x.payerName, x.remark, x.nameTag])); if (bad) return bad; }
 
+  // 疑似重复登记（v3.76.0）：同一宾客 30 分钟内在这本礼簿已登记过同名同额（未取消）——多半是弱网下以为没登记上、离开后重新扫码。
+  // 只返回提示（不建记录），宾客确认「再登记一笔」后带 allowDup 重新提交；同一 reqId 的重试（replay）不提示
+  // 只对带 dupCheck 的新前端检查：旧前端不认识 dupOf，返回它会让宾客卡在表单页
+  if (!replay && event.dupCheck === true && event.allowDup !== true) {
+    const dup = await recentDup(account.ownerOpenid, openid, book ? book._id : '', items, now);
+    if (dup) return ok({ dupOf: dup });
+  }
+
   // 同名提醒：主家礼簿里已有别的宾客用了同一个姓名（不是本人扫码登记的）时，请宾客填区分信息，方便主家辨认
   // 只返回需要填写的姓名，不透露对方任何信息
   // 本人之前在这位主家这里填过的区分信息直接沿用，不再重复询问
@@ -251,6 +259,29 @@ async function create(openid, event) {
       payCodeUrl // 只给临时链接，不给文件路径（路径里含主家的 openid）
     }
   });
+}
+
+/** 疑似重复登记的时间窗口：30 分钟 */
+const DUP_MS = 30 * 60 * 1000;
+/**
+ * 本人 30 分钟内在同一本礼簿登记过的同名同额记录（待转账 / 待确认 / 已入簿；已取消、未收到的不算）
+ * 返回 { name, amount, status, minutes }（不含任何 id / openid）或 null；查询失败不拦登记
+ */
+async function recentDup(ownerOpenid, openid, bookId, items, now) {
+  let rows;
+  try {
+    rows = (await records.where({
+      ownerOpenid, payerOpenid: openid, bookId,
+      payerName: _.in(items.map(x => x.payerName)),
+      status: _.in([REC.PENDING, REC.TRANSFERRED, REC.PAID]),
+      createdAt: _.gte(new Date(now.getTime() - DUP_MS))
+    }).field({ payerName: true, amount: true, status: true, createdAt: true }).limit(100).get()).data;
+  } catch (e) { console.warn('重复登记检查失败，放行', e.message); return null; }
+  for (const x of items) {
+    const r = rows.find(d => d.payerName === x.payerName && Math.round(Number(d.amount) * 100) === Math.round(x.amount * 100));
+    if (r) return { name: x.payerName, amount: x.amount, status: r.status, minutes: Math.max(1, Math.round((now.getTime() - new Date(r.createdAt).getTime()) / 60000)) };
+  }
+  return null;
 }
 
 /**

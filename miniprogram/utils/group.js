@@ -28,6 +28,7 @@ function groupRecords(list) {
       ...first,
       batch,
       mixed,
+      suspectDup: recs.some(r => r.suspectDup), // 疑似重复登记（v3.76.0，服务端 records.pending 标记）
       methodLabel: mixed ? '转账+现金' : (first.payMethod === 'cash' ? '现金' : '转账'),
       // 列表说明行：付款方式只写一次（转账+现金写明各多少）
       methodText: mixed ? `转账 ￥${fmt.money((fen - cashFen) / 100)} + 现金 ￥${fmt.money(cashFen / 100)}` : (first.payMethod === 'cash' ? '宾客现金' : '已转账'),

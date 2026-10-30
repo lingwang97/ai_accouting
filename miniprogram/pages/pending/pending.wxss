@@ -75,6 +75,9 @@ button.btn-big:not([size=mini]) { width: 100%; font-size: 40rpx; font-weight: 60
 .pad { padding: 40rpx 0; }
 .cash-tag { font-size: 22rpx; color: var(--warn); background: var(--warn-bg); border-radius: 6rpx; padding: 2rpx 10rpx; margin-left: 12rpx; }
 .big-cash { font-size: 32rpx; color: var(--warn); font-weight: 600; margin-bottom: 16rpx; }
+/* 疑似重复登记（v3.76.0）：小标签不换行，大字模式整行提示 */
+.dup-tag { flex-shrink: 0; white-space: nowrap; font-size: 22rpx; color: var(--danger, #FA5151); border: 1rpx solid var(--danger, #FA5151); border-radius: 6rpx; padding: 0 8rpx; margin-left: 12rpx; margin-right: 8rpx; }
+.big-dup { font-size: 26rpx; color: var(--danger, #FA5151); margin-bottom: 16rpx; padding: 0 24rpx; }
 
 /* 批次录入 */
 /* 批次：整行「查看明细」按钮，点击区域大 */

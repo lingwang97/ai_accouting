@@ -110,7 +110,7 @@ Page({
       if (this.data.netBad || this.data.loadErr) this.setData({ netBad: false, loadErr: '' });
       const hiddenCount = Math.max(0, (count || 0) - list.length); // 超过单次上限 100 笔的部分
       // 轮询取回的内容与上次相同：不动界面（返回 false 让轮询放慢）
-      const sig = JSON.stringify([list.map(r => [r._id, r.status, r.amount, r.transferredAt]), (stalled || []).map(r => [r._id, r.status]), (rejected || []).map(r => r._id), (appeals || []).map(r => r._id), bookName, otherCount, hiddenCount]);
+      const sig = JSON.stringify([list.map(r => [r._id, r.status, r.amount, r.transferredAt, !!r.suspectDup]), (stalled || []).map(r => [r._id, r.status, !!r.suspectDup]), (rejected || []).map(r => r._id), (appeals || []).map(r => r._id), bookName, otherCount, hiddenCount]);
       if (silent && sig === this._sig) return false;
       this._sig = sig;
       this._stallN = (stalled || []).length; // 轮询用：两个分组的条数

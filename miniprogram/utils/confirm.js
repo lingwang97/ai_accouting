@@ -19,12 +19,14 @@ function confirmTransfer(record) {
     : record.payerName;
   const mixed = !!record.mixed; // 批次混合支付：部分转账、部分现金
   const cash = !mixed && record.payMethod === 'cash';
+  // 疑似重复登记（v3.76.0）：确认前再提醒一次
+  const dupNote = record.suspectDup ? '【疑似重复】30 分钟内有同名同额的另一笔登记，确认真的收到两笔再入簿。' : '';
   return new Promise(resolve => {
     wx.showModal({
       title: `${mixed ? '转账+现金' : (cash ? '现金' : '宾客登记')} ￥${amount}`,
-      content: mixed
+      content: dupNote + (mixed
         ? `请核对 ${who}：微信转账 ￥${record.wechatSumStr}、现金 ￥${record.cashSumStr} 是否都已收到`
-        : (cash ? `请清点 ${who} 交来的现金是否为 ￥${amount}` : `请核对微信收到 ${who} 的转账金额是否为 ￥${amount}`),
+        : (cash ? `请清点 ${who} 交来的现金是否为 ￥${amount}` : `请核对微信收到 ${who} 的转账金额是否为 ￥${amount}`)),
       confirmText: '一致入簿', // 按钮文字最多 4 个字，超出弹窗会直接失败
       cancelText: '金额不符',
       success: res => {

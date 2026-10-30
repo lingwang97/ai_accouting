@@ -28,7 +28,7 @@
     <view class="muted small">宾客可能转完账就离开了，也可能还在转账（3 分钟内登记的不会出现在这里）。请核对微信是否收到：收到的点「已收到」入簿，确实没收到的点「未收到」</view>
     <view class="stall-row" wx:for="{{stalled}}" wx:key="_id" wx:if="{{stallAll || index < 3}}">
       <view class="stall-info">
-        <view class="stall-name"><text class="payer">{{item.nameStr}}</text><text class="money">￥{{item.amountStr}}</text></view>
+        <view class="stall-name"><text class="payer">{{item.nameStr}}</text><text class="dup-tag" wx:if="{{item.suspectDup}}">疑似重复</text><text class="money">￥{{item.amountStr}}</text></view>
         <view class="muted small">{{item.timeStr}} 登记 · {{item.auto ? '已自动取消' : '未点完成'}} · {{item.methodText}}</view>
         <view class="muted small others" wx:if="{{item.batch}}">同批：{{item.othersStr}}</view>
         <view class="ops stall-ops">
@@ -99,7 +99,7 @@
     <view class="item {{item.picked ? 'picked' : ''}}" wx:for="{{shown}}" wx:key="_id" data-id="{{item._id}}" bindtap="onPick">
       <view class="check {{item.picked ? 'on' : ''}}" wx:if="{{selectMode}}">{{item.picked ? '✓' : ''}}</view>
       <view class="info">
-        <view class="name-row"><text class="payer">{{item.nameStr}}</text><text class="money amt">￥{{item.amountStr}}</text><text class="cash-tag" wx:if="{{!item.mixed && item.payMethod === 'cash'}}">{{funeral ? "" : "💵 "}}现金</text></view>
+        <view class="name-row"><text class="payer">{{item.nameStr}}</text><text class="money amt">￥{{item.amountStr}}</text><text class="cash-tag" wx:if="{{!item.mixed && item.payMethod === 'cash'}}">{{funeral ? "" : "💵 "}}现金</text><text class="dup-tag" wx:if="{{item.suspectDup}}">疑似重复</text></view>
         <!-- 批次：同一批的其余几位 -->
         <view class="muted others" wx:if="{{item.batch}}">同批：{{item.othersStr}}</view>
         <!-- 单笔：说明在左、操作在右；批次：说明独占一行，操作在下一行 -->
@@ -139,6 +139,7 @@
       </view>
       <view class="big-card {{slide}}" bindtouchstart="onTouchStart" bindtouchend="onTouchEnd">
         <view class="big-name">{{current.nameStr}}</view>
+        <view class="big-dup" wx:if="{{current.suspectDup}}">疑似重复：30 分钟内有同名同额的另一笔登记，请核对是否收到两笔</view>
         <view class="big-amount {{current.amountStr.length >= 11 ? 'md' : ''}}">￥{{current.amountStr}}</view>
         <view class="big-cash" wx:if="{{current.mixed}}">转账+现金：转账 ￥{{current.wechatSumStr}} · 现金 ￥{{current.cashSumStr}}</view>
         <view class="big-cash" wx:elif="{{current.payMethod === 'cash'}}">{{funeral ? "" : "💵 "}}现金，请当面清点</view>

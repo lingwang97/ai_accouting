@@ -204,7 +204,15 @@ Page({
         this._reqSig = sig;
       }
       const reqId = this._reqId;
-      let res = await req.payCreate({ aid: this.data.aid, ...payload, payMethod: pm, reqId, ...(guestNotify ? { guestNotify: true } : {}) });
+      let allowDup = false;
+      const send = () => req.payCreate({ aid: this.data.aid, ...payload, payMethod: pm, reqId, dupCheck: true, ...(guestNotify ? { guestNotify: true } : {}), ...(allowDup ? { allowDup: true } : {}) });
+      let res = await send();
+      // 疑似重复（v3.76.0）：30 分钟内已登记过同名同额，问一下是不是真要再登记一笔（取消则不提交）
+      if (res.dupOf) {
+        if (!(await this.askDup(res.dupOf))) return;
+        allowDup = true;
+        res = await send();
+      }
       // 同名提醒：主家礼簿里已有别的宾客叫这个名字，请填区分信息后重新提交（取消则不提交）
       if (res.needTag) {
         for (const name of res.needTag) {
@@ -213,9 +221,10 @@ Page({
           if (payload.items) payload.items.forEach(x => { if (x.name === name) x.tag = tag; });
           else payload.tag = tag;
         }
-        res = await req.payCreate({ aid: this.data.aid, ...payload, payMethod: pm, reqId, ...(guestNotify ? { guestNotify: true } : {}) });
+        res = await send();
         if (res.needTag) return wx.showToast({ title: '仍有同名，请修改姓名或区分信息', icon: 'none' });
       }
+      if (res.dupOf) return; // 提交期间刚出现的重复：不再追问，本次不登记
       const { record } = res;
       this._reqId = ''; // 已创建，下一次提交换新 reqId
       if (!payload.items) { try { wx.setStorageSync(NAME_KEY, payload.payerName); } catch (e) { /* 忽略 */ } } // 下次随礼自动填好姓名
@@ -253,6 +262,30 @@ Page({
     } finally {
       this.setData({ submitting: false });
     }
+  },
+
+  /**
+   * 疑似重复登记的确认（v3.76.0）：dup { name, amount, status, minutes }；返回是否「再登记一笔」
+   * 不再登记时告诉宾客去哪里看刚才那笔
+   */
+  askDup(dup) {
+    const st = { pending: '还没点「我已完成转账」', transferred: '正在等主家确认', paid: '主家已确认入簿' }[dup.status] || '已登记';
+    return new Promise(resolve => {
+      wx.showModal({
+        title: `你刚登记过${this.data.act === '登记' ? '' : '这笔'}`,
+        content: `${dup.minutes} 分钟前已登记 ${dup.name} ￥${fmt.money(dup.amount)}（${st}）。确定要再登记一笔吗？同一笔礼金不要重复登记。`,
+        confirmText: '再登记',
+        cancelText: '不用了',
+        success: r => {
+          if (!r.confirm) {
+            wx.showToast({ title: `可在${this.myGiftsWhere()}查看`, icon: 'none', duration: 3000 });
+            return resolve(false);
+          }
+          resolve(true);
+        },
+        fail: () => resolve(false)
+      });
+    });
   },
 
   /** 限流提示弹窗：说明还没登记成功（v3.75.1） */

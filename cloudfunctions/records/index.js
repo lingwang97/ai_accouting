@@ -166,8 +166,10 @@ async function dashboard(ctx) {
     P.refreshOf(db, ctx, !readonly(ctx) && can(ctx, 'confirm')).catch(() => null)
   ]);
   const b = bookRes && bookRes.data;
-  const book = b && b.ownerOpenid === owner && b.statReady
-    ? { _id: b._id, name: b.name, type: b.type, date: b.date || '', hostName: b.hostName || '', count: b.statCount || 0, sum: (b.statFen || 0) / 100 }
+  // 礼簿合计用实时聚合（v3.76.0）：累计值 statFen 在高峰期可能因中断 / 限流漏加，工作台以实时值为准，并顺带核对纠正累计值
+  const live = b && b.ownerOpenid === owner && b.statReady ? await liveBookStat(owner, b) : null;
+  const book = live
+    ? { _id: b._id, name: b.name, type: b.type, date: b.date || '', hostName: b.hostName || '', count: live.count, sum: live.fen / 100 }
     : null;
   const t = (todayRes.list && todayRes.list[0]) || { count: 0, fen: 0 };
   const pendFen = Math.round(((pendRes.list && pendRes.list[0]) || { fen: 0 }).fen);
@@ -394,6 +396,33 @@ async function reconcile(ctx, event) {
   });
 }
 
+/**
+ * 工作台当前礼簿的实时份数与合计（v3.76.0）。实例内按礼簿缓存 LIVE_TTL：累计值（statCount / statFen）没变且未过期时复用，
+ * 有新入簿（累计值变了）立即重算；与累计值不一致时 checkStatDrift 置待补算（下次打开礼簿列表重算）。聚合失败退回累计值
+ */
+const LIVE_TTL = 30 * 1000;
+const liveCache = new Map();
+async function liveBookStat(owner, b) {
+  const sc = b.statCount || 0;
+  const sf = b.statFen || 0;
+  const hit = liveCache.get(b._id);
+  if (hit && hit.exp > Date.now() && hit.sc === sc && hit.sf === sf) return hit.v;
+  try {
+    const r = await records.aggregate()
+      .match({ ownerOpenid: owner, status: REC.PAID, bookId: b._id })
+      .group({ _id: null, count: _.aggregate.sum(1), fen: _.aggregate.sum(_.aggregate.multiply(['$amount', 100])) })
+      .end();
+    const t = (r.list && r.list[0]) || { count: 0, fen: 0 };
+    const v = { count: t.count || 0, fen: Math.round(t.fen || 0) };
+    cacheSet(liveCache, b._id, { exp: Date.now() + LIVE_TTL, sc, sf, v });
+    await checkStatDrift(owner, b, v.count, v.fen);
+    return v;
+  } catch (e) {
+    console.warn('礼簿实时合计失败，用累计值', e.message);
+    return { count: sc, fen: sf };
+  }
+}
+
 /** 核对礼簿 statCount / statFen 与实时聚合：重读一次排除并发入簿，仍不一致才置 statReady=false；失败不影响对账 */
 async function checkStatDrift(owner, book, count, fen) {
   try {
@@ -572,8 +601,41 @@ async function pending(openid, ctx, withRejected) {
   const b = bookRes && bookRes.data;
   const bookName = b && b.ownerOpenid === openid ? (b.hostName ? `${b.hostName} · ${b.name}` : b.name) : '';
   await otherCount(ctx, cur, other.total); // 与轮询（pendingStat）共用缓存，避免两边个数不一致导致待确认页反复重拉
+  if (cur) await markDups(openid, cur, res.data.concat(stall.data));
   return ok({ list: res.data.map(strip), count: cnt.total, stalled: stall.data.map(strip), bookName, otherCount: other.total, rejected: rejRes ? rejRes.data.map(strip) : [], appeals: appRes ? appRes.data.map(strip) : [] });
 }
+
+/**
+ * 疑似重复登记（v3.76.0）：同一本礼簿里同名同额、登记时间相差 30 分钟内的多条（不论谁登记、不论状态是待确认 / 未点完成 / 已入簿），
+ * 给待确认与「宾客未点完成」里的这些记录标 suspectDup，提醒主家核对是否真的收到了两笔。多查一次同名记录，失败不影响待确认列表
+ */
+const DUP_MS = 30 * 60 * 1000;
+async function markDups(openid, bookId, list) {
+  if (!list.length) return;
+  const names = [...new Set(list.map(r => r.payerName).filter(Boolean))].slice(0, 300);
+  const since = Math.min(...list.map(r => new Date(r.createdAt).getTime() || Date.now())) - DUP_MS;
+  let peers;
+  try {
+    peers = (await records.where({
+      ownerOpenid: openid, bookId, payerName: _.in(names),
+      status: _.in([REC.PENDING, REC.TRANSFERRED, REC.PAID, REC.CANCELLED]),
+      createdAt: _.gte(new Date(since))
+    }).field({ payerName: true, amount: true, status: true, autoCancelled: true, createdAt: true }).limit(1000).get()).data;
+  } catch (e) { console.warn('疑似重复检查失败', e.message); return; }
+  dupFlags(list, peers);
+}
+/** 纯函数：list 里与 peers 中另一条同名同额、登记时间相差不超过 30 分钟的记录标 suspectDup（宾客自己取消的不算） */
+function dupFlags(list, peers) {
+  const live = peers.filter(p => p.status !== REC.CANCELLED || p.autoCancelled);
+  list.forEach(r => {
+    const t = new Date(r.createdAt).getTime();
+    const fen = Math.round(Number(r.amount) * 100);
+    if (live.some(p => p._id !== r._id && p.payerName === r.payerName && Math.round(Number(p.amount) * 100) === fen
+      && Math.abs(new Date(p.createdAt).getTime() - t) <= DUP_MS)) r.suspectDup = true;
+  });
+  return list;
+}
+exports._test = { dupFlags };
 
 /**
  * 其他礼簿（非当前礼簿，且在可见范围内）的待确认条件：只用来计数提示
