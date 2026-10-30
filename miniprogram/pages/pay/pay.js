@@ -10,7 +10,7 @@ const samename = require('../../utils/samename.js');
 const theme = require('../../utils/theme.js');
 const guestsub = require('../../utils/guestsub.js');
 
-const paypoll = require('../../utils/paypoll.js'); // 轮询退避：3 秒 → 5 秒 → 10 秒，最长 10 分钟（v3.71.0）
+const paypoll = require('../../utils/paypoll.js'); // 轮询退避：5 秒 → 10 秒 → 20 秒 → 30 秒，最长 10 分钟（v3.71.0 / v3.75.0）
 const NAME_KEY = 'pay_last_name'; // 本机上次随礼用的姓名（宾客常去多家随礼，免得每次重填）
 const OPEN_KEY = 'pay_open'; // 本机最近一笔未点「我已完成转账」的随礼（{ aid, rid, record, payCodeUrl, at }）
 
@@ -320,7 +320,7 @@ Page({
   // —— 轮询收款方确认结果 ——
   startPoll() {
     this.stopPoll();
-    this._pollAt = Date.now(); // 从头计时：回到页面、点「刷新状态」都重新从 3 秒开始
+    this._pollAt = Date.now(); // 从头计时：回到页面、点「刷新状态」、下拉刷新都重新从 5 秒开始
     this._on = true;
     if (this.data.pollTimeout) this.setData({ pollTimeout: false });
     this.poll(this._gen);
@@ -390,6 +390,12 @@ Page({
   /** 手动刷新（超时后） */
   onRefresh() {
     this.startPoll();
+  },
+
+  /** 下拉刷新（v3.75.0）：只在「等待主家确认」步骤立即查一次并从头计时；其他步骤不做任何事（不重置表单 / 不丢已填内容） */
+  onPullDownRefresh() {
+    if (this.data.step === 'waiting' && this.data.record) this.startPoll();
+    wx.stopPullDownRefresh();
   },
 
   onRetry() {

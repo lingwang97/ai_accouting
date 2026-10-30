@@ -129,6 +129,7 @@
         <view class="cash-tip" wx:if="{{record.mixed}}">转账 ￥{{record.payStr}} 已完成，请将现金 ￥{{record.cashStr}} 当面交给礼台</view>
         <view class="muted tip" wx:if="{{!pollTimeout}}">主家确认收到后本页会自动显示回执。也可以先离开，主家确认后到首页「我的随礼记录」查看回执</view>
         <view class="muted tip" wx:else>主家可能正在忙，已暂停自动查询。你可以先离开，主家确认后到首页「我的随礼记录」查看回执；也可点下方「刷新状态」再看看</view>
+        <view class="muted tip pull-tip">下拉可立即刷新</view>
       </view>
       <button class="btn-outline" bindtap="onRefresh">刷新状态</button>
     </block>

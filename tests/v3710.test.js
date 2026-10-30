@@ -229,13 +229,15 @@ test('接入清单：四个云函数带 secure.js 副本与 openapi 权限，登
 });
 
 // ---- 宾客等待页轮询退避
-test('paypoll.delay：1 分钟内 3 秒，3 分钟内 5 秒，之后 10 秒；最长 10 分钟', () => {
-  assert.strictEqual(paypoll.delay(0), 3000);
-  assert.strictEqual(paypoll.delay(59999), 3000);
-  assert.strictEqual(paypoll.delay(60000), 5000);
-  assert.strictEqual(paypoll.delay(179999), 5000);
-  assert.strictEqual(paypoll.delay(180000), 10000);
-  assert.strictEqual(paypoll.delay(599000), 10000);
+test('paypoll.delay（v3.75.0）：1 分钟内 5 秒，3 分钟内 10 秒，6 分钟内 20 秒，之后 30 秒；最长 10 分钟', () => {
+  assert.strictEqual(paypoll.delay(0), 5000);
+  assert.strictEqual(paypoll.delay(59999), 5000);
+  assert.strictEqual(paypoll.delay(60000), 10000);
+  assert.strictEqual(paypoll.delay(179999), 10000);
+  assert.strictEqual(paypoll.delay(180000), 20000);
+  assert.strictEqual(paypoll.delay(359999), 20000);
+  assert.strictEqual(paypoll.delay(360000), 30000);
+  assert.strictEqual(paypoll.delay(599000), 30000);
   assert.strictEqual(paypoll.MAX_MS, 600000);
 });
 
@@ -254,7 +256,7 @@ async function runPay(fn) {
     if (p.startsWith('../../')) return require(path.join(ROOT, 'miniprogram', p.replace('../../', '')));
     return require(p);
   };
-  const wxStub = { vibrateShort() {}, getStorageSync() { return ''; } };
+  const wxStub = { vibrateShort() {}, getStorageSync() { return ''; }, stopPullDownRefresh() { stat.pulled = (stat.pulled || 0) + 1; } };
   new Function('require', 'Page', 'wx', 'getApp', src)(sandboxRequire, o => { def = o; }, wxStub, () => ({ globalData: {} }));
   const page = Object.assign({}, def, { data: { ...def.data, record: { _id: 'r1' } }, setData(o) { Object.assign(this.data, o); } });
   const tick = async ms => { // 推进假时钟，依次触发到期定时器
@@ -270,19 +272,19 @@ async function runPay(fn) {
   try { await fn({ page, tick, stat, timers }); } finally { Date.now = realNow; global.setTimeout = rST; global.clearTimeout = rCT; }
 }
 
-test('pay 轮询：间隔 3 秒 → 5 秒 → 10 秒，10 分钟后停止并提示；刷新状态从头开始', async () => {
+test('pay 轮询：间隔 5 秒 → 10 秒 → 20 秒 → 30 秒，10 分钟后停止并提示；刷新状态从头开始', async () => {
   await runPay(async ({ page, tick, stat, timers }) => {
     const gaps = () => stat.times.map((t, i) => (i ? t - stat.times[i - 1] : 0)).slice(1);
     page.startPoll();
     await tick(0);
     assert.strictEqual(stat.n, 1);
     await tick(59000);
-    assert.ok(gaps().length >= 19 && gaps().every(g => g === 3000), gaps().join(','));
+    assert.ok(gaps().length >= 11 && gaps().every(g => g === 5000), gaps().join(','));
     await tick(130000); // 约 3 分钟
-    assert.ok(gaps().includes(5000) && gaps().every(g => [3000, 5000, 10000].includes(g)));
-    await tick(300000);
+    assert.ok(gaps().includes(10000) && gaps().every(g => [5000, 10000].includes(g)));
+    await tick(300000); // 约 8 分钟
     const g2 = gaps();
-    assert.strictEqual(g2[g2.length - 1], 10000);
+    assert.ok(g2.includes(20000) && g2[g2.length - 1] === 30000);
     assert.strictEqual(page.data.pollTimeout, false);
     await tick(200000); // 总计超过 10 分钟
     assert.strictEqual(page.data.pollTimeout, true);
@@ -290,16 +292,48 @@ test('pay 轮询：间隔 3 秒 → 5 秒 → 10 秒，10 分钟后停止并提�
     const n = stat.n;
     await tick(60000);
     assert.strictEqual(stat.n, n);
-    page.onRefresh(); // 刷新状态：重新开始，立即查一次并回到 3 秒
+    page.onRefresh(); // 刷新状态：重新开始，立即查一次并回到 5 秒
     await tick(0);
     assert.strictEqual(stat.n, n + 1);
     assert.strictEqual(page.data.pollTimeout, false);
-    await tick(3000);
+    await tick(5000);
     assert.strictEqual(stat.n, n + 2);
   });
 });
 
-test('pay 轮询：页面隐藏停止，回到页面立即查一次并重新从 3 秒开始；确认后停止', async () => {
+test('pay 下拉刷新：等待步骤立即查一次并从头计时（含超时后恢复）；其他步骤不查、不动表单', async () => {
+  await runPay(async ({ page, tick, stat, timers }) => {
+    page.data.step = 'waiting';
+    page.startPoll();
+    await tick(0);
+    await tick(130000); // 已进入 10 秒间隔
+    const n = stat.n;
+    page.onPullDownRefresh();
+    await tick(0);
+    assert.strictEqual(stat.n, n + 1, '立即查一次');
+    await tick(5000);
+    assert.strictEqual(stat.n, n + 2, '从头计时：5 秒后再查');
+    await tick(700000); // 超时停止
+    assert.strictEqual(page.data.pollTimeout, true);
+    page.onPullDownRefresh();
+    await tick(0);
+    assert.strictEqual(page.data.pollTimeout, false, '超时后下拉恢复轮询');
+    assert.ok(stat.pulled >= 2, '每次都收起下拉动画');
+    // 表单步骤：不轮询、不改动已填内容
+    page.stopPoll();
+    page.data.step = 'form'; page.data.payerName = '张三'; page.data.amount = '200';
+    const m = stat.n;
+    page.onPullDownRefresh();
+    await tick(0);
+    assert.strictEqual(stat.n, m);
+    assert.strictEqual(page.data.payerName, '张三');
+    assert.strictEqual(page.data.amount, '200');
+    assert.strictEqual(page.data.step, 'form');
+    assert.strictEqual(timers.size, 0);
+  });
+});
+
+test('pay 轮询：页面隐藏停止，回到页面立即查一次并重新从 5 秒开始；确认后停止', async () => {
   await runPay(async ({ page, tick, stat, timers }) => {
     page.data.step = 'waiting';
     page.startPoll();
@@ -312,12 +346,12 @@ test('pay 轮询：页面隐藏停止，回到页面立即查一次并重新从 
     page.onShow();
     await tick(0);
     assert.strictEqual(stat.n, n + 1, '回到页面立即查一次');
-    await tick(3000);
-    assert.strictEqual(stat.n, n + 2, '重新从 3 秒开始');
-    await tick(3000);
+    await tick(5000);
+    assert.strictEqual(stat.n, n + 2, '重新从 5 秒开始');
+    await tick(5000);
     assert.strictEqual(stat.n, n + 3);
     stat.status = 'paid';
-    await tick(3000);
+    await tick(5000);
     assert.strictEqual(page.data.step, 'success');
     assert.strictEqual(timers.size, 0);
     const m = stat.n;

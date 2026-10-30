@@ -14,6 +14,7 @@ const P = require('./plans.js');
 const { nameCheckMap } = require('./namecheck.js');
 const { MAX_AMOUNT, MAX_MSG } = require('./limits.js'); // 单笔礼金上限（tools/cloud-shared/limits.js）
 const { srvCol, resolveCode, resolveCtx, handlerName, canBook, readonly, can, workBook, soloBook, trusted } = require('./ctx.js');
+const statusCache = require('./statuscache.js'); // 宾客查询状态的实例内 3 秒缓存（v3.75.0）
 const accounts = db.collection('accounts');
 // 礼金记录：where / aggregate 自动排除带 _openid 的伪造记录（v3.72.0，见 ctx.srvCol）；add / doc 原样
 const records = srvCol(db, 'records');
@@ -26,9 +27,20 @@ async function ensureCol(name) {
   colReady[name] = true;
 }
 
+// 不改库的 action：其余一律视为写操作，执行后清空本实例的状态缓存（含出错，可能已部分写入）
+const READ_ACTIONS = ['status', 'receipt', 'myReceipts', 'receiptByToken', 'qrCheck', '__meta', '__warm'];
 exports.main = async (event, context) => {
   // 上线前检查（v3.72.2）：返回本函数内存 / 超时，带一次性凭据时探测云调用权限，见 meta.js
   if (event && event.action === '__meta') return await require('./meta.js').handle(cloud, event, context, ['security.msgSecCheck', 'security.imgSecCheck', 'subscribeMessage.send', 'wxacode.getUnlimited']);
+  const act = event && event.action;
+  try {
+    return await mainInner(event, context);
+  } finally {
+    if (act && !READ_ACTIONS.includes(act)) statusCache.clear();
+  }
+};
+
+async function mainInner(event, context) {
   // 预热：warmer 云函数按「系统设置」定时唤醒，保持实例常驻、减少冷启动；直接返回，不做任何读写
   if (event && (event.action === '__warm' || event.Type === 'Timer')) return { code: 0, msg: 'warm', data: null }; // Timer：兼容之前上传过的旧预热触发器
   const { OPENID } = cloud.getWXContext();
@@ -93,10 +105,10 @@ exports.main = async (event, context) => {
     console.error('payment', event.action, e);
     return failOf(e, '操作失败，请稍后重试');
   }
-};
+}
 
 // 仅供本地测试
-exports._test = { takeSlot: (...a) => takeSlot(...a) };
+exports._test = { takeSlot: (...a) => takeSlot(...a), statusCache };
 
 /**
  * 付款方发起转账：创建待转账记录，返回收款码
@@ -782,6 +794,15 @@ async function isStaff(openid, rec) {
 
 /** 付款方轮询状态 */
 async function status(openid, rid) {
+  // 3 秒实例内缓存：key 含 openid，只有同一个人才命中；命中时不读库（命中的人此前已通过 canView 校验）
+  const hit = statusCache.get(openid, rid);
+  if (hit) return hit;
+  const res = await statusRead(openid, rid);
+  if (res.code === 0) statusCache.set(openid, rid, res);
+  return res;
+}
+
+async function statusRead(openid, rid) {
   const rec = await getRecord(rid);
   if (!rec) return err('记录不存在');
   if (!(await canView(openid, rec))) return err('无权查看');
