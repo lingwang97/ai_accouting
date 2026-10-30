@@ -134,8 +134,8 @@ Component({
       this.setData({ 'appeal.busy': true });
       return (async () => {
         try {
-          const guestNotify = await subP;
-          await req.payAppeal(a.rid, String(a.note || '').trim().slice(0, 50), String(a.ref || '').replace(/[^0-9A-Za-z]/g, '').slice(0, 6), guestNotify);
+          const sub = await subP;
+          await req.payAppeal(a.rid, String(a.note || '').trim().slice(0, 50), String(a.ref || '').replace(/[^0-9A-Za-z]/g, '').slice(0, 6), sub);
           this.setData({ appeal: null });
           wx.showToast({ title: '已提交申请', icon: 'success' });
           await this.reload();

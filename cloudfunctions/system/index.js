@@ -788,6 +788,7 @@ const INDEXES = [
   ['records', 'claimed_status_paid', [['claimedOpenid', 1], ['status', 1], ['paidAt', -1]]], // 我的随礼记录（小票二维码认领）
   ['records', 'rcpt_token', [['rcptToken', 1]]], // 扫小票二维码按 token 查回执
   ['records', 'batch', [['batchId', 1]]],
+  ['records', 'owner_status_appeal', [['ownerOpenid', 1], ['status', 1], ['appealStatus', 1]]], // 宾客申诉跨礼簿计数 / 列表（v3.77.0）
   ['records', 'guest_retry', [['guestNotify', 1], ['status', 1], ['paidAt', -1]]], // warmer 补发宾客入簿通知（v3.68.1）
   ['records', 'owner_payer', [['ownerOpenid', 1], ['payerName', 1]]], // 往来按姓名查询 / nameCheck
   ['trash_records', 'owner_book', [['ownerOpenid', 1], ['bookId', 1]]],

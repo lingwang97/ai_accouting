@@ -562,19 +562,31 @@ function rejectedCondOf(openid, cur, now) {
  */
 const APPEAL_TTL = 30 * 1000;
 const appealCache = new Map();
-async function appealCount(openid, cur, fresh, now) {
-  const key = `${openid}|${cur}`;
+/**
+ * v3.77.0：申诉不再只看当前礼簿——可见范围内（canBook）所有礼簿的待处理申诉都计入：{ n 全部, other 其他礼簿 }
+ * 一次最多取 100 条的 bookId 在内存里分当前 / 其他（待处理申诉很少，省一次 count）
+ */
+async function appealCount(ctx, cur, fresh, now) {
+  const key = `${ctx.ownerOpenid}|${cur}|${ctx.bookIds ? ctx.bookIds.join(',') : '*'}`;
   const hit = appealCache.get(key);
-  if (!fresh && hit && hit.exp > now) return hit.n;
+  if (!fresh && hit && hit.exp > now) return hit;
   try {
-    const n = (await records.where(appealCondOf(openid, cur)).count()).total;
-    cacheSet(appealCache, key, { exp: now + APPEAL_TTL, n });
-    return n;
-  } catch (e) { return hit ? hit.n : 0; }
+    const rows = (await records.where(appealCondOf(ctx)).field({ bookId: true }).limit(100).get()).data;
+    const v = { exp: now + APPEAL_TTL, n: rows.length, other: rows.filter(r => r.bookId !== cur).length };
+    cacheSet(appealCache, key, v);
+    return v;
+  } catch (e) { return hit || { n: 0, other: 0 }; }
 }
-/** 「宾客申诉」条件（v3.74.0）：被标未收到、宾客申请了再核对、主家还没处理；不受 24 小时限制（宾客申请期为 30 天） */
-function appealCondOf(openid, cur) {
-  return { ownerOpenid: openid, status: REC.REJECTED, bookId: cur, appealStatus: 'open' };
+/**
+ * 「宾客申诉」条件（v3.74.0）：被标未收到、宾客申请了再核对、主家还没处理；不受 24 小时限制（宾客申请期为 30 天）
+ * v3.77.0：范围为 ctx 可见的全部礼簿（主家 / 授权全部礼簿的记账人不限；其余限 bookIds）；没有 bookId 的旧数据不计
+ */
+function appealCondOf(ctx) {
+  const ids = ctx.bookIds ? ctx.bookIds.filter(id => id !== '__none__') : null;
+  return {
+    ownerOpenid: ctx.ownerOpenid, status: REC.REJECTED, appealStatus: 'open',
+    bookId: ids ? _.in(ids.length ? ids : ['__none__']) : _.exists(true).and(_.neq(''))
+  };
 }
 async function pending(openid, ctx, withRejected) {
   // 只取当前礼簿（workBook）的待确认；确认接口同样限定当前礼簿，避免跨礼簿确认
@@ -593,16 +605,35 @@ async function pending(openid, ctx, withRejected) {
     withRejected && cur && can(ctx, 'confirm')
       ? records.where(rejectedCondOf(openid, cur, now)).orderBy('rejectedAt', 'desc').limit(50).get().catch(() => null)
       : null,
-    // 宾客申诉（需要确认收礼权限）
-    withRejected && cur && can(ctx, 'confirm')
-      ? records.where(appealCondOf(openid, cur)).orderBy('appealAt', 'desc').limit(50).get().catch(() => null)
+    // 宾客申诉（需要确认收礼权限）：可见范围内全部礼簿（v3.77.0），其他礼簿的带礼簿名，前端折叠在提示条里
+    withRejected && can(ctx, 'confirm')
+      ? records.where(appealCondOf(ctx)).orderBy('appealAt', 'desc').limit(50).get().catch(() => null)
       : null
   ]);
   const b = bookRes && bookRes.data;
   const bookName = b && b.ownerOpenid === openid ? (b.hostName ? `${b.hostName} · ${b.name}` : b.name) : '';
   await otherCount(ctx, cur, other.total); // 与轮询（pendingStat）共用缓存，避免两边个数不一致导致待确认页反复重拉
   if (cur) await markDups(openid, cur, res.data.concat(stall.data));
-  return ok({ list: res.data.map(strip), count: cnt.total, stalled: stall.data.map(strip), bookName, otherCount: other.total, rejected: rejRes ? rejRes.data.map(strip) : [], appeals: appRes ? appRes.data.map(strip) : [] });
+  const appeals = appRes ? await tagBooks(openid, appRes.data, cur) : [];
+  return ok({ list: res.data.map(strip), count: cnt.total, stalled: stall.data.map(strip), bookName, otherCount: other.total, rejected: rejRes ? rejRes.data.map(strip) : [], appeals, appealOther: appeals.filter(r => r.bookOther).length });
+}
+
+/** 给申诉记录加礼簿名 / 是否其他礼簿 / 是否已归档（v3.77.0）；查礼簿失败时只缺礼簿名 */
+async function tagBooks(openid, list, cur) {
+  const ids = [...new Set(list.map(r => r.bookId).filter(id => id && id !== cur))].slice(0, 100);
+  const map = new Map();
+  if (ids.length) {
+    try {
+      (await db.collection('books').where({ _id: _.in(ids), ownerOpenid: openid }).field({ name: true, hostName: true, archived: true }).limit(100).get())
+        .data.forEach(b => map.set(b._id, b));
+    } catch (e) { console.warn('申诉礼簿名查询失败', e.message); }
+  }
+  return list.map(r => {
+    const out = strip(r);
+    if (r.bookId === cur) return out;
+    const b = map.get(r.bookId);
+    return { ...out, bookOther: true, bookName: b ? (b.hostName ? `${b.hostName} · ${b.name}` : b.name) : (r.themeName || '其他礼簿'), bookArchived: !!(b && b.archived) };
+  });
 }
 
 /**
@@ -657,7 +688,7 @@ async function pendingStat(openid, ctx, selfOpenid, withExtra, rv) {
   const cur = workBook(ctx);
   const cond = { ownerOpenid: openid, status: REC.TRANSFERRED, bookId: cur || '__none__' };
   const now = Date.now();
-  const canAppeal = !!cur && can(ctx, 'confirm');
+  const canAppeal = can(ctx, 'confirm');
   const [cnt, other, due, stall, rej, app] = await Promise.all([
     records.where(cond).count(),
     otherCount(ctx, cur),
@@ -665,7 +696,7 @@ async function pendingStat(openid, ctx, selfOpenid, withExtra, rv) {
     withExtra && cur ? records.where(stallCondOf(openid, cur, now)).count().catch(() => null) : null,
     withExtra && cur && can(ctx, 'confirm') ? records.where(rejectedCondOf(openid, cur, now)).count().catch(() => null) : null,
     // 宾客申诉待处理数（角标与待确认页轮询用；没有确认收礼权限的不查）
-    canAppeal ? appealCount(openid, cur, withExtra, now) : 0
+    canAppeal ? appealCount(ctx, cur, withExtra, now) : null
   ]);
   const sumKey = `${openid}|${cur}`;
   const hit = sumCache.get(sumKey);
@@ -679,7 +710,7 @@ async function pendingStat(openid, ctx, selfOpenid, withExtra, rv) {
     fen = Math.round(((agg.list && agg.list[0]) || { fen: 0 }).fen);
   }
   if (!hit || hit.count !== cnt.total || hit.exp <= now) cacheSet(sumCache, sumKey, { exp: now + SUM_TTL, count: cnt.total, fen });
-  const out = { count: cnt.total, sum: fen / 100, other, remindDue: due, appeal: app || 0 };
+  const out = { count: cnt.total, sum: fen / 100, other, remindDue: due, appeal: app ? app.n : 0, appealOther: app ? app.other : 0 }; // appeal：可见范围内全部礼簿的申诉数（v3.77.0）
   if (withExtra) { out.stall = stall ? stall.total : -1; out.rej = rej ? rej.total : -1; } // -1：未查询 / 无权限，页面不据此刷新
   return ok(out);
 }

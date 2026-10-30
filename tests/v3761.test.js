@@ -19,7 +19,7 @@ function loadPay(createImpl, dataExtra) {
   };
   const sandboxRequire = p => {
     if (p === '../../utils/request.js') return req;
-    if (p === '../../utils/guestsub.js') return { ask: async () => false };
+    if (p === '../../utils/guestsub.js') return { ask: async () => ({}), flags: () => ({}) };
     if (p.startsWith('../../')) return require(path.join(ROOT, 'miniprogram', p.replace('../../', '')));
     return require(p);
   };

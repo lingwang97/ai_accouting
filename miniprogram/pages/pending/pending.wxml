@@ -10,6 +10,10 @@
       <text class="other-text">其他{{unit}}还有 {{otherCount}} 份待确认礼金</text>
       <text class="other-go">去切换 ›</text>
     </view>
+    <view class="other-tip" wx:if="{{canConfirm && appealsOther.length}}" bindtap="onOtherAp">
+      <text class="other-text">其他{{unit}}还有 {{appealsOther.length}} 条宾客申诉</text>
+      <text class="other-go">{{showOtherAp ? '收起 ›' : '查看 ›'}}</text>
+    </view>
     <view class="other-tip" wx:if="{{hiddenCount > 0}}">
       <text class="other-text">一次最多显示 100 笔，还有 {{hiddenCount}} 笔待确认，处理后会自动补上</text>
     </view>
@@ -48,6 +52,25 @@
     <view class="stall-row" wx:for="{{appeals}}" wx:key="_id">
       <view class="stall-info">
         <view class="stall-name"><text class="payer">{{item.nameStr}}</text><text class="money">￥{{item.amountStr}}</text></view>
+        <view class="muted small">{{item.timeStr}} 申请 · 标记原因：{{item.reasonStr || '未写'}}</view>
+        <view class="muted small" wx:if="{{item.appealNote}}">宾客说明：{{item.appealNote}}</view>
+        <view class="muted small" wx:if="{{item.appealRef}}">转账单号后几位：{{item.appealRef}}</view>
+        <view class="muted small others" wx:if="{{item.batch}}">同批：{{item.othersStr}}</view>
+        <view class="ops stall-ops">
+          <button class="btn btn-sm btn-plain op-btn" data-id="{{item._id}}" catchtap="onTrail">处理经过</button>
+          <button class="btn btn-sm btn-primary op-btn" data-id="{{item._id}}" catchtap="onAppeal">去核对</button>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 其他礼簿的宾客申诉（v3.77.0）：点提示条展开，直接在这里处理，不用切换当前礼簿 -->
+  <view class="card stall" wx:if="{{canConfirm && showOtherAp && appealsOther.length}}">
+    <view class="stall-title">其他{{unit}}的宾客申诉（{{appealsOther.length}}）</view>
+    <view class="stall-row" wx:for="{{appealsOther}}" wx:key="_id">
+      <view class="stall-info">
+        <view class="stall-name"><text class="payer">{{item.nameStr}}</text><text class="money">￥{{item.amountStr}}</text></view>
+        <view class="muted small ap-book">{{unit}}：{{item.bookName}}{{item.bookArchived ? '（已归档）' : ''}}</view>
         <view class="muted small">{{item.timeStr}} 申请 · 标记原因：{{item.reasonStr || '未写'}}</view>
         <view class="muted small" wx:if="{{item.appealNote}}">宾客说明：{{item.appealNote}}</view>
         <view class="muted small" wx:if="{{item.appealRef}}">转账单号后几位：{{item.appealRef}}</view>

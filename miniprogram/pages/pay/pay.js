@@ -196,7 +196,7 @@ Page({
     const subP = pm === 'cash' ? this.askGuestNotify() : null;
     this.setData({ submitting: true });
     try {
-      const guestNotify = subP ? await subP : false;
+      const sub = subP ? await subP : null;
       // 幂等键：弱网重试、连点都带同一个 reqId，服务端只记一条；表单内容变了换新的，提交成功后换新的
       const sig = JSON.stringify([payload, pm]);
       if (!this._reqId || this._reqSig !== sig) {
@@ -206,7 +206,7 @@ Page({
       const reqId = this._reqId;
       let allowDup = false;
       // silent：失败提示由下面 catch 统一处理（限流只弹一个固定说明弹窗，其余错误照常 toast，v3.76.1）
-      const send = () => req.payCreate({ aid: this.data.aid, ...payload, payMethod: pm, reqId, dupCheck: true, ...(guestNotify ? { guestNotify: true } : {}), ...(allowDup ? { allowDup: true } : {}) }, { silent: true });
+      const send = () => req.payCreate({ aid: this.data.aid, ...payload, payMethod: pm, reqId, dupCheck: true, ...guestsub.flags(sub), ...(allowDup ? { allowDup: true } : {}) }, { silent: true });
       let res = await send();
       // 疑似重复（v3.76.0）：30 分钟内已登记过同名同额，问一下是不是真要再登记一笔（取消则不提交）
       if (res.dupOf) {
@@ -336,8 +336,8 @@ Page({
     const subP = this.askGuestNotify(); // 必须在第一个 await 之前（见上）
     this.setData({ submitting: true });
     try {
-      const guestNotify = await subP;
-      await req.payTransferred(this.data.record._id, guestNotify);
+      const sub = await subP;
+      await req.payTransferred(this.data.record._id, sub);
       this.clearOpen();
       this.setData({ step: 'waiting' });
       this.startPoll();

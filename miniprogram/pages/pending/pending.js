@@ -37,6 +37,8 @@ Page({
     loaded: false,
     bookName: '',     // 当前礼簿名：待确认只处理当前礼簿
     hiddenCount: 0,   // 待确认超过单次显示上限（100 笔）时，未显示的笔数
+    appealsOther: [], // 其他礼簿的宾客申诉（v3.77.0）
+    showOtherAp: false,
     otherCount: 0,    // 其他礼簿的待确认份数（提示回工作台切换）
     unit: '礼簿',      // 机构模式称「场次」
     netBad: false,    // 轮询网络失败：顶部提示条（不弹 toast）
@@ -115,7 +117,7 @@ Page({
       this._sig = sig;
       this._stallN = (stalled || []).length; // 轮询用：两个分组的条数
       this._rejN = (rejected || []).length;
-      this._appN = (appeals || []).length;
+      this._appN = (appeals || []).length; // 全部礼簿的申诉数（v3.77.0），与 recordStat 的 appeal 同口径
       getApp().setAppeal(this._appN);
       // 宾客没点「我已完成转账」的（含 24 小时内被自动取消的）：主家核对微信到账后可直接入簿
       this.setData({
@@ -123,7 +125,11 @@ Page({
         // 最近 24 小时内标记「未收到」的：点错了可以撤销
         rejected: groupRecords(rejected || []).map(g => ({ ...g, timeStr: fmt.time(g.rejectedAt || g.createdAt), reasonStr: trail.REASON[g.rejectReason] || '' })),
         // 宾客申诉（v3.74.0）：宾客说被标未收到的这笔确实转了，请主家再核对
-        appeals: groupRecords(appeals || []).map(g => ({ ...g, timeStr: fmt.dateTime(g.appealAt || g.rejectedAt || g.createdAt), reasonStr: [trail.REASON[g.rejectReason] || '', g.rejectNote || ''].filter(Boolean).join('：') }))
+        // v3.77.0：当前礼簿的申诉直接显示；其他礼簿的（带礼簿名）折叠在提示条里，点开可直接处理，不用切换当前礼簿
+        ...(() => {
+          const gs = groupRecords(appeals || []).map(g => ({ ...g, timeStr: fmt.dateTime(g.appealAt || g.rejectedAt || g.createdAt), reasonStr: [trail.REASON[g.rejectReason] || '', g.rejectNote || ''].filter(Boolean).join('：') }));
+          return { appeals: gs.filter(g => !g.bookOther), appealsOther: gs.filter(g => g.bookOther) };
+        })()
       });
       if (silent && list.length > countOf(this._list)) wx.vibrateShort({ type: 'heavy', fail() {} });
       const picked = new Set(this._list.filter(r => r.picked).map(r => r._id));
@@ -275,16 +281,17 @@ Page({
     }
     this.load(false);
   },
-  /** 宾客申诉：核对后入簿 / 维持未收到 */
+  onOtherAp() { this.setData({ showOtherAp: !this.data.showOtherAp }); },
+  /** 宾客申诉：核对后入簿 / 维持未收到（含其他礼簿的） */
   async onAppeal(e) {
-    const g = (this.data.appeals || []).find(x => x._id === e.currentTarget.dataset.id);
+    const g = [].concat(this.data.appeals || [], this.data.appealsOther || []).find(x => x._id === e.currentTarget.dataset.id);
     if (!g) return;
     const res = await this.run(() => confirm.resolveAppeal(g));
     if (res) this.load(false);
   },
   /** 查看处理经过（谁、何时、做了什么） */
   onTrail(e) {
-    const list = [].concat(this.data.appeals || [], this.data.rejected || []);
+    const list = [].concat(this.data.appeals || [], this.data.appealsOther || [], this.data.rejected || []);
     const g = list.find(x => x._id === e.currentTarget.dataset.id);
     if (g) trail.show(g);
   },

@@ -80,10 +80,10 @@ test('主家确认入簿后给订阅的宾客发一次：体验版、打开回�
 });
 
 test('入簿通知只在入簿时发：未收到（拒绝）发的是「未收到」提示（v3.73.0），不是入簿通知；没订阅不发；礼台代记 / 经办人自己不发', async () => {
-  seed([rec('r1', { guestNotify: true })]);
+  seed([rec('r1', { guestNotify: true, guestRejectNotify: true })]);
   await owner({ action: 'reject', rid: 'r1' });
   assert.strictEqual(sent.length, 1);
-  assert.ok(!/已入簿|已收到/.test(sent[0].data.thing5.value), sent[0].data.thing5.value);
+  assert.ok(!/已入簿|已收到/.test(sent[0].data.thing3.value), sent[0].data.thing3.value);
   assert.strictEqual(sent[0].page, 'pages/myreceipts/myreceipts');
   seed([rec('r2')]); // 没订阅
   await owner({ action: 'confirm', rid: 'r2' });

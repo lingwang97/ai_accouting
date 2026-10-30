@@ -13,6 +13,8 @@ const { REC } = require('./status.js');
 const { bjTime } = require('./common.js');
 
 const GUEST_TMPL_ID = 'eC0vKfrKjT6oBR187PU8HSkiLNORwnaKRxf6JT7Vcl0'; // 需与 miniprogram/config.js 的 GUEST_NOTIFY_TMPL_ID 一致
+// v3.77.0：「未收到 / 核对结果」独立模板（字段 thing4 主家+礼簿 / time1 时间 / amount2 金额 / thing3 备注），需与 config.js 的 GUEST_REJECT_TMPL_ID 一致
+const GUEST_REJECT_TMPL_ID = 'pOZ1wk9YDF5aSPc89guSJwQH6ay0Xdu7QJN5hb6Jc0U';
 const MAX_TRIES = 3;
 const STALE_MS = 10 * 60 * 1000;
 const RETRY_WINDOW_MS = 24 * 3600 * 1000; // 只补发 24 小时内入簿的
@@ -47,7 +49,7 @@ function buildGuest(g, timeStr) {
 }
 
 /**
- * 宾客「主家未确认收到」通知内容（v3.73.0，复用入簿通知模板，只换备注文案）
+ * 宾客「主家未确认收到」通知内容（v3.73.0；v3.77.0 起用独立的「未收到」模板）
  * g：同 buildGuest，另有 reason（原因码）；白事统一用「暂未核实到账」，不说「未收到」
  */
 const REJECT_NOTE = { nofound: '主家未查到到账', amount: '主家核对金额不符', nomatch: '主家未对上转账人' };
@@ -59,11 +61,10 @@ function buildReject(g, timeStr) {
   else if (n > 1) note = `${n}人未查到到账，点此查看`;
   else note = (REJECT_NOTE[g.reason] || '主家暂未确认收到') + '，点此查看';
   return {
-    thing6: { value: thingValue([g.hostName, g.themeName].filter(Boolean).join(' '), '慧礼记') },
-    amount3: { value: `${(Math.round(Number(g.amount || 0) * 100) / 100).toFixed(2)}元` },
+    thing4: { value: thingValue([g.hostName, g.themeName].filter(Boolean).join(' '), '慧礼记') },
     time1: { value: timeStr },
-    thing8: { value: { cash: '现金', mixed: '微信转账+现金' }[g.method] || '微信转账' },
-    thing5: { value: thingValue(note, '请点此查看') }
+    amount2: { value: `${(Math.round(Number(g.amount || 0) * 100) / 100).toFixed(2)}元` },
+    thing3: { value: thingValue(note, '请点此查看') }
   };
 }
 
@@ -176,13 +177,15 @@ function create(db, cloud) {
   }
 
   /**
-   * 主家标记「未收到」后通知宾客（v3.73.0）：订阅是一次性的，发完就用掉，所以先原子地把 guestNotify 置为 false 再发，
-   * 同一次订阅只发一条，之后即使入簿也不再重复发（宾客申诉时会重新订阅）；不重试，失败只记日志。批次一条，取宾客自己那条
+   * 主家标记「未收到」后通知宾客（v3.73.0）：订阅是一次性的，发完就用掉，所以先原子地把 guestRejectNotify 置为 false 再发，
+   * 同一次订阅只发一条（宾客申诉时会重新订阅）；不重试，失败只记日志。批次一条，取宾客自己那条。
+   * v3.77.0：用独立模板与独立标记 guestRejectNotify，只消耗「未收到」额度，不影响 guestNotify（入簿通知）；
+   * 旧前端只订阅了入簿模板（没有 guestRejectNotify）的记录不发，不再借用入簿模板
    */
   async function notifyRejected(ids, operatorOpenid, opts) {
     const kept = !!(opts && opts.kept);
-    if (!GUEST_TMPL_ID || !ids.length) return 0;
-    const res = await records.where({ _id: _.in(ids.slice(0, 100)), status: REC.REJECTED, guestNotify: true }).get();
+    if (!GUEST_REJECT_TMPL_ID || !ids.length) return 0;
+    const res = await records.where({ _id: _.in(ids.slice(0, 100)), status: REC.REJECTED, guestRejectNotify: true }).get();
     const pick = new Map();
     res.data.forEach(r => {
       if (!r.payerOpenid || r.deskEntry || r.payerOpenid === operatorOpenid) return;
@@ -193,7 +196,7 @@ function create(db, cloud) {
     let sent = 0;
     await Promise.all([...pick.values()].map(async rec => {
       const key = rec.batchId ? { batchId: rec.batchId, ownerOpenid: rec.ownerOpenid } : { _id: rec._id };
-      const mark = await records.where({ ...key, status: REC.REJECTED, guestNotify: true }).update({ data: { guestNotify: false, guestRejNotifiedAt: new Date() } });
+      const mark = await records.where({ ...key, status: REC.REJECTED, guestRejectNotify: true }).update({ data: { guestRejectNotify: false, guestRejNotifiedAt: new Date() } });
       if (!mark.stats || !mark.stats.updated) return;
       let all = [rec];
       if (rec.batchId) { try { all = (await batchOf(rec)).filter(r => r.status === REC.REJECTED); } catch (e) { /* 按单人 */ } if (!all.length) all = [rec]; }
@@ -209,7 +212,7 @@ function create(db, cloud) {
       try {
         await cloud.openapi.subscribeMessage.send({
           touser: rec.payerOpenid,
-          templateId: GUEST_TMPL_ID,
+          templateId: GUEST_REJECT_TMPL_ID,
           page: 'pages/myreceipts/myreceipts',
           miniprogramState: { develop: 'developer', trial: 'trial' }[rec.guestEnv] || 'formal',
           data
@@ -223,4 +226,4 @@ function create(db, cloud) {
   return { sendGuest, notifyGuests, retryPending, notifyRejected };
 }
 
-module.exports = { GUEST_TMPL_ID, MAX_TRIES, STALE_MS, buildGuest, buildReject, thingValue, create };
+module.exports = { GUEST_TMPL_ID, GUEST_REJECT_TMPL_ID, MAX_TRIES, STALE_MS, buildGuest, buildReject, thingValue, create };

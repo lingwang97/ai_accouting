@@ -1,4 +1,5 @@
 // utils/request.js — 云函数调用统一封装（出入参协议见文档 §5）
+const guestsub = require('./guestsub.js');
 /** 当前小程序版本：develop | trial | release */
 const envVersion = () => {
   try { return wx.getAccountInfoSync().miniProgram.envVersion; } catch (e) { return 'release'; }
@@ -205,7 +206,7 @@ module.exports = {
   // opts.silent：宾客提交页自己处理限流提示（v3.76.1）
   payCreate: (d, opts) => call('payment', { action: 'create', envVersion: envVersion(), ...d }, opts),
   // guestNotify：宾客同意了「入簿通知」订阅（v3.66.1），主家确认后发服务通知
-  payTransferred: (rid, guestNotify) => call('payment', { action: 'transferred', rid, envVersion: envVersion(), ...(guestNotify ? { guestNotify: true } : {}) }),
+  payTransferred: (rid, sub) => call('payment', { action: 'transferred', rid, envVersion: envVersion(), ...guestsub.flags(sub) }),
   payCancel: rid => call('payment', { action: 'cancel', rid }),
   // 宾客等待页轮询用 silent（v3.75.1）：偶尔失败下次再查，不弹提示吓到宾客
   payStatus: (rid, opts) => call('payment', { action: 'status', rid }, opts),
@@ -219,7 +220,7 @@ module.exports = {
   payVoid: rid => call('payment', { action: 'void', rid }).then(dropDash),
   payUnreject: rid => call('payment', { action: 'unreject', rid }).then(dropDash),
   // 宾客申请「再核对」（v3.74.0）；guestNotify：点击时同意了通知订阅
-  payAppeal: (rid, note, ref, guestNotify) => call('payment', { action: 'appeal', rid, envVersion: envVersion(), ...(note ? { note } : {}), ...(ref ? { ref } : {}), ...(guestNotify ? { guestNotify: true } : {}) }),
+  payAppeal: (rid, note, ref, sub) => call('payment', { action: 'appeal', rid, envVersion: envVersion(), ...(note ? { note } : {}), ...(ref ? { ref } : {}), ...guestsub.flags(sub) }),
   // 主家 / 记账人处理申诉：decision accept 入簿（amount 为实际金额）/ keep 维持未收到（note 为给宾客的回复）
   payResolveAppeal: (rid, decision, amount, note) => call('payment', { action: 'resolveAppeal', rid, decision, ...(amount ? { amount } : {}), ...(note ? { note } : {}) }).then(dropDash),
   payAmend: (rid, fields, opts) => call('payment', { action: 'amend', rid, ...fields }, opts).then(dropDash),

@@ -62,7 +62,7 @@ async function mainInner(event, context) {
       // 付款方
       case 'create': return await create(OPENID, event);
       case 'cashEntry': return await cashEntry(OPENID, ctx, event);
-      case 'transferred': return await transferred(OPENID, event.rid, event.envVersion, event.guestNotify === true);
+      case 'transferred': return await transferred(OPENID, event.rid, event.envVersion, event);
       case 'cancel': return await payerUpdate(OPENID, event.rid, [{ status: REC.PENDING }], REC.CANCELLED);
       case 'status': return await status(OPENID, event.rid);
       case 'receipt': return await receipt(OPENID, event.rid, event.batch === true);
@@ -207,7 +207,7 @@ async function create(openid, event) {
     ownerOpenid: account.ownerOpenid,
     payerOpenid: openid,
     // 现金随礼没有「我已完成转账」这一步：在「确认随礼（现金）」时订阅入簿通知（v3.66.1）
-    ...(payMethod === 'cash' && event.guestNotify === true ? guestFlag(event.envVersion) : {}),
+    ...(payMethod === 'cash' ? guestFlag(event.envVersion, event) : {}),
     bookId: book ? book._id : '',
     bookType: book ? book.type : 'other',
     themeName: book ? book.name : ((account.theme && account.theme.name) || ''),
@@ -548,10 +548,10 @@ async function incBookStat(bookId, count, fen, paidAt) {
 }
 
 /** 付款方已转账：pending（或超时被自动取消的）→ transferred，并通知收款方 */
-async function transferred(openid, rid, envVersion, guestNotify) {
+async function transferred(openid, rid, envVersion, subEv) {
   const out = {};
   // 宾客点「我已完成转账」时同意了入簿通知：记在这条（批次为整批）记录上，主家确认后据此发送（v3.66.1）
-  const extra = guestNotify ? guestFlag(envVersion) : null;
+  const extra = guestFlag(envVersion, subEv) || null;
   const res = await payerUpdate(openid, rid,
     [{ status: REC.PENDING }, { status: REC.CANCELLED, autoCancelled: true }], REC.TRANSFERRED, out, extra);
   // 复用 payerUpdate 已读到的记录，不再重复读库（v3.60.3）
@@ -726,7 +726,7 @@ async function appeal(openid, event) {
   const data = {
     appealStatus: 'open', appealN: 1, appealAt: now, appealNote: note, appealRef: ref,
     trail: trailAdd(cur, { who: 'guest', name: cur.payerName, act: 'appeal', ...(note ? { note } : {}), ...(ref ? { ref } : {}) }),
-    ...(event.guestNotify === true ? guestFlag(event.envVersion) : {})
+    ...(guestFlag(event.envVersion, event) || {})
   };
   const res = await records.where(_.and([
     { ...key, payerOpenid: openid, status: REC.REJECTED, rejectedAt: _.gte(cut) },
@@ -757,8 +757,7 @@ async function resolveAppeal(ctx, event) {
   if (note) { const bad = await S.checkText(cloud, ctx.user && ctx.user.openid, [note]); if (bad) return bad; }
   const rec = await getRecord(rid);
   if (!rec || rec.ownerOpenid !== ctx.ownerOpenid || !canBook(ctx, rec.bookId)) return err('记录不存在');
-  if (notCurrentBook(ctx, rec)) return err(switchMsg(ctx));
-  const all = rec.batchId ? await batchRecords(rec.batchId, { ownerOpenid: ctx.ownerOpenid }) : [rec];
+  const all = rec.batchId ? await batchRecords(rec.batchId, { ownerOpenid: ctx.ownerOpenid }) : [rec]; // keep 不限当前礼簿，归档礼簿也可（v3.77.0）
   const todo = all.filter(r => r.status === REC.REJECTED && r.appealStatus === 'open');
   if (!todo.length) return err('没有待处理的申诉，请刷新');
   const ids = [];
@@ -791,9 +790,15 @@ async function afterRejected(res, ctx) {
 }
 
 // —— 宾客入簿通知（v3.66.1）——
-/** 记在记录上的订阅标记：guestEnv 决定通知打开哪个版本（体验版 / 正式版），与主家通知一致 */
-function guestFlag(envVersion) {
-  return { guestNotify: true, guestEnv: ['develop', 'trial'].includes(envVersion) ? envVersion : 'release' };
+/**
+ * 记在记录上的订阅标记：guestEnv 决定通知打开哪个版本（体验版 / 正式版），与主家通知一致。
+ * v3.77.0：入簿模板 guestNotify 与「未收到」模板 guestRejectNotify 分别记录、分别消耗；两个都没同意返回 null（旧前端只会带 guestNotify）
+ */
+function guestFlag(envVersion, ev) {
+  const e = ev || {};
+  const a = e.guestNotify === true, b = e.guestRejectNotify === true;
+  if (!a && !b) return null;
+  return { ...(a ? { guestNotify: true } : {}), ...(b ? { guestRejectNotify: true } : {}), guestEnv: ['develop', 'trial'].includes(envVersion) ? envVersion : 'release' };
 }
 
 /**
@@ -1040,7 +1045,7 @@ async function groupUpdate(ctx, rid, fromList, to, actualAmount, amounts, opts) 
   const rec = await getRecord(rid);
   if (!rec || !rec.batchId) return ownerUpdate(ctx, rid, fromList, to, actualAmount, rec, opts);
   if (rec.ownerOpenid !== ctx.ownerOpenid || !canBook(ctx, rec.bookId)) return err('无权操作该账目');
-  if (notCurrentBook(ctx, rec)) return err(switchMsg(ctx));
+  if (!(opts && opts.appeal) && notCurrentBook(ctx, rec)) return err(switchMsg(ctx)); // 处理申诉不限当前礼簿（v3.77.0）
   const all = (await batchRecords(rec.batchId, { ownerOpenid: ctx.ownerOpenid })).filter(r => fromList.includes(r.status) && (r.status !== REC.CANCELLED || r.autoCancelled) && (!(opts && opts.appeal) || r.appealStatus === 'open'));
   if (!all.length) return err('当前状态不可操作，请刷新');
   const map = (to === REC.PAID && amounts && typeof amounts === 'object') ? amounts : {};
@@ -1061,6 +1066,11 @@ function switchMsg(ctx) {
 }
 function notCurrentBook(ctx, rec) {
   return !!rec.bookId && rec.bookId !== workBook(ctx);
+}
+
+/** 礼簿是否已归档（读失败 / 不存在按未归档处理，不拦截） */
+async function bookArchived(bookId) {
+  try { return !!((await db.collection('books').doc(bookId).get()).data || {}).archived; } catch (e) { return false; }
 }
 
 /** 礼簿码对应的礼簿已被删除（在回收站里） */
@@ -1092,11 +1102,13 @@ async function ownerUpdate(ctx, rid, fromList, to, actualAmount, pre, opts) {
   if (!r0) return err('记录不存在');
   if (r0.ownerOpenid !== openid) return err('无权操作该账目');
   if (ctx.bookIds && !canBook(ctx, r0.bookId)) return err('该礼金不在你负责的场次');
-  // 确认 / 拒绝只能在当前礼簿内进行（作废已入簿的不限）
-  if (r0 && to !== REC.VOID && notCurrentBook(ctx, r0)) return err(switchMsg(ctx));
-  // 处理宾客申诉入簿（v3.74.0）：只有「已申诉待处理」的未收到记录可以直接入簿
+  // 处理宾客申诉入簿（v3.74.0）：只有「已申诉待处理」的未收到记录可以直接入簿；
+  // v3.77.0：不限当前礼簿（权限范围内的礼簿都能处理，上面已校验 canBook），但已归档的礼簿不能入簿
   const viaAppeal = !!(opts && opts.appeal);
+  // 确认 / 拒绝只能在当前礼簿内进行（作废已入簿的、处理申诉的不限）
+  if (r0 && to !== REC.VOID && !viaAppeal && notCurrentBook(ctx, r0)) return err(switchMsg(ctx));
   if (viaAppeal && (!r0 || r0.status !== REC.REJECTED || r0.appealStatus !== 'open')) return err('没有待处理的申诉，请刷新');
+  if (viaAppeal && to === REC.PAID && r0.bookId && await bookArchived(r0.bookId)) return err(ctx.account && ctx.account.orgMode ? '该场次已归档，请先取消归档' : '该礼簿已归档，请先取消归档');
   const data = { status: to };
   if (to === REC.PAID) {
     if (viaAppeal) {

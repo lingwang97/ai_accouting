@@ -25,11 +25,11 @@ const guest = (ev, id) => { state.openid = id || 'g1'; return loadFunction('paym
 
 test('buildReject：按原因写备注；白事统一「暂未核实到账」；批次写人数；每个字段不超过 20 字', () => {
   const t = '2026年10月29日 10:00';
-  assert.strictEqual(gn.buildReject({ amount: 600, count: 1, reason: 'nofound' }, t).thing5.value, '主家未查到到账，点此查看');
-  assert.strictEqual(gn.buildReject({ amount: 600, count: 1, reason: 'amount' }, t).thing5.value, '主家核对金额不符，点此查看');
-  assert.strictEqual(gn.buildReject({ amount: 600, count: 1 }, t).thing5.value, '主家暂未确认收到，点此查看');
-  assert.strictEqual(gn.buildReject({ amount: 600, count: 1, funeral: true, reason: 'nofound' }, t).thing5.value, '暂未核实到账，点此查看');
-  assert.strictEqual(gn.buildReject({ amount: 600, count: 3 }, t).thing5.value, '3人未查到到账，点此查看');
+  assert.strictEqual(gn.buildReject({ amount: 600, count: 1, reason: 'nofound' }, t).thing3.value, '主家未查到到账，点此查看');
+  assert.strictEqual(gn.buildReject({ amount: 600, count: 1, reason: 'amount' }, t).thing3.value, '主家核对金额不符，点此查看');
+  assert.strictEqual(gn.buildReject({ amount: 600, count: 1 }, t).thing3.value, '主家暂未确认收到，点此查看');
+  assert.strictEqual(gn.buildReject({ amount: 600, count: 1, funeral: true, reason: 'nofound' }, t).thing3.value, '暂未核实到账，点此查看');
+  assert.strictEqual(gn.buildReject({ amount: 600, count: 3 }, t).thing3.value, '3人未查到到账，点此查看');
   for (const v of Object.values(gn.buildReject({ hostName: '欧阳府', themeName: '新婚之喜', amount: 1, count: 12, funeral: true }, t))) assert.ok(v.value.length <= 20, v.value);
 });
 
@@ -73,28 +73,28 @@ test('trail 最多保留 20 条', async () => {
 });
 
 test('通知：订阅过的宾客收到一条；发后订阅标记作废，之后不再发；批次一条；没订阅 / 礼台代记不发；发送失败不影响标记', async () => {
-  seed([rec('r1', { guestNotify: true, guestEnv: 'trial' })]);
+  seed([rec('r1', { guestRejectNotify: true, guestEnv: 'trial' })]);
   await owner({ action: 'reject', rid: 'r1', reason: 'nofound' });
   assert.strictEqual(sent.length, 1);
   assert.strictEqual(sent[0].touser, 'g1');
-  assert.strictEqual(sent[0].templateId, gn.GUEST_TMPL_ID);
+  assert.strictEqual(sent[0].templateId, gn.GUEST_REJECT_TMPL_ID);
   assert.strictEqual(sent[0].page, 'pages/myreceipts/myreceipts');
   assert.strictEqual(sent[0].miniprogramState, 'trial');
-  assert.strictEqual(sent[0].data.thing5.value, '主家未查到到账，点此查看');
-  assert.strictEqual(db.data.records[0].guestNotify, false);
+  assert.strictEqual(sent[0].data.thing3.value, '主家未查到到账，点此查看');
+  assert.strictEqual(db.data.records[0].guestRejectNotify, false);
   await owner({ action: 'unreject', rid: 'r1' });
   await owner({ action: 'reject', rid: 'r1' });
   assert.strictEqual(sent.length, 1);
-  const b = (id, i) => rec(id, { batchId: 'B1', batchIdx: i, batchSize: 2, payerName: '甲' + i, amount: 100, guestNotify: true });
+  const b = (id, i) => rec(id, { batchId: 'B1', batchIdx: i, batchSize: 2, payerName: '甲' + i, amount: 100, guestRejectNotify: true });
   seed([b('a0', 0), b('a1', 1)]);
   await owner({ action: 'reject', rid: 'a1' });
   assert.strictEqual(sent.length, 1);
-  assert.strictEqual(sent[0].data.amount3.value, '200.00元');
-  assert.strictEqual(sent[0].data.thing5.value, '2人未查到到账，点此查看');
-  seed([rec('r2'), rec('r3', { guestNotify: true, payerOpenid: '' }), rec('r4', { guestNotify: true, payerOpenid: OWNER })]);
+  assert.strictEqual(sent[0].data.amount2.value, '200.00元');
+  assert.strictEqual(sent[0].data.thing3.value, '2人未查到到账，点此查看');
+  seed([rec('r2'), rec('r3', { guestRejectNotify: true, payerOpenid: '' }), rec('r4', { guestRejectNotify: true, payerOpenid: OWNER })]);
   for (const id of ['r2', 'r3', 'r4']) await owner({ action: 'reject', rid: id });
   assert.strictEqual(sent.length, 0);
-  seed([rec('r5', { guestNotify: true })]);
+  seed([rec('r5', { guestRejectNotify: true })]);
   sdk.openapi.subscribeMessage = { send: async () => { const e = new Error('x'); e.errCode = 43101; throw e; } };
   const r = await owner({ action: 'reject', rid: 'r5' });
   assert.strictEqual(r.code, 0);

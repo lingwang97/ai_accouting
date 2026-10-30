@@ -150,7 +150,7 @@ test('resolveAppeal 需要确认收礼权限：无关身份不能处理；OWNER_
 });
 
 test('resolveAppeal keep：维持未收到（终态）、可附回复、不改 status、不动礼簿合计；通知宾客「核对后仍未收到」', async () => {
-  seed([rej('r1', { guestNotify: true, appealStatus: 'open', appealN: 1 })]);
+  seed([rej('r1', { guestRejectNotify: true, appealStatus: 'open', appealN: 1 })]);
   const r = await owner({ action: 'resolveAppeal', rid: 'r1', decision: 'keep', note: '核对两遍没有' });
   assert.strictEqual(r.code, 0, r.msg);
   const d = rec('r1');
@@ -160,14 +160,14 @@ test('resolveAppeal keep：维持未收到（终态）、可附回复、不改 s
   assert.strictEqual(d.trail[d.trail.length - 1].act, 'keep');
   assert.strictEqual(db.data.books.find(x => x._id === 'b1').statCount, undefined);
   assert.strictEqual(sent.length, 1);
-  assert.strictEqual(sent[0].data.thing5.value, '主家核对后仍未收到，点此查看');
+  assert.strictEqual(sent[0].data.thing3.value, '主家核对后仍未收到，点此查看');
   assert.strictEqual(sent[0].page, 'pages/myreceipts/myreceipts');
   assert.notStrictEqual((await owner({ action: 'resolveAppeal', rid: 'r1', decision: 'keep' })).code, 0);
 });
 
 test('buildReject kept：白事 / 批次文案', () => {
-  assert.strictEqual(gn.buildReject({ amount: 1, count: 1, kept: true, funeral: true }, 't').thing5.value, '核对后仍未核实，点此查看');
-  assert.strictEqual(gn.buildReject({ amount: 1, count: 3, kept: true }, 't').thing5.value, '3人核对后仍未收到，点此查看');
+  assert.strictEqual(gn.buildReject({ amount: 1, count: 1, kept: true, funeral: true }, 't').thing3.value, '核对后仍未核实，点此查看');
+  assert.strictEqual(gn.buildReject({ amount: 1, count: 3, kept: true }, 't').thing3.value, '3人核对后仍未收到，点此查看');
 });
 
 test('unreject：清掉申诉字段（24 小时内），日志保留；之后若再被标未收到可重新申诉', async () => {
@@ -224,11 +224,14 @@ test('records：待确认页返回 appeals（不再出现在「最近未收到�
   const fn = loadFunction('records');
   const p = await fn.main({ action: 'pending', withRejected: true });
   assert.strictEqual(p.code, 0, p.msg);
-  assert.deepStrictEqual(p.data.appeals.map(x => x._id), ['r1']);
+  assert.deepStrictEqual(p.data.appeals.map(x => x._id).sort(), ['r1', 'r4']); // v3.77.0：含其他礼簿的
+  assert.strictEqual(p.data.appeals.find(x => x._id === 'r4').bookOther, true);
+  assert.strictEqual(p.data.appealOther, 1);
   assert.deepStrictEqual(p.data.rejected.map(x => x._id).sort(), ['r2', 'r3']);
   assert.ok(!('payerOpenid' in p.data.appeals[0]));
   const st = await fn.main({ action: 'pendingStat', withExtra: true });
-  assert.strictEqual(st.data.appeal, 1);
+  assert.strictEqual(st.data.appeal, 2); // 全部礼簿合计
+  assert.strictEqual(st.data.appealOther, 1);
   assert.strictEqual(st.data.rej, 2);
 });
 
