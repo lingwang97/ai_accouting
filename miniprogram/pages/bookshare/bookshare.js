@@ -19,6 +19,8 @@ Page({
 
   onShow() {
     theme.apply(this);
+    const acc = getApp().globalData.account;
+    wx.setNavigationBarTitle({ title: acc && acc.orgMode ? '场次共享管理' : '礼簿共享管理' });
     this.load();
   },
 

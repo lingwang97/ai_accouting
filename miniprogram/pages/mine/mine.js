@@ -133,6 +133,7 @@ Page({
 
   goMembers() { wx.navigateTo({ url: '/pages/members/members' }); },
   goTransfer() { wx.navigateTo({ url: '/pages/transfer/transfer' }); },
+  goShare() { wx.navigateTo({ url: '/pages/bookshare/bookshare' }); },
   goAdmin() { wx.navigateTo({ url: '/pages/admin/admin' }); },
 
   /** 长按版本号：显示本人 openid（配置管理员、排查问题用） */

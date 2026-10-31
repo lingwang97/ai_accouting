@@ -1,5 +1,5 @@
 {
-  "navigationBarTitleText": "礼簿共享",
+  "navigationBarTitleText": "礼簿共享管理",
   "usingComponents": {
     "loading": "/components/loading/loading"
   }

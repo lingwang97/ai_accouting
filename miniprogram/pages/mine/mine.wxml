@@ -36,11 +36,15 @@
         <image class="mi-icon" src="/assets/icons/user-m.svg" /><text class="mi-text">{{role === 'clerk' && !pm.info ? '收款码（申请更换）' : '主家信息与收款码'}}</text><text class="arrow">›</text>
       </view>
       <view class="menu-item" bindtap="goMembers" wx:if="{{account}}">
-        <image class="mi-icon" src="/assets/icons/people-m.svg" /><text class="mi-text">{{account.orgMode ? '礼台人员' : '记账人'}}</text><text class="arrow"><text class="muted">邀请 / 权限</text> ›</text>
+        <image class="mi-icon" src="/assets/icons/people-m.svg" /><text class="mi-text">{{account.orgMode ? '礼台人员管理' : '记账人管理'}}</text><text class="arrow"><text class="muted">邀请 / 权限</text> ›</text>
       </view>
       <!-- 移交主家：礼簿是替别人建的，把礼簿转给真正的主家；仅主家本人（机构模式同样显示，v3.77.4） -->
       <view class="menu-item" bindtap="goTransfer" wx:if="{{account && role === 'owner'}}">
         <image class="mi-icon" src="/assets/icons/swap-m.svg" /><text class="mi-text">移交主家</text><text class="arrow"><text class="muted">把{{account.orgMode ? '场次' : '礼簿'}}转给真正的主家</text> ›</text>
+      </view>
+      <!-- 礼簿共享管理：分享给家人只读查看；可见条件同礼簿管理底部「礼簿共享」按钮（v3.77.5） -->
+      <view class="menu-item" bindtap="goShare" wx:if="{{account && pm.members}}">
+        <image class="mi-icon" src="/assets/icons/share-m.svg" /><text class="mi-text">{{account.orgMode ? '场次共享管理' : '礼簿共享管理'}}</text><text class="arrow"><text class="muted">分享给家人只读查看</text> ›</text>
       </view>
       <!-- 我作为宾客随过的礼：记账人、机构模式没有「往来」页，从这里进入；其他身份在「往来 → 随礼记录」（v3.74.4） -->
       <view class="menu-item" bindtap="goMyGifts" wx:if="{{role === 'clerk' || (account && account.orgMode)}}">
