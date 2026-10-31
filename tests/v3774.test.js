@@ -121,3 +121,12 @@ test('常见问题：移交入口指向「我的 → 移交主家」和 transfer
   const all = ['pages/guide/faq.js', 'pages/guide/guide.js', 'pages/start/start.wxml', 'pages/invite/invite.wxml'].map(read).join('\n');
   assert.ok(!/记账人」?页的「移交|记账人 → 移交|邀请 \/ 移交主家/.test(all));
 });
+
+test('v3.78.2 移交页：「发给主家本人」只在生成移交卡片后出现（与礼簿共享一致）', () => {
+  const w = read('pages/transfer/transfer.wxml').split(String.fromCharCode(13)).join('');
+  const make = w.indexOf('wx:if="{{!transferToken}}"');
+  const send = w.indexOf('发给主家本人');
+  assert.ok(make > 0 && send > make, '生成按钮应在发送按钮之前');
+  const between = w.slice(make, send);
+  assert.ok(/<block wx:else>/.test(between), '发送按钮应在 !transferToken 的 wx:else 分支里');
+});
