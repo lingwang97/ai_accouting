@@ -74,11 +74,12 @@
     </view>
     </block>
 
-    <block wx:if="{{account && (pm.export || role === 'viewer' || role === 'owner')}}">
+    <!-- 家人共享不显示本组：导出从工作台「导出」宫格进入（v3.78.1） -->
+    <block wx:if="{{account && role !== 'viewer' && (pm.export || role === 'owner')}}">
       <view class="group-title">数据管理</view>
       <view class="card menu">
-        <view class="menu-item" bindtap="goExport" wx:if="{{pm.export || role === 'viewer'}}">
-          <image class="mi-icon" src="/assets/icons/export-m.svg" /><text class="mi-text">{{role === 'viewer' ? '导出礼簿' : '导出与备份'}}</text><text class="arrow">›</text>
+        <view class="menu-item" bindtap="goExport" wx:if="{{pm.export}}">
+          <image class="mi-icon" src="/assets/icons/export-m.svg" /><text class="mi-text">导出与备份</text><text class="arrow">›</text>
         </view>
         <view class="menu-item" bindtap="goTrash" wx:if="{{role === 'owner'}}">
           <image class="mi-icon" src="/assets/icons/trash-m.svg" /><text class="mi-text">回收站</text><text class="arrow"><text class="muted">删除的礼簿可恢复</text> ›</text>
