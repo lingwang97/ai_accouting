@@ -4,6 +4,7 @@ const fmt = require('../../utils/format.js');
 const openfile = require('../../utils/openfile.js');
 const theme = require('../../utils/theme.js');
 const perm = require('../../utils/perm.js');
+const viewerbook = require('../../utils/viewerbook.js');
 
 function presets() {
   const now = new Date();
@@ -54,7 +55,7 @@ Page({
       const { list, activeBookId } = await req.bookList();
       // 家人共享只能按礼簿整本导出（服务端同样限制），不提供「按日期范围」
       const books = viewer ? list : [{ _id: '', name: '按日期范围导出' }, ...list];
-      const want = bookId || activeBookId;
+      const want = bookId || (viewer ? viewerbook.get() : '') || activeBookId; // 家人共享：默认所选的那本
       const idx = Math.max(0, books.findIndex(b => b._id === want));
       this.setData({ books, bookIdx: idx });
     } catch (e) { /* 礼簿可选，失败时按日期导出 */ } finally {

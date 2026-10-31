@@ -63,7 +63,7 @@
   padding: 0 8rpx; border-radius: 18rpx; background: var(--danger); color: #fff; font-size: 22rpx; text-align: center;
   box-sizing: border-box; border: 3rpx solid #fff;
 }
-.g-title { font-size: 32rpx; font-weight: 600; color: #333; }
+.g-title { font-size: 32rpx; font-weight: 600; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .g-sub { font-size: 24rpx; color: var(--text-3); margin-top: 6rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .g-sub2 { margin-top: 2rpx; } /* 有待确认又有申诉时第二行（v3.74.4），原来一行放不下会被省略号吞掉申诉数 */
 .g-sub.hot { color: var(--danger); font-weight: 600; }

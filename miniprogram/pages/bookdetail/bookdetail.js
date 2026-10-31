@@ -104,6 +104,11 @@ Page({
     }
   },
 
+  /** 家人共享：对账入口放在统计页（对账页仍只读） */
+  goReconcile() {
+    wx.navigateTo({ url: `/pages/reconcile/reconcile?bookId=${this.data.id}` });
+  },
+
   goExport() {
     wx.navigateTo({ url: `/pages/export/export?bookId=${this.data.id}` });
   }

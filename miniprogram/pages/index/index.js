@@ -15,6 +15,7 @@ const pollcfg = require('../../utils/pollcfg.js');
 const advperm = require('../../utils/advperm.js');
 const fresh = require('../../utils/fresh.js');
 const ble = require('../../utils/ble.js');
+const viewerbook = require('../../utils/viewerbook.js');
 
 const POLL_MS = 10000; // 连续无变化会自动放慢（见 utils/poller.js），刷新 / 操作后恢复
 const DISMISS_KEY = 'idx_dismissed';
@@ -58,6 +59,8 @@ Page({
     notifyOff: false,  // 提示已被关闭（见 notifyOff()）
     guideTip: false,   // 「第一次使用？看看使用教程」小卡片（关闭后不再显示）
     joins: [],         // 申请加入的进度 [{ aid, name, role, pending, dk }]
+    sharedN: 0,        // 家人共享：共享给我的（未归档）礼簿数，≥2 才显示切换
+    viewerEmpty: false, // 家人共享：没有可看的礼簿（共享已取消，或共享的都已删除 / 归档）
     dismissed: {},     // 本地已读签名：notify=提示文案；j_<aid>=已同意的身份。签名变化（文案 / 身份不同）再提醒
     setupCard: null,   // 已登录、选了办事收礼但还没建好主家信息：「开始办事 · 3 步」进度 { name, code, book }
     themeStyle: '',
@@ -152,7 +155,7 @@ Page({
       // 一次取齐：主家信息、当前礼簿、今日、待确认；与启动时的登录检查并行发出
       const loggedOut = !!wx.getStorageSync(LOGOUT_KEY);
       // 失败不弹 toast：页面自己说明（首次加载失败显示「网络不佳，点此重试」，有缓存时顶部提示条）
-      const dP = loggedOut ? null : req.dashboard({ silent: true }).catch(() => null);
+      const dP = loggedOut ? null : req.dashboard({ silent: true }, viewerbook.get()).catch(() => null);
       if (!app.globalData.user && !loggedOut) await app.loginReady;
       if (!app.globalData.user && !loggedOut && app.loginFailed) await app.retryLogin(); // 登录检查因网络失败：再试一次
       const user = app.globalData.user;
@@ -160,7 +163,7 @@ Page({
       // 登录检查连不上：不能断定是宾客，显示网络失败（v3.66.0；以前会退到「扫码随礼」宾客页，主家以为礼簿没了）
       if (!user) return !loggedOut && app.loginFailed ? this.toNetErr(req.errText({ net: true })) : this.toGuest();
 
-      const d = (dP && (await dP)) || (await req.dashboard({ silent: true }));
+      const d = (dP && (await dP)) || (await req.dashboard({ silent: true }, viewerbook.get()));
       this.setData({ joins: (d.joins || []).map(j => ({ ...j, dk: 'j_' + j.aid })) }); // 申请加入的进度：待同意 / 已同意待切换
       app.globalData.account = d.account;
       app.globalData.role = d.role;
@@ -186,7 +189,9 @@ Page({
         // 能管理礼簿且不限礼簿范围才可切换；机构模式下负责多场的记账人切换的是自己正在记的一场（mySwitch）
         mySwitch: !!d.mySwitch,
         noBook: d.noBook || '', // ended 记账人负责的礼簿已结束；none 主家还没有当前礼簿
-        canSwitch: !!d.mySwitch || (d.role !== 'clerk' || !(d.account && d.account.orgMode)) && perm.map(d.perms, d.role).books && !d.restricted,
+        canSwitch: d.role === 'viewer' ? (d.sharedN || 0) >= 2 : (!!d.mySwitch || (d.role !== 'clerk' || !(d.account && d.account.orgMode)) && perm.map(d.perms, d.role).books && !d.restricted),
+        sharedN: d.sharedN || 0,
+        viewerEmpty: d.role === 'viewer' && !b,
         notifyTip: notify.tipText(d.lastNotify, d.giftNotify),
         // 提示是否已被关闭：文案未变、且没有新的发送失败或距关闭不到 30 分钟
         notifyOff: notifyOff(this.data.dismissed.notify, notify.tipText(d.lastNotify, d.giftNotify), d.lastNotify),
@@ -308,7 +313,34 @@ Page({
   },
 
   /** 切换当前礼簿：点哪本立即切换（超过 6 本时最后一项进礼簿管理） */
+  /** 家人共享：在共享给我的几本里选看哪一本（只记在本机，不改主家的当前礼簿） */
+  async switchViewerBook() {
+    if (this._switching) return;
+    this._switching = true;
+    let list = [];
+    try { list = (await req.bookList()).list.filter(b => !b.archived); } catch (e) { this._switching = false; return; }
+    const cur = this.data.book && this.data.book._id;
+    const max = list.length > 6 ? 5 : 6;
+    const shown = list.slice(0, max);
+    const items = shown.map(b => (b._id === cur ? '✓ ' : '') + (b.hostName ? `${b.hostName} · ${b.name}` : b.name));
+    if (list.length > max) items.push(this.data.account && this.data.account.orgMode ? '共享给我的场次…' : '共享给我的礼簿…');
+    if (!items.length) { this._switching = false; return this.goBooks(); }
+    wx.showActionSheet({
+      itemList: items,
+      complete: () => { this._switching = false; },
+      success: res => {
+        const b = shown[res.tapIndex];
+        if (!b) return this.goBooks();
+        if (b._id === cur) return;
+        viewerbook.set(b._id);
+        getApp().globalData.activeBookChanged = true; // 礼簿页下次显示时按所选礼簿重新选中
+        theme.apply(this, b.type);
+        this.refresh();
+      }
+    });
+  },
   async onSwitchBook() {
+    if (this.data.readonly) return this.switchViewerBook();
     // 读取礼簿列表期间、选择框关闭之前不再响应，避免连点叠出多个选择框
     if (this._switching) return;
     this._switching = true;
@@ -346,6 +378,12 @@ Page({
     });
   },
   goOrgSummary() { wx.navigateTo({ url: '/pages/orgsummary/orgsummary' }); },
+  /** 家人共享：导出直达导出页，带上当前所看的礼簿 */
+  goExportBook() {
+    const b = this.data.book;
+    wx.navigateTo({ url: '/pages/export/export' + (b ? `?bookId=${b._id}` : '') });
+  },
+  goMine() { wx.switchTab({ url: '/pages/mine/mine' }); },
   goBookDetail() {
     const b = this.data.book;
     if (b) wx.navigateTo({ url: `/pages/bookdetail/bookdetail?id=${b._id}` });

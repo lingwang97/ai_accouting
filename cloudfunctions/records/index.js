@@ -35,7 +35,7 @@ exports.main = async (event, context) => {
     if (['list', 'pending', 'dashboard', 'pendingStat'].includes(event.action) && !readonly(ctx) && ctx.account) await expirePending(OWNER);
     switch (event.action) {
       case 'dashboard':
-        return await dashboard(ctx);
+        return await dashboard(ctx, event.bookId);
       // 对账、多场汇总：记账人需有「对账与导出」权限（家人共享可查看）
       case 'orgSummary':
         if (ctx.role === 'clerk' && !can(ctx, 'export')) return err('你没有对账与导出的权限');
@@ -135,7 +135,7 @@ async function expirePending(openid) {
  * 工作台一次取齐：主家信息与身份、当前礼簿合计、今日收礼、待确认（原先前端要依次调 4 次）
  * 当前礼簿尚未建立或尚未补算合计时 needBooks=true，前端再调 books.list（会自动建默认礼簿、补算）
  */
-async function dashboard(ctx) {
+async function dashboard(ctx, bookIdWant) {
   const account = ctx.account;
   const lastNotify = (ctx.user && ctx.user.lastNotify) || null;
   const joins = await myJoins(ctx);
@@ -143,7 +143,21 @@ async function dashboard(ctx) {
   const owner = ctx.ownerOpenid;
   const today = bjDay(new Date());
   const scope = ctx.bookIds ? { bookId: _.in(ctx.bookIds) } : {};
-  const activeId = workBook(ctx); // 机构模式记账人：自己选的一场
+  let activeId = workBook(ctx); // 机构模式记账人：自己选的一场
+  // 家人共享（v3.78.0）：可在共享的几本里选看哪一本（前端本机记住）；只认共享范围内（canBook）、未归档、仍存在的，否则回退默认
+  let sharedN;
+  if (ctx.role === 'viewer') {
+    const ids = (ctx.bookIds || []).filter(id => id && id !== '__none__').slice(0, 100);
+    let live = ids;
+    if (ids.length) {
+      const lr = await db.collection('books').where({ _id: _.in(ids), ownerOpenid: owner, _openid: _.exists(false) })
+        .field({ _id: true, archived: true }).limit(100).get().catch(() => null);
+      if (lr) live = lr.data.filter(b => b.archived !== true).map(b => b._id);
+    }
+    sharedN = live.length;
+    const want = String(bookIdWant || '');
+    activeId = want && canBook(ctx, want) && live.includes(want) ? want : (live.includes(activeId) ? activeId : (live[0] || ''));
+  }
   // 待确认只算当前礼簿；其他礼簿的只给个数（工作台小提示），确认要先切换礼簿
   const pendCond = { ownerOpenid: owner, status: REC.TRANSFERRED, bookId: activeId || '__none__' };
   const [bookRes, todayRes, pendRes, pendCount, otherCount, todayBookRes, joinRes, refresh] = await Promise.all([
@@ -190,7 +204,8 @@ async function dashboard(ctx) {
     lastNotify,
     giftNotify: !readonly(ctx) && can(ctx, 'confirm') && !!ctx.user && ctx.user.giftNotify === true, // v3.66.3：新礼金提醒是否开启
     book,
-    needBooks: !book,
+    needBooks: !book && !(ctx.role === 'viewer' && !activeId),
+    ...(sharedN !== undefined ? { sharedN } : {}),
     today: { count: t.count, sum: Math.round(t.fen) / 100, book: todayBookRes ? todayBookRes.total : 0 },
     pending: { count: pendCount.total, sum: pendFen / 100, other: otherCount.total },
     pendingMembers: joinRes ? joinRes.total : 0,

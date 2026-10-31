@@ -8,6 +8,7 @@ const confirm = require('../../utils/confirm.js');
 const theme = require('../../utils/theme.js');
 const cache = require('../../utils/cache.js');
 const perm = require('../../utils/perm.js');
+const viewerbook = require('../../utils/viewerbook.js');
 const { REC } = require('../../utils/status.js');
 const { REASON } = require('../../utils/trail.js');
 const samename = require('../../utils/samename.js');
@@ -277,6 +278,11 @@ Page({
     const pick = app.globalData.recordsBookId;
     app.globalData.recordsBookId = '';
     let want = activeBookId;
+    // 家人共享：默认选中自己在工作台选看的那本（本机记住；不在共享列表里则用默认）
+    if (app.globalData.role === 'viewer') {
+      const mine = viewerbook.get();
+      if (mine && list.some(b => b._id === mine)) want = mine;
+    }
     if (pick) {
       want = pick;
       this._bookPicked = true;
@@ -289,6 +295,8 @@ Page({
   onBook(e) {
     this._bookPicked = true;
     this.setData({ bookIdx: Number(e.detail.value) });
+    const sel = this.data.books[this.data.bookIdx];
+    if (this.data.readonly && sel && sel._id) viewerbook.set(sel._id); // 家人共享：与工作台、统计、导出保持同一本
     this.reload();
   },
 

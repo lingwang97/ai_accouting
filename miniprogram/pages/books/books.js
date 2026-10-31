@@ -7,6 +7,7 @@ const printer = require('../../utils/printer.js');
 const theme = require('../../utils/theme.js');
 const openfile = require('../../utils/openfile.js');
 const perm = require('../../utils/perm.js');
+const viewerbook = require('../../utils/viewerbook.js');
 const plan = require('../../utils/plan.js');
 
 const EXPORTS = [
@@ -37,7 +38,9 @@ Page({
   onShow() {
     this.setData({ iconKey: theme.apply(this).icon }); // 主题色跟当前礼簿事由走
     const a = getApp().globalData.account;
-    wx.setNavigationBarTitle({ title: a && a.orgMode ? '场次管理' : '礼簿管理' }); // 机构模式称「场次」
+    const org = !!(a && a.orgMode);
+    const viewer = getApp().globalData.role === 'viewer'; // 家人共享：「共享给我的礼簿」
+    wx.setNavigationBarTitle({ title: viewer ? (org ? '共享给我的场次' : '共享给我的礼簿') : (org ? '场次管理' : '礼簿管理') }); // 机构模式称「场次」
     this.load();
   },
 
@@ -46,6 +49,9 @@ Page({
       const [{ list, activeBookId, restricted, perms }, role] = await Promise.all([req.bookList(), getApp().ensureRole()]);
       const acc = getApp().globalData.account;
       const pm = perm.map(perms, role);
+      // 家人共享：「当前」是自己在工作台选看的那本（本机记住），不是主家的当前礼簿
+      const mine = role === 'viewer' ? viewerbook.get() : '';
+      const curId = mine && list.some(b => b._id === mine && !b.archived) ? mine : activeBookId;
       const all = list.map(b => ({
         ...b,
         typeLabel: scenes.label(b.type),
@@ -59,8 +65,9 @@ Page({
         canExport: pm.export || role === 'viewer',
         isOwner: role === 'owner', // 删除礼簿只限主家本人
         orgMode: !!(acc && acc.orgMode),
-        current: all.find(b => b._id === activeBookId) || null,
-        list: all.filter(b => !b.archived && b._id !== activeBookId),
+        viewer: role === 'viewer',
+        current: all.find(b => b._id === curId) || null,
+        list: all.filter(b => !b.archived && b._id !== curId),
         archived: all.filter(b => b.archived)
       });
     } catch (e) { /* toast 已提示 */ } finally {

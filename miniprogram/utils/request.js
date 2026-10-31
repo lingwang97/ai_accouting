@@ -229,7 +229,7 @@ module.exports = {
   recordList: (d, opts) => call('records', { action: 'list', ...d }, opts),
   markPrinted: rids => call('records', { action: 'markPrinted', rids }),
   recordPending: (withRejected, opts) => call('records', { action: 'pending', ...pollHint(), ...(withRejected ? { withRejected: true } : {}) }, opts),
-  dashboard: opts => call('records', { action: 'dashboard' }, opts),
+  dashboard: (opts, bookId) => call('records', { action: 'dashboard', ...(bookId ? { bookId } : {}) }, opts), // bookId：家人共享选看的礼簿（服务端校验范围）
   pendingStat: () => call('records', { action: 'pendingStat', ...pollHint() }, { silent: true }),
   // 待确认页轮询：带 withExtra 另返回 stall / rej 两个分组的条数
   recordStat: d => call('records', { action: 'pendingStat', ...pollHint(), ...d }, { silent: true }),

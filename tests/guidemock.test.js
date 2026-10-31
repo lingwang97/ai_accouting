@@ -54,7 +54,7 @@ test('示意图：「我的」菜单 4 组 12 行与 mine.wxml 一致', () => {
 
 test('示意图：工作台宫格与 index.wxml 一致，机构模式多「场次汇总」', () => {
   const src = read('pages/index/index.wxml');
-  const body = src.slice(src.indexOf('<view class="grid" wx:else>'));
+  const body = src.slice(src.indexOf('<view class="grid" wx:elif="{{!readonly}}">'));
   const titles = textsOf(body.slice(0, body.indexOf('<ad-slot')), 'g-title');
   M.GRID_ORG.forEach(t => assert.ok(titles.includes(t) || (t === '礼簿管理' && titles.includes('礼簿管理')), '工作台没有宫格：' + t));
   titles.forEach(t => assert.ok(M.GRID_ORG.includes(t) || t === '场次管理', '示意图缺少工作台宫格：' + t));

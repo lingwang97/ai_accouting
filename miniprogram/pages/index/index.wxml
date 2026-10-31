@@ -36,7 +36,11 @@
     <view class="warn-card" wx:elif="{{noBook === 'none' && !readonly}}" bindtap="goBooks">{{o.t("还没有当前礼簿：请先在「礼簿管理」里新建或选择一本，宾客的礼金才知道记到哪里 ›", account.orgMode)}}</view>
 
     <!-- 当前礼簿 -->
-    <view class="book-card" bindtap="goRecords">
+    <view class="warn-card empty-card" wx:if="{{viewerEmpty}}">
+      <view>主家暂未共享{{account.orgMode ? '场次' : '礼簿'}}给你，或共享已取消，可联系主家重新共享</view>
+      <view class="btn btn-primary" style="margin-top:20rpx" hover-class="btn-hover" bindtap="goMine">切换身份</view>
+    </view>
+    <view class="book-card" wx:if="{{!viewerEmpty}}" bindtap="goRecords">
       <view class="bc-top">
         <view class="bc-title" catchtap="{{canSwitch ? 'onSwitchBook' : ''}}">
           <view class="bc-name">{{book ? (book.hostName ? book.hostName + ' · ' + book.name : book.name) : o.t('我的礼簿', account.orgMode)}}</view>
@@ -70,31 +74,31 @@
     </view>
 
     <!-- 家人共享：只读入口 -->
-    <view class="grid" wx:if="{{readonly}}">
+    <view class="grid" wx:if="{{readonly && !viewerEmpty}}">
       <view class="g-item" hover-class="g-hover" bindtap="goRecords">
         <view class="g-icon"><image src="/assets/icons/book-w.svg" /></view>
         <view class="g-title">礼金明细</view>
         <view class="g-sub">查看、搜索</view>
       </view>
-      <view class="g-item" hover-class="g-hover" bindtap="goReconcile">
-        <view class="g-icon"><image src="/assets/icons/receipt-w.svg" /></view>
-        <view class="g-title">一键对账</view>
-        <view class="g-sub">按方式汇总</view>
-      </view>
       <view class="g-item" hover-class="g-hover" bindtap="goBookDetail">
         <view class="g-icon"><image src="/assets/icons/layers-w.svg" /></view>
         <view class="g-title">礼簿统计</view>
-        <view class="g-sub">按关系、方式</view>
+        <view class="g-sub">按关系、方式 · 对账</view>
       </view>
-      <view class="g-item" hover-class="g-hover" bindtap="goBooks">
+      <view class="g-item" hover-class="g-hover" bindtap="goExportBook">
         <view class="g-icon"><image src="/assets/icons/export-w.svg" /></view>
         <view class="g-title">导出</view>
         <view class="g-sub">PDF / Excel</view>
       </view>
+      <view class="g-item" hover-class="g-hover" bindtap="goBooks">
+        <view class="g-icon"><image src="/assets/icons/receipt-w.svg" /></view>
+        <view class="g-title">{{account.orgMode ? '共享给我的场次' : '共享给我的礼簿'}}</view>
+        <view class="g-sub">共 {{sharedN}} {{account.orgMode ? '场' : '本'}}</view>
+      </view>
     </view>
 
     <!-- 常用操作：三行两列（记账人按权限显示；隐藏部分后仍两列排列） -->
-    <view class="grid" wx:else>
+    <view class="grid" wx:elif="{{!readonly}}">
       <view class="g-item" hover-class="g-hover" wx:if="{{pm.show}}" bindtap="goQrcode">
         <view class="g-icon"><image src="/assets/icons/qrcode-w.svg" /></view>
         <view class="g-title">出示礼簿码</view>
