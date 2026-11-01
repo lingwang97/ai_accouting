@@ -29,18 +29,15 @@
       <button class="btn-primary" bindtap="goSetup">立即创建</button>
     </view>
 
+    <!-- v3.78.3 重新分组：主家与人员 / 礼台与样式 / 数据与设置；各项可见条件不变，viewer 前三组都不显示 -->
     <block wx:if="{{role !== 'viewer'}}">
-    <view class="group-title">账号与收款</view>
+    <view class="group-title">主家与人员</view>
     <view class="card menu">
       <view class="menu-item" bindtap="goAccount" wx:if="{{role !== 'clerk' || pm.info || pm.paycode}}">
         <image class="mi-icon" src="/assets/icons/user-m.svg" /><text class="mi-text">{{role === 'clerk' && !pm.info ? '收款码（申请更换）' : '主家信息与收款码'}}</text><text class="arrow">›</text>
       </view>
       <view class="menu-item" bindtap="goMembers" wx:if="{{account}}">
         <image class="mi-icon" src="/assets/icons/people-m.svg" /><text class="mi-text">{{account.orgMode ? '礼台人员管理' : '记账人管理'}}</text><text class="arrow"><text class="muted">邀请 / 权限</text> ›</text>
-      </view>
-      <!-- 移交主家：礼簿是替别人建的，把礼簿转给真正的主家；仅主家本人（机构模式同样显示，v3.77.4） -->
-      <view class="menu-item" bindtap="goTransfer" wx:if="{{account && role === 'owner'}}">
-        <image class="mi-icon" src="/assets/icons/swap-m.svg" /><text class="mi-text">移交主家</text><text class="arrow"><text class="muted">把{{account.orgMode ? '场次' : '礼簿'}}转给真正的主家</text> ›</text>
       </view>
       <!-- 礼簿共享管理：分享给家人只读查看；可见条件同礼簿管理底部「礼簿共享」按钮（v3.77.5） -->
       <view class="menu-item" bindtap="goShare" wx:if="{{account && pm.members}}">
@@ -52,10 +49,7 @@
       </view>
     </view>
 
-    </block>
-
-    <block wx:if="{{role !== 'viewer'}}">
-    <view class="group-title">样式与设备</view>
+    <view class="group-title">礼台与样式</view>
     <view class="card menu">
       <view class="menu-item" bindtap="goPrinter">
         <image class="mi-icon" src="/assets/icons/printer-m.svg" /><text class="mi-text">蓝牙打印机</text><text class="arrow"><text class="muted">{{printerName || '未连接'}}</text> ›</text>
@@ -67,16 +61,11 @@
       <view class="menu-item" bindtap="goAppearance" wx:if="{{account && role === 'owner'}}">
         <image class="mi-icon" src="/assets/icons/palette-m.svg" /><text class="mi-text">主题色</text><text class="arrow">›</text>
       </view>
-      <!-- 高级功能：机构模式、新礼金提醒、高峰模式等；所有有账户身份的角色都显示，无权限的项目在页内置灰并说明 -->
-      <view class="menu-item" bindtap="goAdvanced" wx:if="{{account}}">
-        <image class="mi-icon" src="/assets/icons/settings-m.svg" /><text class="mi-text">高级功能</text><text class="arrow">›</text>
-      </view>
     </view>
-    </block>
 
-    <!-- 家人共享不显示本组：导出从工作台「导出」宫格进入（v3.78.1） -->
-    <block wx:if="{{account && role !== 'viewer' && (pm.export || role === 'owner')}}">
-      <view class="group-title">数据管理</view>
+    <!-- 本组有账户身份时至少有一项，不会出现空卡片；家人共享不显示：导出从工作台「导出」宫格进入（v3.78.1） -->
+    <block wx:if="{{account}}">
+      <view class="group-title">数据与设置</view>
       <view class="card menu">
         <view class="menu-item" bindtap="goExport" wx:if="{{pm.export}}">
           <image class="mi-icon" src="/assets/icons/export-m.svg" /><text class="mi-text">导出与备份</text><text class="arrow">›</text>
@@ -84,7 +73,16 @@
         <view class="menu-item" bindtap="goTrash" wx:if="{{role === 'owner'}}">
           <image class="mi-icon" src="/assets/icons/trash-m.svg" /><text class="mi-text">回收站</text><text class="arrow"><text class="muted">删除的礼簿可恢复</text> ›</text>
         </view>
+        <!-- 高级功能：机构模式、新礼金提醒、高峰模式等；所有有账户身份的角色都显示，无权限的项目在页内置灰并说明 -->
+        <view class="menu-item" bindtap="goAdvanced">
+          <image class="mi-icon" src="/assets/icons/settings-m.svg" /><text class="mi-text">高级功能</text><text class="arrow">›</text>
+        </view>
+        <!-- 移交主家：礼簿是替别人建的，把礼簿转给真正的主家；仅主家本人（机构模式同样显示，v3.77.4），放最后避免误点 -->
+        <view class="menu-item" bindtap="goTransfer" wx:if="{{role === 'owner'}}">
+          <image class="mi-icon" src="/assets/icons/swap-m.svg" /><text class="mi-text">移交主家</text><text class="arrow"><text class="muted">把{{account.orgMode ? '场次' : '礼簿'}}转给真正的主家</text> ›</text>
+        </view>
       </view>
+    </block>
     </block>
 
     <view class="group-title">帮助与隐私</view>

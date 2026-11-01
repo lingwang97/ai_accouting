@@ -141,10 +141,10 @@ test('前端：统计页 viewer 有对账入口；mine 对 viewer 隐藏打印�
   assert.ok(/wx:if="\{\{readonly\}\}" bindtap="goReconcile"/.test(rd('miniprogram/pages/bookdetail/bookdetail.wxml')));
   assert.ok(rd('miniprogram/pages/bookdetail/bookdetail.js').includes('/pages/reconcile/reconcile?bookId=${this.data.id}'));
   const m = rd('miniprogram/pages/mine/mine.wxml');
-  const i = m.indexOf('样式与设备');
+  const i = m.indexOf('>礼台与样式<');
   assert.ok(m.slice(m.lastIndexOf('<block', i), i).includes("role !== 'viewer'"));
-  assert.ok(m.indexOf('蓝牙打印机') > i && m.indexOf('高级功能') > i);
-  assert.ok(m.slice(i).indexOf('</block>') > m.slice(i).indexOf('高级功能')); // 整组在 block 内
+  assert.ok(m.indexOf('蓝牙打印机') > i && m.indexOf('高级功能') > m.indexOf('>数据与设置<'));
+  assert.ok(m.slice(i).indexOf('</block>') > m.slice(i).indexOf('蓝牙打印机')); // 整组在 block 内
 });
 
 test('导出页：传统礼簿 PDF 按钮按「选中的是具体礼簿」显示（家人共享单本 / 多本、主家日期范围）', () => {

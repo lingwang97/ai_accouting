@@ -7,3 +7,6 @@
 .left { flex: 1; font-size: 24rpx; color: var(--text-3); }
 .left.soon { color: var(--danger); }
 button.t-op:not([size=mini]) { width: 160rpx; padding: 0; margin-left: 16rpx; }
+.keep-row { display: flex; align-items: center; padding: 24rpx 28rpx; }
+.keep-t { flex: 1; font-size: 28rpx; }
+.keep-a { font-size: 26rpx; color: var(--text-3); }

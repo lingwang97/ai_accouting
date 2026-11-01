@@ -36,8 +36,8 @@ function loadPage(rel, reqStub) {
 test('我的：「移交主家」菜单只对主家显示，排在「记账人」后面，「记账人」小字改为邀请 / 权限', () => {
   const w = read('pages/mine/mine.wxml');
   assert.ok(w.includes('<text class="mi-text">移交主家</text>'));
-  assert.ok(w.indexOf('移交主家</text>') > w.indexOf("'礼台人员管理' : '记账人管理'"));
-  assert.ok(/class="menu-item" bindtap="goTransfer" wx:if="\{\{account && role === 'owner'\}\}"/.test(w), '仅 owner 可见（机构模式同样显示，不加 orgMode 条件）');
+  assert.ok(w.indexOf('移交主家</text>') > w.indexOf("'礼台人员管理' : '记账人管理'")); // v3.78.3：移至「数据与设置」组末尾
+  assert.ok(/class="menu-item" bindtap="goTransfer" wx:if="\{\{role === 'owner'\}\}"/.test(w), '仅 owner 可见（机构模式同样显示，不加 orgMode 条件）');
   assert.ok(!/goTransfer[^>]*orgMode/.test(w));
   assert.ok(w.includes('邀请 / 权限') && !w.includes('邀请 / 移交主家'));
   assert.ok(read('pages/mine/mine.js').includes("/pages/transfer/transfer"));

@@ -10,6 +10,7 @@ Page({
     days: 0,              // 0 = 接口未返回前不显示天数，避免先闪「15 天」
     loading: true,
     busy: false,
+    isOwner: false,       // 仅主家显示「保留天数」入口
     themeStyle: ''
   },
 
@@ -17,6 +18,7 @@ Page({
 
   onShow() {
     theme.apply(this);
+    this.setData({ isOwner: getApp().globalData.role === 'owner' });
     this.load();
   },
 
@@ -41,6 +43,8 @@ Page({
       this.setData({ loading: false });
     }
   },
+
+  goAdvanced() { wx.navigateTo({ url: '/pages/advanced/advanced' }); },
 
   /** 恢复：礼簿和礼金记录原样放回，仍为已归档；数据多时分批，done=false 时接着调用 */
   onRestore(e) {

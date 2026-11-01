@@ -184,8 +184,8 @@ Page({
         setTimeout(() => wx.showModal({
           title: this.data.orgMode ? '礼台人员需重新安排' : '记账人需要重新安排',
           content: this.data.orgMode
-            ? `「${names.join('、')}」只负责被删除的场次，现在不能登记。可在「我的 → 礼台人员」里给他们换一场。`
-            : `「${names.join('、')}」只负责被删除的礼簿，现在不能登记。可在「我的 → 记账人」里给他们换一本。`,
+            ? `「${names.join('、')}」只负责被删除的场次，现在不能登记。可在「我的 → 礼台人员管理」里给他们换一场。`
+            : `「${names.join('、')}」只负责被删除的礼簿，现在不能登记。可在「我的 → 记账人管理」里给他们换一本。`,
           confirmText: '去设置',
           success: m2 => { if (m2.confirm) wx.navigateTo({ url: '/pages/members/members' }); }
         }), 1500);
@@ -227,8 +227,8 @@ Page({
               wx.showModal({
                 title: this.data.orgMode ? '礼台人员需重新安排' : '记账人需要重新安排',
                 content: this.data.orgMode
-                  ? `「${names.join('、')}」只负责这个场次，归档后不能再登记。可在「我的 → 礼台人员」里给他们换一场。`
-                  : `「${names.join('、')}」只负责这本礼簿，归档后不能再登记。可在「我的 → 记账人」里给他们换一本。`,
+                  ? `「${names.join('、')}」只负责这个场次，归档后不能再登记。可在「我的 → 礼台人员管理」里给他们换一场。`
+                  : `「${names.join('、')}」只负责这本礼簿，归档后不能再登记。可在「我的 → 记账人管理」里给他们换一本。`,
                 confirmText: '去设置',
                 success: m2 => { if (m2.confirm) wx.navigateTo({ url: '/pages/members/members' }); }
               });

@@ -14,9 +14,9 @@ test('我的：菜单名「记账人管理 / 礼台人员管理」，小字仍�
   assert.ok(!/<text class="mi-text">\{\{account\.orgMode \? '礼台人员' : '记账人'\}\}/.test(w));
 });
 
-test('我的：「礼簿共享管理」在「移交主家」下面，可见条件与礼簿管理共享按钮一致，viewer 看不到', () => {
+test('我的：「礼簿共享管理」在「主家与人员」组（v3.78.3 起），可见条件与礼簿管理共享按钮一致，viewer 看不到', () => {
   const w = read('pages/mine/mine.wxml');
-  assert.ok(w.indexOf('礼簿共享管理') > w.indexOf('<text class="mi-text">移交主家</text>'));
+  assert.ok(w.indexOf('礼簿共享管理') > w.indexOf("'礼台人员管理' : '记账人管理'") && w.indexOf('礼簿共享管理') < w.indexOf('>礼台与样式<'));
   assert.ok(w.includes("account.orgMode ? '场次共享管理' : '礼簿共享管理'"));
   assert.ok(w.includes('分享给家人只读查看'));
   assert.ok(/bindtap="goShare" wx:if="\{\{account && pm\.members\}\}"/.test(w));
