@@ -36,20 +36,18 @@ function loadGuide(org) {
   return inst;
 }
 
-test('示意图：「我的」菜单 4 组 12 行与 mine.wxml 一致', () => {
+test('示意图：「我的」菜单 4 组 13 行与 mine.wxml（主家视角）项目和顺序完全一致', () => {
   const src = read('pages/mine/mine.wxml');
   const rows = textsOf(src, 'mi-text');
   const groups = textsOf(src, 'group-title');
   const flat = [].concat(...M.MENU.map(g => g.items));
   assert.strictEqual(M.MENU.length, 4);
-  assert.strictEqual(flat.length, 12);
-  flat.forEach(t => assert.ok(rows.includes(t), '「我的」页没有菜单项：' + t));
-  M.MENU.forEach(g => assert.ok(groups.includes(g.g), '「我的」页没有分组：' + g.g));
-  // 反过来：页面上的菜单项（管理员区的「系统设置」除外）都要画进示意图
-  rows.filter(t => t !== '系统设置').forEach(t => {
-    const ok = flat.includes(t) || ['收款码（申请更换）', '礼台人员管理', '导出礼簿', '移交主家', '礼簿共享管理', '场次共享管理'].includes(t);
-    assert.ok(ok, '示意图缺少「我的」页的菜单项：' + t);
-  });
+  assert.strictEqual(flat.length, 13);
+  // 分组名与顺序：页面上除「管理员」外的分组依次对应
+  assert.deepStrictEqual(groups.filter(g => g !== '管理员'), M.MENU.map(g => g.g), '分组名或顺序不一致');
+  // 菜单项与顺序：去掉主家（普通模式）看不到的项目（记账人 / 机构模式才有的文案与「随礼记录」、管理员「系统设置」）后逐项相同
+  const notHost = ['系统设置', '收款码（申请更换）', '礼台人员管理', '场次共享管理', '随礼记录'];
+  assert.deepStrictEqual(flat, rows.filter(t => !notHost.includes(t)), '示意图「我的」菜单的项目或顺序与页面不一致');
 });
 
 test('示意图：工作台宫格与 index.wxml 一致，机构模式多「场次汇总」', () => {
@@ -91,7 +89,7 @@ test('教程：每一步的高亮项都在示意图里，普通 / 机构模式�
           if (m.hl) assert.ok(m.items.includes(m.hl), k + ' 高亮格不存在：' + m.hl);
         } else if (m.type === 'menu') {
           const flat = [].concat(...m.groups.map(x => x.items));
-          assert.strictEqual(flat.length, 12, k);
+          assert.strictEqual(flat.length, 13, k);
           if (m.hl) {
             assert.ok(flat.includes(m.hl), k + ' 高亮菜单项不存在：' + m.hl);
             assert.ok(m.groups.some(x => x.show && x.items.includes(m.hl)), k + ' 高亮项所在组要展开');

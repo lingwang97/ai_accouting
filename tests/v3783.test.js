@@ -61,7 +61,8 @@ test('我的：各角色都没有空分组（owner / clerk 不同权限 / viewer
 
 test('教程示意图 MENU：新分组与顺序，机构模式替换不出错', () => {
   assert.deepStrictEqual(M.MENU.map(g => g.g), ['主家与人员', '礼台与样式', '数据与设置', '帮助与隐私']);
-  assert.deepStrictEqual(M.MENU[2].items, ['导出与备份', '回收站', '高级功能']);
+  assert.deepStrictEqual(M.MENU[0].items, ['主家信息与收款码', '记账人管理', '礼簿共享管理']);
+  assert.deepStrictEqual(M.MENU[2].items, ['导出与备份', '回收站', '高级功能', '移交主家']);
   const orgText = s => String(s).replace(/礼簿管理/g, '场次管理').replace(/记账人/g, '礼台人员').replace(/当前礼簿/g, '当前场次');
   M.MENU.forEach(g => assert.strictEqual(orgText(g.g), g.g, '分组名不含被替换的词'));
   assert.strictEqual(orgText('记账人管理'), '礼台人员管理');
