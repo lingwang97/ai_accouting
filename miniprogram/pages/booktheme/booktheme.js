@@ -166,8 +166,8 @@ const PAGE = {
     } catch (e) { /* 用示例 */ }
   },
 
-  onSwipe(e) { this.setData({ cur: e.detail.current, tryFont: '' }); this.syncPvFonts(); },
-  onTab(e) { this.setData({ cur: Number(e.currentTarget.dataset.i), tryFont: '' }); this.syncPvFonts(); },
+  onSwipe(e) { this.setData({ cur: e.detail.current, tryFont: '' }); this._pvRetry = true; this.syncPvFonts(); },
+  onTab(e) { this.setData({ cur: Number(e.currentTarget.dataset.i), tryFont: '' }); this._pvRetry = true; this.syncPvFonts(); },
 
   /** 当前生效的配置（用于预览） */
   effective() {
@@ -238,7 +238,8 @@ const PAGE = {
     const foot = b.footer === '-' ? '' : (b.footer || e.footer || (d.isFuneral ? '' : pt.BACK_FOOTER[book.type] || ''));
     // 签名：本礼簿经手人姓名（云端 bookPreviewData 返回，只有姓名）；没有则显示留空签字栏
     const sg = d.signers || {}, ns = sg.names || [];
-    const sign = ns.length ? `记账人：${ns.join('　')}${sg.total > ns.length ? `等 ${sg.total} 人` : ''}` : '记账人（签字）';
+    const who = orgtext.t('记账人', d.org); // 机构模式写「礼台人员」（与云端封底一致）
+    const sign = ns.length ? `${who}：${ns.join('　')}${sg.total > ns.length ? `等 ${sg.total} 人` : ''}` : `${who}（签字）`;
     return { foot, sign };
   },
 
@@ -460,14 +461,24 @@ const PAGE = {
   noop() {},
   onTogglePv() { this.setData({ pvOpen: !this.data.pvOpen }); },
 
+  /** 会员字体试看提示：第一次弹窗说明（本地记一次），之后只轻提示，不再打断看示意图（v3.83.2） */
+  tryHint() {
+    let seen = false;
+    try { seen = !!wx.getStorageSync('tryFontTip'); } catch (e) { /* 忽略 */ }
+    if (seen) return wx.showToast({ title: '会员字体，仅试看', icon: 'none' });
+    try { wx.setStorageSync('tryFontTip', 1); } catch (e) { /* 忽略 */ }
+    vip.explain('PDF 字体', VIP_TIP);
+  },
+
   /** 字体在「内页」标签选择（全书通用）；预设主题下选字体先转为「在预设基础上修改」 */
   onFontPick(e) {
     const v = e.currentTarget.dataset.v;
     const d = this.data;
+    this._pvRetry = true; // 切字体时，之前加载失败的预览字体重试一次
     if (v !== 'sans' && !d.premiumOk) { // 会员字体：示意图可以试看，但不能选中（导出仍按免费样式）
       this.setData({ tryFont: v });
       this.refresh();
-      return vip.explain('PDF 字体', VIP_TIP);
+      return this.tryHint();
     }
     if (d.tryFont) this.setData({ tryFont: '' }); // 选了可用的字体：结束试看，示意图回到已选字体
     if (v === this.effective().font) return this.refresh();
@@ -505,6 +516,13 @@ const PAGE = {
   },
 
   /** 照片尺寸（image 组件 bindload 给出的原始宽高；网络图片也能取到，不需要域名白名单） */
+  /** 照片读不到（临时链接过期 / 网络）：清掉预览地址并提示重新选择 */
+  onPhotoErr() {
+    if (this.data.photoDim || !this.data.coverUrl) return;
+    this.setData({ coverUrl: '' });
+    this.refresh();
+    wx.showToast({ title: '照片加载失败，请重新选择', icon: 'none' });
+  },
   onPhotoLoad(e) {
     const { width, height } = e.detail || {};
     if (!(width > 0 && height > 0)) return;
@@ -514,28 +532,36 @@ const PAGE = {
 
   // ===== 裁剪编辑器（自写 touch 手势：单指平移、双指缩放；滑块 / ± / 九宫格为兜底与快捷） =====
   /** 编辑器里裁剪框与照片的位置（单位 rpx，框最大 560 x 620，比例与 PDF 一致） */
-  cropRender() {
+  cropRender(edit) { // edit：新的裁剪位置；与界面更新合并成一次 setData（拖动时每帧一次，v3.83.2），不传则用当前 cropEdit
     const d = this.data;
+    const e = edit || d.cropEdit;
     const full = d.coverLayout === 'full';
     const box = full ? pt.COVER_BOX.full : pt.COVER_BOX.left;
+    const maxH = this._maxH || 620;
     let fw = 560, fh = fw * box.h / box.w;
-    if (fh > 620) { fh = 620; fw = fh * box.w / box.h; }
-    const g = pt.cropGeom(d.photoDim.w, d.photoDim.h, fw, fh, d.cropEdit);
+    if (fh > maxH) { fh = maxH; fw = fh * box.w / box.h; }
+    const g = pt.cropGeom(d.photoDim.w, d.photoDim.h, fw, fh, e);
     this._cf = { fw, fh };
-    this.setData({
-      cropFrame: { w: Math.round(fw), h: Math.round(fh) },
-      cropImg: `position:absolute;left:${(-g.ox).toFixed(1)}rpx;top:${(-g.oy).toFixed(1)}rpx;width:${g.iw.toFixed(1)}rpx;height:${g.ih.toFixed(1)}rpx;`,
-      cropZ: Math.round(d.cropEdit.z * 100),
-      bandTop: full ? (d.coverScrim === 'block' ? 37 : 40) : 0
-    });
+    const upd = { cropImg: `position:absolute;left:${(-g.ox).toFixed(1)}rpx;top:${(-g.oy).toFixed(1)}rpx;width:${g.iw.toFixed(1)}rpx;height:${g.ih.toFixed(1)}rpx;` };
+    if (edit) upd.cropEdit = edit;
+    const w = Math.round(fw), h = Math.round(fh);
+    if (d.cropFrame.w !== w || d.cropFrame.h !== h) upd.cropFrame = { w, h };
+    const z = Math.round(e.z * 100);
+    if (d.cropZ !== z) upd.cropZ = z;
+    const bt = full ? (d.coverScrim === 'block' ? 37 : 40) : 0;
+    if (d.bandTop !== bt) upd.bandTop = bt;
+    this.setData(upd);
   },
   onOpenCrop() {
     const d = this.data;
     if (!d.coverSet || d.isFuneral || d.photoBusy) return;
-    if (!d.coverUrl || !d.photoDim) return wx.showToast({ title: '照片还在加载', icon: 'none' });
-    let k = 2;
-    try { k = 750 / (wx.getWindowInfo ? wx.getWindowInfo().windowWidth : wx.getSystemInfoSync().windowWidth); } catch (e) { /* 取不到按 iPhone 6 宽度 */ }
+    if (!d.coverUrl) return wx.showToast({ title: '照片加载失败，请重新选择', icon: 'none' });
+    if (!d.photoDim) return wx.showToast({ title: '照片还在加载', icon: 'none' });
+    let k = 2, wh = 0;
+    try { const w = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync(); k = 750 / w.windowWidth; wh = w.windowHeight; } catch (e) { /* 取不到按 iPhone 6 宽度 */ }
     this._k = k || 2;
+    // 裁剪框高度按窗口高度限制（v3.83.2）：面板最高 94vh，减去标题 / 提示 / 缩放条 / 九宫格 / 按钮栏等约 790rpx；小屏最低 260rpx，再矮面板自己滚动（按钮栏固定在底部）
+    this._maxH = wh ? Math.max(260, Math.min(620, Math.round(wh * this._k * 0.94 - 790))) : 620;
     this._g = null;
     this.setData({ cropOpen: true, cropEdit: pt.sanitizeCrop(d.coverCrop) });
     this.cropRender();
@@ -545,11 +571,10 @@ const PAGE = {
     this.setData({ cropOpen: false, coverCrop: pt.sanitizeCrop(this.data.cropEdit) });
     this.refresh();
   },
-  onCropReset() { this.setData({ cropEdit: { ...pt.CROP_DEFAULT } }); this.cropRender(); },
+  onCropReset() { this.cropRender({ ...pt.CROP_DEFAULT }); },
   cropZoom(z) {
     const d = this.data, f = this._cf;
-    this.setData({ cropEdit: pt.zoomAt(d.cropEdit, z, d.photoDim.w, d.photoDim.h, f.fw, f.fh) });
-    this.cropRender();
+    this.cropRender(pt.zoomAt(d.cropEdit, z, d.photoDim.w, d.photoDim.h, f.fw, f.fh));
   },
   onCropZ(e) { this.cropZoom(Number(e.detail.value) / 100); },
   onCropPlus() { this.cropZoom(this.data.cropEdit.z + 0.2); },
@@ -558,8 +583,7 @@ const PAGE = {
   onCropCell(e) {
     const { x, y } = e.currentTarget.dataset;
     const c = this.data.cropEdit;
-    this.setData({ cropEdit: pt.sanitizeCrop({ x: Number(x) / 2, y: Number(y) / 2, z: c.z }) });
-    this.cropRender();
+    this.cropRender(pt.sanitizeCrop({ x: Number(x) / 2, y: Number(y) / 2, z: c.z }));
   },
   /** 手势：按当前 touches 数量重新取基准（单指 -> 双指 -> 抬起一指回到单指，iOS / 安卓的 touches 变化顺序不同，都能接上） */
   cropBase(ts) {
@@ -582,13 +606,12 @@ const PAGE = {
     if (want === 'pan') {
       const dx = (ts[0].clientX - g.x) * this._k, dy = (ts[0].clientY - g.y) * this._k;
       g.x = ts[0].clientX; g.y = ts[0].clientY;
-      this.setData({ cropEdit: pt.panBy(d.cropEdit, dx, dy, d.photoDim.w, d.photoDim.h, f.fw, f.fh) });
+      this.cropRender(pt.panBy(d.cropEdit, dx, dy, d.photoDim.w, d.photoDim.h, f.fw, f.fh));
     } else {
       const dx = ts[0].clientX - ts[1].clientX, dy = ts[0].clientY - ts[1].clientY;
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      this.setData({ cropEdit: pt.zoomAt(g.crop, g.z * dist / g.dist, d.photoDim.w, d.photoDim.h, f.fw, f.fh) });
+      this.cropRender(pt.zoomAt(g.crop, g.z * dist / g.dist, d.photoDim.w, d.photoDim.h, f.fw, f.fh));
     }
-    this.cropRender();
   },
   onCropEnd(e) { this.cropBase(e.touches || []); },
 
@@ -599,8 +622,9 @@ const PAGE = {
     const mark = e.mark || '';
     const keys = pvfont.keysFor(main, mark);
     const sig = `${main}|${mark}`;
-    if (sig === this._pvSig) return;
-    this._pvSig = sig;
+    const retry = !!this._pvRetry; this._pvRetry = false; // 切标签 / 切字体时才重试上次失败的字体，避免每次编辑都重复请求
+    if (sig === this._pvSig && !(retry && this._pvBad)) return;
+    this._pvSig = sig; this._pvBad = false;
     if (keys.some(k => this._pvLoaded[k] === undefined)) this.setData({ pvLoading: true });
     const fam = {};
     await Promise.all(keys.map(async k => { fam[k] = await pvfont.load(k, this._pvLoaded); }));
@@ -609,8 +633,9 @@ const PAGE = {
     const mainFam = fam[main];
     const subFam = main === 'brush' ? fam.sans : mainFam;
     const markFam = (mark === '囍' || main === 'brush') ? fam.serif : mainFam;
+    this._pvBad = !noneFont && keys.some(k => !fam[k]);
     this.setData({
-      pvLoading: false, pvNone: noneFont, pvFail: !noneFont && keys.some(k => !fam[k]),
+      pvLoading: false, pvNone: noneFont, pvFail: this._pvBad,
       pvf: { main: pvfont.css(mainFam), sub: pvfont.css(subFam), mark: pvfont.css(markFam) }
     });
   },

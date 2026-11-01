@@ -41,9 +41,25 @@ async function payCode(path, size) {
 // 任何一步失败用上一步的图；最终超过 3MB 返回空串（调用方提示换图）。同时统一转成 JPG（compressImage 输出 JPG）
 const COVER_LIMIT = 1.5 * 1024 * 1024;
 const COVER_HARD = 3 * 1024 * 1024;
+/** 是不是 JPG：读文件头 2 字节（FF D8）；读不到（低版本不支持 position / length）按扩展名判断 */
+function isJpeg(path) {
+  return new Promise(resolve => {
+    const byExt = () => resolve(/\.jpe?g$/i.test(String(path || '')));
+    try {
+      wx.getFileSystemManager().readFile({
+        filePath: path, position: 0, length: 2,
+        success: r => { const u = new Uint8Array(r.data); resolve(u.length >= 2 ? (u[0] === 0xff && u[1] === 0xd8) : false); },
+        fail: byExt
+      });
+    } catch (e) { byExt(); }
+  });
+}
+
 async function cover(path, size) {
   let out = path;
   let sz = typeof size === 'number' && size > 0 ? size : await sizeOf(path);
+  // v3.83.2：已经是 JPG 且不超过 1.5MB 的照片不再重新压缩（二次压缩只会掉画质）；PNG / 超限的照旧压缩转 JPG
+  if (sz > 0 && sz <= COVER_LIMIT && await isJpeg(path)) return path;
   for (const q of [80, 60, 40]) {
     const c = await compress(out, q);
     if (!c) break;
@@ -55,4 +71,4 @@ async function cover(path, size) {
   return out;
 }
 
-module.exports = { payCode, cover, LIMIT, COVER_LIMIT, COVER_HARD };
+module.exports = { payCode, cover, isJpeg, LIMIT, COVER_LIMIT, COVER_HARD };

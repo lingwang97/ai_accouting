@@ -79,7 +79,7 @@
         <view class="pv-tab {{cur === 2 ? 'on' : ''}}" data-i="2" bindtap="onTab">封底</view>
       </view>
     </view>
-    <image class="dim-loader" wx:if="{{coverSet && coverUrl && !photoDim && !isFuneral}}" src="{{coverUrl}}" bindload="onPhotoLoad" />
+    <image class="dim-loader" wx:if="{{coverSet && coverUrl && !photoDim && !isFuneral}}" src="{{coverUrl}}" bindload="onPhotoLoad" binderror="onPhotoErr" />
     <view class="lock-tip" wx:if="{{lockTip}}">{{lockTip}}</view>
     <view class="muted tip">示意图仅供参考，点「预览」看真实效果{{pvSample ? '（内页暂无数据，用示例）' : ''}}{{pvLoading ? ' · 字体加载中…' : (pvNone ? ' · 预览字体未上传，示意图暂用系统字体' : (pvFail ? ' · 字体加载失败，示意图暂用系统字体' : ''))}}</view>
 
@@ -121,7 +121,7 @@
       <view wx:if="{{custErr}}" class="cust-err">{{custErr}}</view>
       <view class="cust-lb">角饰</view>
       <view class="chips"><view wx:for="{{patterns}}" wx:key="k" class="chip {{cust.pattern === item.k ? 'on' : ''}}" data-f="pattern" data-v="{{item.k}}" bindtap="onCust">{{item.n}}</view></view>
-      <view class="cust-lb">封面标题（不填用礼簿名）</view>
+      <view class="cust-lb">{{o.t('封面标题（不填用礼簿名）', org)}}</view>
       <input class="input" cursor-spacing="120" adjust-position="{{true}}" bindfocus="onKbOn" bindblur="onKbOff" value="{{cust.title}}" maxlength="20" placeholder="如：李王联姻志喜" data-f="title" bindinput="onCustInput" />
       <view class="cust-lb">封面落款（不填则没有）</view>
       <input class="input" cursor-spacing="120" adjust-position="{{true}}" bindfocus="onKbOn" bindblur="onKbOff" value="{{cust.footer}}" maxlength="8" placeholder="如：百年好合" data-f="footer" bindinput="onCustInput" />
@@ -134,7 +134,7 @@
       <view wx:if="{{defTip}}" class="def-tip">{{defTip}}</view>
       <view class="cust-lb">角饰</view>
       <view class="chips"><view wx:for="{{fPatterns}}" wx:key="k" class="chip {{fun.pattern === item.k ? 'on' : ''}}" data-f="pattern" data-v="{{item.k}}" bindtap="onFun">{{item.n}}</view></view>
-      <view class="cust-lb">封面标题（不填用礼簿名）</view>
+      <view class="cust-lb">{{o.t('封面标题（不填用礼簿名）', org)}}</view>
       <input class="input" cursor-spacing="120" adjust-position="{{true}}" bindfocus="onKbOn" bindblur="onKbOff" value="{{fun.title}}" maxlength="20" placeholder="如：某某先生奠仪簿" data-f="title" bindinput="onFunInput" />
       <view class="cust-lb">封面落款</view>
       <view class="chips">
@@ -183,7 +183,7 @@
       </block>
       <view class="muted tip">照片会印在导出 PDF 的封面上（左图右文或整页），默认居中裁剪，可点「调整裁剪」拖动、缩放照片；照片上传和移除立即生效，其余设置在导出或点「保存样式」时保存。PDF 转发后他人可见，请先征得照片里的人同意。</view>
     </view>
-    <view class="muted tip" wx:if="{{isFuneral}}">白事礼簿封面不使用照片</view>
+    <view class="muted tip" wx:if="{{isFuneral}}">{{o.t('白事礼簿封面不使用照片', org)}}</view>
 
     </block>
 
@@ -227,8 +227,8 @@
             <view wx:for="{{fFooters}}" wx:key="*this" class="chip {{back.footer === item ? 'on' : ''}}" data-v="{{item}}" bindtap="onBackFooter">{{item}}</view>
           </block>
         </view>
-        <input class="input" cursor-spacing="120" adjust-position="{{true}}" bindfocus="onKbOn" bindblur="onKbOff" disabled="{{!premiumOk}}" value="{{back.footer === '-' ? '' : back.footer}}" maxlength="8" placeholder="自动：用封面落款，没有则按事由默认（白事无吉语）" data-f="footer" bindinput="onBackInput" />
-        <view class="opt" bindtap="onBackLocked"><text>记账人签名栏</text><switch disabled="{{!premiumOk}}" checked="{{back.sign}}" color="{{themePrimary || '#C8161D'}}" data-f="sign" bindchange="onBackSwitch" /></view>
+        <input class="input" cursor-spacing="120" adjust-position="{{true}}" bindfocus="onKbOn" bindblur="onKbOff" disabled="{{!premiumOk}}" value="{{back.footer === '-' ? '' : back.footer}}" maxlength="8" placeholder="自动：沿用封面落款或默认" data-f="footer" bindinput="onBackInput" />
+        <view class="opt" bindtap="onBackLocked"><text>{{o.t('记账人签名栏', org)}}</text><switch disabled="{{!premiumOk}}" checked="{{back.sign}}" color="{{themePrimary || '#C8161D'}}" data-f="sign" bindchange="onBackSwitch" /></view>
         <view class="opt" bindtap="onBackLocked"><text>显示「慧礼记」小字</text><switch disabled="{{!premiumOk}}" checked="{{back.brand}}" color="{{themePrimary || '#C8161D'}}" data-f="brand" bindchange="onBackSwitch" /></view>
       </block>
     </view>
@@ -241,7 +241,7 @@
   <view class="bottom-bar" wx:if="{{book && !kb}}">
     <view class="bb-row">
       <button class="btn-outline pv-btn" disabled="{{exporting || previewing || pvLock || saving}}" bindtap="onPreview">预览</button>
-      <button class="btn-outline sv-btn" wx:if="{{canSave}}" loading="{{saving}}" disabled="{{exporting || previewing || saving}}" bindtap="onSaveStyle">{{dirty ? '保存样式' : '已保存'}}</button>
+      <button class="btn-outline sv-btn" wx:if="{{canSave}}" loading="{{saving}}" disabled="{{exporting || previewing || saving}}" bindtap="onSaveStyle">{{saving ? '保存中' : (dirty ? '保存样式' : '已保存')}}</button>
       <button class="btn-primary ok-btn" loading="{{exporting}}" disabled="{{exporting || previewing || saving}}" bindtap="onExport">导出</button>
     </view>
   </view>

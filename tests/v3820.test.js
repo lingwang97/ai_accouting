@@ -289,11 +289,11 @@ test('页面：水印字在内页标签（封面只留合并提示）、预设�
   // 手势在 touches 数量变化时重新取基准（单指 / 双指切换）
   assert.ok(/const want = ts\.length >= 2 \? 'pinch' : 'pan';\s*if \(!g \|\| g\.mode !== want\) return this\.cropBase\(ts\);/.test(js));
   // 示意图与裁剪编辑器都用共用的 cropGeom；示意封面与 PDF 同比例（700 x 495 ≈ 1.414）
-  assert.ok(js.includes('pt.cropGeom(d.photoDim.w, d.photoDim.h, box.w, box.h, d.coverCrop)') && js.includes('pt.cropGeom(d.photoDim.w, d.photoDim.h, fw, fh, d.cropEdit)'));
+  assert.ok(js.includes('pt.cropGeom(d.photoDim.w, d.photoDim.h, box.w, box.h, d.coverCrop)') && js.includes('pt.cropGeom(d.photoDim.w, d.photoDim.h, fw, fh, e)'));
   const m = wss.match(/\.pc \{[^}]*width: (\d+)rpx; height: (\d+)rpx/);
   assert.ok(m && Math.abs(Number(m[1]) / Number(m[2]) - 841.89 / 595.28) < 0.01, '示意封面比例');
   // 小屏：编辑器框最大 560 x 620rpx、面板用全局 .sheet（带安全区）；弹窗按钮 ≤4 字
-  assert.ok(js.includes('let fw = 560') && js.includes('fh > 620'));
+  assert.ok(js.includes('let fw = 560') && js.includes('fh > maxH'));
   [...js.matchAll(/(?:confirmText|cancelText): '([^']+)'/g)].forEach(x => assert.ok(x[1].length <= 4, x[1]));
   assert.ok(/VERSION: '3\.\d+\.\d+'/.test(read('miniprogram/config.js')));
 });

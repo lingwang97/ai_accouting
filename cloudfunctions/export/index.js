@@ -530,6 +530,7 @@ function buildMeta(rows, { account, book, startDay, endDay, themeName, pdfThemeK
     photo: null, // 封面照片 { buf, shape }，由 loadCoverPhoto 读取后填入（白事不用）
     startDay, endDay, themeName,
     signers: signersOf(rows), // 封底记账人（只含姓名）
+    org: !!(account && account.orgMode), // 机构模式：封底「记账人」写「礼台人员」，表格里「礼簿」写「场次」（v3.83.2）
     count: rows.length,
     sum: rows.reduce((s, r) => s + Math.round(Number(r.amount) * 100), 0) / 100,
     methodLine: methodSummary(rows),
@@ -552,15 +553,21 @@ function methodSummary(rows) {
   return s;
 }
 
+/** 机构模式称呼（与前端 utils/orgtext 一致）：礼簿 → 场次、记账人 → 礼台人员；固定名称「传统礼簿」不替换 */
+function orgT(meta, s) {
+  if (!meta || !meta.org) return s;
+  return String(s).split('传统礼簿').join('#K#').split('礼簿').join('场次').split('记账人').join('礼台人员').split('#K#').join('传统礼簿');
+}
+
 /** 副标题：主家 / 礼簿日期 / 统计区间 */
 function subtitleLines(meta) {
   const lines = [];
   const head = [`主家：${meta.accountName}`];
-  if (meta.bookDate) head.push(`礼簿日期：${meta.bookDate}`);
+  if (meta.bookDate) head.push(`${orgT(meta, '礼簿')}日期：${meta.bookDate}`);
   if (meta.location) head.push(`地点：${meta.location}`);
   lines.push(head.join('　'));
   if (meta.startDay && meta.endDay) {
-    lines.push(`统计区间：${meta.startDay} 至 ${meta.endDay}${meta.themeName ? '　礼簿：' + meta.themeName : ''}`);
+    lines.push(`统计区间：${meta.startDay} 至 ${meta.endDay}${meta.themeName ? `　${orgT(meta, '礼簿')}：` + meta.themeName : ''}`);
   }
   if (meta.methodLine) lines.push(meta.methodLine);
   lines.push(`导出时间：${meta.exportedAt}　由微信小程序「慧礼记」生成`);
@@ -590,10 +597,10 @@ const methodText = r => (r.payMethod === 'cash' ? '现金' : (r.deskEntry && !r.
 
 /** 按整本礼簿导出时标题已含礼簿名，不再重复「礼簿」列，宽度并入礼品/备注；按日期跨礼簿导出时保留 */
 function colsFor(meta) {
-  if (!meta.bookName) return COLS;
-  const book = COLS.find(c => c.key === 'themeName');
-  return COLS.filter(c => c.key !== 'themeName')
-    .map(c => (c.key === 'remark' ? { ...c, w: c.w + book.w } : c));
+  const cols = meta.bookName
+    ? COLS.filter(c => c.key !== 'themeName').map(c => (c.key === 'remark' ? { ...c, w: c.w + COLS.find(x => x.key === 'themeName').w } : c))
+    : COLS;
+  return meta.org ? cols.map(c => ({ ...c, title: orgT(meta, c.title) })) : cols;
 }
 const ROW_H = 20;
 
@@ -611,7 +618,7 @@ function buildPdf(rows, meta, fonts) {
     const cols = colsFor(meta);
 
     // 标题与汇总
-    doc.fontSize(18).fillColor('#222').text(`${meta.title} · 礼簿`, { align: 'center' });
+    doc.fontSize(18).fillColor('#222').text(`${meta.title} · ${orgT(meta, '礼簿')}`, { align: 'center' });
     doc.moveDown(0.5);
     doc.fontSize(10).fillColor('#666');
     subtitleLines(meta).forEach(l => doc.text(l, { align: 'center' }));
@@ -698,7 +705,7 @@ async function buildXlsx(rows, meta) {
   const withBook = !meta.bookName;
   const lastCol = withBook ? 'G' : 'F';
   ws.mergeCells(`A1:${lastCol}1`);
-  ws.getCell('A1').value = `${meta.title} · 礼簿`;
+  ws.getCell('A1').value = `${meta.title} · ${orgT(meta, '礼簿')}`;
   ws.getCell('A1').font = { size: 16, bold: true };
   ws.getCell('A1').alignment = { horizontal: 'center' };
   ws.mergeCells(`A2:${lastCol}2`);
@@ -708,7 +715,7 @@ async function buildXlsx(rows, meta) {
 
   const header = ws.getRow(4);
   header.values = withBook
-    ? ['序号', '宾客', '关系', '方式', '礼金(元)', '礼簿', '礼品/备注']
+    ? ['序号', '宾客', '关系', '方式', '礼金(元)', orgT(meta, '礼簿'), '礼品/备注']
     : ['序号', '宾客', '关系', '方式', '礼金(元)', '礼品/备注'];
   header.font = { bold: true, color: { argb: 'FFFFFFFF' } };
   header.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: meta.theme.argb } }; });
@@ -836,7 +843,7 @@ function buildBook(rows, meta, fonts) {
       doc.switchToPage(g.page);
       setGeom(meta.bind, i + 1);
       drawGrid(doc, pal, g.merge);
-      doc.font('sub').fontSize(8).fillColor('#555').text(`— ${i + 1} / ${n} —${meta.preview ? `　预览（${meta.previewSample ? '示例数据' : '仅前几笔'}，非正式礼簿）` : ''}`, BK.left, BK.gridBottom + 14,
+      doc.font('sub').fontSize(8).fillColor('#555').text(`— ${i + 1} / ${n} —${meta.preview ? `　预览（${meta.previewSample ? '示例数据' : '仅前几笔'}，非正式${orgT(meta, '礼簿')}）` : ''}`, BK.left, BK.gridBottom + 14,
         { width: BK.right - BK.left, align: 'center', lineBreak: false });
     });
     setGeom('none', 1);
@@ -919,7 +926,7 @@ function drawBack(doc, meta) {
     const names = signText(meta.signers);
     doc.lineWidth(0.8).strokeColor(c.border);
     if (names) {
-      const txt = `记账人：${names}`;
+      const txt = `${orgT(meta, '记账人')}：${names}`;
       let size = 16;
       doc.font('sub').fontSize(size);
       while (size > 9 && doc.widthOfString(txt) > maxW) { size -= 1; doc.fontSize(size); }
@@ -929,14 +936,14 @@ function drawBack(doc, meta) {
       doc.moveTo((W - lw) / 2, sy + size + 6).lineTo((W + lw) / 2, sy + size + 6).stroke();
     } else {
       doc.fontSize(16).fillColor(c.text);
-      const label = '记账人（签字）', lw = doc.widthOfString(label), line = 260;
+      const label = `${orgT(meta, '记账人')}（签字）`, lw = doc.widthOfString(label), line = 260;
       const x0 = (W - lw - line - 8) / 2;
       doc.text(label, x0, sy, { lineBreak: false });
       doc.moveTo(x0 + lw + 8, sy + 18).lineTo(x0 + lw + 8 + line, sy + 18).stroke();
     }
   }
   if (back.brand) doc.font('sub').fontSize(10).fillColor(c.text).text('慧礼记', 0, H - 70, { width: W, align: 'center', lineBreak: false });
-  if (meta.preview) doc.font('sub').fontSize(9).fillColor(c.text).text(`预览（${meta.previewSample ? '示例数据' : '仅前几笔，合计为这几笔'}，非正式礼簿）`, 0, H - 52, { width: W, align: 'center', lineBreak: false });
+  if (meta.preview) doc.font('sub').fontSize(9).fillColor(c.text).text(`预览（${meta.previewSample ? '示例数据' : '仅前几笔，合计为这几笔'}，非正式${orgT(meta, '礼簿')}）`, 0, H - 52, { width: W, align: 'center', lineBreak: false });
 }
 
 /** 封面照片相框位置（v3.79.0 左图右文）：x、y 为照片区左上角，w 为宽，高 = 页高 - 2y */
@@ -1585,4 +1592,4 @@ function sanitizeName(s) {
 
 
 // 仅供本地测试使用，不影响云函数入口
-module.exports._test = { signersOf, signText, drawBack, fontLoader, buildPdf, buildXlsx, buildBook, buildBackup, buildMeta, amountUpper, sanitizeName, guestText };
+module.exports._test = { orgT, subtitleLines, colsFor, signersOf, signText, drawBack, fontLoader, buildPdf, buildXlsx, buildBook, buildBackup, buildMeta, amountUpper, sanitizeName, guestText };

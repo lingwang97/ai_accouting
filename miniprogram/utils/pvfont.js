@@ -103,7 +103,7 @@ async function viaLocal(key, f, family) {
 /** 加载一个预览字体：返回 family 名，失败返回 ''；结果（Promise）记在 loaded[key]，同一页面不重复加载 */
 function load(key, loaded) {
   if (loaded[key] !== undefined) return loaded[key];
-  loaded[key] = getMeta().then(async m => {
+  const p = getMeta().then(async m => {
     const f = m[key];
     if (!f || (!f.url && !f.fileID) || typeof wx.loadFontFace !== 'function') return '';
     const family = familyOf(key, f.v);
@@ -122,7 +122,10 @@ function load(key, loaded) {
       return '';
     }
   }).catch(() => '');
-  return loaded[key];
+  loaded[key] = p;
+  // 失败结果不缓存（v3.83.2）：下次切字体 / 标签时可以重试；成功的（和「管理员没上传」）仍同一页面只加载一次
+  p.then(v => { if (!v && loaded[key] === p && metaState !== 'none') delete loaded[key]; });
+  return p;
 }
 
 /** 示意图要用的字体 key（与 PDF 的分工一致）：主字体；毛笔体的小字用黑体；囍水印 / 毛笔体的水印用宋体 */
