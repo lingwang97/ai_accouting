@@ -8,10 +8,11 @@ const pt = require('./pdftheme.js');
 const plan = require('../../utils/plan.js');
 const vip = require('../../utils/vip.js');
 const imgc = require('../../utils/imgcompress.js');
+const orgtext = require('../../utils/orgtext.js');
 
 const VIP_TIP = '该功能为会员功能，开通后可使用';
 
-Page({
+const PAGE = {
   data: {
     loading: true,
     kb: false,               // 键盘是否弹起
@@ -46,6 +47,12 @@ Page({
     binds: pt.BINDS,
     bindTip: pt.BIND_TIPS.none,
     exporting: false,
+    pvOpen: true,            // 吸顶示意图是否展开（小屏可收起）
+    dirty: false,            // 有未保存的样式改动（导出或「保存样式」后清除）
+    saving: false,           // 正在「只保存样式」
+    sheet: '',               // 确认面板：'' | 'export' | 'preview'
+    org: false,              // 机构模式：礼簿称场次
+    fontName: '黑体', effFont: 'sans',
     premiumOk: true,         // 套餐是否开放会员主题（features.pdfThemePremium；缺项视为开放）
     lockTip: '',             // 套餐未开放时的说明
     presets: pt.LIST,
@@ -79,10 +86,12 @@ Page({
     try {
       const [{ list }] = await Promise.all([req.bookList(), getApp().ensureRole(), plan.load()]);
       const premiumOk = plan.has('pdfThemePremium');
+      const acc = getApp().globalData.account;
+      const org = !!(acc && acc.orgMode);
       const photoOk = plan.has('coverPhoto');
       const book = list.find(b => b._id === this.data.id);
       if (!book) {
-        wx.showToast({ title: '礼簿不存在', icon: 'none' });
+        wx.showToast({ title: orgtext.t('礼簿不存在', org), icon: 'none' });
         return setTimeout(() => wx.navigateBack({ fail() {} }), 1200);
       }
       const isFuneral = book.type === 'funeral';
@@ -100,7 +109,7 @@ Page({
           : `按「${lb}」默认选了「${def.name}」${def.mark ? '，水印「' + def.mark + '」' : '，无水印'}，可更换或修改`;
       }
       this.setData({
-        premiumOk, photoOk,
+        premiumOk, photoOk, org,
         deco: book.pdfDeco || '',
         decos: isFuneral ? pt.FUNERAL_DECOS : pt.DECOS,
         coverSet: !!book.coverPhoto,
@@ -123,6 +132,7 @@ Page({
       this.refresh();
       this.loadRows();
       if (book.coverPhoto && !isFuneral) this.loadCover();
+      this._base = this.snap(); // 进页面时的样式快照，之后改动才算「未保存」
     } catch (e) { /* toast 已提示 */ } finally {
       this.setData({ loading: false });
     }
@@ -132,7 +142,11 @@ Page({
   async loadCover() {
     try {
       const r = await req.bookCoverUrl(this.data.id);
-      if (r && r.url) { this.setData({ coverUrl: r.url, coverShape: r.shape || 'rect' }); this.refresh(); }
+      if (r && r.url) {
+        this.setData({ coverUrl: r.url, coverShape: r.shape || 'rect' });
+        this.refresh();
+        if (!this.data.dirty) this._base = this.snap();
+      }
     } catch (e) { /* 忽略 */ }
   },
 
@@ -175,7 +189,8 @@ Page({
       corners: this.cornersOf(e.pattern),
       info: [book.hostName ? `主家：${book.hostName}` : '', book.date ? `日期：${book.date}` : ''].filter(Boolean)
     }) : null;
-    const upd = { custErr: err, pv, lockTip: this.lockTip() };
+    const ef = e.font || 'sans';
+    const upd = { custErr: err, pv, lockTip: this.lockTip(), effFont: ef, fontName: (pt.FONTS.find(f => f.k === ef) || {}).n || '黑体' };
     if (pv) { upd.pg = this.pageOf(e, d.isFuneral ? pt.GREY.main : e.main); upd.bk = this.backOf(e, pv); }
     this.setData(upd);
   },
@@ -309,14 +324,6 @@ Page({
     if (k === this.data.coverShape) return;
     this.setData({ coverShape: k });
     this.refresh();
-    this.saveCoverOpts(); // 立即保存
-  },
-
-  /** 只改展示设置（形状 / 版式 / 托底 / 焦点），不动照片文件；失败不打扰，导出时以云端为准 */
-  saveCoverOpts() {
-    const d = this.data;
-    if (!d.coverSet) return;
-    req.bookSetCover(d.id, undefined, d.coverShape, { layout: d.coverLayout, scrim: d.coverScrim, focus: d.coverFocus }).catch(() => {});
   },
 
   onLayout(e) {
@@ -325,7 +332,6 @@ Page({
     this.setData({ coverLayout: k });
     this.updateQ();
     this.refresh();
-    this.saveCoverOpts();
   },
 
   onScrim(e) {
@@ -333,13 +339,11 @@ Page({
     if (k === this.data.coverScrim) return;
     this.setData({ coverScrim: k });
     this.refresh();
-    this.saveCoverOpts();
   },
 
   onFocus(e) {
     const { x, y } = e.currentTarget.dataset;
     this.setData({ coverFocus: { x: Number(x), y: Number(y) } });
-    this.saveCoverOpts();
   },
 
   /** 打印方式只作用于本次导出 / 预览，不保存 */
@@ -449,10 +453,90 @@ Page({
     });
   },
 
-  /** 导出 / 预览共用的主题参数；自定义配色不合法时提示并返回 null */
+  noop() {},
+  onTogglePv() { this.setData({ pvOpen: !this.data.pvOpen }); },
+
+  /** 字体在「内页」标签选择（全书通用）；预设主题下选字体先转为「在预设基础上修改」 */
+  onFontPick(e) {
+    const v = e.currentTarget.dataset.v;
+    const d = this.data;
+    if (v === this.effective().font) return;
+    if (v !== 'sans' && !d.premiumOk) return vip.explain('PDF 字体', VIP_TIP);
+    if (d.isFuneral) { this.setData({ 'fun.font': v }); return this.refresh(); }
+    if (d.themeKey !== 'custom') {
+      if (!d.premiumOk) return vip.explain('PDF 主题', VIP_TIP);
+      this.setData({ cust: pt.expand(d.themeKey), base: d.themeKey, themeKey: 'custom', defTip: '' });
+    }
+    this.setData({ 'cust.font': v });
+    this.refresh();
+  },
+
+  /** 草稿快照：主题 / 纹样 / 尾页 / 装订 / 封面照片展示设置（这些在导出或「保存样式」时才保存）；与进页面时一致就不算改动 */
+  snap() {
+    const d = this.data;
+    return JSON.stringify([d.themeKey, d.base, d.cust, d.fun, d.back, d.bind, d.deco, d.coverShape, d.coverLayout, d.coverScrim, d.coverFocus]);
+  },
+  touch() {
+    const dirty = this.snap() !== this._base;
+    if (dirty === this.data.dirty) return;
+    this.setData({ dirty });
+    try {
+      if (dirty && this.data.canSave) wx.enableAlertBeforeUnload({ message: '样式还没保存，确定离开吗？' });
+      else if (wx.disableAlertBeforeUnload) wx.disableAlertBeforeUnload();
+    } catch (e) { /* 低版本没有该接口：不提示 */ }
+  },
+  clean() {
+    this._base = this.snap();
+    if (this.data.dirty) this.setData({ dirty: false });
+    try { if (wx.disableAlertBeforeUnload) wx.disableAlertBeforeUnload(); } catch (e) { /* 忽略 */ }
+  },
+
+  /** 预览：设了封面照片才弹确认面板（选打印方式），否则直接预览 */
+  onPreview() {
+    const d = this.data;
+    if (d.exporting || d.previewing || d.pvLock || d.saving || !d.book) return;
+    if (d.coverSet && !d.isFuneral) return this.setData({ sheet: 'preview' });
+    this.doPreview();
+  },
+  /** 导出：先弹确认面板（打印方式只用于本次 + 保存说明） */
+  onExport() {
+    const d = this.data;
+    if (d.exporting || d.previewing || d.saving || !d.book) return;
+    this.setData({ sheet: 'export' });
+  },
+  onSheetClose() { this.setData({ sheet: '' }); },
+  onSheetOk() {
+    const k = this.data.sheet;
+    this.setData({ sheet: '' });
+    if (k === 'export') this.doExport();
+    else if (k === 'preview') this.doPreview();
+  },
+
+  /** 只保存样式（不导出）：需要「管理礼簿」权限，云端再校验一次 */
+  async onSaveStyle() {
+    const d = this.data;
+    if (!d.canSave || d.saving || d.exporting || d.previewing || !d.book) return;
+    const params = this.buildParams();
+    if (!params) return;
+    params.format = 'book';
+    params.saveOnly = true;
+    this.setData({ saving: true });
+    try {
+      await req.exportFile(params);
+      this.clean();
+      wx.showToast({ title: '样式已保存', icon: 'success' });
+    } catch (e) {
+      wx.showModal({ title: '保存未成功', content: (e && e.message) || '请稍后重试', showCancel: false });
+    } finally {
+      this.setData({ saving: false });
+    }
+  },
+
+  /** 导出 / 预览 / 只保存样式共用的参数；自定义配色不合法时提示并返回 null（封面照片展示设置作为草稿一并提交，云端校验后：有权限时保存，否则只用于本次） */
   buildParams() {
     const d = this.data;
     const params = { bookId: d.id, pdfBack: d.back, pdfBind: d.bind, pdfDeco: d.deco, coverPrint: d.coverSet ? d.coverPrint : 'keep' };
+    if (d.coverSet && !d.isFuneral) Object.assign(params, { coverShape: d.coverShape, coverLayout: d.coverLayout, coverScrim: d.coverScrim, coverFocus: d.coverFocus });
     if (d.isFuneral) {
       params.pdfTheme = 'custom';
       params.pdfCustom = d.fun;
@@ -468,7 +552,7 @@ Page({
   },
 
   /** 预览：云端用同一套排版生成封面 + 内页 + 封底的小 PDF（不保存主题）；生成中禁用，完成后 3 秒内不能再点 */
-  async onPreview() {
+  async doPreview() {
     const d = this.data;
     if (d.exporting || d.previewing || d.pvLock || !d.book) return;
     const params = this.buildParams();
@@ -493,9 +577,9 @@ Page({
   },
 
   /** 确认导出：校验 → 云端保存主题（有权限时）并生成 → 下载打开 */
-  async onConfirm() {
+  async doExport() {
     const d = this.data;
-    if (d.exporting || d.previewing || !d.book) return;
+    if (d.exporting || d.previewing || d.saving || !d.book) return;
     const params = this.buildParams();
     if (!params) return;
     params.format = 'book';
@@ -503,6 +587,7 @@ Page({
     wx.showLoading({ title: '约需半分钟…', mask: true }); // 导出一般 10～30 秒，礼金多时接近 1 分钟（v3.65.2 提示预计时间）
     try {
       const res = await req.exportFile(params);
+      if (d.canSave) this.clean(); // 导出时云端已把样式保存到礼簿
       const filePath = await openfile.download(res.fileID, res.fileName);
       // 已下载到本机，立即删除云端文件，避免礼金明细通过链接外泄
       req.exportCleanup(res.fileID).catch(() => {});
@@ -516,4 +601,13 @@ Page({
       this.setData({ exporting: false });
     }
   }
+};
+
+// 这些操作会改动草稿：操作后对比快照，有变化才标记「未保存」（被会员限制拦下的不算）
+['onPickTheme', 'onEditPreset', 'onCust', 'onCustInput', 'onFun', 'onFunInput', 'onBackSwitch', 'onBackFooter', 'onBackInput',
+  'onBind', 'onDeco', 'onShape', 'onLayout', 'onScrim', 'onFocus', 'onFontPick'].forEach(n => {
+  const f = PAGE[n];
+  PAGE[n] = function (e) { const r = f.call(this, e); this.touch(); return r; };
 });
+
+Page(PAGE);

@@ -23,8 +23,14 @@
 .sw { width: 64rpx; height: 64rpx; border-radius: 50%; margin: 6rpx 8rpx; border: 2rpx solid #ddd; box-sizing: border-box; }
 .sw.on { box-shadow: 0 0 0 4rpx var(--primary); }
 /* 示意预览：封面 / 内页 / 封底，swiper 高度固定，页面不跳动 */
-.pv-swiper { height: 420rpx; }
-.pc { position: relative; height: 400rpx; border: 4rpx solid; border-radius: 8rpx; box-sizing: border-box; overflow: hidden; }
+.pv-swiper { height: 296rpx; }
+/* v3.81.0 吸顶示意图：整体缩小到 72%（宽度放大 139% 再缩回），小屏也不占满屏幕 */
+.sticky-pv { position: sticky; top: 0; z-index: 4; background: #F4F5F7; margin: 0 -24rpx; padding: 8rpx 24rpx 4rpx; }
+.pv-head { display: flex; flex-direction: row; align-items: center; justify-content: space-between; }
+.pv-head .book-name { flex: 1; min-width: 0; margin-bottom: 8rpx; }
+.pv-fold { flex-shrink: 0; margin-left: 16rpx; padding: 6rpx 0; font-size: 24rpx; color: var(--primary); }
+.font-hint { margin: 0 0 16rpx; }
+.pc { position: relative; width: 139%; transform: scale(0.72); transform-origin: 0 0; height: 400rpx; border: 4rpx solid; border-radius: 8rpx; box-sizing: border-box; overflow: hidden; }
 .pc-in { position: absolute; left: 10rpx; right: 10rpx; top: 10rpx; bottom: 10rpx; border: 2rpx solid; }
 .pc-mark { position: absolute; left: 0; right: 0; top: 50%; margin-top: -110rpx; text-align: center; line-height: 220rpx; font-size: 220rpx; opacity: .12; }
 .pc-cn { position: absolute; width: 36rpx; height: 36rpx; line-height: 36rpx; font-size: 28rpx; text-align: center; z-index: 2; }
@@ -89,7 +95,9 @@ button.photo-btn.btn-outline:not(.btn):not([size=mini]) { width: 100%; margin-bo
 .opt text { flex: 1; margin-right: 20rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .bb-row { display: flex; flex-direction: row; align-items: center; }
-.bb-row button.pv-btn.btn-outline:not(.btn):not([size=mini]) { width: 32%; margin-right: 16rpx; flex-shrink: 0; }
+.bb-row button.pv-btn.btn-outline:not(.btn):not([size=mini]) { width: 26%; margin-right: 12rpx; flex-shrink: 0; }
+.bb-row button.sv-btn.btn-outline:not(.btn):not([size=mini]) { width: 34%; margin-right: 12rpx; flex-shrink: 0; }
+.bb-row button { padding-left: 0; padding-right: 0; font-size: 28rpx; }
 .bb-row button.ok-btn.btn-primary:not(.btn):not([size=mini]) { width: auto; flex: 1; }
 
 .th-vip { display: inline-block; margin-top: 4rpx; font-size: 20rpx; color: var(--warn); background: var(--warn-bg); border: 2rpx solid var(--warn-border); border-radius: 999rpx; padding: 0 12rpx; line-height: 32rpx; }

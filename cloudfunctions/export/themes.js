@@ -19,6 +19,30 @@ const DEFAULT_KEY = 'red_gold';
 const PATTERNS = ['double', 'huiwen', 'flower', 'cloud', 'diamond', 'line', 'none'];
 const FONTS = ['sans', 'serif', 'brush'];
 const MARKS = ['', '喜', '囍', '寿', '福']; // 喜事水印字（囍不在 GB2312，宋体子集已补；毛笔体没有，绘制时改用宋体）
+// v3.81.0 封面照片展示设置作为草稿随预览 / 导出提交（event.coverShape / coverLayout / coverScrim / coverFocus）：
+// coverOverride 只取传了的项并校验；mergeCover 叠在已存设置上；coverDoc 生成落库形态（默认值不落库，与 books 云函数一致）
+function coverView(d) {
+  d = d && typeof d === 'object' ? d : {};
+  return { shape: sanitizeShape(d.shape), layout: sanitizeLayout(d.layout), scrim: sanitizeScrim(d.scrim), focus: sanitizeFocus(d.focus) };
+}
+function coverOverride(ev) {
+  ev = ev || {};
+  const o = {};
+  if (ev.coverShape !== undefined) o.shape = sanitizeShape(ev.coverShape);
+  if (ev.coverLayout !== undefined) o.layout = sanitizeLayout(ev.coverLayout);
+  if (ev.coverScrim !== undefined) o.scrim = sanitizeScrim(ev.coverScrim);
+  if (ev.coverFocus !== undefined) o.focus = sanitizeFocus(ev.coverFocus);
+  return o;
+}
+const mergeCover = (old, o) => Object.assign(coverView(old), o || {});
+function coverDoc(fileID, v) {
+  const d = { fileID, shape: v.shape };
+  if (v.layout === 'full') d.layout = 'full';
+  if (v.scrim === 'block') d.scrim = 'block';
+  if (!(v.focus.x === 1 && v.focus.y === 1)) d.focus = { x: v.focus.x, y: v.focus.y };
+  return d;
+}
+
 // 白事可编辑项的限制（礼俗）：角饰只能无 / 双线 / 直角，水印只能无 / 奠；颜色一律素灰
 const FUNERAL_PATTERNS = ['none', 'double', 'line'];
 const FUNERAL_MARKS = ['', '奠'];
@@ -207,4 +231,4 @@ function pick(premiumOk, funeral, bookType, key, custom) {
   return premiumOk ? bt : freeOnly(bt, funeral, bookType);
 }
 
-module.exports = { PHOTO_LAYOUTS, PHOTO_SCRIMS, PRINT_MODES, sanitizeLayout, sanitizeScrim, sanitizePrint, sanitizeFocus, DECOS, FUNERAL_DECOS, DECO_DEFAULTS, sanitizeDeco, decoOf, PHOTO_SHAPES, sanitizeShape, pick, FREE_KEYS, premiumUsed, freeOnly, isDefaultBack, PRESETS, DEFAULT_KEY, TYPE_DEFAULTS, typeDefault, resolveDefault, resolve, isPresetKey, sanitizeCustom, sanitizeFuneral, sanitizeBack, sanitizeBind, DEFAULT_BACK };
+module.exports = { coverView, coverOverride, mergeCover, coverDoc, PHOTO_LAYOUTS, PHOTO_SCRIMS, PRINT_MODES, sanitizeLayout, sanitizeScrim, sanitizePrint, sanitizeFocus, DECOS, FUNERAL_DECOS, DECO_DEFAULTS, sanitizeDeco, decoOf, PHOTO_SHAPES, sanitizeShape, pick, FREE_KEYS, premiumUsed, freeOnly, isDefaultBack, PRESETS, DEFAULT_KEY, TYPE_DEFAULTS, typeDefault, resolveDefault, resolve, isPresetKey, sanitizeCustom, sanitizeFuneral, sanitizeBack, sanitizeBind, DEFAULT_BACK };

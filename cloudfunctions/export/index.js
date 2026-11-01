@@ -108,6 +108,9 @@ exports.main = async (event, context) => {
     if (format === 'book' && !bookId) return err('传统礼簿请选择一本礼簿整本导出');
     // 仅传统礼簿支持归档保留；家人共享只读，不能生成存档
     const archive = format === 'book' && event.keep === true;
+    // 只保存样式（v3.81.0）：不生成文件，只把主题 / 纹样 / 尾页 / 装订 / 封面照片展示设置记到礼簿，需「管理礼簿」权限
+    const saveOnly = format === 'book' && event.saveOnly === true;
+    if (saveOnly && !can(ctx, 'books')) return err('你没有管理礼簿的权限');
     if (archive && !(can(ctx, 'books') && can(ctx, 'export'))) return err('生成存档需要「管理礼簿」和「对账与导出」权限');
 
     if (bookId) {
@@ -132,9 +135,9 @@ exports.main = async (event, context) => {
       try { features = (await P.planOf(db, OWNER)).features; } catch (e) { console.warn('读取套餐失败，按默认处理', e.message); }
     }
     stage = '读取礼金';
-    const rows = await fetchRows(OWNER, { bookId, startDay, endDay, themeName });
+    const rows = saveOnly ? [] : await fetchRows(OWNER, { bookId, startDay, endDay, themeName });
     if (rows.tooMany) return err(`礼金超过 ${MAX_ROWS} 笔，请按日期范围分段导出`);
-    if (rows.length === 0) return err('该范围内没有已入簿的礼金');
+    if (!saveOnly && rows.length === 0) return err('该范围内没有已入簿的礼金');
     // 传统礼簿 PDF 逐页绘制 + bufferPages 占内存，单独限制笔数；表格 PDF / Excel 不受此限
     // v3.64.0：上限随套餐（features.bookMax，缺项 3000；压测见开发文档 §175）
     const bookMax = P.bookMaxOf(features);
@@ -197,10 +200,17 @@ exports.main = async (event, context) => {
         await db.collection('books').doc(book._id).update({ data: { pdfTheme: _.set(save) } });
       }
     }
+    // 封面照片展示设置（形状 / 版式 / 托底 / 焦点，v3.81.0 起为草稿，随导出 / 只保存样式一起保存）：有「管理礼簿」权限且礼簿已设照片、非白事时写入，其余只用于本次
+    const coverOv = themes.coverOverride(event);
+    if (format === 'book' && book && Object.keys(coverOv).length && book.coverPhoto && !book.coverPhoto._openid && book.coverPhoto.fileID && book.type !== 'funeral' && can(ctx, 'books')) {
+      const doc = themes.coverDoc(book.coverPhoto.fileID, themes.mergeCover(book.coverPhoto, coverOv));
+      if (JSON.stringify(doc) !== JSON.stringify(book.coverPhoto)) await db.collection('books').doc(book._id).update({ data: { coverPhoto: _.set(doc) } });
+    }
+    if (saveOnly) return ok({ saved: true });
     const meta = buildMeta(rows, { account, book, startDay, endDay, themeName, pdfThemeKey, pdfCustom, pdfBack, pdfBind, pdfDeco, premiumOk });
     if (format === 'book') {
       stage = '读取封面照片';
-      const ph = await loadCoverPhoto(book, features, meta.funeral, themes.sanitizePrint(event.coverPrint));
+      const ph = await loadCoverPhoto(book, features, meta.funeral, themes.sanitizePrint(event.coverPrint), themes.coverOverride(event));
       // 存档会长期保存：照片读不到时不静默缺图，让用户稍后重试
       if (ph.want && !ph.photo && archive) return err('封面照片暂时无法读取，请稍后重试');
       if (ph.photo) meta.photo = ph.photo;
@@ -430,7 +440,7 @@ async function bookPreview(event, ctx, OWNER) {
   try { features = (await P.planOf(db, OWNER)).features; premiumOk = P.featureOpen(features, 'pdfThemePremium'); } catch (e) { /* 读套餐失败：按开放处理 */ }
   const account = (await db.collection('accounts').where({ ownerOpenid: OWNER }).limit(1).get()).data[0] || { accountName: '' };
   const meta = buildMeta(rows, { account, book, startDay: '', endDay: '', themeName: '', pdfThemeKey: th.key, pdfCustom: th.custom, pdfBack: th.back, pdfBind: th.bind, pdfDeco: th.deco, premiumOk });
-  { const ph = await loadCoverPhoto(book, features, meta.funeral, themes.sanitizePrint(event.coverPrint)); if (ph.photo) meta.photo = ph.photo; } // 预览读不到照片只是不放
+  { const ph = await loadCoverPhoto(book, features, meta.funeral, themes.sanitizePrint(event.coverPrint), themes.coverOverride(event)); if (ph.photo) meta.photo = ph.photo; } // 预览读不到照片只是不放
   meta.preview = true;
   meta.previewSample = sample;
   let stage = '准备字体';
@@ -458,8 +468,9 @@ async function bookPreview(event, ctx, OWNER) {
  * 封面照片（v3.79.0）：读礼簿 coverPhoto 的文件（只有 books 云函数写入，已校验归属 / 格式 / 审核）；
  * 白事、套餐关闭 features.coverPhoto、没有照片时 want=false；want=true 而 photo=null 表示读取失败（存档要报错，普通导出 / 预览只是不放照片）
  */
-async function loadCoverPhoto(book, features, funeral, print) {
-  const cp = book && book.coverPhoto && !book.coverPhoto._openid ? book.coverPhoto : null;
+async function loadCoverPhoto(book, features, funeral, print, ov) {
+  let cp = book && book.coverPhoto && !book.coverPhoto._openid ? book.coverPhoto : null;
+  if (cp && ov && Object.keys(ov).length) cp = { fileID: cp.fileID, ...themes.mergeCover(cp, ov) }; // 草稿覆盖项（v3.81.0），只用于本次
   if (!cp || !cp.fileID || funeral || print === 'none' || !P.featureOpen(features, 'coverPhoto')) return { want: false, photo: null }; // print=none：本次导出去掉照片（v3.80.0）
   try {
     const buf = (await cloud.downloadFile({ fileID: cp.fileID })).fileContent;

@@ -268,7 +268,7 @@ t('buildBook 封面：各事由 x 版式 x 托底 x 焦点 x 淡化，全部能�
 test('主题页接入：版式 / 托底 / 焦点 / 打印 / 分辨率提示、coverPrint 随导出预览参数且不保存', () => {
   const js = read('miniprogram/pages/booktheme/booktheme.js');
   assert.ok(/coverPrint: d\.coverSet \? d\.coverPrint : 'keep'/.test(js), '导出 / 预览带 coverPrint');
-  assert.ok(js.includes('saveCoverOpts') && js.includes('layout: d.coverLayout, scrim: d.coverScrim, focus: d.coverFocus'));
+  assert.ok(js.includes('layout: d.coverLayout, scrim: d.coverScrim, focus: d.coverFocus'));
   assert.ok(js.includes('pt.photoTier('), '分辨率三档提示');
   assert.ok(!/bookSetCover\([^)]*coverPrint/.test(js), '打印方式不保存到礼簿');
   const wxml = read('miniprogram/pages/booktheme/booktheme.wxml');
@@ -278,5 +278,5 @@ test('主题页接入：版式 / 托底 / 焦点 / 打印 / 分辨率提示、co
   const ex = read('cloudfunctions/export/index.js');
   assert.ok(ex.includes('themes.sanitizePrint(event.coverPrint)'));
   assert.ok(!/pdfTheme[^\n]*coverPrint|coverPrint[^\n]*save\./.test(ex), 'coverPrint 不写入礼簿');
-  assert.ok(/VERSION: '3\.80\.0'/.test(read('miniprogram/config.js')));
+  assert.ok(/VERSION: '3\.\d+\.\d+'/.test(read('miniprogram/config.js')));
 });
