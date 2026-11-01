@@ -477,7 +477,7 @@ async function loadCoverPhoto(book, features, funeral, print, ov) {
     const jpg = buf && buf.length > 8 && buf[0] === 0xff && buf[1] === 0xd8;
     const png = buf && buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
     if ((jpg || png) && buf.length <= 4 * 1024 * 1024) {
-      return { want: true, photo: { buf, shape: themes.sanitizeShape(cp.shape), layout: themes.sanitizeLayout(cp.layout), scrim: themes.sanitizeScrim(cp.scrim), focus: themes.sanitizeFocus(cp.focus), fade: print === 'fade' } };
+      return { want: true, photo: { buf, shape: themes.sanitizeShape(cp.shape), layout: themes.sanitizeLayout(cp.layout), scrim: themes.sanitizeScrim(cp.scrim), crop: themes.coverView(cp).crop, fade: print === 'fade' } };
     }
     console.warn('cover photo unusable', buf && buf.length);
   } catch (e) { console.warn('cover photo download failed', e && (e.errMsg || e.message)); }
@@ -928,7 +928,7 @@ function drawPhoto(doc, photo, c) {
     doc.save();
     if (photo.shape === 'oval') doc.ellipse(x + w / 2, y + h / 2, w / 2, h / 2).clip();
     else doc.roundedRect(x, y, w, h, 14).clip();
-    doc.image(photo.buf, x, y, { cover: [w, h], ...focusOf(photo) });
+    placeImage(doc, photo, x, y, w, h);
     if (photo.fade) doc.rect(x, y, w, h).fillOpacity(0.55).fill('#FFFFFF'); // 打印淡化：叠 55% 白，省墨
     doc.restore();
   } catch (e) {
@@ -949,10 +949,15 @@ function drawPhoto(doc, photo, c) {
   return true;
 }
 
-/** 九宫格焦点 -> pdfkit cover 的对齐参数 */
-function focusOf(photo) {
-  const f = photo.focus || { x: 1, y: 1 };
-  return { align: ['left', 'center', 'right'][f.x] || 'center', valign: ['top', 'center', 'bottom'][f.y] || 'center' };
+/**
+ * 在裁剪框 (bx, by, bw, bh) 内按 crop（位置 x / y + 放大 z）摆放图片（v3.82.0）：pdfkit openImage 取原始尺寸，
+ * 与前端同一个 cropGeom 计算；调用方负责先 clip 到框。老式 photo 对象只有 focus（九宫格）时读取映射
+ */
+function placeImage(doc, photo, bx, by, bw, bh) {
+  const im = doc.openImage(photo.buf);
+  const crop = photo.crop ? themes.sanitizeCrop(photo.crop) : (photo.focus ? themes.focusToCrop(photo.focus) : { ...themes.CROP_DEFAULT });
+  const g = themes.cropGeom(im.width, im.height, bw, bh, crop);
+  doc.image(im, bx - g.ox, by - g.oy, { width: g.iw, height: g.ih });
 }
 
 /**
@@ -963,7 +968,8 @@ function drawFullPhoto(doc, photo, c) {
   const W = BK.width, H = BK.height;
   try {
     doc.save();
-    doc.image(photo.buf, 0, 0, { cover: [W, H], ...focusOf(photo) });
+    doc.rect(0, 0, W, H).clip();
+    placeImage(doc, photo, 0, 0, W, H);
     doc.restore();
   } catch (e) {
     try { doc.restore(); } catch (e2) { /* 忽略 */ }

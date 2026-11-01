@@ -63,6 +63,44 @@ const COVER_LAYOUTS = [{ k: 'left', n: '左图右文' }, { k: 'full', n: '整页
 const COVER_SCRIMS = [{ k: 'gradient', n: '渐变' }, { k: 'block', n: '色块' }];
 const COVER_PRINTS = [{ k: 'keep', n: '保留' }, { k: 'fade', n: '淡化' }, { k: 'none', n: '去照片' }];
 const FOCUS_CELLS = ['左上', '上', '右上', '左', '中', '右', '左下', '下', '右下'].map((n, i) => ({ n, x: i % 3, y: Math.floor(i / 3) }));
+// v3.82.0 封面照片裁剪：crop = { x, y, z }（x、y 0~1 为位置，z 1~3 为放大倍数）；cropGeom 与云函数 export/themes.js 同名函数一致（tests 随机比对）
+const PAGE_PT = { w: 841.89, h: 595.28 };
+// 裁剪框（pt）：左图右文 280 x (页高 - 192)，整页为 A4 横向整页
+const COVER_BOX = { left: { w: 280, h: 595.28 - 192 }, full: { w: 841.89, h: 595.28 } };
+const CROP_DEFAULT = { x: 0.5, y: 0.5, z: 1 };
+function sanitizeCrop(c) {
+  c = c && typeof c === 'object' ? c : {};
+  const n = (v, lo, hi, d) => { const f = Number(v); return isFinite(f) && v !== null && v !== '' ? Math.round(Math.min(hi, Math.max(lo, f)) * 1000) / 1000 : d; };
+  return { x: n(c.x, 0, 1, 0.5), y: n(c.y, 0, 1, 0.5), z: n(c.z, 1, 3, 1) };
+}
+const isDefaultCrop = c => { const s = sanitizeCrop(c); return s.x === 0.5 && s.y === 0.5 && s.z === 1; };
+function cropGeom(imgW, imgH, boxW, boxH, crop) {
+  const c = sanitizeCrop(crop);
+  const s = Math.max(boxW / imgW, boxH / imgH) * c.z;
+  const iw = imgW * s, ih = imgH * s;
+  return { iw, ih, ox: c.x * (iw - boxW), oy: c.y * (ih - boxH) };
+}
+const clampN = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+/** 缩放到 z，同时保持裁剪框中心对应的图片位置不变（滑块 / ± / 双指缩放共用） */
+function zoomAt(crop, z, imgW, imgH, boxW, boxH) {
+  const c = sanitizeCrop(crop);
+  const g = cropGeom(imgW, imgH, boxW, boxH, c);
+  const fx = (g.ox + boxW / 2) / g.iw, fy = (g.oy + boxH / 2) / g.ih; // 框中心落在图片上的比例位置
+  const nz = clampN(Number(z) || 1, 1, 3);
+  const b = cropGeom(imgW, imgH, boxW, boxH, { x: 0.5, y: 0.5, z: nz });
+  const rx = b.iw - boxW, ry = b.ih - boxH;
+  const ox = clampN(fx * b.iw - boxW / 2, 0, Math.max(rx, 0)), oy = clampN(fy * b.ih - boxH / 2, 0, Math.max(ry, 0));
+  return sanitizeCrop({ x: rx > 0.5 ? ox / rx : c.x, y: ry > 0.5 ? oy / ry : c.y, z: nz });
+}
+/** 平移：图片跟手指移动 dx、dy（与裁剪框同单位）；某方向没有多余像素时该方向不变 */
+function panBy(crop, dx, dy, imgW, imgH, boxW, boxH) {
+  const c = sanitizeCrop(crop);
+  const g = cropGeom(imgW, imgH, boxW, boxH, c);
+  const rx = g.iw - boxW, ry = g.ih - boxH;
+  const ox = clampN(g.ox - dx, 0, Math.max(rx, 0)), oy = clampN(g.oy - dy, 0, Math.max(ry, 0));
+  return sanitizeCrop({ x: rx > 0.5 ? ox / rx : c.x, y: ry > 0.5 ? oy / ry : c.y, z: c.z });
+}
+
 /** 照片分辨率三档（按短边像素）：整页版式要求更高 */
 function photoTier(w, h, layout) {
   const s = Math.min(Number(w) || 0, Number(h) || 0);
@@ -187,6 +225,7 @@ module.exports = {
   TYPE_DEFAULTS, TYPE_LABELS, typeDefault, defaultSelection,
   LIST, DEFAULT_KEY, FREE_KEYS, FONTS, PATTERNS, MARKS, MAIN_COLORS, ACCENT_COLORS, DEFAULT_CUSTOM,
   DECOS, FUNERAL_DECOS, DECO_DEFAULTS, DECO_TXT, DECO_BAND, decoOf, COVER_SHAPES, COVER_LAYOUTS, COVER_SCRIMS, COVER_PRINTS, FOCUS_CELLS, photoTier,
+  PAGE_PT, COVER_BOX, CROP_DEFAULT, sanitizeCrop, isDefaultCrop, cropGeom, zoomAt, panBy,
   FUNERAL_PATTERNS, FUNERAL_MARKS, FUNERAL_FOOTERS, DEFAULT_FUNERAL, GREY, DEFAULT_BACK, BINDS, BIND_TIPS,
   checkCustom, previewOf, expand, funeralPreview
 };

@@ -79,7 +79,7 @@ exports.main = async (event, context) => {
       case 'stats': return await stats(OWNER, event.bookId, ctx);
       case 'recalc': return await recalc(OWNER, String(event.bookId || ''));
       case 'getTpl': return await getTpl(OWNER, account, event.bookId);
-      case 'setCoverPhoto': return await setCoverPhoto(OWNER, OPENID, event.bookId, event.fileID, { shape: event.shape, layout: event.layout, scrim: event.scrim, focus: event.focus });
+      case 'setCoverPhoto': return await setCoverPhoto(OWNER, OPENID, event.bookId, event.fileID, { shape: event.shape, layout: event.layout, scrim: event.scrim, focus: event.focus, crop: event.crop });
       case 'coverPhotoUrl': return await coverPhotoUrl(OWNER, event.bookId);
       case 'saveTpl': return await saveTpl(OWNER, event.bookId, event.receiptTpl, event.printTpl, OPENID);
       default: return err('未知 action');
@@ -606,14 +606,24 @@ async function dropCover(fileID, openid) {
   try { await cloud.deleteFile({ fileList: [fileID] }); } catch (e) { /* 忽略 */ }
 }
 
-// 封面照片的存储 / 展示形态（v3.80.0）：默认值（左图右文、渐变、居中）不落库，旧数据缺项即默认
-const clampFocus = f => { const n = v => { const i = Math.round(Number(v)); return i >= 0 && i <= 2 ? i : 1; }; return f && typeof f === 'object' ? { x: n(f.x), y: n(f.y) } : { x: 1, y: 1 }; };
-const coverView = d => ({ shape: d && d.shape === 'oval' ? 'oval' : 'rect', layout: d && d.layout === 'full' ? 'full' : 'left', scrim: d && d.scrim === 'block' ? 'block' : 'gradient', focus: clampFocus(d && d.focus) });
+// 封面照片的存储 / 展示形态（v3.80.0；v3.82.0 起焦点改为连续裁剪 crop）：默认值（左图右文、渐变、居中不放大）不落库，旧数据缺项即默认；
+// 旧的九宫格 focus（0 / 1 / 2）读取时映射成 crop = { x: focus.x / 2, y: focus.y / 2, z: 1 }，保存新设置后改写为 crop
+const CROP_DEFAULT = { x: 0.5, y: 0.5, z: 1 };
+const clampCrop = c => {
+  c = c && typeof c === 'object' ? c : {};
+  const n = (v, lo, hi, d) => { const f = Number(v); return isFinite(f) && v !== null && v !== '' ? Math.round(Math.min(hi, Math.max(lo, f)) * 1000) / 1000 : d; };
+  return { x: n(c.x, 0, 1, 0.5), y: n(c.y, 0, 1, 0.5), z: n(c.z, 1, 3, 1) };
+};
+const focusToCrop = f => { const n = v => { const i = Math.round(Number(v)); return i >= 0 && i <= 2 ? i : 1; }; f = f && typeof f === 'object' ? f : {}; return { x: n(f.x) / 2, y: n(f.y) / 2, z: 1 }; };
+const coverView = d => ({
+  shape: d && d.shape === 'oval' ? 'oval' : 'rect', layout: d && d.layout === 'full' ? 'full' : 'left', scrim: d && d.scrim === 'block' ? 'block' : 'gradient',
+  crop: d && d.crop ? clampCrop(d.crop) : (d && d.focus ? focusToCrop(d.focus) : { ...CROP_DEFAULT })
+});
 const coverDoc = (fileID, v) => {
   const d = { fileID, shape: v.shape };
   if (v.layout === 'full') d.layout = 'full';
   if (v.scrim === 'block') d.scrim = 'block';
-  if (!(v.focus.x === 1 && v.focus.y === 1)) d.focus = { x: v.focus.x, y: v.focus.y };
+  if (!(v.crop.x === 0.5 && v.crop.y === 0.5 && v.crop.z === 1)) d.crop = { x: v.crop.x, y: v.crop.y, z: v.crop.z };
   return d;
 };
 /** 在旧设置（可无）上叠加本次传入的项：只改传了的 */
@@ -622,7 +632,8 @@ function mergeCover(old, input) {
   if (input.shape !== undefined) v.shape = input.shape === 'oval' ? 'oval' : 'rect';
   if (input.layout !== undefined) v.layout = input.layout === 'full' ? 'full' : 'left';
   if (input.scrim !== undefined) v.scrim = input.scrim === 'block' ? 'block' : 'gradient';
-  if (input.focus !== undefined) v.focus = clampFocus(input.focus);
+  if (input.crop !== undefined) v.crop = clampCrop(input.crop);
+  else if (input.focus !== undefined) v.crop = focusToCrop(input.focus);
   return v;
 }
 
@@ -665,6 +676,8 @@ async function setCoverPhoto(openid, caller, bookId, fileID, input) {
   if (buf.length > COVER_MAX) { await dropCover(fileID, caller); return err('照片太大，请换一张小一点的'); }
   const bad = await S.checkImage(cloud, fileID); // 内容安全（失败放行；>1MB 跳过；违规时 checkImage 已删文件）
   if (bad) return bad;
+  // 换了一张新照片：裁剪位置 / 缩放回到默认（旧的是针对旧照片调的），除非这次同时传了新的
+  if ((!old || old.fileID !== fileID) && input.crop === undefined && input.focus === undefined) v.crop = { ...CROP_DEFAULT };
   await books.doc(book._id).update({ data: { coverPhoto: _.set(coverDoc(fileID, v)) } });
   if (old) await dropCover(old.fileID, openid);
   return ok({ coverPhoto: v });

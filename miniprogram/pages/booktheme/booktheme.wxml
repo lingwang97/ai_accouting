@@ -11,7 +11,7 @@
         <!-- 封面 -->
         <swiper-item>
           <view class="pc {{pv.full ? 'full' : ''}}" style="background:{{pv.bg}};border-color:{{pv.border}};color:{{pv.text}}">
-            <image class="pc-fullimg" wx:if="{{pv.full}}" src="{{pv.photo}}" mode="aspectFill" style="opacity:{{pv.fade ? 0.5 : 1}}" />
+            <image class="pc-fullimg" wx:if="{{pv.full}}" src="{{pv.photo}}" mode="{{pv.photoStyle ? 'scaleToFill' : 'aspectFill'}}" style="{{pv.photoStyle}}opacity:{{pv.fade ? 0.5 : 1}}" />
             <view class="pc-scrim-g" wx:if="{{pv.full && pv.scrim === 'gradient'}}" style="background:linear-gradient(to bottom, rgba(0,0,0,0), {{pv.bg}} 45%)"></view>
             <view class="pc-scrim-b" wx:if="{{pv.full && pv.scrim === 'block'}}" style="background:{{pv.bg}}"></view>
             <view class="pc-in" style="border-color:{{pv.border}}"></view>
@@ -24,7 +24,7 @@
             </block>
             <view class="pc-band pc-band-t" wx:if="{{pv.band}}" style="color:{{pv.border}}">{{pv.band}}</view>
             <view class="pc-band pc-band-b" wx:if="{{pv.band}}" style="color:{{pv.border}}">{{pv.band}}</view>
-            <view class="pc-photo {{pv.shape === 'oval' ? 'oval' : ''}}" wx:if="{{pv.left}}" style="border-color:{{pv.border}};opacity:{{pv.fade ? 0.5 : 1}}"><image src="{{pv.photo}}" mode="aspectFill" /></view>
+            <view class="pc-photo {{pv.shape === 'oval' ? 'oval' : ''}}" wx:if="{{pv.left}}" style="border-color:{{pv.border}};opacity:{{pv.fade ? 0.5 : 1}}"><image src="{{pv.photo}}" mode="{{pv.photoStyle ? 'scaleToFill' : 'aspectFill'}}" style="{{pv.photoStyle}}" /></view>
             <view class="pc-deco {{pv.left ? 'has-photo' : ''}}" wx:if="{{pv.decoTxt}}" style="color:{{pv.border}}">{{pv.decoTxt}}</view>
             <view class="pc-mid {{pv.left ? 'has-photo' : ''}} {{pv.full ? 'full' : ''}}">
               <view class="pc-title" style="color:{{pv.border}}">{{pv.title}}</view>
@@ -79,6 +79,7 @@
         <view class="pv-tab {{cur === 2 ? 'on' : ''}}" data-i="2" bindtap="onTab">封底</view>
       </view>
     </view>
+    <image class="dim-loader" wx:if="{{coverSet && coverUrl && !photoDim && !isFuneral}}" src="{{coverUrl}}" bindload="onPhotoLoad" />
     <view class="lock-tip" wx:if="{{lockTip}}">{{lockTip}}</view>
     <view class="muted tip">示意图仅供参考，点「预览」看真实效果{{pvSample ? '（内页暂无数据，用示例）' : ''}}</view>
 
@@ -120,8 +121,6 @@
       <view wx:if="{{custErr}}" class="cust-err">{{custErr}}</view>
       <view class="cust-lb">角饰</view>
       <view class="chips"><view wx:for="{{patterns}}" wx:key="k" class="chip {{cust.pattern === item.k ? 'on' : ''}}" data-f="pattern" data-v="{{item.k}}" bindtap="onCust">{{item.n}}</view></view>
-      <view class="cust-lb">水印字</view>
-      <view class="chips"><view wx:for="{{marks}}" wx:key="k" class="chip {{cust.mark === item.k ? 'on' : ''}}" data-f="mark" data-v="{{item.k}}" bindtap="onCust">{{item.n}}</view></view>
       <view class="cust-lb">封面标题（不填用礼簿名）</view>
       <input class="input" cursor-spacing="120" adjust-position="{{true}}" bindfocus="onKbOn" bindblur="onKbOff" value="{{cust.title}}" maxlength="20" placeholder="如：李王联姻志喜" data-f="title" bindinput="onCustInput" />
       <view class="cust-lb">封面落款（不填则没有）</view>
@@ -135,8 +134,6 @@
       <view wx:if="{{defTip}}" class="def-tip">{{defTip}}</view>
       <view class="cust-lb">角饰</view>
       <view class="chips"><view wx:for="{{fPatterns}}" wx:key="k" class="chip {{fun.pattern === item.k ? 'on' : ''}}" data-f="pattern" data-v="{{item.k}}" bindtap="onFun">{{item.n}}</view></view>
-      <view class="cust-lb">水印字</view>
-      <view class="chips"><view wx:for="{{fMarks}}" wx:key="k" class="chip {{fun.mark === item.k ? 'on' : ''}}" data-f="mark" data-v="{{item.k}}" bindtap="onFun">{{item.n}}</view></view>
       <view class="cust-lb">封面标题（不填用礼簿名）</view>
       <input class="input" cursor-spacing="120" adjust-position="{{true}}" bindfocus="onKbOn" bindblur="onKbOff" value="{{fun.title}}" maxlength="20" placeholder="如：某某先生奠仪簿" data-f="title" bindinput="onFunInput" />
       <view class="cust-lb">封面落款</view>
@@ -147,7 +144,7 @@
       <input class="input" cursor-spacing="120" adjust-position="{{true}}" bindfocus="onKbOn" bindblur="onKbOff" value="{{fun.footer}}" maxlength="8" placeholder="也可以自己写（8 字以内）" data-f="footer" bindinput="onFunInput" />
     </view>
 
-      <view class="muted tip font-hint">字体：{{fontName}} · 在「内页」标签修改</view>
+      <view class="muted tip font-hint">字体：{{fontName}}　水印：{{markName}} · 在「内页」标签修改</view>
     <!-- 封面纹样（v3.79.0）：矢量图案，导出时画在封面上；按事由有默认 -->
     <view class="card cust">
       <view class="section-title">封面纹样</view>
@@ -181,10 +178,10 @@
           <view class="cust-lb">文字托底（让字在照片上看得清）</view>
           <view class="chips"><view wx:for="{{scrims}}" wx:key="k" class="chip {{coverScrim === item.k ? 'on' : ''}}" data-k="{{item.k}}" bindtap="onScrim">{{item.n}}</view></view>
         </block>
-        <view class="cust-lb">照片重点（裁剪时尽量留住的位置）</view>
-        <view class="fgrid"><view wx:for="{{focusCells}}" wx:key="n" class="fcell {{coverFocus.x === item.x && coverFocus.y === item.y ? 'on' : ''}}" data-x="{{item.x}}" data-y="{{item.y}}" bindtap="onFocus">{{item.n}}</view></view>
+        <view class="cust-lb">裁剪</view>
+        <button class="btn-outline crop-btn" disabled="{{photoBusy}}" bindtap="onOpenCrop">调整裁剪{{cropAdj ? '（已调整）' : ''}}</button>
       </block>
-      <view class="muted tip">照片会印在导出 PDF 的封面上（左图右文或整页），自动居中裁剪，可用「照片重点」调整保留的位置；照片上传和移除立即生效，其余设置在导出或点「保存样式」时保存。PDF 转发后他人可见，请先征得照片里的人同意。</view>
+      <view class="muted tip">照片会印在导出 PDF 的封面上（左图右文或整页），默认居中裁剪，可点「调整裁剪」拖动、缩放照片；照片上传和移除立即生效，其余设置在导出或点「保存样式」时保存。PDF 转发后他人可见，请先征得照片里的人同意。</view>
     </view>
     <view class="muted tip" wx:if="{{isFuneral}}">白事礼簿封面不使用照片</view>
 
@@ -197,6 +194,12 @@
         <view class="chips"><view wx:for="{{fonts}}" wx:key="k" class="chip {{effFont === item.k ? 'on' : ''}}" data-v="{{item.k}}" bindtap="onFontPick">{{item.n}}{{item.locked ? " · 会员" : ""}}</view></view>
         <view class="muted tip" wx:if="{{!isFuneral && themeKey !== 'custom'}}">选择字体会把当前主题转为「在预设基础上修改」{{premiumOk ? '' : '（会员功能）'}}</view>
         <view class="muted tip">字体用于封面标题和全部内页</view>
+      </view>
+      <view class="card cust">
+        <view class="section-title">水印字</view>
+        <view class="chips"><view wx:for="{{isFuneral ? fMarks : marks}}" wx:key="k" class="chip {{effMark === item.k ? 'on' : ''}}" data-v="{{item.k}}" bindtap="onMarkPick">{{item.n}}</view></view>
+        <view class="muted tip">水印字会淡淡地印在内页、封面和封底上（整页照片封面除外）</view>
+        <view class="muted tip" wx:if="{{!isFuneral && themeKey !== 'custom'}}">选择水印会把当前主题转为「在预设基础上修改」{{premiumOk ? '' : '（会员功能）'}}</view>
       </view>
       <view class="card cust">
         <view class="section-title">装订</view>
@@ -255,6 +258,30 @@
       <view class="sheet-btns">
         <button class="btn btn-lg btn-plain" bindtap="onSheetClose">取消</button>
         <button class="btn btn-lg btn-primary" bindtap="onSheetOk">{{sheet === 'export' ? '开始导出' : '开始预览'}}</button>
+      </view>
+    </view>
+  </view>
+  <!-- 裁剪编辑器：单指拖动照片、双指缩放；框的比例与 PDF 一致 -->
+  <view class="mask" wx:if="{{cropOpen}}" catchtouchmove="noop">
+    <view class="sheet crop-sheet" catchtap="noop">
+      <view class="sheet-title">调整裁剪</view>
+      <view class="muted tip crop-tip">拖动照片调整位置，双指或滑块缩放{{coverShape === 'oval' && coverLayout === 'left' ? '；椭圆外的部分不会显示' : ''}}{{coverLayout === 'full' ? '；下方深色带是文字区，会被渐变 / 色块遮住' : ''}}</view>
+      <view class="crop-frame" style="width:{{cropFrame.w}}rpx;height:{{cropFrame.h}}rpx" catchtouchstart="onCropStart" catchtouchmove="onCropMove" catchtouchend="onCropEnd" catchtouchcancel="onCropEnd">
+        <image src="{{coverUrl}}" mode="scaleToFill" style="{{cropImg}}" />
+        <view class="crop-oval" wx:if="{{coverShape === 'oval' && coverLayout === 'left'}}"></view>
+        <view class="crop-band" wx:if="{{coverLayout === 'full'}}" style="top:{{bandTop}}%"><text>文字区</text></view>
+      </view>
+      <view class="crop-zoom">
+        <view class="crop-zb" bindtap="onCropMinus">－</view>
+        <slider class="crop-slider" min="100" max="300" step="5" value="{{cropZ}}" block-size="20" activeColor="{{themePrimary || '#C8161D'}}" bindchanging="onCropZ" bindchange="onCropZ" />
+        <view class="crop-zb" bindtap="onCropPlus">＋</view>
+      </view>
+      <view class="fgrid"><view wx:for="{{focusCells}}" wx:key="n" class="fcell" data-x="{{item.x}}" data-y="{{item.y}}" bindtap="onCropCell">{{item.n}}</view></view>
+      <view class="muted tip">九宫格：快速把照片靠到某个位置，再拖动微调</view>
+      <view class="sheet-btns">
+        <button class="btn btn-lg btn-plain" bindtap="onCropCancel">取消</button>
+        <button class="btn btn-lg btn-plain" bindtap="onCropReset">复位</button>
+        <button class="btn btn-lg btn-primary" bindtap="onCropDone">完成</button>
       </view>
     </view>
   </view>

@@ -134,7 +134,7 @@ test('setCoverPhoto：主家设置照片成功，保存 coverPhoto={fileID,shape
   try {
     let r = await call(L, OWNER, { action: 'setCoverPhoto', bookId: 'b1', fileID: FID(1), shape: 'oval' });
     assert.strictEqual(r.code, 0, r.msg);
-    assert.deepStrictEqual(r.data.coverPhoto, { shape: 'oval', layout: 'left', scrim: 'gradient', focus: { x: 1, y: 1 } }, '返回不带 fileID，带展示设置');
+    assert.deepStrictEqual(r.data.coverPhoto, { shape: 'oval', layout: 'left', scrim: 'gradient', crop: { x: 0.5, y: 0.5, z: 1 } }, '返回不带 fileID，带展示设置');
     let u = L.log.updates.find(x => x.name === 'books' && x.id === 'b1');
     assert.deepStrictEqual(u.data.coverPhoto.v, { fileID: FID(1), shape: 'oval' });
     assert.strictEqual(u.data.coverPhoto.__op, 'set');
@@ -226,7 +226,7 @@ test('list 返回 coverPhoto 只有形状、不含 fileID；pdfDeco 随 pdfTheme
     let r = await call(L, OWNER, { action: 'list' });
     assert.strictEqual(r.code, 0, r.msg);
     const b = r.data.list.find(x => x._id === 'b1');
-    assert.deepStrictEqual(b.coverPhoto, { shape: 'oval', layout: 'left', scrim: 'gradient', focus: { x: 1, y: 1 } });
+    assert.deepStrictEqual(b.coverPhoto, { shape: 'oval', layout: 'left', scrim: 'gradient', crop: { x: 0.5, y: 0.5, z: 1 } });
     assert.strictEqual(b.pdfDeco, 'lotus');
     assert.ok(!JSON.stringify(r.data).includes('covers/'), '不返回云存储路径');
     const bf = r.data.list.find(x => x._id === 'bf');
@@ -237,7 +237,7 @@ test('list 返回 coverPhoto 只有形状、不含 fileID；pdfDeco 随 pdfTheme
     assert.ok(/^https:\/\/tmp\.example\//.test(r.data.url));
     assert.strictEqual(r.data.shape, 'oval');
     r = await call(L, OWNER, { action: 'coverPhotoUrl', bookId: 'bf' });
-    assert.deepStrictEqual(r.data, { url: '', shape: 'rect', layout: 'left', scrim: 'gradient', focus: { x: 1, y: 1 } });
+    assert.deepStrictEqual(r.data, { url: '', shape: 'rect', layout: 'left', scrim: 'gradient', crop: { x: 0.5, y: 0.5, z: 1 } });
   } finally { L.log.restore(); }
 });
 

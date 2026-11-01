@@ -23,14 +23,14 @@
 .sw { width: 64rpx; height: 64rpx; border-radius: 50%; margin: 6rpx 8rpx; border: 2rpx solid #ddd; box-sizing: border-box; }
 .sw.on { box-shadow: 0 0 0 4rpx var(--primary); }
 /* 示意预览：封面 / 内页 / 封底，swiper 高度固定，页面不跳动 */
-.pv-swiper { height: 296rpx; }
+.pv-swiper { height: 312rpx; }
 /* v3.81.0 吸顶示意图：整体缩小到 72%（宽度放大 139% 再缩回），小屏也不占满屏幕 */
 .sticky-pv { position: sticky; top: 0; z-index: 4; background: #F4F5F7; margin: 0 -24rpx; padding: 8rpx 24rpx 4rpx; }
 .pv-head { display: flex; flex-direction: row; align-items: center; justify-content: space-between; }
 .pv-head .book-name { flex: 1; min-width: 0; margin-bottom: 8rpx; }
 .pv-fold { flex-shrink: 0; margin-left: 16rpx; padding: 6rpx 0; font-size: 24rpx; color: var(--primary); }
 .font-hint { margin: 0 0 16rpx; }
-.pc { position: relative; width: 139%; transform: scale(0.72); transform-origin: 0 0; height: 400rpx; border: 4rpx solid; border-radius: 8rpx; box-sizing: border-box; overflow: hidden; }
+.pc { position: relative; width: 700rpx; height: 495rpx; transform: translateX(134rpx) scale(0.62); transform-origin: 0 0; margin-left: 0; border: 4rpx solid; border-radius: 8rpx; box-sizing: border-box; overflow: hidden; }
 .pc-in { position: absolute; left: 10rpx; right: 10rpx; top: 10rpx; bottom: 10rpx; border: 2rpx solid; }
 .pc-mark { position: absolute; left: 0; right: 0; top: 50%; margin-top: -110rpx; text-align: center; line-height: 220rpx; font-size: 220rpx; opacity: .12; }
 .pc-cn { position: absolute; width: 36rpx; height: 36rpx; line-height: 36rpx; font-size: 28rpx; text-align: center; z-index: 2; }
@@ -47,25 +47,39 @@
 .pc-sign { width: 80%; margin-top: 24rpx; font-size: 20rpx; text-align: center; }
 .pc-sign view { display: inline-block; max-width: 100%; min-width: 60%; padding: 0 12rpx; border-bottom: 2rpx solid; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* v3.79.0 封面示意：照片相框（左）、纹样字符、带状纹样 */
-.pc-photo { position: absolute; left: 7%; top: 13%; bottom: 13%; width: 34%; border: 3rpx solid; border-radius: 12rpx; overflow: hidden; box-sizing: border-box; z-index: 2; }
+.pc-photo { position: absolute; left: 11.4%; top: 16.1%; width: 33.3%; height: 67.7%; border: 3rpx solid; border-radius: 12rpx; overflow: hidden; box-sizing: border-box; z-index: 2; }
 .pc-photo.oval { border-radius: 50%; }
 .pc-photo image { width: 100%; height: 100%; display: block; }
-.pc-mid.has-photo { padding-left: 46%; padding-right: 4%; }
+.pc-mid.has-photo { padding-left: 50%; padding-right: 3%; }
 .pc-deco { position: absolute; left: 0; right: 0; top: 22rpx; text-align: center; font-size: 40rpx; line-height: 48rpx; z-index: 2; }
-.pc-deco.has-photo { left: 46%; right: 4%; }
+.pc-deco.has-photo { left: 50%; right: 3%; }
 .pc-band { position: absolute; left: 12%; right: 12%; text-align: center; font-size: 16rpx; line-height: 20rpx; letter-spacing: 2rpx; white-space: nowrap; overflow: hidden; z-index: 2; }
 .pc-band-t { top: 16rpx; }
 .pc-band-b { bottom: 16rpx; }
-.pc-foot.has-photo, .pc-brand.has-photo { left: 46%; right: 4%; }
+.pc-foot.has-photo, .pc-brand.has-photo { left: 50%; right: 3%; }
 /* v3.80.0 整页封面示意与九宫格焦点 */
 .pc-fullimg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; }
-.pc-scrim-g { position: absolute; left: 0; right: 0; bottom: 0; height: 75%; }
-.pc-scrim-b { position: absolute; left: 12%; right: 12%; top: 34%; bottom: 8%; border-radius: 12rpx; opacity: .82; }
+.pc-scrim-g { position: absolute; left: 0; right: 0; bottom: 0; top: 18.5%; }
+.pc-scrim-b { position: absolute; left: 13%; right: 13%; top: 37%; bottom: 9.4%; border-radius: 12rpx; opacity: .82; }
 .pc.full .pc-mark { display: none; }
 .pc-mid.full { justify-content: flex-end; padding-bottom: 80rpx; }
 .fgrid { display: flex; flex-wrap: wrap; width: 360rpx; }
 .fcell { width: 33.33%; height: 64rpx; line-height: 64rpx; text-align: center; font-size: 22rpx; border: 1rpx solid var(--border); box-sizing: border-box; color: var(--text-2); background: var(--fill); }
 .fcell.on { background: var(--primary); color: #fff; border-color: var(--primary); }
+/* v3.82.0 裁剪编辑器 */
+.dim-loader { position: absolute; width: 2rpx; height: 2rpx; opacity: 0; left: -10rpx; top: 0; }
+button.crop-btn.btn-outline:not(.btn):not([size=mini]) { width: 100%; }
+.crop-sheet { max-height: 94vh; text-align: center; }
+.crop-tip { text-align: left; margin: 4rpx 0 12rpx; }
+.crop-frame { position: relative; overflow: hidden; margin: 0 auto 16rpx; background: #222; border: 2rpx solid var(--primary); box-sizing: content-box; }
+.crop-frame image { display: block; }
+.crop-oval { position: absolute; left: 0; top: 0; right: 0; bottom: 0; border-radius: 50%; box-shadow: 0 0 0 1000rpx rgba(255, 255, 255, .7); border: 2rpx solid var(--primary); box-sizing: border-box; }
+.crop-band { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, .45); color: #fff; font-size: 22rpx; display: flex; align-items: center; justify-content: center; }
+.crop-zoom { display: flex; flex-direction: row; align-items: center; margin: 0 0 12rpx; }
+.crop-slider { flex: 1; margin: 0 16rpx; }
+.crop-zb { width: 64rpx; height: 64rpx; line-height: 64rpx; text-align: center; border-radius: 50%; background: var(--fill); color: var(--text-2); font-size: 36rpx; flex-shrink: 0; }
+.crop-sheet .fgrid { margin: 0 auto; }
+.crop-sheet .sheet-btns .btn { margin-bottom: 0; }
 .photo-row { display: flex; flex-direction: row; align-items: center; }
 .photo-th { width: 150rpx; height: 200rpx; border: 2rpx solid var(--border); border-radius: 12rpx; overflow: hidden; background: var(--fill); color: var(--text-3); font-size: 24rpx; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-sizing: border-box; }
 .photo-th.oval { border-radius: 50%; }

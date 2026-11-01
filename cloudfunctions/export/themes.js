@@ -21,9 +21,30 @@ const FONTS = ['sans', 'serif', 'brush'];
 const MARKS = ['', '喜', '囍', '寿', '福']; // 喜事水印字（囍不在 GB2312，宋体子集已补；毛笔体没有，绘制时改用宋体）
 // v3.81.0 封面照片展示设置作为草稿随预览 / 导出提交（event.coverShape / coverLayout / coverScrim / coverFocus）：
 // coverOverride 只取传了的项并校验；mergeCover 叠在已存设置上；coverDoc 生成落库形态（默认值不落库，与 books 云函数一致）
+// v3.82.0 封面照片裁剪：crop = { x, y, z }。x、y 为 0~1（在可移动方向上的位置，0 靠左 / 上、0.5 居中、1 靠右 / 下），
+// z 为 1~3（相对「刚好铺满」的放大倍数）。旧数据的九宫格 focus（0 / 1 / 2）读取时映射成 x/2、y/2、z=1；默认值不落库
+const CROP_DEFAULT = { x: 0.5, y: 0.5, z: 1 };
+function sanitizeCrop(c) {
+  c = c && typeof c === 'object' ? c : {};
+  const n = (v, lo, hi, d) => { const f = Number(v); return isFinite(f) && v !== null && v !== '' ? Math.round(Math.min(hi, Math.max(lo, f)) * 1000) / 1000 : d; };
+  return { x: n(c.x, 0, 1, 0.5), y: n(c.y, 0, 1, 0.5), z: n(c.z, 1, 3, 1) };
+}
+const focusToCrop = f => { const s = sanitizeFocus(f); return { x: s.x / 2, y: s.y / 2, z: 1 }; };
+const isDefaultCrop = c => c.x === 0.5 && c.y === 0.5 && c.z === 1;
+/**
+ * 裁剪几何（前后端共用，pages/booktheme/pdftheme.js 同名函数，tests 随机比对）：
+ * 图片原始尺寸 imgW x imgH，裁剪框 boxW x boxH；先按「刚好铺满」放大再乘 z，ox / oy 为图片左上角相对框左上角向左 / 上的偏移
+ * 绘制：image(buf, boxX - ox, boxY - oy, { width: iw, height: ih })，并 clip 到框
+ */
+function cropGeom(imgW, imgH, boxW, boxH, crop) {
+  const c = sanitizeCrop(crop);
+  const s = Math.max(boxW / imgW, boxH / imgH) * c.z;
+  const iw = imgW * s, ih = imgH * s;
+  return { iw, ih, ox: c.x * (iw - boxW), oy: c.y * (ih - boxH) };
+}
 function coverView(d) {
   d = d && typeof d === 'object' ? d : {};
-  return { shape: sanitizeShape(d.shape), layout: sanitizeLayout(d.layout), scrim: sanitizeScrim(d.scrim), focus: sanitizeFocus(d.focus) };
+  return { shape: sanitizeShape(d.shape), layout: sanitizeLayout(d.layout), scrim: sanitizeScrim(d.scrim), crop: d.crop ? sanitizeCrop(d.crop) : (d.focus ? focusToCrop(d.focus) : { ...CROP_DEFAULT }) };
 }
 function coverOverride(ev) {
   ev = ev || {};
@@ -31,7 +52,8 @@ function coverOverride(ev) {
   if (ev.coverShape !== undefined) o.shape = sanitizeShape(ev.coverShape);
   if (ev.coverLayout !== undefined) o.layout = sanitizeLayout(ev.coverLayout);
   if (ev.coverScrim !== undefined) o.scrim = sanitizeScrim(ev.coverScrim);
-  if (ev.coverFocus !== undefined) o.focus = sanitizeFocus(ev.coverFocus);
+  if (ev.coverCrop !== undefined) o.crop = sanitizeCrop(ev.coverCrop);
+  else if (ev.coverFocus !== undefined) o.crop = focusToCrop(ev.coverFocus); // 旧版九宫格参数仍可读
   return o;
 }
 const mergeCover = (old, o) => Object.assign(coverView(old), o || {});
@@ -39,7 +61,7 @@ function coverDoc(fileID, v) {
   const d = { fileID, shape: v.shape };
   if (v.layout === 'full') d.layout = 'full';
   if (v.scrim === 'block') d.scrim = 'block';
-  if (!(v.focus.x === 1 && v.focus.y === 1)) d.focus = { x: v.focus.x, y: v.focus.y };
+  if (!isDefaultCrop(v.crop)) d.crop = { x: v.crop.x, y: v.crop.y, z: v.crop.z };
   return d;
 }
 
@@ -231,4 +253,4 @@ function pick(premiumOk, funeral, bookType, key, custom) {
   return premiumOk ? bt : freeOnly(bt, funeral, bookType);
 }
 
-module.exports = { coverView, coverOverride, mergeCover, coverDoc, PHOTO_LAYOUTS, PHOTO_SCRIMS, PRINT_MODES, sanitizeLayout, sanitizeScrim, sanitizePrint, sanitizeFocus, DECOS, FUNERAL_DECOS, DECO_DEFAULTS, sanitizeDeco, decoOf, PHOTO_SHAPES, sanitizeShape, pick, FREE_KEYS, premiumUsed, freeOnly, isDefaultBack, PRESETS, DEFAULT_KEY, TYPE_DEFAULTS, typeDefault, resolveDefault, resolve, isPresetKey, sanitizeCustom, sanitizeFuneral, sanitizeBack, sanitizeBind, DEFAULT_BACK };
+module.exports = { CROP_DEFAULT, sanitizeCrop, focusToCrop, cropGeom, coverView, coverOverride, mergeCover, coverDoc, PHOTO_LAYOUTS, PHOTO_SCRIMS, PRINT_MODES, sanitizeLayout, sanitizeScrim, sanitizePrint, sanitizeFocus, DECOS, FUNERAL_DECOS, DECO_DEFAULTS, sanitizeDeco, decoOf, PHOTO_SHAPES, sanitizeShape, pick, FREE_KEYS, premiumUsed, freeOnly, isDefaultBack, PRESETS, DEFAULT_KEY, TYPE_DEFAULTS, typeDefault, resolveDefault, resolve, isPresetKey, sanitizeCustom, sanitizeFuneral, sanitizeBack, sanitizeBind, DEFAULT_BACK };

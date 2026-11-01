@@ -38,7 +38,9 @@ const PAGE = {
     layouts: pt.COVER_LAYOUTS, scrims: pt.COVER_SCRIMS, prints: pt.COVER_PRINTS, focusCells: pt.FOCUS_CELLS,
     coverLayout: 'left',     // 封面照片版式：left 左图右文 / full 整页（v3.80.0）
     coverScrim: 'gradient',  // 整页时文字托底：gradient 渐变 / block 色块
-    coverFocus: { x: 1, y: 1 }, // 九宫格焦点
+    coverCrop: { x: 0.5, y: 0.5, z: 1 }, // 裁剪位置与缩放（x、y 0~1，z 1~3；旧版九宫格焦点云端读取时已映射）
+    cropOpen: false, cropEdit: { x: 0.5, y: 0.5, z: 1 }, cropFrame: { w: 400, h: 400 }, cropImg: '', cropZ: 100, bandTop: 37, // 裁剪编辑器
+    effMark: '', markName: '无',
     coverPrint: 'keep',      // 本次导出 / 预览的打印方式：keep 保留 / fade 淡化 / none 去照片（不保存）
     photoQ: '',              // 刚选的照片分辨率提示
     photoDim: null,          // { w, h }
@@ -116,7 +118,7 @@ const PAGE = {
         coverShape: (book.coverPhoto && book.coverPhoto.shape) || 'rect',
         coverLayout: (book.coverPhoto && book.coverPhoto.layout) || 'left',
         coverScrim: (book.coverPhoto && book.coverPhoto.scrim) || 'gradient',
-        coverFocus: (book.coverPhoto && book.coverPhoto.focus) || { x: 1, y: 1 },
+        coverCrop: pt.sanitizeCrop(book.coverPhoto && book.coverPhoto.crop),
         presets: pt.LIST.map(p => ({ ...p, locked: !premiumOk && !pt.FREE_KEYS.includes(p.key) })),
         fonts: pt.FONTS.map(f => ({ ...f, locked: !premiumOk && f.k !== 'sans' })),
         book, isFuneral, defTip,
@@ -184,13 +186,13 @@ const PAGE = {
     const full = !!photo && d.coverLayout === 'full';
     const pv = colors ? Object.assign({}, colors, {
       deco, decoTxt: full ? '' : (pt.DECO_TXT[deco] || ''), band: full ? '' : (pt.DECO_BAND[deco] || ''),
-      photo, full, left: !!photo && !full, scrim: d.coverScrim, fade: d.coverPrint === 'fade', shape: d.coverShape,
+      photo, full, left: !!photo && !full, photoStyle: this.photoStyle(photo, full), scrim: d.coverScrim, fade: d.coverPrint === 'fade', shape: d.coverShape,
       title: e.title || book.name || '', footer: e.footer || '', mark: e.mark || '',
       corners: this.cornersOf(e.pattern),
       info: [book.hostName ? `主家：${book.hostName}` : '', book.date ? `日期：${book.date}` : ''].filter(Boolean)
     }) : null;
     const ef = e.font || 'sans';
-    const upd = { custErr: err, pv, lockTip: this.lockTip(), effFont: ef, fontName: (pt.FONTS.find(f => f.k === ef) || {}).n || '黑体' };
+    const upd = { custErr: err, pv, lockTip: this.lockTip(), effFont: ef, fontName: (pt.FONTS.find(f => f.k === ef) || {}).n || '黑体', effMark: e.mark || '', markName: e.mark || '无', cropAdj: !pt.isDefaultCrop(d.coverCrop) };
     if (pv) { upd.pg = this.pageOf(e, d.isFuneral ? pt.GREY.main : e.main); upd.bk = this.backOf(e, pv); }
     this.setData(upd);
   },
@@ -341,10 +343,6 @@ const PAGE = {
     this.refresh();
   },
 
-  onFocus(e) {
-    const { x, y } = e.currentTarget.dataset;
-    this.setData({ coverFocus: { x: Number(x), y: Number(y) } });
-  },
 
   /** 打印方式只作用于本次导出 / 预览，不保存 */
   onPrint(e) {
@@ -402,9 +400,9 @@ const PAGE = {
             filePath: path, success: resolve, fail: reject
           }));
           fileID = up.fileID;
-          await req.bookSetCover(d.id, fileID, d.coverShape, { layout: d.coverLayout, scrim: d.coverScrim, focus: d.coverFocus });
+          await req.bookSetCover(d.id, fileID, d.coverShape, { layout: d.coverLayout, scrim: d.coverScrim, crop: pt.CROP_DEFAULT }); // 新照片裁剪位置回到默认
           wx.hideLoading();
-          this.setData({ coverSet: true, coverUrl: path });
+          this.setData({ coverSet: true, coverUrl: path, coverCrop: { ...pt.CROP_DEFAULT }, photoDim: null });
           this.refresh();
           this.warnSmall(path);
         } catch (e) {
@@ -471,10 +469,122 @@ const PAGE = {
     this.refresh();
   },
 
+  /** 水印字在「内页」标签选择（封面、封底、内页都画，整页照片封面除外）；预设主题下选水印先转为「在预设基础上修改」，会员限制与字体一致；白事直接改 */
+  onMarkPick(e) {
+    const v = e.currentTarget.dataset.v;
+    const d = this.data;
+    if (v === (this.effective().mark || '')) return;
+    if (d.isFuneral) { this.setData({ 'fun.mark': v }); return this.refresh(); }
+    if (d.themeKey !== 'custom') {
+      if (!d.premiumOk) return vip.explain('PDF 主题', VIP_TIP);
+      this.setData({ cust: pt.expand(d.themeKey), base: d.themeKey, themeKey: 'custom', defTip: '' });
+    }
+    this.setData({ 'cust.mark': v });
+    this.refresh();
+  },
+
+  /** 示意图封面里照片的位置与大小（与 PDF 同一个 cropGeom；示意封面 700rpx 宽对应页宽 841.89pt）；还不知道照片尺寸时返回空，用居中裁剪兜底 */
+  photoStyle(photo, full) {
+    const d = this.data;
+    if (!photo || !d.photoDim) return '';
+    const box = full ? pt.COVER_BOX.full : pt.COVER_BOX.left;
+    const k = 700 / pt.PAGE_PT.w;
+    const g = pt.cropGeom(d.photoDim.w, d.photoDim.h, box.w, box.h, d.coverCrop);
+    return `position:absolute;left:${(-g.ox * k).toFixed(1)}rpx;top:${(-g.oy * k).toFixed(1)}rpx;width:${(g.iw * k).toFixed(1)}rpx;height:${(g.ih * k).toFixed(1)}rpx;`;
+  },
+
+  /** 照片尺寸（image 组件 bindload 给出的原始宽高；网络图片也能取到，不需要域名白名单） */
+  onPhotoLoad(e) {
+    const { width, height } = e.detail || {};
+    if (!(width > 0 && height > 0)) return;
+    this.setData({ photoDim: { w: width, h: height } });
+    this.refresh();
+  },
+
+  // ===== 裁剪编辑器（自写 touch 手势：单指平移、双指缩放；滑块 / ± / 九宫格为兜底与快捷） =====
+  /** 编辑器里裁剪框与照片的位置（单位 rpx，框最大 560 x 620，比例与 PDF 一致） */
+  cropRender() {
+    const d = this.data;
+    const full = d.coverLayout === 'full';
+    const box = full ? pt.COVER_BOX.full : pt.COVER_BOX.left;
+    let fw = 560, fh = fw * box.h / box.w;
+    if (fh > 620) { fh = 620; fw = fh * box.w / box.h; }
+    const g = pt.cropGeom(d.photoDim.w, d.photoDim.h, fw, fh, d.cropEdit);
+    this._cf = { fw, fh };
+    this.setData({
+      cropFrame: { w: Math.round(fw), h: Math.round(fh) },
+      cropImg: `position:absolute;left:${(-g.ox).toFixed(1)}rpx;top:${(-g.oy).toFixed(1)}rpx;width:${g.iw.toFixed(1)}rpx;height:${g.ih.toFixed(1)}rpx;`,
+      cropZ: Math.round(d.cropEdit.z * 100),
+      bandTop: full ? (d.coverScrim === 'block' ? 37 : 40) : 0
+    });
+  },
+  onOpenCrop() {
+    const d = this.data;
+    if (!d.coverSet || d.isFuneral || d.photoBusy) return;
+    if (!d.coverUrl || !d.photoDim) return wx.showToast({ title: '照片还在加载', icon: 'none' });
+    let k = 2;
+    try { k = 750 / (wx.getWindowInfo ? wx.getWindowInfo().windowWidth : wx.getSystemInfoSync().windowWidth); } catch (e) { /* 取不到按 iPhone 6 宽度 */ }
+    this._k = k || 2;
+    this._g = null;
+    this.setData({ cropOpen: true, cropEdit: pt.sanitizeCrop(d.coverCrop) });
+    this.cropRender();
+  },
+  onCropCancel() { this.setData({ cropOpen: false }); },
+  onCropDone() {
+    this.setData({ cropOpen: false, coverCrop: pt.sanitizeCrop(this.data.cropEdit) });
+    this.refresh();
+  },
+  onCropReset() { this.setData({ cropEdit: { ...pt.CROP_DEFAULT } }); this.cropRender(); },
+  cropZoom(z) {
+    const d = this.data, f = this._cf;
+    this.setData({ cropEdit: pt.zoomAt(d.cropEdit, z, d.photoDim.w, d.photoDim.h, f.fw, f.fh) });
+    this.cropRender();
+  },
+  onCropZ(e) { this.cropZoom(Number(e.detail.value) / 100); },
+  onCropPlus() { this.cropZoom(this.data.cropEdit.z + 0.2); },
+  onCropMinus() { this.cropZoom(this.data.cropEdit.z - 0.2); },
+  /** 九宫格快捷：位置直接到 0 / 0.5 / 1，缩放不变，之后还可以继续拖动微调 */
+  onCropCell(e) {
+    const { x, y } = e.currentTarget.dataset;
+    const c = this.data.cropEdit;
+    this.setData({ cropEdit: pt.sanitizeCrop({ x: Number(x) / 2, y: Number(y) / 2, z: c.z }) });
+    this.cropRender();
+  },
+  /** 手势：按当前 touches 数量重新取基准（单指 -> 双指 -> 抬起一指回到单指，iOS / 安卓的 touches 变化顺序不同，都能接上） */
+  cropBase(ts) {
+    if (ts.length >= 2) {
+      const dx = ts[0].clientX - ts[1].clientX, dy = ts[0].clientY - ts[1].clientY;
+      this._g = { mode: 'pinch', dist: Math.sqrt(dx * dx + dy * dy) || 1, z: this.data.cropEdit.z, crop: { ...this.data.cropEdit } };
+    } else if (ts.length === 1) {
+      this._g = { mode: 'pan', x: ts[0].clientX, y: ts[0].clientY };
+    } else {
+      this._g = null;
+    }
+  },
+  onCropStart(e) { this.cropBase(e.touches || []); },
+  onCropMove(e) {
+    const ts = e.touches || [];
+    const g = this._g;
+    const want = ts.length >= 2 ? 'pinch' : 'pan';
+    if (!g || g.mode !== want) return this.cropBase(ts);
+    const d = this.data, f = this._cf;
+    if (want === 'pan') {
+      const dx = (ts[0].clientX - g.x) * this._k, dy = (ts[0].clientY - g.y) * this._k;
+      g.x = ts[0].clientX; g.y = ts[0].clientY;
+      this.setData({ cropEdit: pt.panBy(d.cropEdit, dx, dy, d.photoDim.w, d.photoDim.h, f.fw, f.fh) });
+    } else {
+      const dx = ts[0].clientX - ts[1].clientX, dy = ts[0].clientY - ts[1].clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      this.setData({ cropEdit: pt.zoomAt(g.crop, g.z * dist / g.dist, d.photoDim.w, d.photoDim.h, f.fw, f.fh) });
+    }
+    this.cropRender();
+  },
+  onCropEnd(e) { this.cropBase(e.touches || []); },
+
   /** 草稿快照：主题 / 纹样 / 尾页 / 装订 / 封面照片展示设置（这些在导出或「保存样式」时才保存）；与进页面时一致就不算改动 */
   snap() {
     const d = this.data;
-    return JSON.stringify([d.themeKey, d.base, d.cust, d.fun, d.back, d.bind, d.deco, d.coverShape, d.coverLayout, d.coverScrim, d.coverFocus]);
+    return JSON.stringify([d.themeKey, d.base, d.cust, d.fun, d.back, d.bind, d.deco, d.coverShape, d.coverLayout, d.coverScrim, d.coverCrop]);
   },
   touch() {
     const dirty = this.snap() !== this._base;
@@ -536,7 +646,7 @@ const PAGE = {
   buildParams() {
     const d = this.data;
     const params = { bookId: d.id, pdfBack: d.back, pdfBind: d.bind, pdfDeco: d.deco, coverPrint: d.coverSet ? d.coverPrint : 'keep' };
-    if (d.coverSet && !d.isFuneral) Object.assign(params, { coverShape: d.coverShape, coverLayout: d.coverLayout, coverScrim: d.coverScrim, coverFocus: d.coverFocus });
+    if (d.coverSet && !d.isFuneral) Object.assign(params, { coverShape: d.coverShape, coverLayout: d.coverLayout, coverScrim: d.coverScrim, coverCrop: d.coverCrop });
     if (d.isFuneral) {
       params.pdfTheme = 'custom';
       params.pdfCustom = d.fun;
@@ -605,7 +715,7 @@ const PAGE = {
 
 // 这些操作会改动草稿：操作后对比快照，有变化才标记「未保存」（被会员限制拦下的不算）
 ['onPickTheme', 'onEditPreset', 'onCust', 'onCustInput', 'onFun', 'onFunInput', 'onBackSwitch', 'onBackFooter', 'onBackInput',
-  'onBind', 'onDeco', 'onShape', 'onLayout', 'onScrim', 'onFocus', 'onFontPick'].forEach(n => {
+  'onBind', 'onDeco', 'onShape', 'onLayout', 'onScrim', 'onCropDone', 'onFontPick', 'onMarkPick'].forEach(n => {
   const f = PAGE[n];
   PAGE[n] = function (e) { const r = f.call(this, e); this.touch(); return r; };
 });

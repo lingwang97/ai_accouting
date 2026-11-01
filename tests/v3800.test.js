@@ -103,14 +103,14 @@ test('setCoverPhoto：版式 / 托底 / 焦点落库，默认值不落库；只�
     // 新设：整页 + 色块 + 右下焦点
     let r = await call(L, { action: 'setCoverPhoto', bookId: 'b1', fileID: FID(1), shape: 'rect', layout: 'full', scrim: 'block', focus: { x: 2, y: 2 } });
     assert.strictEqual(r.code, 0, r.msg);
-    assert.deepStrictEqual(stored(L), { fileID: FID(1), shape: 'rect', layout: 'full', scrim: 'block', focus: { x: 2, y: 2 } });
-    assert.deepStrictEqual(r.data.coverPhoto, { shape: 'rect', layout: 'full', scrim: 'block', focus: { x: 2, y: 2 } });
+    assert.deepStrictEqual(stored(L), { fileID: FID(1), shape: 'rect', layout: 'full', scrim: 'block', crop: { x: 1, y: 1, z: 1 } }); // 旧版九宫格参数 focus 映射成 crop
+    assert.deepStrictEqual(r.data.coverPhoto, { shape: 'rect', layout: 'full', scrim: 'block', crop: { x: 1, y: 1, z: 1 } });
     // 只改焦点（其余沿用旧值）
     db.data.books[0].coverPhoto = stored(L);
     L.log.updates.length = 0;
     r = await call(L, { action: 'setCoverPhoto', bookId: 'b1', focus: { x: 0, y: 1 } });
     assert.strictEqual(r.code, 0, r.msg);
-    assert.deepStrictEqual(stored(L), { fileID: FID(1), shape: 'rect', layout: 'full', scrim: 'block', focus: { x: 0, y: 1 } });
+    assert.deepStrictEqual(stored(L), { fileID: FID(1), shape: 'rect', layout: 'full', scrim: 'block', crop: { x: 0, y: 0.5, z: 1 } });
     assert.deepStrictEqual(L.log.deleted, [], '只改展示设置不删文件');
     // 改回默认：layout left / scrim gradient / 中心焦点 -> 不落库的字段全部消失
     db.data.books[0].coverPhoto = stored(L);
@@ -123,7 +123,7 @@ test('setCoverPhoto：版式 / 托底 / 焦点落库，默认值不落库；只�
     // 旧数据（只有 fileID / shape）list 返回默认的版式 / 托底 / 焦点
     r = await call(L, { action: 'list' });
     const b = r.data.list.find(x => x._id === 'b1');
-    assert.deepStrictEqual(b.coverPhoto, { shape: 'oval', layout: 'left', scrim: 'gradient', focus: { x: 1, y: 1 } });
+    assert.deepStrictEqual(b.coverPhoto, { shape: 'oval', layout: 'left', scrim: 'gradient', crop: { x: 0.5, y: 0.5, z: 1 } });
     // 白事仍不能设置（含设置展示项），没有照片时只改展示设置报错
     r = await call(L, { action: 'setCoverPhoto', bookId: 'bf', fileID: FID(2), layout: 'full' });
     assert.ok(/白事/.test(r.msg), r.msg);
@@ -139,7 +139,7 @@ test('coverPhotoUrl 返回版式 / 托底 / 焦点（不含云存储路径）', 
   sdk.getTempFileURL = async o => ({ fileList: o.fileList.map(f => ({ fileID: f, status: 0, tempFileURL: 'https://tmp.example/x' })) });
   try {
     const r = await call(L, { action: 'coverPhotoUrl', bookId: 'b1' });
-    assert.deepStrictEqual({ ...r.data }, { url: 'https://tmp.example/x', shape: 'oval', layout: 'full', scrim: 'gradient', focus: { x: 0, y: 2 } });
+    assert.deepStrictEqual({ ...r.data }, { url: 'https://tmp.example/x', shape: 'oval', layout: 'full', scrim: 'gradient', crop: { x: 0, y: 1, z: 1 } });
   } finally { L.log.restore(); sdk.getTempFileURL = async () => ({ fileList: [] }); }
 });
 
@@ -268,11 +268,11 @@ t('buildBook 封面：各事由 x 版式 x 托底 x 焦点 x 淡化，全部能�
 test('主题页接入：版式 / 托底 / 焦点 / 打印 / 分辨率提示、coverPrint 随导出预览参数且不保存', () => {
   const js = read('miniprogram/pages/booktheme/booktheme.js');
   assert.ok(/coverPrint: d\.coverSet \? d\.coverPrint : 'keep'/.test(js), '导出 / 预览带 coverPrint');
-  assert.ok(js.includes('layout: d.coverLayout, scrim: d.coverScrim, focus: d.coverFocus'));
+  assert.ok(js.includes('layout: d.coverLayout, scrim: d.coverScrim, crop:'));
   assert.ok(js.includes('pt.photoTier('), '分辨率三档提示');
   assert.ok(!/bookSetCover\([^)]*coverPrint/.test(js), '打印方式不保存到礼簿');
   const wxml = read('miniprogram/pages/booktheme/booktheme.wxml');
-  ['onLayout', 'onScrim', 'onFocus', 'onPrint'].forEach(h => assert.ok(wxml.includes('bind' + 'tap="' + h + '"'), h));
+  ['onLayout', 'onScrim', 'onOpenCrop', 'onPrint'].forEach(h => assert.ok(wxml.includes('bind' + 'tap="' + h + '"'), h));
   assert.ok(/wx:if="\{\{!isFuneral && canSave\}\}">\s*<view class="section-title">封面照片/.test(wxml), '白事仍无照片区');
   [...js.matchAll(/(?:confirmText|cancelText): '([^']+)'/g)].forEach(m => assert.ok(m[1].length <= 4, m[1]));
   const ex = read('cloudfunctions/export/index.js');
