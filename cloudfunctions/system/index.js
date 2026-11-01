@@ -706,7 +706,8 @@ async function preflight(fix, admin, context) {
   if (launch.launched === true) add('上线', '正式上线标记', 'ok', '已标记' + (launch.at ? '（' + agoText(launch.at) + '）' : ''), '');
   else {
     let rows = [];
-    try { const w = await wipeAll(admin, false, { keepAdmins: true }); rows = (w.data && w.data.rows) || []; } catch (e) { /* 统计失败 */ }
+    // 上线前全部清除（含管理员数据，v3.78.6）：统计口径与「清除全部测试数据」默认一致
+    try { const w = await wipeAll(admin, false, { keepAdmins: false }); rows = (w.data && w.data.rows) || []; } catch (e) { /* 统计失败 */ }
     const n = rows.reduce((t, r) => t + r.count, 0);
     add('上线', '正式上线标记', 'warn', n ? `未标记；还有测试数据 ${n} 条（${rows.slice(0, 3).map(r => r.label + ' ' + r.count).join('、')}…）` : '未标记',
       n ? '上线前先「清除全部测试数据」，再「标记正式上线」' : '确认无误后点「标记正式上线」');
@@ -724,7 +725,7 @@ const LAUNCH_ITEMS = [
   { key: 'minlib', label: '小程序后台最低基础库设为 2.21.2', fix: '设置 → 基本设置 → 基础库最低版本设置' },
   { key: 'category', label: '服务类目为「工具 > 记账」，不选金融 / 支付', fix: '设置 → 基本设置 → 服务类目' },
   { key: 'privacy', label: '隐私保护指引逐项填写（照片、相册、蓝牙、摄像头、剪切板、头像）', fix: '见 docs/提审与隐私说明.md 第二节' },
-  { key: 'tmpl', label: '订阅消息模板与 config.js 三个模板 ID 一致', fix: '小程序后台 → 订阅消息 → 我的模板' },
+  { key: 'tmpl', label: '订阅消息模板与 config.js 四个模板 ID 及关键词一致', fix: '小程序后台 → 订阅消息 → 我的模板：主家新礼金 NOTIFY_TMPL_ID（thing1/thing4/amount7/time9/thing3）；宾客入簿 GUEST_NOTIFY_TMPL_ID（thing6/amount3/time1/thing8/thing5）；宾客未收到 GUEST_REJECT_TMPL_ID（thing4/time1/amount2/thing3）；亲友办事提醒 REMIND_TMPL_ID（thing2/thing10/time11/thing12/thing4）' },
   { key: 'alarm', label: '云开发告警、数据库自动回档已开启', fix: '云开发控制台 → 运维 / 数据库 → 备份与回档' },
   { key: 'storage', label: '云存储权限保持「所有用户可读，仅创建者可读写」', fix: '云开发控制台 → 存储 → 权限设置' },
   { key: 'colperm', label: '19 个集合权限均为「所有用户不可读写」', fix: '云开发控制台 → 数据库 → 各集合 → 数据权限（本页「检测集合权限」可自动核对）' },

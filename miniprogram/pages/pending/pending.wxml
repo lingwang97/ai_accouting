@@ -176,6 +176,7 @@
         </view>
         <view class="muted">{{current.timeStr}} {{current.mixed ? '转账+现金' : (current.payMethod === 'cash' ? '宾客现金' : '已转账')}}</view>
       </view>
+      <view class="tip muted">{{current.mixed ? '请核对转账加现金合计' : (current.payMethod === 'cash' ? '请清点现金金额' : '请核对微信已到账金额')}}</view>
       <button class="btn-primary btn-big" disabled="{{busy}}" bindtap="onCardOk">确认收到</button>
       <button class="btn-danger btn-big" disabled="{{busy}}" bindtap="onCardNo">没收到</button>
       <view class="link center mismatch" bindtap="onCardMismatch">金额不一致？按实际到账入簿</view>

@@ -23,7 +23,7 @@ Page({
     loaded: false,
     // 数据清除
     purgeTab: 'account', purgeOpenid: '', purgeGuest: false, purgePv: null, purgeBackup: null, purgeBackedUp: false,
-    launched: true, wipeKeepAdmins: true, wipeRows: null, wiping: false, // 清除全部测试数据（未上线时可用）
+    launched: true, wipeKeepAdmins: false, wipeRows: null, wiping: false, // 清除全部测试数据（未上线时可用）
     backingUp: false, purging: false, bookKeyword: '', purgeBooks: [], orphanRows: null, orphanLoading: false, logs: [],
     warmup: null,
     funcs: [],          // [{ name, label, on }]
