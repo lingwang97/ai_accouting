@@ -51,6 +51,15 @@
 .pc-band-t { top: 16rpx; }
 .pc-band-b { bottom: 16rpx; }
 .pc-foot.has-photo, .pc-brand.has-photo { left: 46%; right: 4%; }
+/* v3.80.0 整页封面示意与九宫格焦点 */
+.pc-fullimg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; }
+.pc-scrim-g { position: absolute; left: 0; right: 0; bottom: 0; height: 75%; }
+.pc-scrim-b { position: absolute; left: 12%; right: 12%; top: 34%; bottom: 8%; border-radius: 12rpx; opacity: .82; }
+.pc.full .pc-mark { display: none; }
+.pc-mid.full { justify-content: flex-end; padding-bottom: 80rpx; }
+.fgrid { display: flex; flex-wrap: wrap; width: 360rpx; }
+.fcell { width: 33.33%; height: 64rpx; line-height: 64rpx; text-align: center; font-size: 22rpx; border: 1rpx solid var(--border); box-sizing: border-box; color: var(--text-2); background: var(--fill); }
+.fcell.on { background: var(--primary); color: #fff; border-color: var(--primary); }
 .photo-row { display: flex; flex-direction: row; align-items: center; }
 .photo-th { width: 150rpx; height: 200rpx; border: 2rpx solid var(--border); border-radius: 12rpx; overflow: hidden; background: var(--fill); color: var(--text-3); font-size: 24rpx; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-sizing: border-box; }
 .photo-th.oval { border-radius: 50%; }

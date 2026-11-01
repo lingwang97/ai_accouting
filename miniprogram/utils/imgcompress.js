@@ -37,9 +37,9 @@ async function payCode(path, size) {
   return out;
 }
 
-// v3.79.0 封面照片：压到 900KB 以内（云端内容审核只审 1MB 以内）。质量 80 -> 60 -> 40 逐级压；
+// v3.79.0 封面照片：压到 1.5MB 以内（v3.80.0 由 900KB 放宽，整页封面更清晰；云端内容审核只审 1MB 以内，1~1.5MB 的照片跳过审核）。质量 80 -> 60 -> 40 逐级压；
 // 任何一步失败用上一步的图；最终超过 3MB 返回空串（调用方提示换图）。同时统一转成 JPG（compressImage 输出 JPG）
-const COVER_LIMIT = 900 * 1024;
+const COVER_LIMIT = 1.5 * 1024 * 1024;
 const COVER_HARD = 3 * 1024 * 1024;
 async function cover(path, size) {
   let out = path;

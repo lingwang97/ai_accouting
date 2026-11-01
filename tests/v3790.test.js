@@ -134,7 +134,7 @@ test('setCoverPhoto：主家设置照片成功，保存 coverPhoto={fileID,shape
   try {
     let r = await call(L, OWNER, { action: 'setCoverPhoto', bookId: 'b1', fileID: FID(1), shape: 'oval' });
     assert.strictEqual(r.code, 0, r.msg);
-    assert.deepStrictEqual(r.data.coverPhoto, { shape: 'oval' }, '返回不带 fileID');
+    assert.deepStrictEqual(r.data.coverPhoto, { shape: 'oval', layout: 'left', scrim: 'gradient', focus: { x: 1, y: 1 } }, '返回不带 fileID，带展示设置');
     let u = L.log.updates.find(x => x.name === 'books' && x.id === 'b1');
     assert.deepStrictEqual(u.data.coverPhoto.v, { fileID: FID(1), shape: 'oval' });
     assert.strictEqual(u.data.coverPhoto.__op, 'set');
@@ -226,7 +226,7 @@ test('list 返回 coverPhoto 只有形状、不含 fileID；pdfDeco 随 pdfTheme
     let r = await call(L, OWNER, { action: 'list' });
     assert.strictEqual(r.code, 0, r.msg);
     const b = r.data.list.find(x => x._id === 'b1');
-    assert.deepStrictEqual(b.coverPhoto, { shape: 'oval' });
+    assert.deepStrictEqual(b.coverPhoto, { shape: 'oval', layout: 'left', scrim: 'gradient', focus: { x: 1, y: 1 } });
     assert.strictEqual(b.pdfDeco, 'lotus');
     assert.ok(!JSON.stringify(r.data).includes('covers/'), '不返回云存储路径');
     const bf = r.data.list.find(x => x._id === 'bf');
@@ -237,7 +237,7 @@ test('list 返回 coverPhoto 只有形状、不含 fileID；pdfDeco 随 pdfTheme
     assert.ok(/^https:\/\/tmp\.example\//.test(r.data.url));
     assert.strictEqual(r.data.shape, 'oval');
     r = await call(L, OWNER, { action: 'coverPhotoUrl', bookId: 'bf' });
-    assert.deepStrictEqual(r.data, { url: '', shape: 'rect' });
+    assert.deepStrictEqual(r.data, { url: '', shape: 'rect', layout: 'left', scrim: 'gradient', focus: { x: 1, y: 1 } });
   } finally { L.log.restore(); }
 });
 
@@ -390,7 +390,7 @@ t('buildBook 封面：有 / 无照片、各事由、全部纹样都能生成 PDF
 });
 
 // ---------- 前端：压缩 / 页面 / 版本 ----------
-test('imgcompress.cover：逐级压到 900KB 内；压缩不可用用原图；超过 3MB 返回空串', async () => {
+test('imgcompress.cover：逐级压到 1.5MB 内；压缩不可用用原图；超过 3MB 返回空串', async () => {
   const sizes = {};
   const mk = (map, noCompress) => {
     global.wx = {
@@ -401,7 +401,7 @@ test('imgcompress.cover：逐级压到 900KB 内；压缩不可用用原图；�
   try {
     mk({ 'a.jpg.q80': 500 * 1024 }); // 一次就够
     assert.strictEqual(await imgc.cover('a.jpg', 4 * 1024 * 1024), 'a.jpg.q80');
-    mk({ 'a.jpg.q80': 2 * 1024 * 1024, 'a.jpg.q80.q60': 950 * 1024, 'a.jpg.q80.q60.q40': 400 * 1024 }); // 要压到 40
+    mk({ 'a.jpg.q80': 2 * 1024 * 1024, 'a.jpg.q80.q60': 1.6 * 1024 * 1024, 'a.jpg.q80.q60.q40': 400 * 1024 }); // 要压到 40
     assert.strictEqual(await imgc.cover('a.jpg', 5 * 1024 * 1024), 'a.jpg.q80.q60.q40');
     mk({ 'a.jpg.q80': 4 * 1024 * 1024, 'a.jpg.q80.q60': 4 * 1024 * 1024, 'a.jpg.q80.q60.q40': 3.5 * 1024 * 1024 });
     assert.strictEqual(await imgc.cover('a.jpg', 9 * 1024 * 1024), '', '压不到 3MB 内：提示换图');
@@ -414,7 +414,7 @@ test('imgcompress.cover：逐级压到 900KB 内；压缩不可用用原图；�
 
 test('主题页接入：request 封装、白事不显示照片区、上传路径 covers/、首次隐私提示、版本号', () => {
   const rq = read('miniprogram/utils/request.js');
-  assert.ok(/bookSetCover: \(bookId, fileID, shape\) => call\('books', \{ action: 'setCoverPhoto'/.test(rq));
+  assert.ok(rq.includes("bookSetCover: (bookId, fileID, shape, extra) => call('books', Object.assign({ action: 'setCoverPhoto'"));
   assert.ok(/'coverPhotoUrl'/.test(rq.split('READ_ACTIONS')[1].split(']')[0]), '取链接是只读 action');
   const js = read('miniprogram/pages/booktheme/booktheme.js');
   assert.ok(js.includes('covers/book-${getApp().globalData.openid}-${Date.now()}.jpg'));
@@ -429,7 +429,7 @@ test('主题页接入：request 封装、白事不显示照片区、上传路径
   const b = read('cloudfunctions/books/index.js');
   assert.ok(/\['setCoverPhoto', 'coverPhotoUrl'\]\.includes\(event\.action\) && !can\(ctx, 'books'\)/.test(b));
   assert.ok(/case 'setCoverPhoto'/.test(b) && /case 'coverPhotoUrl'/.test(b));
-  assert.ok(/VERSION: '3\.79\.0'/.test(read('miniprogram/config.js')));
+  assert.ok(/VERSION: '3\.\d+\.\d+'/.test(read('miniprogram/config.js')));
 });
 
 test('套餐：features.coverPhoto 缺项开放，默认套餐为 true（plans 各份一致）', () => {

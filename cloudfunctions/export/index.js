@@ -200,7 +200,7 @@ exports.main = async (event, context) => {
     const meta = buildMeta(rows, { account, book, startDay, endDay, themeName, pdfThemeKey, pdfCustom, pdfBack, pdfBind, pdfDeco, premiumOk });
     if (format === 'book') {
       stage = '读取封面照片';
-      const ph = await loadCoverPhoto(book, features, meta.funeral);
+      const ph = await loadCoverPhoto(book, features, meta.funeral, themes.sanitizePrint(event.coverPrint));
       // 存档会长期保存：照片读不到时不静默缺图，让用户稍后重试
       if (ph.want && !ph.photo && archive) return err('封面照片暂时无法读取，请稍后重试');
       if (ph.photo) meta.photo = ph.photo;
@@ -430,7 +430,7 @@ async function bookPreview(event, ctx, OWNER) {
   try { features = (await P.planOf(db, OWNER)).features; premiumOk = P.featureOpen(features, 'pdfThemePremium'); } catch (e) { /* 读套餐失败：按开放处理 */ }
   const account = (await db.collection('accounts').where({ ownerOpenid: OWNER }).limit(1).get()).data[0] || { accountName: '' };
   const meta = buildMeta(rows, { account, book, startDay: '', endDay: '', themeName: '', pdfThemeKey: th.key, pdfCustom: th.custom, pdfBack: th.back, pdfBind: th.bind, pdfDeco: th.deco, premiumOk });
-  { const ph = await loadCoverPhoto(book, features, meta.funeral); if (ph.photo) meta.photo = ph.photo; } // 预览读不到照片只是不放
+  { const ph = await loadCoverPhoto(book, features, meta.funeral, themes.sanitizePrint(event.coverPrint)); if (ph.photo) meta.photo = ph.photo; } // 预览读不到照片只是不放
   meta.preview = true;
   meta.previewSample = sample;
   let stage = '准备字体';
@@ -458,14 +458,16 @@ async function bookPreview(event, ctx, OWNER) {
  * 封面照片（v3.79.0）：读礼簿 coverPhoto 的文件（只有 books 云函数写入，已校验归属 / 格式 / 审核）；
  * 白事、套餐关闭 features.coverPhoto、没有照片时 want=false；want=true 而 photo=null 表示读取失败（存档要报错，普通导出 / 预览只是不放照片）
  */
-async function loadCoverPhoto(book, features, funeral) {
+async function loadCoverPhoto(book, features, funeral, print) {
   const cp = book && book.coverPhoto && !book.coverPhoto._openid ? book.coverPhoto : null;
-  if (!cp || !cp.fileID || funeral || !P.featureOpen(features, 'coverPhoto')) return { want: false, photo: null };
+  if (!cp || !cp.fileID || funeral || print === 'none' || !P.featureOpen(features, 'coverPhoto')) return { want: false, photo: null }; // print=none：本次导出去掉照片（v3.80.0）
   try {
     const buf = (await cloud.downloadFile({ fileID: cp.fileID })).fileContent;
     const jpg = buf && buf.length > 8 && buf[0] === 0xff && buf[1] === 0xd8;
     const png = buf && buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
-    if ((jpg || png) && buf.length <= 4 * 1024 * 1024) return { want: true, photo: { buf, shape: cp.shape === 'oval' ? 'oval' : 'rect' } };
+    if ((jpg || png) && buf.length <= 4 * 1024 * 1024) {
+      return { want: true, photo: { buf, shape: themes.sanitizeShape(cp.shape), layout: themes.sanitizeLayout(cp.layout), scrim: themes.sanitizeScrim(cp.scrim), focus: themes.sanitizeFocus(cp.focus), fade: print === 'fade' } };
+    }
     console.warn('cover photo unusable', buf && buf.length);
   } catch (e) { console.warn('cover photo download failed', e && (e.errMsg || e.message)); }
   return { want: true, photo: null };
@@ -814,10 +816,11 @@ function coverColors(bt) {
 }
 
 /** 封面 / 封底共用的底色、水印、双线边框和四角角饰（新建一页） */
-function drawFrame(doc, bt, c) {
+function drawFrame(doc, bt, c, under) {
   const W = BK.width, H = BK.height;
   doc.addPage({ size: 'A4', layout: 'landscape', margin: 0 });
   doc.rect(0, 0, W, H).fill(c.bg);
+  if (under) under(); // 整页封面照片：画在底色之上、水印和边框之下
   drawMark(doc, bt.mark, c.border, 0.06);
   doc.lineWidth(3).rect(24, 24, W - 48, H - 48).stroke(c.border);
   doc.lineWidth(1).rect(34, 34, W - 68, H - 68).stroke(c.border);
@@ -914,7 +917,8 @@ function drawPhoto(doc, photo, c) {
     doc.save();
     if (photo.shape === 'oval') doc.ellipse(x + w / 2, y + h / 2, w / 2, h / 2).clip();
     else doc.roundedRect(x, y, w, h, 14).clip();
-    doc.image(photo.buf, x, y, { cover: [w, h], align: 'center', valign: 'center' });
+    doc.image(photo.buf, x, y, { cover: [w, h], ...focusOf(photo) });
+    if (photo.fade) doc.rect(x, y, w, h).fillOpacity(0.55).fill('#FFFFFF'); // 打印淡化：叠 55% 白，省墨
     doc.restore();
   } catch (e) {
     try { doc.restore(); } catch (e2) { /* 忽略 */ }
@@ -929,6 +933,42 @@ function drawPhoto(doc, photo, c) {
   } else {
     doc.lineWidth(2.5).roundedRect(x - 5, y - 5, w + 10, h + 10, 18).stroke();
     doc.lineWidth(1).roundedRect(x - 10, y - 10, w + 20, h + 20, 22).stroke();
+  }
+  doc.restore();
+  return true;
+}
+
+/** 九宫格焦点 -> pdfkit cover 的对齐参数 */
+function focusOf(photo) {
+  const f = photo.focus || { x: 1, y: 1 };
+  return { align: ['left', 'center', 'right'][f.x] || 'center', valign: ['top', 'center', 'bottom'][f.y] || 'center' };
+}
+
+/**
+ * 整页封面照片（v3.80.0）：铺满整页（居中 / 焦点裁剪），再按托底方式让文字清晰：
+ * gradient 底部渐变遮罩（从约 1/3 高度起由透明渐变到主题色）/ block 文字区半透明主题色圆角块；fade 时先叠 55% 白。失败返回 false
+ */
+function drawFullPhoto(doc, photo, c) {
+  const W = BK.width, H = BK.height;
+  try {
+    doc.save();
+    doc.image(photo.buf, 0, 0, { cover: [W, H], ...focusOf(photo) });
+    doc.restore();
+  } catch (e) {
+    try { doc.restore(); } catch (e2) { /* 忽略 */ }
+    console.warn('cover photo draw failed', e && e.message);
+    return false;
+  }
+  doc.save();
+  if (photo.fade) doc.rect(0, 0, W, H).fillOpacity(0.55).fill('#FFFFFF');
+  if (photo.scrim === 'block') {
+    doc.roundedRect(110, 222, W - 220, H - 56 - 222, 14).fillOpacity(0.82).fill(c.bg);
+    doc.lineWidth(1).strokeOpacity(0.9).roundedRect(110, 222, W - 220, H - 56 - 222, 14).stroke(c.border);
+  } else {
+    const y0 = 110;
+    const g = doc.linearGradient(0, y0, 0, H);
+    g.stop(0, c.bg, 0).stop(0.28, c.bg, 0.86).stop(1, c.bg, 0.94);
+    doc.rect(0, y0, W, H - y0).fill(g);
   }
   doc.restore();
   return true;
@@ -1058,36 +1098,37 @@ function drawCover(doc, meta) {
   const W = BK.width, H = BK.height;
   const bt = meta.bt;
   const c = coverColors(bt);
-  drawFrame(doc, bt, c);
-
-  // 封面照片（白事不用；损坏的图片画不出来时按无照片排版）
-  const withPhoto = !!(meta.photo && !meta.funeral && drawPhoto(doc, meta.photo, c));
+  // 封面照片（白事不用；损坏的图片画不出来时按无照片排版）：left 左图右文 / full 整页（v3.80.0，整页时不画水印与纹样，文字在下方托底区）
+  const wantFull = !!(meta.photo && !meta.funeral && meta.photo.layout === 'full');
+  let full = false;
+  drawFrame(doc, wantFull ? { ...bt, mark: '' } : bt, c, wantFull ? () => { full = drawFullPhoto(doc, meta.photo, c); } : null);
+  const withPhoto = !wantFull && !!(meta.photo && !meta.funeral && drawPhoto(doc, meta.photo, c));
   // 文字栏：没有照片时占满页宽（与以前完全一致），有照片时在照片右侧居中
   const colX = withPhoto ? PHOTO_BOX.x + PHOTO_BOX.w + 36 : 0;
   const colW = withPhoto ? W - colX - 64 : W;
   const cx = colX + colW / 2;
-  if (meta.deco) drawDeco(doc, meta.deco, cx, 112, c, W, H);
+  if (meta.deco && !full) drawDeco(doc, meta.deco, cx, 112, c, W, H);
 
   // 主标题：礼簿名，过长自动缩小字号
   const main = bt.title || meta.bookName || (meta.funeral ? '奠仪簿' : '礼簿'); // 自定义封面标题优先
   const suffix = meta.funeral ? '奠仪簿' : '礼簿';
   const showSuffix = !bt.title && !!meta.bookName && !main.endsWith(suffix);
-  const maxW = withPhoto ? colW - 24 : W - 160;
-  let size = 60;
+  const maxW = full ? W - 220 : (withPhoto ? colW - 24 : W - 160);
+  let size = full ? 50 : 60;
   doc.font('cn').fontSize(size);
   const minSize = withPhoto ? 16 : 20;
   while (size > minSize && doc.widthOfString(main) > maxW) { size -= 2; doc.fontSize(size); }
   const shownMain = doc.widthOfString(main) > maxW ? fitText(doc, main, maxW) : main; // 缩到最小仍放不下时截断加省略号（以前会折行与下面的字重叠）
-  let y = showSuffix ? 170 : 200;
+  let y = full ? (showSuffix ? 238 : 262) : (showSuffix ? 170 : 200);
   doc.fillColor(c.title).text(shownMain, colX, y, { width: colW, align: 'center', lineBreak: false });
-  y += size * 1.5;
+  y += size * (full ? 1.45 : 1.5);
   if (showSuffix) {
-    doc.fontSize(30).fillColor(c.title).text(suffix.split('').join(' '), colX, y, { width: colW, align: 'center', lineBreak: false });
-    y += 56;
+    doc.fontSize(full ? 24 : 30).fillColor(c.title).text(suffix.split('').join(' '), colX, y, { width: colW, align: 'center', lineBreak: false });
+    y += full ? 44 : 56;
   }
   // 分隔短线
   doc.lineWidth(1).moveTo(cx - 80, y).lineTo(cx + 80, y).stroke(c.border);
-  y += 22;
+  y += full ? 18 : 22;
 
   const info = [];
   if (meta.accountName) info.push(`主家：${meta.accountName}`);
@@ -1095,7 +1136,7 @@ function drawCover(doc, meta) {
   else if (meta.startDay && meta.endDay) info.push(`日期：${meta.startDay} 至 ${meta.endDay}`);
   if (meta.location) info.push(`地点：${meta.location}`);
   doc.font('sub').fontSize(16).fillColor(c.text);
-  info.forEach(t => { doc.text(withPhoto ? fitText(doc, t, colW - 16) : t, colX, y, { width: colW, align: 'center', lineBreak: false }); y += 26; });
+  info.forEach(t => { doc.text(withPhoto ? fitText(doc, t, colW - 16) : t, colX, y, { width: colW, align: 'center', lineBreak: false }); y += full ? 24 : 26; });
 
   if (bt.footer) doc.font('cn').fontSize(20).fillColor(c.title).text(bt.footer.split('').join(' '), colX, H - 110, { width: colW, align: 'center', lineBreak: false });
   doc.font('sub').fontSize(10).fillColor(c.text).text('慧礼记', colX, H - 70, { width: colW, align: 'center', lineBreak: false });

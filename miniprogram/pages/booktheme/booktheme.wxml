@@ -5,7 +5,10 @@
     <swiper wx:if="{{pv}}" class="pv-swiper" current="{{cur}}" bindchange="onSwipe" duration="250">
       <!-- 封面 -->
       <swiper-item>
-        <view class="pc" style="background:{{pv.bg}};border-color:{{pv.border}};color:{{pv.text}}">
+        <view class="pc {{pv.full ? 'full' : ''}}" style="background:{{pv.bg}};border-color:{{pv.border}};color:{{pv.text}}">
+          <image class="pc-fullimg" wx:if="{{pv.full}}" src="{{pv.photo}}" mode="aspectFill" style="opacity:{{pv.fade ? 0.5 : 1}}" />
+          <view class="pc-scrim-g" wx:if="{{pv.full && pv.scrim === 'gradient'}}" style="background:linear-gradient(to bottom, rgba(0,0,0,0), {{pv.bg}} 45%)"></view>
+          <view class="pc-scrim-b" wx:if="{{pv.full && pv.scrim === 'block'}}" style="background:{{pv.bg}}"></view>
           <view class="pc-in" style="border-color:{{pv.border}}"></view>
           <view class="pc-mark" wx:if="{{pv.mark}}" style="color:{{pv.border}}">{{pv.mark}}</view>
           <block wx:if="{{pv.corners}}">
@@ -16,15 +19,15 @@
           </block>
           <view class="pc-band pc-band-t" wx:if="{{pv.band}}" style="color:{{pv.border}}">{{pv.band}}</view>
           <view class="pc-band pc-band-b" wx:if="{{pv.band}}" style="color:{{pv.border}}">{{pv.band}}</view>
-          <view class="pc-photo {{pv.shape === 'oval' ? 'oval' : ''}}" wx:if="{{pv.photo}}" style="border-color:{{pv.border}}"><image src="{{pv.photo}}" mode="aspectFill" /></view>
-          <view class="pc-deco {{pv.photo ? 'has-photo' : ''}}" wx:if="{{pv.decoTxt}}" style="color:{{pv.border}}">{{pv.decoTxt}}</view>
-          <view class="pc-mid {{pv.photo ? 'has-photo' : ''}}">
+          <view class="pc-photo {{pv.shape === 'oval' ? 'oval' : ''}}" wx:if="{{pv.left}}" style="border-color:{{pv.border}};opacity:{{pv.fade ? 0.5 : 1}}"><image src="{{pv.photo}}" mode="aspectFill" /></view>
+          <view class="pc-deco {{pv.left ? 'has-photo' : ''}}" wx:if="{{pv.decoTxt}}" style="color:{{pv.border}}">{{pv.decoTxt}}</view>
+          <view class="pc-mid {{pv.left ? 'has-photo' : ''}} {{pv.full ? 'full' : ''}}">
             <view class="pc-title" style="color:{{pv.border}}">{{pv.title}}</view>
             <view class="pc-line" style="background:{{pv.border}}"></view>
             <view class="pc-sm" wx:for="{{pv.info}}" wx:key="*this">{{item}}</view>
           </view>
-          <view class="pc-foot {{pv.photo ? 'has-photo' : ''}}" style="color:{{pv.border}}" wx:if="{{pv.footer}}">{{pv.footer}}</view>
-          <view class="pc-brand {{pv.photo ? 'has-photo' : ''}}">慧礼记</view>
+          <view class="pc-foot {{pv.left ? 'has-photo' : ''}}" style="color:{{pv.border}}" wx:if="{{pv.footer}}">{{pv.footer}}</view>
+          <view class="pc-brand {{pv.left ? 'has-photo' : ''}}">慧礼记</view>
         </view>
       </swiper-item>
       <!-- 内页（右起，本礼簿前几位宾客） -->
@@ -161,11 +164,25 @@
           <button class="btn-outline photo-btn" wx:if="{{coverSet}}" disabled="{{photoBusy}}" bindtap="onRemovePhoto">移除</button>
         </view>
       </view>
+      <view class="muted tip" wx:if="{{photoQ}}">{{photoQ}}</view>
       <block wx:if="{{coverSet}}">
-        <view class="cust-lb">相框形状</view>
-        <view class="chips"><view wx:for="{{shapes}}" wx:key="k" class="chip {{coverShape === item.k ? 'on' : ''}}" data-k="{{item.k}}" bindtap="onShape">{{item.n}}</view></view>
+        <view class="cust-lb">封面版式</view>
+        <view class="chips"><view wx:for="{{layouts}}" wx:key="k" class="chip {{coverLayout === item.k ? 'on' : ''}}" data-k="{{item.k}}" bindtap="onLayout">{{item.n}}</view></view>
+        <block wx:if="{{coverLayout === 'left'}}">
+          <view class="cust-lb">相框形状</view>
+          <view class="chips"><view wx:for="{{shapes}}" wx:key="k" class="chip {{coverShape === item.k ? 'on' : ''}}" data-k="{{item.k}}" bindtap="onShape">{{item.n}}</view></view>
+        </block>
+        <block wx:else>
+          <view class="cust-lb">文字托底（让字在照片上看得清）</view>
+          <view class="chips"><view wx:for="{{scrims}}" wx:key="k" class="chip {{coverScrim === item.k ? 'on' : ''}}" data-k="{{item.k}}" bindtap="onScrim">{{item.n}}</view></view>
+        </block>
+        <view class="cust-lb">照片重点（裁剪时尽量留住的位置）</view>
+        <view class="fgrid"><view wx:for="{{focusCells}}" wx:key="n" class="fcell {{coverFocus.x === item.x && coverFocus.y === item.y ? 'on' : ''}}" data-x="{{item.x}}" data-y="{{item.y}}" bindtap="onFocus">{{item.n}}</view></view>
+        <view class="cust-lb">打印方式（只用于本次预览和导出，不保存）</view>
+        <view class="chips"><view wx:for="{{prints}}" wx:key="k" class="chip {{coverPrint === item.k ? 'on' : ''}}" data-k="{{item.k}}" bindtap="onPrint">{{item.n}}</view></view>
+        <view class="muted tip">淡化：照片叠一层白色，约省六成墨；去照片：封面只留底色和纹样。整页版式照片越大越清晰，建议短边 1100 像素以上</view>
       </block>
-      <view class="muted tip">照片会印在导出 PDF 的封面上（左图右文），自动居中裁剪；建议竖版、短边不低于 600 像素。选好后立即保存到本礼簿，PDF 转发后他人可见，请先征得照片里的人同意。</view>
+      <view class="muted tip">照片会印在导出 PDF 的封面上（左图右文或整页），自动居中裁剪，可用「照片重点」调整保留的位置；选好后立即保存到本礼簿。PDF 转发后他人可见，请先征得照片里的人同意。</view>
     </view>
     <view class="muted tip" wx:if="{{isFuneral}}">白事礼簿封面不使用照片</view>
 

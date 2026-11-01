@@ -34,6 +34,13 @@ Page({
     coverUrl: '',            // 封面照片预览地址（临时链接 / 刚选的本地图）
     coverShape: 'rect',      // 相框形状：rect | oval
     shapes: pt.COVER_SHAPES,
+    layouts: pt.COVER_LAYOUTS, scrims: pt.COVER_SCRIMS, prints: pt.COVER_PRINTS, focusCells: pt.FOCUS_CELLS,
+    coverLayout: 'left',     // 封面照片版式：left 左图右文 / full 整页（v3.80.0）
+    coverScrim: 'gradient',  // 整页时文字托底：gradient 渐变 / block 色块
+    coverFocus: { x: 1, y: 1 }, // 九宫格焦点
+    coverPrint: 'keep',      // 本次导出 / 预览的打印方式：keep 保留 / fade 淡化 / none 去照片（不保存）
+    photoQ: '',              // 刚选的照片分辨率提示
+    photoDim: null,          // { w, h }
     photoOk: true,           // 套餐是否开放封面照片（features.coverPhoto；缺项视为开放）
     photoBusy: false,        // 正在上传 / 保存照片
     binds: pt.BINDS,
@@ -98,6 +105,9 @@ Page({
         decos: isFuneral ? pt.FUNERAL_DECOS : pt.DECOS,
         coverSet: !!book.coverPhoto,
         coverShape: (book.coverPhoto && book.coverPhoto.shape) || 'rect',
+        coverLayout: (book.coverPhoto && book.coverPhoto.layout) || 'left',
+        coverScrim: (book.coverPhoto && book.coverPhoto.scrim) || 'gradient',
+        coverFocus: (book.coverPhoto && book.coverPhoto.focus) || { x: 1, y: 1 },
         presets: pt.LIST.map(p => ({ ...p, locked: !premiumOk && !pt.FREE_KEYS.includes(p.key) })),
         fonts: pt.FONTS.map(f => ({ ...f, locked: !premiumOk && f.k !== 'sans' })),
         book, isFuneral, defTip,
@@ -156,10 +166,11 @@ Page({
     }
     const book = d.book || {};
     const deco = pt.decoOf(d.deco, book.type);
-    const photo = !d.isFuneral && d.coverSet && d.coverUrl ? d.coverUrl : '';
+    const photo = !d.isFuneral && d.coverSet && d.coverUrl && d.coverPrint !== 'none' ? d.coverUrl : '';
+    const full = !!photo && d.coverLayout === 'full';
     const pv = colors ? Object.assign({}, colors, {
-      deco, decoTxt: pt.DECO_TXT[deco] || '', band: pt.DECO_BAND[deco] || '',
-      photo, shape: d.coverShape,
+      deco, decoTxt: full ? '' : (pt.DECO_TXT[deco] || ''), band: full ? '' : (pt.DECO_BAND[deco] || ''),
+      photo, full, left: !!photo && !full, scrim: d.coverScrim, fade: d.coverPrint === 'fade', shape: d.coverShape,
       title: e.title || book.name || '', footer: e.footer || '', mark: e.mark || '',
       corners: this.cornersOf(e.pattern),
       info: [book.hostName ? `主家：${book.hostName}` : '', book.date ? `日期：${book.date}` : ''].filter(Boolean)
@@ -298,7 +309,51 @@ Page({
     if (k === this.data.coverShape) return;
     this.setData({ coverShape: k });
     this.refresh();
-    if (this.data.coverSet) req.bookSetCover(this.data.id, undefined, k).catch(() => {}); // 只改形状，立即保存
+    this.saveCoverOpts(); // 立即保存
+  },
+
+  /** 只改展示设置（形状 / 版式 / 托底 / 焦点），不动照片文件；失败不打扰，导出时以云端为准 */
+  saveCoverOpts() {
+    const d = this.data;
+    if (!d.coverSet) return;
+    req.bookSetCover(d.id, undefined, d.coverShape, { layout: d.coverLayout, scrim: d.coverScrim, focus: d.coverFocus }).catch(() => {});
+  },
+
+  onLayout(e) {
+    const k = e.currentTarget.dataset.k;
+    if (k === this.data.coverLayout) return;
+    this.setData({ coverLayout: k });
+    this.updateQ();
+    this.refresh();
+    this.saveCoverOpts();
+  },
+
+  onScrim(e) {
+    const k = e.currentTarget.dataset.k;
+    if (k === this.data.coverScrim) return;
+    this.setData({ coverScrim: k });
+    this.refresh();
+    this.saveCoverOpts();
+  },
+
+  onFocus(e) {
+    const { x, y } = e.currentTarget.dataset;
+    this.setData({ coverFocus: { x: Number(x), y: Number(y) } });
+    this.saveCoverOpts();
+  },
+
+  /** 打印方式只作用于本次导出 / 预览，不保存 */
+  onPrint(e) {
+    this.setData({ coverPrint: e.currentTarget.dataset.k });
+    this.refresh();
+  },
+
+  /** 刚选的照片分辨率提示（三档）；整页版式要求更高 */
+  updateQ() {
+    const d = this.data;
+    if (!d.photoDim) return this.setData({ photoQ: '' });
+    const t = pt.photoTier(d.photoDim.w, d.photoDim.h, d.coverLayout);
+    this.setData({ photoQ: `照片 ${d.photoDim.w}×${d.photoDim.h} 像素，${t.n}${t.k === 'high' ? '' : d.coverLayout === 'full' ? '（整页建议短边 1100 以上，最好 1600 以上）' : '（建议短边 600 以上）'}` });
   },
 
   /** 首次上传前的隐私提示（以后不再弹） */
@@ -343,7 +398,7 @@ Page({
             filePath: path, success: resolve, fail: reject
           }));
           fileID = up.fileID;
-          await req.bookSetCover(d.id, fileID, d.coverShape);
+          await req.bookSetCover(d.id, fileID, d.coverShape, { layout: d.coverLayout, scrim: d.coverScrim, focus: d.coverFocus });
           wx.hideLoading();
           this.setData({ coverSet: true, coverUrl: path });
           this.refresh();
@@ -367,7 +422,11 @@ Page({
   warnSmall(path) {
     wx.getImageInfo({
       src: path,
-      success: r => { if (Math.min(r.width, r.height) < 600) wx.showToast({ title: '照片较小，打印可能不清晰', icon: 'none' }); }
+      success: r => {
+        this.setData({ photoDim: { w: r.width, h: r.height } });
+        this.updateQ();
+        if (pt.photoTier(r.width, r.height, this.data.coverLayout).k === 'low') wx.showToast({ title: '照片较小，打印可能不清晰', icon: 'none' });
+      }
     });
   },
 
@@ -383,7 +442,7 @@ Page({
         this.setData({ photoBusy: true });
         try {
           await req.bookSetCover(d.id, '');
-          this.setData({ coverSet: false, coverUrl: '' });
+          this.setData({ coverSet: false, coverUrl: '', photoDim: null, photoQ: '' });
           this.refresh();
         } catch (e) { /* toast 已提示 */ } finally { this.setData({ photoBusy: false }); }
       }
@@ -393,7 +452,7 @@ Page({
   /** 导出 / 预览共用的主题参数；自定义配色不合法时提示并返回 null */
   buildParams() {
     const d = this.data;
-    const params = { bookId: d.id, pdfBack: d.back, pdfBind: d.bind, pdfDeco: d.deco };
+    const params = { bookId: d.id, pdfBack: d.back, pdfBind: d.bind, pdfDeco: d.deco, coverPrint: d.coverSet ? d.coverPrint : 'keep' };
     if (d.isFuneral) {
       params.pdfTheme = 'custom';
       params.pdfCustom = d.fun;

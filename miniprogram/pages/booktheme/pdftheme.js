@@ -58,6 +58,17 @@ function decoOf(v, bookType) {
   return k === 'none' ? '' : k;
 }
 const COVER_SHAPES = [{ k: 'rect', n: '圆角方框' }, { k: 'oval', n: '椭圆' }];
+// v3.80.0 整页封面（与云函数 export/themes.js 一致）：版式 / 文字托底 / 九宫格焦点 / 单次打印方式
+const COVER_LAYOUTS = [{ k: 'left', n: '左图右文' }, { k: 'full', n: '整页' }];
+const COVER_SCRIMS = [{ k: 'gradient', n: '渐变' }, { k: 'block', n: '色块' }];
+const COVER_PRINTS = [{ k: 'keep', n: '保留' }, { k: 'fade', n: '淡化' }, { k: 'none', n: '去照片' }];
+const FOCUS_CELLS = ['左上', '上', '右上', '左', '中', '右', '左下', '下', '右下'].map((n, i) => ({ n, x: i % 3, y: Math.floor(i / 3) }));
+/** 照片分辨率三档（按短边像素）：整页版式要求更高 */
+function photoTier(w, h, layout) {
+  const s = Math.min(Number(w) || 0, Number(h) || 0);
+  const [lo, hi] = layout === 'full' ? [1100, 1600] : [600, 900];
+  return s < lo ? { k: 'low', n: '偏糊' } : (s < hi ? { k: 'mid', n: '一般' } : { k: 'high', n: '清晰' });
+}
 
 const FUNERAL_FOOTERS = ['沉痛哀悼', '深切缅怀', '音容宛在', '永远怀念', '千古'];
 const DEFAULT_FUNERAL = { font: 'sans', pattern: 'none', mark: '', footer: '', title: '' };
@@ -175,7 +186,7 @@ module.exports = {
   SAMPLE, BACK_FOOTER, CORNER_CHARS, amountUpper,
   TYPE_DEFAULTS, TYPE_LABELS, typeDefault, defaultSelection,
   LIST, DEFAULT_KEY, FREE_KEYS, FONTS, PATTERNS, MARKS, MAIN_COLORS, ACCENT_COLORS, DEFAULT_CUSTOM,
-  DECOS, FUNERAL_DECOS, DECO_DEFAULTS, DECO_TXT, DECO_BAND, decoOf, COVER_SHAPES,
+  DECOS, FUNERAL_DECOS, DECO_DEFAULTS, DECO_TXT, DECO_BAND, decoOf, COVER_SHAPES, COVER_LAYOUTS, COVER_SCRIMS, COVER_PRINTS, FOCUS_CELLS, photoTier,
   FUNERAL_PATTERNS, FUNERAL_MARKS, FUNERAL_FOOTERS, DEFAULT_FUNERAL, GREY, DEFAULT_BACK, BINDS, BIND_TIPS,
   checkCustom, previewOf, expand, funeralPreview
 };

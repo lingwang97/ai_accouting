@@ -79,7 +79,7 @@ exports.main = async (event, context) => {
       case 'stats': return await stats(OWNER, event.bookId, ctx);
       case 'recalc': return await recalc(OWNER, String(event.bookId || ''));
       case 'getTpl': return await getTpl(OWNER, account, event.bookId);
-      case 'setCoverPhoto': return await setCoverPhoto(OWNER, OPENID, event.bookId, event.fileID, event.shape);
+      case 'setCoverPhoto': return await setCoverPhoto(OWNER, OPENID, event.bookId, event.fileID, { shape: event.shape, layout: event.layout, scrim: event.scrim, focus: event.focus });
       case 'coverPhotoUrl': return await coverPhotoUrl(OWNER, event.bookId);
       case 'saveTpl': return await saveTpl(OWNER, event.bookId, event.receiptTpl, event.printTpl, OPENID);
       default: return err('未知 action');
@@ -127,7 +127,7 @@ async function list(openid, account, ctx) {
       pdfBack: (b.pdfTheme && b.pdfTheme.back) || null, // 传统礼簿尾页设置
       pdfBind: (b.pdfTheme && b.pdfTheme.bind) || '',  // 装订：none | single | double（空为默认不留边）
       pdfDeco: (b.pdfTheme && b.pdfTheme.deco) || '',  // 封面纹样（v3.79.0，空为按事由默认）
-      coverPhoto: b.coverPhoto && !b.coverPhoto._openid && b.coverPhoto.fileID ? { shape: b.coverPhoto.shape === 'oval' ? 'oval' : 'rect' } : null, // 封面照片（只给形状，不返回云存储路径）
+      coverPhoto: b.coverPhoto && !b.coverPhoto._openid && b.coverPhoto.fileID ? coverView(b.coverPhoto) : null, // 封面照片（只给形状 / 版式 / 托底 / 焦点，不返回云存储路径）
       hostName: b.hostName || '',             // 机构版：本场主家称呼
       hasPayCode: !!b.payCodeFileID,          // 机构版：本场单独设置了收款码
       pendingPayCode: !!b.pendingPayCode,     // 记账人提交的本场收款码待主家确认
@@ -606,16 +606,36 @@ async function dropCover(fileID, openid) {
   try { await cloud.deleteFile({ fileList: [fileID] }); } catch (e) { /* 忽略 */ }
 }
 
+// 封面照片的存储 / 展示形态（v3.80.0）：默认值（左图右文、渐变、居中）不落库，旧数据缺项即默认
+const clampFocus = f => { const n = v => { const i = Math.round(Number(v)); return i >= 0 && i <= 2 ? i : 1; }; return f && typeof f === 'object' ? { x: n(f.x), y: n(f.y) } : { x: 1, y: 1 }; };
+const coverView = d => ({ shape: d && d.shape === 'oval' ? 'oval' : 'rect', layout: d && d.layout === 'full' ? 'full' : 'left', scrim: d && d.scrim === 'block' ? 'block' : 'gradient', focus: clampFocus(d && d.focus) });
+const coverDoc = (fileID, v) => {
+  const d = { fileID, shape: v.shape };
+  if (v.layout === 'full') d.layout = 'full';
+  if (v.scrim === 'block') d.scrim = 'block';
+  if (!(v.focus.x === 1 && v.focus.y === 1)) d.focus = { x: v.focus.x, y: v.focus.y };
+  return d;
+};
+/** 在旧设置（可无）上叠加本次传入的项：只改传了的 */
+function mergeCover(old, input) {
+  const v = coverView(old);
+  if (input.shape !== undefined) v.shape = input.shape === 'oval' ? 'oval' : 'rect';
+  if (input.layout !== undefined) v.layout = input.layout === 'full' ? 'full' : 'left';
+  if (input.scrim !== undefined) v.scrim = input.scrim === 'block' ? 'block' : 'gradient';
+  if (input.focus !== undefined) v.focus = clampFocus(input.focus);
+  return v;
+}
+
 /**
- * 设置 / 更换 / 移除封面照片，或只改形状
- * fileID：新照片（须是本人刚上传到 covers/ 的文件）；'' 移除；不传只改 shape
+ * 设置 / 更换 / 移除封面照片，或只改形状 / 版式 / 托底 / 焦点
+ * fileID：新照片（须是本人刚上传到 covers/ 的文件）；'' 移除；不传只改展示设置（input：shape / layout / scrim / focus，传了才改）
  * 白事礼簿不支持封面照片（只能移除）；套餐关闭 features.coverPhoto 时不能新设
  */
-async function setCoverPhoto(openid, caller, bookId, fileID, shape) {
+async function setCoverPhoto(openid, caller, bookId, fileID, input) {
+  input = input && typeof input === 'object' ? input : {};
   const book = await getBook(openid, String(bookId || ''));
   if (!book) return err('礼簿不存在');
   const old = book.coverPhoto && !book.coverPhoto._openid ? book.coverPhoto : null;
-  const sh = shape === undefined ? (old && old.shape) || 'rect' : (shape === 'oval' ? 'oval' : 'rect');
   if (fileID === '' || fileID === null) { // 移除
     if (!old) return ok({ coverPhoto: null });
     await books.doc(book._id).update({ data: { coverPhoto: _.remove() } });
@@ -623,16 +643,17 @@ async function setCoverPhoto(openid, caller, bookId, fileID, shape) {
     return ok({ coverPhoto: null });
   }
   if (book.type === 'funeral') return err('白事礼簿不使用封面照片');
-  if (fileID === undefined) { // 只改形状
+  const v = mergeCover(old, input);
+  if (fileID === undefined) { // 只改展示设置
     if (!old) return err('请先选择照片');
-    await books.doc(book._id).update({ data: { coverPhoto: _.set({ fileID: old.fileID, shape: sh }) } });
-    return ok({ coverPhoto: { shape: sh } });
+    await books.doc(book._id).update({ data: { coverPhoto: _.set(coverDoc(old.fileID, v)) } });
+    return ok({ coverPhoto: v });
   }
   fileID = String(fileID);
   if (!ownCover(fileID, caller)) return err('照片无效，请重新选择');
-  if (old && old.fileID === fileID) { // 同一张：只改形状
-    await books.doc(book._id).update({ data: { coverPhoto: _.set({ fileID, shape: sh }) } });
-    return ok({ coverPhoto: { shape: sh } });
+  if (old && old.fileID === fileID) { // 同一张：只改展示设置
+    await books.doc(book._id).update({ data: { coverPhoto: _.set(coverDoc(fileID, v)) } });
+    return ok({ coverPhoto: v });
   }
   let plan = null;
   try { plan = await P.planOf(db, openid); } catch (e) { /* 读套餐失败：按开放处理 */ }
@@ -642,24 +663,24 @@ async function setCoverPhoto(openid, caller, bookId, fileID, shape) {
   try { buf = (await cloud.downloadFile({ fileID })).fileContent; } catch (e) { /* 下面统一提示 */ }
   if (!buf || !imgKind(buf)) { await dropCover(fileID, caller); return err('照片格式不支持，请换一张 JPG 或 PNG 照片'); }
   if (buf.length > COVER_MAX) { await dropCover(fileID, caller); return err('照片太大，请换一张小一点的'); }
-  const bad = await S.checkImage(cloud, fileID); // 内容安全（失败放行，违规时 checkImage 已删文件）
+  const bad = await S.checkImage(cloud, fileID); // 内容安全（失败放行；>1MB 跳过；违规时 checkImage 已删文件）
   if (bad) return bad;
-  await books.doc(book._id).update({ data: { coverPhoto: _.set({ fileID, shape: sh }) } });
+  await books.doc(book._id).update({ data: { coverPhoto: _.set(coverDoc(fileID, v)) } });
   if (old) await dropCover(old.fileID, openid);
-  return ok({ coverPhoto: { shape: sh } });
+  return ok({ coverPhoto: v });
 }
 
 /** 封面照片的临时链接（供主题页预览；有「管理礼簿」权限者可取，不返回云存储路径） */
 async function coverPhotoUrl(openid, bookId) {
   const book = await getBook(openid, String(bookId || ''));
-  if (!book || !book.coverPhoto || book.coverPhoto._openid || !book.coverPhoto.fileID) return ok({ url: '', shape: 'rect' });
+  if (!book || !book.coverPhoto || book.coverPhoto._openid || !book.coverPhoto.fileID) return ok({ url: '', ...coverView(null) });
   let url = '';
   try {
     const r = await cloud.getTempFileURL({ fileList: [book.coverPhoto.fileID] });
     const f = r.fileList && r.fileList[0];
     url = f && f.status === 0 ? String(f.tempFileURL || '') : '';
   } catch (e) { /* 取不到不影响使用 */ }
-  return ok({ url, shape: book.coverPhoto.shape === 'oval' ? 'oval' : 'rect' });
+  return ok({ url, ...coverView(book.coverPhoto) });
 }
 
 async function getBook(openid, bookId) {

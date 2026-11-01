@@ -43,6 +43,18 @@ function decoOf(v, bookType) {
 // 封面照片形状：圆角矩形 / 椭圆
 const PHOTO_SHAPES = ['rect', 'oval'];
 const sanitizeShape = v => (PHOTO_SHAPES.includes(v) ? v : 'rect');
+// v3.80.0 整页封面照片：版式 left 左图右文 / full 整页；托底 gradient 底部渐变遮罩 / block 半透明色块；
+// 焦点 focus = 九宫格 { x: 0 左 1 中 2 右, y: 0 上 1 中 2 下 }（居中裁剪时偏向哪里）；打印 coverPrint 只作用于单次导出
+const PHOTO_LAYOUTS = ['left', 'full'];
+const PHOTO_SCRIMS = ['gradient', 'block'];
+const PRINT_MODES = ['keep', 'fade', 'none'];
+const sanitizeLayout = v => (PHOTO_LAYOUTS.includes(v) ? v : 'left');
+const sanitizeScrim = v => (PHOTO_SCRIMS.includes(v) ? v : 'gradient');
+const sanitizePrint = v => (PRINT_MODES.includes(v) ? v : 'keep');
+const sanitizeFocus = f => {
+  const n = v => { const i = Math.round(Number(v)); return i >= 0 && i <= 2 ? i : 1; };
+  return f && typeof f === 'object' ? { x: n(f.x), y: n(f.y) } : { x: 1, y: 1 };
+};
 
 function lum(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -195,4 +207,4 @@ function pick(premiumOk, funeral, bookType, key, custom) {
   return premiumOk ? bt : freeOnly(bt, funeral, bookType);
 }
 
-module.exports = { DECOS, FUNERAL_DECOS, DECO_DEFAULTS, sanitizeDeco, decoOf, PHOTO_SHAPES, sanitizeShape, pick, FREE_KEYS, premiumUsed, freeOnly, isDefaultBack, PRESETS, DEFAULT_KEY, TYPE_DEFAULTS, typeDefault, resolveDefault, resolve, isPresetKey, sanitizeCustom, sanitizeFuneral, sanitizeBack, sanitizeBind, DEFAULT_BACK };
+module.exports = { PHOTO_LAYOUTS, PHOTO_SCRIMS, PRINT_MODES, sanitizeLayout, sanitizeScrim, sanitizePrint, sanitizeFocus, DECOS, FUNERAL_DECOS, DECO_DEFAULTS, sanitizeDeco, decoOf, PHOTO_SHAPES, sanitizeShape, pick, FREE_KEYS, premiumUsed, freeOnly, isDefaultBack, PRESETS, DEFAULT_KEY, TYPE_DEFAULTS, typeDefault, resolveDefault, resolve, isPresetKey, sanitizeCustom, sanitizeFuneral, sanitizeBack, sanitizeBind, DEFAULT_BACK };

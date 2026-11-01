@@ -160,7 +160,7 @@ module.exports = {
   bookStats: bookId => call('books', { action: 'stats', bookId }),
   bookGetTpl: bookId => call('books', { action: 'getTpl', bookId }),
   // v3.79.0 封面照片：fileID 不传只改形状，'' 移除；coverPhotoUrl 取预览用的临时链接
-  bookSetCover: (bookId, fileID, shape) => call('books', { action: 'setCoverPhoto', bookId, fileID, shape }),
+  bookSetCover: (bookId, fileID, shape, extra) => call('books', Object.assign({ action: 'setCoverPhoto', bookId, fileID, shape }, extra || {})), // extra：layout / scrim / focus（v3.80.0）
   bookCoverUrl: bookId => call('books', { action: 'coverPhotoUrl', bookId }, { silent: true }),
   bookSaveTpl: (bookId, tpls) => call('books', { action: 'saveTpl', bookId, ...tpls }),
   purgeAccount: () => call('account', { action: 'purge', confirm: 'DELETE' }),
