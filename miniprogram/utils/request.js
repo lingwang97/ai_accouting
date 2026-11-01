@@ -9,7 +9,7 @@ const envVersion = () => {
 const READ_ACTIONS = ['get', 'list', 'query', 'people', 'outList', 'remindList', 'pending', 'pendingStat', 'dashboard',
   'status', 'receipt', 'myReceipts', 'receiptByToken', 'issueQr', 'qrCheck', 'themes', 'check', 'getByAid', 'gen', 'app', 'plan', 'adminGet', 'detail',
   'nameCheck', 'reconcile', 'orgSummary', 'removePreview', 'members', 'pendingMembers', 'getTpl', 'stats', 'trashList',
-  'viewers', 'payCodeReviews', 'inviteInfo', 'advGet',
+  'viewers', 'payCodeReviews', 'inviteInfo', 'advGet', 'coverPhotoUrl',
   // export 预览：只生成临时文件，不改礼簿 / 礼金数据（与导出不同，不触发页面强制刷新）
   'bookPreview', 'bookPreviewData',
   // system 只读：ads 读设置；admin*Preview / adminFindHosts / adminLogs / adminPreflight(不带 Fix) 只查不写（adminIndexes 会建索引，不列入）
@@ -159,6 +159,9 @@ module.exports = {
     .then(r => { ['books', 'dashboard'].forEach(k => require('./cache.js').set(k, null)); return r; }),
   bookStats: bookId => call('books', { action: 'stats', bookId }),
   bookGetTpl: bookId => call('books', { action: 'getTpl', bookId }),
+  // v3.79.0 封面照片：fileID 不传只改形状，'' 移除；coverPhotoUrl 取预览用的临时链接
+  bookSetCover: (bookId, fileID, shape) => call('books', { action: 'setCoverPhoto', bookId, fileID, shape }),
+  bookCoverUrl: bookId => call('books', { action: 'coverPhotoUrl', bookId }, { silent: true }),
   bookSaveTpl: (bookId, tpls) => call('books', { action: 'saveTpl', bookId, ...tpls }),
   purgeAccount: () => call('account', { action: 'purge', confirm: 'DELETE' }),
   inviteCreate: (type, opts, callOpts) => call('account', { action: 'createInvite', type, ...(opts || {}) }, callOpts),

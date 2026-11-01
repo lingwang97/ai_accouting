@@ -5,7 +5,7 @@
 const cloud = require('wx-server-sdk');
 const { ok, err, failOf } = require('./common.js');
 const S = require('./secure.js'); // 内容安全审核（tools/cloud-shared/secure.js，失败放行）
-const { ownPayCode } = require('./paycode.js'); // 收款码归属（tools/cloud-shared/paycode.js）
+const { ownPayCode, ownCover } = require('./paycode.js'); // 收款码归属（tools/cloud-shared/paycode.js）
 const { REC } = require('./status.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
@@ -53,6 +53,8 @@ exports.main = async (event, context) => {
     // 记账人按权限：「管理礼簿」新建 / 修改 / 切换 / 归档，「回执与打印样式」改样式；只能操作负责的礼簿
     if (['save', 'setActive', 'archive'].includes(event.action) && !can(ctx, 'books')) return err('你没有管理礼簿的权限');
     if (event.action === 'recalc' && !can(ctx, 'books')) return err('你没有管理礼簿的权限');
+    if (['setCoverPhoto', 'coverPhotoUrl'].includes(event.action) && !can(ctx, 'books')) return err('你没有管理礼簿的权限');
+    if (['setCoverPhoto', 'coverPhotoUrl'].includes(event.action) && !canBook(ctx, String(event.bookId || ''))) return err('礼簿不存在');
     if (event.action === 'recalc' && !canBook(ctx, String(event.bookId || ''))) return err('礼簿不存在');
     if (event.action === 'saveTpl' && !can(ctx, 'style')) return err('你没有修改回执与打印样式的权限');
     if (event.action === 'save' && event.book && event.book._id && !canBook(ctx, String(event.book._id))) return err('礼簿不存在');
@@ -77,6 +79,8 @@ exports.main = async (event, context) => {
       case 'stats': return await stats(OWNER, event.bookId, ctx);
       case 'recalc': return await recalc(OWNER, String(event.bookId || ''));
       case 'getTpl': return await getTpl(OWNER, account, event.bookId);
+      case 'setCoverPhoto': return await setCoverPhoto(OWNER, OPENID, event.bookId, event.fileID, event.shape);
+      case 'coverPhotoUrl': return await coverPhotoUrl(OWNER, event.bookId);
       case 'saveTpl': return await saveTpl(OWNER, event.bookId, event.receiptTpl, event.printTpl, OPENID);
       default: return err('未知 action');
     }
@@ -122,6 +126,8 @@ async function list(openid, account, ctx) {
       pdfBase: (b.pdfTheme && b.pdfTheme.base) || '', // 自定义基于哪个预设修改（仅记录）
       pdfBack: (b.pdfTheme && b.pdfTheme.back) || null, // 传统礼簿尾页设置
       pdfBind: (b.pdfTheme && b.pdfTheme.bind) || '',  // 装订：none | single | double（空为默认不留边）
+      pdfDeco: (b.pdfTheme && b.pdfTheme.deco) || '',  // 封面纹样（v3.79.0，空为按事由默认）
+      coverPhoto: b.coverPhoto && !b.coverPhoto._openid && b.coverPhoto.fileID ? { shape: b.coverPhoto.shape === 'oval' ? 'oval' : 'rect' } : null, // 封面照片（只给形状，不返回云存储路径）
       hostName: b.hostName || '',             // 机构版：本场主家称呼
       hasPayCode: !!b.payCodeFileID,          // 机构版：本场单独设置了收款码
       pendingPayCode: !!b.pendingPayCode,     // 记账人提交的本场收款码待主家确认
@@ -589,6 +595,72 @@ async function saveTpl(openid, bookId, receiptTpl, printTpl, caller) {
   return ok({ saved: Object.keys(data) });
 }
 
+
+// ===== 传统礼簿封面照片（v3.79.0）=====
+const COVER_MAX = 4 * 1024 * 1024; // 封面照片文件上限（前端已压缩到 1MB 内，这里兜底）
+const imgKind = b => (b && b.length > 4 && b[0] === 0xff && b[1] === 0xd8 ? 'jpg' : (b && b.length > 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47 ? 'png' : ''));
+
+/** 删除封面照片文件（尽力而为，只删本人 covers/ 下的文件） */
+async function dropCover(fileID, openid) {
+  if (!fileID || !ownCover(fileID, openid)) return;
+  try { await cloud.deleteFile({ fileList: [fileID] }); } catch (e) { /* 忽略 */ }
+}
+
+/**
+ * 设置 / 更换 / 移除封面照片，或只改形状
+ * fileID：新照片（须是本人刚上传到 covers/ 的文件）；'' 移除；不传只改 shape
+ * 白事礼簿不支持封面照片（只能移除）；套餐关闭 features.coverPhoto 时不能新设
+ */
+async function setCoverPhoto(openid, caller, bookId, fileID, shape) {
+  const book = await getBook(openid, String(bookId || ''));
+  if (!book) return err('礼簿不存在');
+  const old = book.coverPhoto && !book.coverPhoto._openid ? book.coverPhoto : null;
+  const sh = shape === undefined ? (old && old.shape) || 'rect' : (shape === 'oval' ? 'oval' : 'rect');
+  if (fileID === '' || fileID === null) { // 移除
+    if (!old) return ok({ coverPhoto: null });
+    await books.doc(book._id).update({ data: { coverPhoto: _.remove() } });
+    await dropCover(old.fileID, openid);
+    return ok({ coverPhoto: null });
+  }
+  if (book.type === 'funeral') return err('白事礼簿不使用封面照片');
+  if (fileID === undefined) { // 只改形状
+    if (!old) return err('请先选择照片');
+    await books.doc(book._id).update({ data: { coverPhoto: _.set({ fileID: old.fileID, shape: sh }) } });
+    return ok({ coverPhoto: { shape: sh } });
+  }
+  fileID = String(fileID);
+  if (!ownCover(fileID, caller)) return err('照片无效，请重新选择');
+  if (old && old.fileID === fileID) { // 同一张：只改形状
+    await books.doc(book._id).update({ data: { coverPhoto: _.set({ fileID, shape: sh }) } });
+    return ok({ coverPhoto: { shape: sh } });
+  }
+  let plan = null;
+  try { plan = await P.planOf(db, openid); } catch (e) { /* 读套餐失败：按开放处理 */ }
+  if (!P.featureOpen(plan && plan.features, 'coverPhoto')) { await dropCover(fileID, caller); return err('封面照片为会员功能，开通后可使用'); }
+  // 格式 / 大小：只收 JPG / PNG（pdfkit 只能嵌入这两种），不合格删掉刚上传的文件
+  let buf = null;
+  try { buf = (await cloud.downloadFile({ fileID })).fileContent; } catch (e) { /* 下面统一提示 */ }
+  if (!buf || !imgKind(buf)) { await dropCover(fileID, caller); return err('照片格式不支持，请换一张 JPG 或 PNG 照片'); }
+  if (buf.length > COVER_MAX) { await dropCover(fileID, caller); return err('照片太大，请换一张小一点的'); }
+  const bad = await S.checkImage(cloud, fileID); // 内容安全（失败放行，违规时 checkImage 已删文件）
+  if (bad) return bad;
+  await books.doc(book._id).update({ data: { coverPhoto: _.set({ fileID, shape: sh }) } });
+  if (old) await dropCover(old.fileID, openid);
+  return ok({ coverPhoto: { shape: sh } });
+}
+
+/** 封面照片的临时链接（供主题页预览；有「管理礼簿」权限者可取，不返回云存储路径） */
+async function coverPhotoUrl(openid, bookId) {
+  const book = await getBook(openid, String(bookId || ''));
+  if (!book || !book.coverPhoto || book.coverPhoto._openid || !book.coverPhoto.fileID) return ok({ url: '', shape: 'rect' });
+  let url = '';
+  try {
+    const r = await cloud.getTempFileURL({ fileList: [book.coverPhoto.fileID] });
+    const f = r.fileList && r.fileList[0];
+    url = f && f.status === 0 ? String(f.tempFileURL || '') : '';
+  } catch (e) { /* 取不到不影响使用 */ }
+  return ok({ url, shape: book.coverPhoto.shape === 'oval' ? 'oval' : 'rect' });
+}
 
 async function getBook(openid, bookId) {
   if (!/^[a-zA-Z0-9_-]{1,64}$/.test(String(bookId || ''))) return null;

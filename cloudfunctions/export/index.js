@@ -153,6 +153,10 @@ exports.main = async (event, context) => {
     const storedBind = book && book.pdfTheme && typeof book.pdfTheme === 'object' ? book.pdfTheme.bind : null;
     let pdfBack = themes.sanitizeBack(event.pdfBack !== undefined ? event.pdfBack : storedBack);
     let pdfBind = themes.sanitizeBind(event.pdfBind !== undefined ? event.pdfBind : storedBind);
+    // 封面纹样（v3.79.0）：传了就采用并记到礼簿，没传沿用已存的（没有存过 = 按事由默认）
+    const storedDeco = book && book.pdfTheme && typeof book.pdfTheme === 'object' ? book.pdfTheme.deco : undefined;
+    const isFuneralBook = !!book && book.type === 'funeral';
+    let pdfDeco = themes.sanitizeDeco(event.pdfDeco !== undefined ? event.pdfDeco : storedDeco, isFuneralBook);
     if (format === 'book' && book && event.pdfTheme !== undefined) {
       const k = String(event.pdfTheme || '');
       let save = { key: k };
@@ -182,16 +186,25 @@ exports.main = async (event, context) => {
       // 尾页 / 装订：传了就采用，没传沿用礼簿已存的（切换预设 / 自定义时不丢）
       if (event.pdfBack !== undefined) pdfBack = themes.sanitizeBack(event.pdfBack);
       if (event.pdfBind !== undefined) pdfBind = themes.sanitizeBind(event.pdfBind);
+      if (event.pdfDeco !== undefined) pdfDeco = themes.sanitizeDeco(event.pdfDeco, isFuneralBook);
       if (storedBack) save.back = pdfBack;
       if (storedBind) save.bind = pdfBind;
       if (event.pdfBack !== undefined) save.back = pdfBack;
       if (event.pdfBind !== undefined) save.bind = pdfBind;
+      if (storedDeco !== undefined || event.pdfDeco !== undefined) save.deco = pdfDeco;
       // 保存到礼簿需要「管理礼簿」权限；没有权限的只用于本次导出
       if (can(ctx, 'books')) {
         await db.collection('books').doc(book._id).update({ data: { pdfTheme: _.set(save) } });
       }
     }
-    const meta = buildMeta(rows, { account, book, startDay, endDay, themeName, pdfThemeKey, pdfCustom, pdfBack, pdfBind, premiumOk });
+    const meta = buildMeta(rows, { account, book, startDay, endDay, themeName, pdfThemeKey, pdfCustom, pdfBack, pdfBind, pdfDeco, premiumOk });
+    if (format === 'book') {
+      stage = '读取封面照片';
+      const ph = await loadCoverPhoto(book, features, meta.funeral);
+      // 存档会长期保存：照片读不到时不静默缺图，让用户稍后重试
+      if (ph.want && !ph.photo && archive) return err('封面照片暂时无法读取，请稍后重试');
+      if (ph.photo) meta.photo = ph.photo;
+    }
 
     let buffer;
     let notice = '';
@@ -393,7 +406,7 @@ function previewTheme(book, event) {
     } else if (k && !themes.isPresetKey(k)) return { error: '主题不存在' };
     key = k;
   }
-  return { key, custom, back: themes.sanitizeBack(event.pdfBack), bind: themes.sanitizeBind(event.pdfBind) };
+  return { key, custom, back: themes.sanitizeBack(event.pdfBack), bind: themes.sanitizeBind(event.pdfBind), deco: themes.sanitizeDeco(event.pdfDeco, book.type === 'funeral') };
 }
 
 /**
@@ -413,10 +426,11 @@ async function bookPreview(event, ctx, OWNER) {
   }
   const th = previewTheme(book, event);
   if (th.error) return err(th.error);
-  let premiumOk = true;
-  try { premiumOk = P.featureOpen((await P.planOf(db, OWNER)).features, 'pdfThemePremium'); } catch (e) { /* 读套餐失败：按开放处理 */ }
+  let premiumOk = true, features = {};
+  try { features = (await P.planOf(db, OWNER)).features; premiumOk = P.featureOpen(features, 'pdfThemePremium'); } catch (e) { /* 读套餐失败：按开放处理 */ }
   const account = (await db.collection('accounts').where({ ownerOpenid: OWNER }).limit(1).get()).data[0] || { accountName: '' };
-  const meta = buildMeta(rows, { account, book, startDay: '', endDay: '', themeName: '', pdfThemeKey: th.key, pdfCustom: th.custom, pdfBack: th.back, pdfBind: th.bind, premiumOk });
+  const meta = buildMeta(rows, { account, book, startDay: '', endDay: '', themeName: '', pdfThemeKey: th.key, pdfCustom: th.custom, pdfBack: th.back, pdfBind: th.bind, pdfDeco: th.deco, premiumOk });
+  { const ph = await loadCoverPhoto(book, features, meta.funeral); if (ph.photo) meta.photo = ph.photo; } // 预览读不到照片只是不放
   meta.preview = true;
   meta.previewSample = sample;
   let stage = '准备字体';
@@ -440,7 +454,24 @@ async function bookPreview(event, ctx, OWNER) {
 }
 
 /** 汇总导出所需的元信息 */
-function buildMeta(rows, { account, book, startDay, endDay, themeName, pdfThemeKey, pdfCustom, pdfBack, pdfBind, premiumOk = true }) {
+/**
+ * 封面照片（v3.79.0）：读礼簿 coverPhoto 的文件（只有 books 云函数写入，已校验归属 / 格式 / 审核）；
+ * 白事、套餐关闭 features.coverPhoto、没有照片时 want=false；want=true 而 photo=null 表示读取失败（存档要报错，普通导出 / 预览只是不放照片）
+ */
+async function loadCoverPhoto(book, features, funeral) {
+  const cp = book && book.coverPhoto && !book.coverPhoto._openid ? book.coverPhoto : null;
+  if (!cp || !cp.fileID || funeral || !P.featureOpen(features, 'coverPhoto')) return { want: false, photo: null };
+  try {
+    const buf = (await cloud.downloadFile({ fileID: cp.fileID })).fileContent;
+    const jpg = buf && buf.length > 8 && buf[0] === 0xff && buf[1] === 0xd8;
+    const png = buf && buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
+    if ((jpg || png) && buf.length <= 4 * 1024 * 1024) return { want: true, photo: { buf, shape: cp.shape === 'oval' ? 'oval' : 'rect' } };
+    console.warn('cover photo unusable', buf && buf.length);
+  } catch (e) { console.warn('cover photo download failed', e && (e.errMsg || e.message)); }
+  return { want: true, photo: null };
+}
+
+function buildMeta(rows, { account, book, startDay, endDay, themeName, pdfThemeKey, pdfCustom, pdfBack, pdfBind, pdfDeco, premiumOk = true }) {
   // 礼簿类型：按礼簿取；未指定礼簿时，仅当全部记录都是白事才按白事处理
   let bookType = book ? book.type : '';
   if (!bookType) bookType = rows.length && rows.every(r => r.bookType === 'funeral') ? 'funeral' : 'other';
@@ -457,6 +488,8 @@ function buildMeta(rows, { account, book, startDay, endDay, themeName, pdfThemeK
     bt: themes.pick(premiumOk, funeral, bookType, pdfThemeKey, pdfCustom), // 传统礼簿主题；没保存过（key 为空）按礼簿类型取默认主题 + 水印（v3.55.0，只在内存里用）
     back: themes.sanitizeBack(premiumOk ? pdfBack : null), // 尾页设置（会员项关闭时用默认）
     bind: themes.sanitizeBind(pdfBind), // 装订：none | single | double
+    deco: themes.decoOf(pdfDeco, bookType), // 封面纹样（v3.79.0，已按事由默认展开；空串不画）
+    photo: null, // 封面照片 { buf, shape }，由 loadCoverPhoto 读取后填入（白事不用）
     startDay, endDay, themeName,
     signers: signersOf(rows), // 封底记账人（只含姓名）
     count: rows.length,
@@ -867,30 +900,193 @@ function drawBack(doc, meta) {
   if (meta.preview) doc.font('sub').fontSize(9).fillColor(c.text).text(`预览（${meta.previewSample ? '示例数据' : '仅前几笔，合计为这几笔'}，非正式礼簿）`, 0, H - 52, { width: W, align: 'center', lineBreak: false });
 }
 
-/** 封面：按主题配色（预设默认红底金色双框；白事浅灰底深灰框） */
+/** 封面照片相框位置（v3.79.0 左图右文）：x、y 为照片区左上角，w 为宽，高 = 页高 - 2y */
+const PHOTO_BOX = { x: 96, y: 96, w: 280 };
+
+/**
+ * 封面照片：圆角矩形 / 椭圆框内居中裁剪（cover），外加金色双线相框；失败（图片损坏等）返回 false，封面按无照片排版
+ * 只在非白事礼簿使用（调用方已判断）
+ */
+function drawPhoto(doc, photo, c) {
+  const { x, y, w } = PHOTO_BOX;
+  const h = BK.height - 2 * y;
+  try {
+    doc.save();
+    if (photo.shape === 'oval') doc.ellipse(x + w / 2, y + h / 2, w / 2, h / 2).clip();
+    else doc.roundedRect(x, y, w, h, 14).clip();
+    doc.image(photo.buf, x, y, { cover: [w, h], align: 'center', valign: 'center' });
+    doc.restore();
+  } catch (e) {
+    try { doc.restore(); } catch (e2) { /* 忽略 */ }
+    console.warn('cover photo draw failed', e && e.message);
+    return false;
+  }
+  doc.save();
+  doc.strokeColor(c.border);
+  if (photo.shape === 'oval') {
+    doc.lineWidth(2.5).ellipse(x + w / 2, y + h / 2, w / 2 + 5, h / 2 + 5).stroke();
+    doc.lineWidth(1).ellipse(x + w / 2, y + h / 2, w / 2 + 10, h / 2 + 10).stroke();
+  } else {
+    doc.lineWidth(2.5).roundedRect(x - 5, y - 5, w + 10, h + 10, 18).stroke();
+    doc.lineWidth(1).roundedRect(x - 10, y - 10, w + 20, h + 20, 22).stroke();
+  }
+  doc.restore();
+  return true;
+}
+
+/** 文字超过 maxW 时从末尾截断并加省略号（封面照片版文字栏较窄时用） */
+function fitText(doc, t, maxW) {
+  let s = String(t);
+  if (doc.widthOfString(s) <= maxW) return s;
+  while (s.length > 1 && doc.widthOfString(s + '…') > maxW) s = s.slice(0, -1);
+  return s + '…';
+}
+
+/** 五角星（围绕原点，外半径 r） */
+function starPoints(r) {
+  const pts = [];
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + i * Math.PI / 5;
+    const rr = i % 2 ? r * 0.45 : r;
+    pts.push([Math.cos(a) * rr, Math.sin(a) * rr]);
+  }
+  return pts;
+}
+
+/**
+ * 封面纹样（v3.79.0，纯矢量）：band_huiwen 回纹带 / band_wanzi 万字锦带横跨封面上下；
+ * xi 喜字团 / shou 团寿 / xiangyun 祥云 / lotus 莲花 / kids 月亮星星（满月）/ fangsheng 方胜 / pine 松枝 / chrys 白菊 是标题上方的小图案（约 66pt 见方，中心在 cx, cy）
+ */
+function drawDeco(doc, key, cx, cy, c, W, H) {
+  const col = c.border;
+  doc.save();
+  doc.strokeColor(col).fillColor(col).lineWidth(1.2).lineJoin('round').lineCap('round');
+  if (key === 'band_huiwen') {
+    const n = Math.floor((W - 200) / 24), x0 = (W - n * 24) / 2;
+    [48, H - 50].forEach(y => {
+      for (let i = 0; i < n; i++) {
+        const x = x0 + i * 24;
+        doc.moveTo(x, y + 12).lineTo(x, y).lineTo(x + 18, y).lineTo(x + 18, y + 9).lineTo(x + 6, y + 9).lineTo(x + 6, y + 4).lineTo(x + 12, y + 4).stroke();
+      }
+      doc.lineWidth(0.8).moveTo(x0, y - 4).lineTo(x0 + n * 24, y - 4).stroke();
+      doc.lineWidth(1.2).moveTo(x0, y + 12).lineTo(x0 + n * 24, y + 12).stroke();
+    });
+  } else if (key === 'band_wanzi') {
+    const n = Math.floor((W - 200) / 18), x0 = (W - n * 18) / 2, s = 5;
+    [48, H - 50].forEach(y => {
+      for (let i = 0; i < n; i++) {
+        const mx = x0 + i * 18 + 9, my = y + 6;
+        doc.moveTo(mx - s, my).lineTo(mx + s, my).stroke();
+        doc.moveTo(mx, my - s).lineTo(mx, my + s).stroke();
+        doc.moveTo(mx, my - s).lineTo(mx + s, my - s).stroke();
+        doc.moveTo(mx + s, my).lineTo(mx + s, my + s).stroke();
+        doc.moveTo(mx, my + s).lineTo(mx - s, my + s).stroke();
+        doc.moveTo(mx - s, my).lineTo(mx - s, my - s).stroke();
+      }
+      doc.lineWidth(0.8).moveTo(x0, y - 3).lineTo(x0 + n * 18, y - 3).stroke();
+      doc.moveTo(x0, y + 14).lineTo(x0 + n * 18, y + 14).stroke();
+    });
+  } else {
+    doc.translate(cx, cy);
+    if (key === 'shou' || key === 'xi') {
+      if (key === 'shou') {
+        doc.lineWidth(1.6).circle(0, 0, 30).stroke();
+        doc.lineWidth(0.8).circle(0, 0, 25).stroke();
+      } else {
+        doc.lineWidth(1.6).polygon([0, -33], [33, 0], [0, 33], [-33, 0]).stroke();
+        doc.lineWidth(0.8).circle(0, 0, 23).stroke();
+      }
+      doc.font('sub').fontSize(30).fillColor(col).text(key === 'shou' ? '寿' : '喜', -30, -16, { width: 60, align: 'center', lineBreak: false });
+    } else if (key === 'xiangyun') {
+      doc.lineWidth(1.6).path('M -30 14 C -44 14 -44 -6 -26 -4 C -26 -20 -4 -22 0 -12 C 6 -24 28 -18 26 -4 C 44 -6 44 14 30 14 Z').stroke();
+      doc.lineWidth(0.9).path('M -18 6 C -22 -2 -12 -4 -10 2').stroke();
+      doc.path('M 6 2 C 4 -6 16 -8 18 -2').stroke();
+      doc.lineWidth(1.2).moveTo(-20, 22).lineTo(20, 22).stroke();
+    } else if (key === 'lotus') {
+      for (let i = 0; i < 8; i++) {
+        doc.save().rotate(i * 45).lineWidth(1.1).path('M 0 -4 C 8 -12 8 -24 0 -31 C -8 -24 -8 -12 0 -4 Z').stroke().restore();
+      }
+      for (let i = 0; i < 8; i++) {
+        doc.save().rotate(22.5 + i * 45).lineWidth(0.8).path('M 0 -4 C 4 -9 4 -16 0 -20 C -4 -16 -4 -9 0 -4 Z').stroke().restore();
+      }
+      doc.circle(0, 0, 3.5).fill(col);
+    } else if (key === 'kids') {
+      doc.circle(-14, -4, 15).fill(col);
+      doc.circle(-8, -8, 13).fill(c.bg);
+      doc.save().translate(14, -16).polygon(...starPoints(8)).fill(col).restore();
+      doc.save().translate(26, 0).polygon(...starPoints(5.5)).fill(col).restore();
+      doc.save().translate(2, 4).polygon(...starPoints(4)).fill(col).restore();
+      doc.lineWidth(1.3).path('M -22 26 C -30 26 -30 16 -20 17 C -20 8 -4 8 -2 16 C 6 14 10 24 2 26 Z').stroke();
+    } else if (key === 'fangsheng') {
+      [-10, 10].forEach(dx => {
+        doc.lineWidth(1.6).polygon([dx, -22], [dx + 22, 0], [dx, 22], [dx - 22, 0]).stroke();
+        doc.lineWidth(0.8).polygon([dx, -12], [dx + 12, 0], [dx, 12], [dx - 12, 0]).stroke();
+      });
+    } else if (key === 'pine') {
+      const B = [[-32, 16], [-12, 12], [10, 2], [32, -14]]; // 主枝的三次贝塞尔控制点
+      const at = t => {
+        const u = 1 - t;
+        const p = i => u * u * u * B[0][i] + 3 * u * u * t * B[1][i] + 3 * u * t * t * B[2][i] + t * t * t * B[3][i];
+        const d = i => 3 * u * u * (B[1][i] - B[0][i]) + 6 * u * t * (B[2][i] - B[1][i]) + 3 * t * t * (B[3][i] - B[2][i]);
+        return { x: p(0), y: p(1), a: Math.atan2(d(1), d(0)) };
+      };
+      doc.scale(1.3);
+      doc.lineWidth(1.3).path('M -32 16 C -12 12 10 2 32 -14').stroke();
+      doc.lineWidth(0.8);
+      for (let i = 0; i <= 6; i++) {
+        const p = at(i / 6);
+        [-0.9, -0.45, 0.45, 0.9].forEach(da => {
+          const a = p.a + da;
+          doc.moveTo(p.x, p.y).lineTo(p.x + Math.cos(a) * 12, p.y + Math.sin(a) * 12).stroke();
+        });
+      }
+    } else if (key === 'chrys') {
+      for (let i = 0; i < 16; i++) {
+        doc.save().rotate(i * 22.5).lineWidth(0.9).path('M 0 -5 C 4 -12 4 -22 0 -29 C -4 -22 -4 -12 0 -5 Z').stroke().restore();
+      }
+      for (let i = 0; i < 12; i++) {
+        doc.save().rotate(7 + i * 30).lineWidth(0.8).path('M 0 -3 C 3 -7 3 -13 0 -17 C -3 -13 -3 -7 0 -3 Z').stroke().restore();
+      }
+      doc.circle(0, 0, 3.5).fill(col);
+    }
+  }
+  doc.restore();
+}
+
+/** 封面：按主题配色（预设默认红底金色双框；白事浅灰底深灰框）；有封面照片时左图右文，没有照片与以前一致 */
 function drawCover(doc, meta) {
   const W = BK.width, H = BK.height;
   const bt = meta.bt;
   const c = coverColors(bt);
   drawFrame(doc, bt, c);
 
+  // 封面照片（白事不用；损坏的图片画不出来时按无照片排版）
+  const withPhoto = !!(meta.photo && !meta.funeral && drawPhoto(doc, meta.photo, c));
+  // 文字栏：没有照片时占满页宽（与以前完全一致），有照片时在照片右侧居中
+  const colX = withPhoto ? PHOTO_BOX.x + PHOTO_BOX.w + 36 : 0;
+  const colW = withPhoto ? W - colX - 64 : W;
+  const cx = colX + colW / 2;
+  if (meta.deco) drawDeco(doc, meta.deco, cx, 112, c, W, H);
+
   // 主标题：礼簿名，过长自动缩小字号
   const main = bt.title || meta.bookName || (meta.funeral ? '奠仪簿' : '礼簿'); // 自定义封面标题优先
   const suffix = meta.funeral ? '奠仪簿' : '礼簿';
   const showSuffix = !bt.title && !!meta.bookName && !main.endsWith(suffix);
-  const maxW = W - 160;
+  const maxW = withPhoto ? colW - 24 : W - 160;
   let size = 60;
   doc.font('cn').fontSize(size);
-  while (size > 20 && doc.widthOfString(main) > maxW) { size -= 2; doc.fontSize(size); }
+  const minSize = withPhoto ? 16 : 20;
+  while (size > minSize && doc.widthOfString(main) > maxW) { size -= 2; doc.fontSize(size); }
+  const shownMain = doc.widthOfString(main) > maxW ? fitText(doc, main, maxW) : main; // 缩到最小仍放不下时截断加省略号（以前会折行与下面的字重叠）
   let y = showSuffix ? 170 : 200;
-  doc.fillColor(c.title).text(main, 0, y, { width: W, align: 'center', lineBreak: false });
+  doc.fillColor(c.title).text(shownMain, colX, y, { width: colW, align: 'center', lineBreak: false });
   y += size * 1.5;
   if (showSuffix) {
-    doc.fontSize(30).fillColor(c.title).text(suffix.split('').join(' '), 0, y, { width: W, align: 'center', lineBreak: false });
+    doc.fontSize(30).fillColor(c.title).text(suffix.split('').join(' '), colX, y, { width: colW, align: 'center', lineBreak: false });
     y += 56;
   }
   // 分隔短线
-  doc.lineWidth(1).moveTo(W / 2 - 80, y).lineTo(W / 2 + 80, y).stroke(c.border);
+  doc.lineWidth(1).moveTo(cx - 80, y).lineTo(cx + 80, y).stroke(c.border);
   y += 22;
 
   const info = [];
@@ -899,10 +1095,10 @@ function drawCover(doc, meta) {
   else if (meta.startDay && meta.endDay) info.push(`日期：${meta.startDay} 至 ${meta.endDay}`);
   if (meta.location) info.push(`地点：${meta.location}`);
   doc.font('sub').fontSize(16).fillColor(c.text);
-  info.forEach(t => { doc.text(t, 0, y, { width: W, align: 'center', lineBreak: false }); y += 26; });
+  info.forEach(t => { doc.text(withPhoto ? fitText(doc, t, colW - 16) : t, colX, y, { width: colW, align: 'center', lineBreak: false }); y += 26; });
 
-  if (bt.footer) doc.font('cn').fontSize(20).fillColor(c.title).text(bt.footer.split('').join(' '), 0, H - 110, { width: W, align: 'center', lineBreak: false });
-  doc.font('sub').fontSize(10).fillColor(c.text).text('慧礼记', 0, H - 70, { width: W, align: 'center', lineBreak: false });
+  if (bt.footer) doc.font('cn').fontSize(20).fillColor(c.title).text(bt.footer.split('').join(' '), colX, H - 110, { width: colW, align: 'center', lineBreak: false });
+  doc.font('sub').fontSize(10).fillColor(c.text).text('慧礼记', colX, H - 70, { width: colW, align: 'center', lineBreak: false });
 }
 
 /** 水印字：居中的极淡大字（mark 为空不画） */

@@ -7,6 +7,7 @@ const perm = require('../../utils/perm.js');
 const pt = require('./pdftheme.js');
 const plan = require('../../utils/plan.js');
 const vip = require('../../utils/vip.js');
+const imgc = require('../../utils/imgcompress.js');
 
 const VIP_TIP = '该功能为会员功能，开通后可使用';
 
@@ -27,6 +28,14 @@ Page({
     custErr: '',
     back: Object.assign({}, pt.DEFAULT_BACK), // 尾页设置
     bind: 'none',                              // 装订：none | single | double
+    deco: '',                // 封面纹样（'' 按事由默认；见 pdftheme.DECOS）
+    decos: pt.DECOS,
+    coverSet: false,         // 本礼簿是否已设封面照片
+    coverUrl: '',            // 封面照片预览地址（临时链接 / 刚选的本地图）
+    coverShape: 'rect',      // 相框形状：rect | oval
+    shapes: pt.COVER_SHAPES,
+    photoOk: true,           // 套餐是否开放封面照片（features.coverPhoto；缺项视为开放）
+    photoBusy: false,        // 正在上传 / 保存照片
     binds: pt.BINDS,
     bindTip: pt.BIND_TIPS.none,
     exporting: false,
@@ -63,6 +72,7 @@ Page({
     try {
       const [{ list }] = await Promise.all([req.bookList(), getApp().ensureRole(), plan.load()]);
       const premiumOk = plan.has('pdfThemePremium');
+      const photoOk = plan.has('coverPhoto');
       const book = list.find(b => b._id === this.data.id);
       if (!book) {
         wx.showToast({ title: '礼簿不存在', icon: 'none' });
@@ -83,7 +93,11 @@ Page({
           : `按「${lb}」默认选了「${def.name}」${def.mark ? '，水印「' + def.mark + '」' : '，无水印'}，可更换或修改`;
       }
       this.setData({
-        premiumOk,
+        premiumOk, photoOk,
+        deco: book.pdfDeco || '',
+        decos: isFuneral ? pt.FUNERAL_DECOS : pt.DECOS,
+        coverSet: !!book.coverPhoto,
+        coverShape: (book.coverPhoto && book.coverPhoto.shape) || 'rect',
         presets: pt.LIST.map(p => ({ ...p, locked: !premiumOk && !pt.FREE_KEYS.includes(p.key) })),
         fonts: pt.FONTS.map(f => ({ ...f, locked: !premiumOk && f.k !== 'sans' })),
         book, isFuneral, defTip,
@@ -98,9 +112,18 @@ Page({
       });
       this.refresh();
       this.loadRows();
+      if (book.coverPhoto && !isFuneral) this.loadCover();
     } catch (e) { /* toast 已提示 */ } finally {
       this.setData({ loading: false });
     }
+  },
+
+  /** 封面照片预览的临时链接（取不到不影响使用，只是示意图里不显示照片） */
+  async loadCover() {
+    try {
+      const r = await req.bookCoverUrl(this.data.id);
+      if (r && r.url) { this.setData({ coverUrl: r.url, coverShape: r.shape || 'rect' }); this.refresh(); }
+    } catch (e) { /* 忽略 */ }
   },
 
   /** 内页示意用的真实前几位宾客（与「预览」PDF 同一份数据）；失败 / 没有数据用示例，不打扰用户 */
@@ -132,7 +155,11 @@ Page({
       if (d.themeKey === 'custom') err = pt.checkCustom(e);
     }
     const book = d.book || {};
+    const deco = pt.decoOf(d.deco, book.type);
+    const photo = !d.isFuneral && d.coverSet && d.coverUrl ? d.coverUrl : '';
     const pv = colors ? Object.assign({}, colors, {
+      deco, decoTxt: pt.DECO_TXT[deco] || '', band: pt.DECO_BAND[deco] || '',
+      photo, shape: d.coverShape,
       title: e.title || book.name || '', footer: e.footer || '', mark: e.mark || '',
       corners: this.cornersOf(e.pattern),
       info: [book.hostName ? `主家：${book.hostName}` : '', book.date ? `日期：${book.date}` : ''].filter(Boolean)
@@ -261,10 +288,112 @@ Page({
     this.refresh();
   },
 
+  onDeco(e) {
+    this.setData({ deco: e.currentTarget.dataset.k });
+    this.refresh();
+  },
+
+  onShape(e) {
+    const k = e.currentTarget.dataset.k;
+    if (k === this.data.coverShape) return;
+    this.setData({ coverShape: k });
+    this.refresh();
+    if (this.data.coverSet) req.bookSetCover(this.data.id, undefined, k).catch(() => {}); // 只改形状，立即保存
+  },
+
+  /** 首次上传前的隐私提示（以后不再弹） */
+  photoTip() {
+    let seen = false;
+    try { seen = !!wx.getStorageSync('coverPhotoTip'); } catch (e) { /* 忽略 */ }
+    if (seen) return Promise.resolve(true);
+    return new Promise(resolve => {
+      wx.showModal({
+        title: '封面照片提示',
+        content: '照片会印在导出的传统礼簿 PDF 封面上。PDF 转发给别人后，对方也能看到这张照片，请确认照片里的人同意。',
+        confirmText: '继续', cancelText: '取消',
+        success: r => {
+          if (r.confirm) { try { wx.setStorageSync('coverPhotoTip', 1); } catch (e) { /* 忽略 */ } }
+          resolve(!!r.confirm);
+        },
+        fail: () => resolve(false)
+      });
+    });
+  },
+
+  /** 选择 / 更换封面照片：压缩 -> 上传 covers/ -> 云端校验、审核并保存（旧照片由云端删除） */
+  async onPickPhoto() {
+    const d = this.data;
+    if (d.photoBusy || d.isFuneral || !d.canSave) return;
+    if (!d.photoOk && !d.coverSet) return vip.explain('封面照片', VIP_TIP);
+    if (!(await this.photoTip())) return;
+    wx.chooseMedia({
+      count: 1,
+      mediaType: ['image'],
+      sizeType: ['compressed'],
+      success: async res => {
+        const f = res.tempFiles[0];
+        this.setData({ photoBusy: true });
+        wx.showLoading({ title: '正在上传…', mask: true });
+        let fileID = '';
+        try {
+          const path = await imgc.cover(f.tempFilePath, f.size);
+          if (!path) { wx.hideLoading(); wx.showToast({ title: '照片太大，请换一张', icon: 'none' }); return; }
+          const up = await new Promise((resolve, reject) => wx.cloud.uploadFile({
+            cloudPath: `covers/book-${getApp().globalData.openid}-${Date.now()}.jpg`,
+            filePath: path, success: resolve, fail: reject
+          }));
+          fileID = up.fileID;
+          await req.bookSetCover(d.id, fileID, d.coverShape);
+          wx.hideLoading();
+          this.setData({ coverSet: true, coverUrl: path });
+          this.refresh();
+          this.warnSmall(path);
+        } catch (e) {
+          wx.hideLoading();
+          if (fileID) wx.cloud.deleteFile({ fileList: [fileID] }).catch(() => {}); // 没保存成功的文件尽量删掉
+          if (!fileID) wx.showToast({ title: '上传失败', icon: 'none' });
+        } finally {
+          this.setData({ photoBusy: false });
+        }
+      },
+      fail: err => {
+        if (String((err && err.errMsg) || '').includes('cancel')) return;
+        wx.showToast({ title: '无法选择图片', icon: 'none' });
+      }
+    });
+  },
+
+  /** 照片太小打印会模糊：短边不足 600 像素时提醒（不拦截） */
+  warnSmall(path) {
+    wx.getImageInfo({
+      src: path,
+      success: r => { if (Math.min(r.width, r.height) < 600) wx.showToast({ title: '照片较小，打印可能不清晰', icon: 'none' }); }
+    });
+  },
+
+  onRemovePhoto() {
+    const d = this.data;
+    if (d.photoBusy || !d.coverSet) return;
+    wx.showModal({
+      title: '移除照片',
+      content: '移除后封面不再显示照片，云端的照片文件也会一并删除。',
+      confirmText: '移除',
+      success: async r => {
+        if (!r.confirm) return;
+        this.setData({ photoBusy: true });
+        try {
+          await req.bookSetCover(d.id, '');
+          this.setData({ coverSet: false, coverUrl: '' });
+          this.refresh();
+        } catch (e) { /* toast 已提示 */ } finally { this.setData({ photoBusy: false }); }
+      }
+    });
+  },
+
   /** 导出 / 预览共用的主题参数；自定义配色不合法时提示并返回 null */
   buildParams() {
     const d = this.data;
-    const params = { bookId: d.id, pdfBack: d.back, pdfBind: d.bind };
+    const params = { bookId: d.id, pdfBack: d.back, pdfBind: d.bind, pdfDeco: d.deco };
     if (d.isFuneral) {
       params.pdfTheme = 'custom';
       params.pdfCustom = d.fun;

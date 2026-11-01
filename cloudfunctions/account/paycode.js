@@ -8,4 +8,13 @@ function ownPayCode(fileID, openid) {
   return !!esc && new RegExp(`^cloud://[^/]+/paycodes/(book-)?${esc}-\\d+\\.(png|jpe?g|webp)$`, 'i').test(String(fileID || ''));
 }
 
-module.exports = { ownPayCode };
+/**
+ * 是否为该用户本人上传到 covers/ 目录的封面照片（v3.79.0，pages/booktheme 上传路径 covers/book-{openid}-{时间}.jpg）：
+ * 只认本人刚上传的文件，不能引用别人的图片
+ */
+function ownCover(fileID, openid) {
+  const esc = String(openid || '').replace(/[^a-zA-Z0-9_-]/g, '');
+  return !!esc && new RegExp(`^cloud://[^/]+/covers/book-${esc}-\\d+\\.(png|jpe?g)$`, 'i').test(String(fileID || ''));
+}
+
+module.exports = { ownPayCode, ownCover };

@@ -40,6 +40,23 @@
 .pc-brand { position: absolute; bottom: 28rpx; left: 0; right: 0; text-align: center; font-size: 18rpx; }
 .pc-sign { width: 80%; margin-top: 24rpx; font-size: 20rpx; text-align: center; }
 .pc-sign view { display: inline-block; max-width: 100%; min-width: 60%; padding: 0 12rpx; border-bottom: 2rpx solid; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* v3.79.0 封面示意：照片相框（左）、纹样字符、带状纹样 */
+.pc-photo { position: absolute; left: 7%; top: 13%; bottom: 13%; width: 34%; border: 3rpx solid; border-radius: 12rpx; overflow: hidden; box-sizing: border-box; z-index: 2; }
+.pc-photo.oval { border-radius: 50%; }
+.pc-photo image { width: 100%; height: 100%; display: block; }
+.pc-mid.has-photo { padding-left: 46%; padding-right: 4%; }
+.pc-deco { position: absolute; left: 0; right: 0; top: 22rpx; text-align: center; font-size: 40rpx; line-height: 48rpx; z-index: 2; }
+.pc-deco.has-photo { left: 46%; right: 4%; }
+.pc-band { position: absolute; left: 12%; right: 12%; text-align: center; font-size: 16rpx; line-height: 20rpx; letter-spacing: 2rpx; white-space: nowrap; overflow: hidden; z-index: 2; }
+.pc-band-t { top: 16rpx; }
+.pc-band-b { bottom: 16rpx; }
+.pc-foot.has-photo, .pc-brand.has-photo { left: 46%; right: 4%; }
+.photo-row { display: flex; flex-direction: row; align-items: center; }
+.photo-th { width: 150rpx; height: 200rpx; border: 2rpx solid var(--border); border-radius: 12rpx; overflow: hidden; background: var(--fill); color: var(--text-3); font-size: 24rpx; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-sizing: border-box; }
+.photo-th.oval { border-radius: 50%; }
+.photo-th image { width: 100%; height: 100%; display: block; }
+.photo-btns { flex: 1; margin-left: 24rpx; }
+button.photo-btn.btn-outline:not(.btn):not([size=mini]) { width: 100%; margin-bottom: 16rpx; }
 .pc-none { display: flex; align-items: center; justify-content: center; color: var(--text-3); font-size: 28rpx; background: var(--fill); border-color: var(--border); }
 /* 内页：右起 12 列，姓名 | 大写金额 | 小写；装订边用一侧斜纹示意 */
 .pg { background: #fff; }

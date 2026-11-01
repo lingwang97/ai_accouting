@@ -40,6 +40,25 @@ const DEFAULT_CUSTOM = { main: '#0B3D6B', accent: '#F5D76E', font: 'serif', patt
 // 白事：颜色固定素灰（不可改）；角饰只有 无 / 双线 / 直角，水印只有 无 / 奠；落款有预设，也可自己写
 const FUNERAL_PATTERNS = [{ k: 'none', n: '无' }, { k: 'double', n: '双线' }, { k: 'line', n: '直角' }];
 const FUNERAL_MARKS = [{ k: '', n: '无' }, { k: '奠', n: '奠' }];
+// v3.79.0 封面纹样（与云函数 export/themes.js 的 DECOS / FUNERAL_DECOS / DECO_DEFAULTS 一致，tests 有比对）：'' = 按事由默认
+const DECOS = [
+  { k: '', n: '按事由' }, { k: 'none', n: '无' }, { k: 'band_huiwen', n: '回纹带' }, { k: 'band_wanzi', n: '万字锦' },
+  { k: 'xi', n: '喜字' }, { k: 'shou', n: '团寿' }, { k: 'xiangyun', n: '祥云' }, { k: 'lotus', n: '莲花' }, { k: 'kids', n: '月星' }, { k: 'fangsheng', n: '方胜' }
+];
+const FUNERAL_DECOS = [{ k: '', n: '默认' }, { k: 'none', n: '无' }, { k: 'pine', n: '松枝' }, { k: 'chrys', n: '白菊' }];
+const DECO_DEFAULTS = { wedding: 'xi', birthday: 'shou', baby: 'kids', house: 'fangsheng', funeral: 'none', other: 'band_huiwen' };
+// 示意图用字符近似（实际为矢量图形）
+const DECO_TXT = { xi: '喜', shou: '寿', xiangyun: '☁', lotus: '✿', kids: '☾★', fangsheng: '◇◇', pine: '松', chrys: '❀' };
+const DECO_BAND = { band_huiwen: '回回回回回回回回', band_wanzi: '卍卍卍卍卍卍卍卍' };
+/** 最终纹样 key（'' 取事由默认，none 返回 ''）；与云函数 themes.decoOf 一致 */
+function decoOf(v, bookType) {
+  const funeral = bookType === 'funeral';
+  const ok = (funeral ? FUNERAL_DECOS : DECOS).some(x => x.k === v);
+  const k = (ok ? v : '') || DECO_DEFAULTS[bookType] || DECO_DEFAULTS.other;
+  return k === 'none' ? '' : k;
+}
+const COVER_SHAPES = [{ k: 'rect', n: '圆角方框' }, { k: 'oval', n: '椭圆' }];
+
 const FUNERAL_FOOTERS = ['沉痛哀悼', '深切缅怀', '音容宛在', '永远怀念', '千古'];
 const DEFAULT_FUNERAL = { font: 'sans', pattern: 'none', mark: '', footer: '', title: '' };
 const GREY = { main: '#555555', accent: '#333333' };
@@ -156,6 +175,7 @@ module.exports = {
   SAMPLE, BACK_FOOTER, CORNER_CHARS, amountUpper,
   TYPE_DEFAULTS, TYPE_LABELS, typeDefault, defaultSelection,
   LIST, DEFAULT_KEY, FREE_KEYS, FONTS, PATTERNS, MARKS, MAIN_COLORS, ACCENT_COLORS, DEFAULT_CUSTOM,
+  DECOS, FUNERAL_DECOS, DECO_DEFAULTS, DECO_TXT, DECO_BAND, decoOf, COVER_SHAPES,
   FUNERAL_PATTERNS, FUNERAL_MARKS, FUNERAL_FOOTERS, DEFAULT_FUNERAL, GREY, DEFAULT_BACK, BINDS, BIND_TIPS,
   checkCustom, previewOf, expand, funeralPreview
 };

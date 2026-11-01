@@ -14,13 +14,17 @@
             <view class="pc-cn pc-bl" style="color:{{pv.border}}">{{pv.corners[2]}}</view>
             <view class="pc-cn pc-br" style="color:{{pv.border}}">{{pv.corners[3]}}</view>
           </block>
-          <view class="pc-mid">
+          <view class="pc-band pc-band-t" wx:if="{{pv.band}}" style="color:{{pv.border}}">{{pv.band}}</view>
+          <view class="pc-band pc-band-b" wx:if="{{pv.band}}" style="color:{{pv.border}}">{{pv.band}}</view>
+          <view class="pc-photo {{pv.shape === 'oval' ? 'oval' : ''}}" wx:if="{{pv.photo}}" style="border-color:{{pv.border}}"><image src="{{pv.photo}}" mode="aspectFill" /></view>
+          <view class="pc-deco {{pv.photo ? 'has-photo' : ''}}" wx:if="{{pv.decoTxt}}" style="color:{{pv.border}}">{{pv.decoTxt}}</view>
+          <view class="pc-mid {{pv.photo ? 'has-photo' : ''}}">
             <view class="pc-title" style="color:{{pv.border}}">{{pv.title}}</view>
             <view class="pc-line" style="background:{{pv.border}}"></view>
             <view class="pc-sm" wx:for="{{pv.info}}" wx:key="*this">{{item}}</view>
           </view>
-          <view class="pc-foot" style="color:{{pv.border}}" wx:if="{{pv.footer}}">{{pv.footer}}</view>
-          <view class="pc-brand">慧礼记</view>
+          <view class="pc-foot {{pv.photo ? 'has-photo' : ''}}" style="color:{{pv.border}}" wx:if="{{pv.footer}}">{{pv.footer}}</view>
+          <view class="pc-brand {{pv.photo ? 'has-photo' : ''}}">慧礼记</view>
         </view>
       </swiper-item>
       <!-- 内页（右起，本礼簿前几位宾客） -->
@@ -135,6 +139,35 @@
       </view>
       <input class="input" cursor-spacing="120" adjust-position="{{true}}" bindfocus="onKbOn" bindblur="onKbOff" value="{{fun.footer}}" maxlength="8" placeholder="也可以自己写（8 字以内）" data-f="footer" bindinput="onFunInput" />
     </view>
+
+    <!-- 封面纹样（v3.79.0）：矢量图案，导出时画在封面上；按事由有默认 -->
+    <view class="card cust">
+      <view class="section-title">封面纹样</view>
+      <view class="chips"><view wx:for="{{decos}}" wx:key="k" class="chip {{deco === item.k ? 'on' : ''}}" data-k="{{item.k}}" bindtap="onDeco">{{item.n}}</view></view>
+      <view class="muted tip" wx:if="{{isFuneral}}">白事封面只提供素雅的松枝、白菊线条</view>
+      <view class="muted tip" wx:else>「按事由」：喜事用喜字、寿宴用团寿、满月用月星、乔迁用方胜、其他用回纹带</view>
+    </view>
+
+    <!-- 封面照片（白事不使用）：框内居中裁剪，左图右文 -->
+    <view class="card cust" wx:if="{{!isFuneral && canSave}}">
+      <view class="section-title">封面照片{{photoOk ? '' : '（会员功能）'}}</view>
+      <view class="photo-row">
+        <view class="photo-th {{coverShape === 'oval' ? 'oval' : ''}}">
+          <image wx:if="{{coverSet && coverUrl}}" src="{{coverUrl}}" mode="aspectFill" />
+          <text wx:else>{{coverSet ? '已设置' : '无'}}</text>
+        </view>
+        <view class="photo-btns">
+          <button class="btn-outline photo-btn" disabled="{{photoBusy}}" bindtap="onPickPhoto">{{coverSet ? '更换照片' : '选择照片'}}</button>
+          <button class="btn-outline photo-btn" wx:if="{{coverSet}}" disabled="{{photoBusy}}" bindtap="onRemovePhoto">移除</button>
+        </view>
+      </view>
+      <block wx:if="{{coverSet}}">
+        <view class="cust-lb">相框形状</view>
+        <view class="chips"><view wx:for="{{shapes}}" wx:key="k" class="chip {{coverShape === item.k ? 'on' : ''}}" data-k="{{item.k}}" bindtap="onShape">{{item.n}}</view></view>
+      </block>
+      <view class="muted tip">照片会印在导出 PDF 的封面上（左图右文），自动居中裁剪；建议竖版、短边不低于 600 像素。选好后立即保存到本礼簿，PDF 转发后他人可见，请先征得照片里的人同意。</view>
+    </view>
+    <view class="muted tip" wx:if="{{isFuneral}}">白事礼簿封面不使用照片</view>
 
     <!-- 尾页与装订 -->
     <view class="card cust">

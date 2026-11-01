@@ -136,11 +136,13 @@ async function resumeStuck(db, limit) {
   return n;
 }
 
-/** 删除时登记的文件：存档 PDF、本人上传的本场收款码、各版本礼簿码 */
+/** 删除时登记的文件：存档 PDF、本人上传的本场收款码、封面照片、各版本礼簿码 */
 function filesOf(book, account, ownPayCode) {
   const files = [];
   if (book.archivePdf && book.archivePdf.fileID) files.push(book.archivePdf.fileID);
   if (ownPayCode(book.payCodeFileID, book.ownerOpenid)) files.push(book.payCodeFileID);
+  // 封面照片（v3.79.0）：只删 covers/ 目录下的文件（设置时已校验归属）
+  if (book.coverPhoto && /^cloud:\/\/[^/]+\/covers\//.test(String(book.coverPhoto.fileID || ''))) files.push(book.coverPhoto.fileID);
   const prefix = account && account.payCodeFileID ? account.payCodeFileID.split('/paycodes/')[0] : '';
   if (prefix) {
     ENVS.forEach(env => files.push(`${prefix}/qrcodes/${book._id}-${env}.png`));

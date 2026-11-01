@@ -24,6 +24,26 @@ const FUNERAL_PATTERNS = ['none', 'double', 'line'];
 const FUNERAL_MARKS = ['', '奠'];
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
+// v3.79.0 封面纹样（纯矢量，index.js drawDeco 绘制）：'' 表示按事由默认，'none' 不画
+// band_huiwen 回纹带 / band_wanzi 万字锦带：封面上下各一条；其余为封面标题上方的小图案
+const DECOS = ['', 'none', 'band_huiwen', 'band_wanzi', 'xi', 'shou', 'xiangyun', 'lotus', 'kids', 'fangsheng'];
+const FUNERAL_DECOS = ['', 'none', 'pine', 'chrys']; // 白事只有松枝 / 白菊（素雅，灰黑线条）
+const DECO_DEFAULTS = { wedding: 'xi', birthday: 'shou', baby: 'kids', house: 'fangsheng', funeral: 'none', other: 'band_huiwen' };
+/** 校验封面纹样：非法值回落 ''（按事由默认）；白事只认松枝 / 白菊 / 无 */
+function sanitizeDeco(v, funeral) {
+  const k = String(v === undefined || v === null ? '' : v);
+  return (funeral ? FUNERAL_DECOS : DECOS).includes(k) ? k : '';
+}
+/** 最终纹样：'' 取事由默认；'none' 或没有返回 '' */
+function decoOf(v, bookType) {
+  const funeral = bookType === 'funeral';
+  const k = sanitizeDeco(v, funeral) || DECO_DEFAULTS[bookType] || DECO_DEFAULTS.other;
+  return k === 'none' ? '' : k;
+}
+// 封面照片形状：圆角矩形 / 椭圆
+const PHOTO_SHAPES = ['rect', 'oval'];
+const sanitizeShape = v => (PHOTO_SHAPES.includes(v) ? v : 'rect');
+
 function lum(hex) {
   const n = parseInt(hex.slice(1), 16);
   const ch = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
@@ -175,4 +195,4 @@ function pick(premiumOk, funeral, bookType, key, custom) {
   return premiumOk ? bt : freeOnly(bt, funeral, bookType);
 }
 
-module.exports = { pick, FREE_KEYS, premiumUsed, freeOnly, isDefaultBack, PRESETS, DEFAULT_KEY, TYPE_DEFAULTS, typeDefault, resolveDefault, resolve, isPresetKey, sanitizeCustom, sanitizeFuneral, sanitizeBack, sanitizeBind, DEFAULT_BACK };
+module.exports = { DECOS, FUNERAL_DECOS, DECO_DEFAULTS, sanitizeDeco, decoOf, PHOTO_SHAPES, sanitizeShape, pick, FREE_KEYS, premiumUsed, freeOnly, isDefaultBack, PRESETS, DEFAULT_KEY, TYPE_DEFAULTS, typeDefault, resolveDefault, resolve, isPresetKey, sanitizeCustom, sanitizeFuneral, sanitizeBack, sanitizeBind, DEFAULT_BACK };
