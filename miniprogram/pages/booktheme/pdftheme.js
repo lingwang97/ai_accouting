@@ -43,12 +43,12 @@ const FUNERAL_MARKS = [{ k: '', n: '无' }, { k: '奠', n: '奠' }];
 // v3.79.0 封面纹样（与云函数 export/themes.js 的 DECOS / FUNERAL_DECOS / DECO_DEFAULTS 一致，tests 有比对）：'' = 按事由默认
 const DECOS = [
   { k: '', n: '按事由' }, { k: 'none', n: '无' }, { k: 'band_huiwen', n: '回纹带' }, { k: 'band_wanzi', n: '万字锦' },
-  { k: 'xi', n: '喜字' }, { k: 'shou', n: '团寿' }, { k: 'xiangyun', n: '祥云' }, { k: 'lotus', n: '莲花' }, { k: 'kids', n: '月星' }, { k: 'fangsheng', n: '方胜' }
+  { k: 'xi', n: '喜字' }, { k: 'shuangxi', n: '囍字' }, { k: 'shou', n: '团寿' }, { k: 'xiangyun', n: '祥云' }, { k: 'lotus', n: '莲花' }, { k: 'kids', n: '月星' }, { k: 'fangsheng', n: '方胜' }
 ];
 const FUNERAL_DECOS = [{ k: '', n: '默认' }, { k: 'none', n: '无' }, { k: 'pine', n: '松枝' }, { k: 'chrys', n: '白菊' }];
-const DECO_DEFAULTS = { wedding: 'xi', birthday: 'shou', baby: 'kids', house: 'fangsheng', funeral: 'none', other: 'band_huiwen' };
+const DECO_DEFAULTS = { wedding: 'shuangxi', birthday: 'shou', baby: 'kids', house: 'fangsheng', funeral: 'none', other: 'band_huiwen' };
 // 示意图用字符近似（实际为矢量图形）
-const DECO_TXT = { xi: '喜', shou: '寿', xiangyun: '☁', lotus: '✿', kids: '☾★', fangsheng: '◇◇', pine: '松', chrys: '❀' };
+const DECO_TXT = { xi: '喜', shuangxi: '囍', shou: '寿', xiangyun: '☁', lotus: '✿', kids: '☾★', fangsheng: '◇◇', pine: '松', chrys: '❀' };
 const DECO_BAND = { band_huiwen: '回回回回回回回回', band_wanzi: '卍卍卍卍卍卍卍卍' };
 /** 最终纹样 key（'' 取事由默认，none 返回 ''）；与云函数 themes.decoOf 一致 */
 function decoOf(v, bookType) {

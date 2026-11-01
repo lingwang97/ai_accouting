@@ -67,6 +67,7 @@
 .fcell { width: 33.33%; height: 64rpx; line-height: 64rpx; text-align: center; font-size: 22rpx; border: 1rpx solid var(--border); box-sizing: border-box; color: var(--text-2); background: var(--fill); }
 .fcell.on { background: var(--primary); color: #fff; border-color: var(--primary); }
 /* v3.82.0 裁剪编辑器 */
+.chip.try { border: 2rpx dashed var(--primary); color: var(--primary); }
 .dim-loader { position: absolute; width: 2rpx; height: 2rpx; opacity: 0; left: -10rpx; top: 0; }
 button.crop-btn.btn-outline:not(.btn):not([size=mini]) { width: 100%; }
 .crop-sheet { max-height: 94vh; text-align: center; }

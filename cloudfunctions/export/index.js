@@ -50,6 +50,7 @@ const TYPE_LABEL = { wedding: '喜事', birthday: '寿宴', baby: '满月/周岁
 const NO_BOOK = '未归入礼簿';
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const themes = require('./themes.js');
+const XI = require('./xipath.js'); // 「囍」字形轮廓（矢量路径，tools/gen_xi_path.py 生成，宋体 OFL）
 const P = require('./plans.js');
 
 // 配色：喜事用中国红，白事一律用灰色系（不出现任何红色元素）
@@ -90,6 +91,8 @@ exports.main = async (event, context) => {
     if (ctx.role === 'clerk' && !can(ctx, 'export')) return err('你没有导出权限');
     // 清理临时导出文件：放在权限判断之后，无导出权限的记账人也不能触发清理
     if (event.action === 'cleanup') return await cleanupFile(OWNER, String(event.fileID || ''));
+    // 示意图字体预览：只取小字体的 https 临时链接（v3.83.0）
+    if (event.action === 'fontPreview') return await fontPreview(ctx);
     // 送礼记录属于本人的人情往来：记账人备份主家数据时不含；只负责部分场次的人员不能全量备份
     if (event.format === 'backup' && ctx.bookIds) return err('你只负责部分场次，请按场次导出');
     if (event.format === 'backup') return await exportBackup(OWNER, ctx.role === 'owner');
@@ -417,6 +420,27 @@ function previewTheme(book, event) {
     key = k;
   }
   return { key, custom, back: themes.sanitizeBack(event.pdfBack), bind: themes.sanitizeBind(event.pdfBind), deco: themes.sanitizeDeco(event.pdfDeco, book.type === 'funeral') };
+}
+
+/**
+ * 示意图字体预览（v3.83.0）：返回三份预览小字体（约 800 个常用字的子集）的 https 临时链接，不返回 fileID / 云存储路径。
+ * 权限：能打开导出页的身份（主家、有导出权限的记账人、家人共享）；没有账户的返回错误。字体由 fontsetup 的 uploadPreview 上传并登记在 settings.preview_fonts
+ */
+async function fontPreview(ctx) {
+  if (!ctx || !ctx.account || ctx.role === 'none') return err('请先完善主家信息');
+  let meta = null;
+  try { meta = (await db.collection('settings').doc('preview_fonts').get()).data; } catch (e) { /* 未上传 */ }
+  const fonts = meta && !meta._openid && meta.fonts ? meta.fonts : {};
+  const keys = ['sans', 'serif', 'brush'].filter(k => fonts[k] && fonts[k].fileID);
+  if (!keys.length) return ok({ ready: false, fonts: {} });
+  const out = {};
+  try {
+    const r = await cloud.getTempFileURL({ fileList: keys.map(k => fonts[k].fileID) });
+    (r.fileList || []).forEach((f, i) => {
+      if (f && f.status === 0 && /^https:\/\//.test(String(f.tempFileURL || ''))) out[keys[i]] = { url: String(f.tempFileURL), v: String(fonts[keys[i]].sha256 || '').slice(0, 8), size: Number(fonts[keys[i]].size) || 0 };
+    });
+  } catch (e) { console.warn('fontPreview failed', e && (e.errMsg || e.message)); }
+  return ok({ ready: Object.keys(out).length > 0, fonts: out });
 }
 
 /**
@@ -1012,7 +1036,7 @@ function starPoints(r) {
 
 /**
  * 封面纹样（v3.79.0，纯矢量）：band_huiwen 回纹带 / band_wanzi 万字锦带横跨封面上下；
- * xi 喜字团 / shou 团寿 / xiangyun 祥云 / lotus 莲花 / kids 月亮星星（满月）/ fangsheng 方胜 / pine 松枝 / chrys 白菊 是标题上方的小图案（约 66pt 见方，中心在 cx, cy）
+ * xi 喜字（字形）/ shuangxi 囍字（矢量路径）/ shou 团寿 / xiangyun 祥云 / lotus 莲花 / kids 月亮星星（满月）/ fangsheng 方胜 / pine 松枝 / chrys 白菊 是标题上方的小图案（约 66pt 见方，中心在 cx, cy）
  */
 function drawDeco(doc, key, cx, cy, c, W, H) {
   const col = c.border;
@@ -1054,7 +1078,13 @@ function drawDeco(doc, key, cx, cy, c, W, H) {
         doc.lineWidth(0.8).circle(0, 0, 23).stroke();
       }
       doc.font('sub').fontSize(30).fillColor(col).text(key === 'shou' ? '寿' : '喜', -30, -16, { width: 60, align: 'center', lineBreak: false });
-    } else if (key === 'xiangyun') {
+    } else if (key === 'shuangxi') { // 囍字：圆角方框内的「囍」字形矢量轮廓（宋体 OFL，xipath.js），不依赖运行时字体
+    doc.lineWidth(1.6).roundedRect(-33, -33, 66, 66, 8).stroke();
+    doc.lineWidth(0.8).roundedRect(-28.5, -28.5, 57, 57, 5).stroke();
+    const [bx0, by0, bx1, by1] = XI.bbox;
+    const k = 42 / Math.max(bx1 - bx0, by1 - by0);
+    doc.save().scale(k, -k).translate(-(bx0 + bx1) / 2, -(by0 + by1) / 2).path(XI.d).fill('nonzero').restore();
+  } else if (key === 'xiangyun') {
       doc.lineWidth(1.6).path('M -30 14 C -44 14 -44 -6 -26 -4 C -26 -20 -4 -22 0 -12 C 6 -24 28 -18 26 -4 C 44 -6 44 14 30 14 Z').stroke();
       doc.lineWidth(0.9).path('M -18 6 C -22 -2 -12 -4 -10 2').stroke();
       doc.path('M 6 2 C 4 -6 16 -8 18 -2').stroke();

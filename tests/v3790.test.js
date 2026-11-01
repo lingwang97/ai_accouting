@@ -29,7 +29,7 @@ test('纹样：sanitizeDeco 白名单（喜事 / 白事各自一套），非法�
 });
 
 test('纹样：decoOf 按事由默认，none 不画，白事默认无', () => {
-  assert.strictEqual(themes.decoOf('', 'wedding'), 'xi');
+  assert.strictEqual(themes.decoOf('', 'wedding'), 'shuangxi'); // v3.83.0 喜事默认改为囍字
   assert.strictEqual(themes.decoOf('', 'birthday'), 'shou');
   assert.strictEqual(themes.decoOf('', 'baby'), 'kids');
   assert.strictEqual(themes.decoOf('', 'house'), 'fangsheng');
@@ -39,7 +39,7 @@ test('纹样：decoOf 按事由默认，none 不画，白事默认无', () => {
   assert.strictEqual(themes.decoOf('none', 'wedding'), '');
   assert.strictEqual(themes.decoOf('pine', 'funeral'), 'pine');
   assert.strictEqual(themes.decoOf('xi', 'funeral'), '', '白事传喜事纹样 -> 默认（无）');
-  assert.strictEqual(themes.decoOf('pine', 'wedding'), 'xi', '喜事传白事纹样 -> 按事由默认');
+  assert.strictEqual(themes.decoOf('pine', 'wedding'), 'shuangxi', '喜事传白事纹样 -> 按事由默认');
 });
 
 test('纹样：前端清单与云函数一致（DECOS / FUNERAL_DECOS / DECO_DEFAULTS / decoOf / 形状）', () => {

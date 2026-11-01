@@ -72,9 +72,9 @@ const HEX = /^#[0-9a-fA-F]{6}$/;
 
 // v3.79.0 封面纹样（纯矢量，index.js drawDeco 绘制）：'' 表示按事由默认，'none' 不画
 // band_huiwen 回纹带 / band_wanzi 万字锦带：封面上下各一条；其余为封面标题上方的小图案
-const DECOS = ['', 'none', 'band_huiwen', 'band_wanzi', 'xi', 'shou', 'xiangyun', 'lotus', 'kids', 'fangsheng'];
+const DECOS = ['', 'none', 'band_huiwen', 'band_wanzi', 'xi', 'shuangxi', 'shou', 'xiangyun', 'lotus', 'kids', 'fangsheng'];
 const FUNERAL_DECOS = ['', 'none', 'pine', 'chrys']; // 白事只有松枝 / 白菊（素雅，灰黑线条）
-const DECO_DEFAULTS = { wedding: 'xi', birthday: 'shou', baby: 'kids', house: 'fangsheng', funeral: 'none', other: 'band_huiwen' };
+const DECO_DEFAULTS = { wedding: 'shuangxi', birthday: 'shou', baby: 'kids', house: 'fangsheng', funeral: 'none', other: 'band_huiwen' };
 /** 校验封面纹样：非法值回落 ''（按事由默认）；白事只认松枝 / 白菊 / 无 */
 function sanitizeDeco(v, funeral) {
   const k = String(v === undefined || v === null ? '' : v);

@@ -606,6 +606,7 @@ async function preflight(fix, admin, context) {
   }
 
   const fonts = await fontStatus();
+  add('配置', '预览字体（云存储）', fonts.previewReady ? 'ok' : 'warn', fonts.previewReady ? '已就绪' : '未上传：示意图不能实时预览字体（不影响导出）', '点「上传预览字体」（需先部署 fontsetup 云函数，运行 python tools/gen_font_js.py --preview 生成字体模块）');
   add('配置', '导出字体（云存储）', fonts.ready ? 'ok' : 'bad', fonts.ready ? '已就绪' : '未上传：' + fonts.fonts.filter(f => !f.uploaded).map(f => f.label).join('、'), '点「上传导出字体」（需先部署 fontsetup）');
 
   // 往来人标识密钥：只读来源状态与创建时间，不读 secret
@@ -696,8 +697,8 @@ async function preflight(fix, admin, context) {
   ['printtpl', 'fontsetup'].forEach((name, i) => {
     const r = oldFns[i];
     const gone = r.error && r.missing;
-    const fontsNote = name === 'fontsetup' && !fonts.ready ? '（字体还没上传，先别删）' : '';
-    add('云函数', `旧函数 ${name}`, gone ? 'ok' : (name === 'fontsetup' && !fonts.ready ? 'ok' : 'warn'), gone ? '已删除' : '仍存在' + fontsNote,
+    const fontsNote = name === 'fontsetup' && !(fonts.ready && fonts.previewReady) ? '（字体还没上传，先别删）' : '';
+    add('云函数', `旧函数 ${name}`, gone ? 'ok' : (name === 'fontsetup' && !(fonts.ready && fonts.previewReady) ? 'ok' : 'warn'), gone ? '已删除' : '仍存在' + fontsNote,
       gone || fontsNote ? '' : `云开发控制台 → 云函数 → 删除 ${name}`);
   });
 
@@ -769,7 +770,14 @@ async function fontStatus() {
     if (d && !d._openid && d.fonts) fonts = d.fonts;
   } catch (e) { /* 未登记 */ }
   const list = Object.keys(LABEL).map(key => ({ key, label: LABEL[key], uploaded: !!(fonts[key] && fonts[key].fileID) }));
-  return { ready: list.every(f => f.uploaded), fonts: list };
+  // 示意图预览字体（v3.83.0，settings.preview_fonts，fontsetup 的 uploadPreview 写入）：没上传只影响示意图换字体，不影响导出
+  let pv = {};
+  try {
+    const d = (await db.collection('settings').doc('preview_fonts').get()).data;
+    if (d && !d._openid && d.fonts) pv = d.fonts;
+  } catch (e) { /* 未登记 */ }
+  const previewReady = Object.keys(LABEL).every(key => pv[key] && pv[key].fileID);
+  return { ready: list.every(f => f.uploaded), previewReady, fonts: list };
 }
 
 // —— 数据库索引 ——

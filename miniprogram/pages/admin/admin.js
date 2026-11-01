@@ -154,6 +154,7 @@ Page({
           manual: all.filter(x => x.status === 'manual').length,
           colsOk: !r.missing.length,
           fontsOk: !r.fonts || r.fonts.ready,
+          pvFontsOk: !r.fonts || r.fonts.previewReady !== false, // 示意图预览字体（v3.83.0）
           manualRuntime: (r.manualRuntime || []).join('、')
         }
       });
@@ -203,6 +204,24 @@ Page({
     } catch (e) {
       wx.hideLoading();
       // 云函数没部署 / 超时 / 无权限：给明确指引
+      wx.showModal({ title: '上传失败', content: (e && e.message && e.message !== 'biz error') ? e.message : '请确认已部署 fontsetup 云函数后重试', showCancel: false, confirmText: '知道了' });
+    } finally {
+      this.setData({ fontLoading: false });
+    }
+  },
+
+  // —— 示意图预览字体（v3.83.0）：一次性上传到云存储 preview-fonts/（fontsetup 云函数 uploadPreview，管理员） ——
+  async onPvFontsUpload() {
+    if (this.data.fontLoading) return;
+    this.setData({ fontLoading: true });
+    wx.showLoading({ title: '上传中，请稍候', mask: true });
+    try {
+      await req.adminPvFontsUpload();
+      wx.hideLoading();
+      wx.showToast({ title: '预览字体已上传', icon: 'success' });
+      this.onPreflight();
+    } catch (e) {
+      wx.hideLoading();
       wx.showModal({ title: '上传失败', content: (e && e.message && e.message !== 'biz error') ? e.message : '请确认已部署 fontsetup 云函数后重试', showCancel: false, confirmText: '知道了' });
     } finally {
       this.setData({ fontLoading: false });

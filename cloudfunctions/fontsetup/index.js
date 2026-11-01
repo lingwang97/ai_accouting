@@ -14,6 +14,13 @@ const FONTS = [
   { key: 'serif', file: './font-serif.js', name: 'NotoSerifSC-Subset.ttf', label: '宋体' },
   { key: 'brush', file: './font-brush.js', name: 'MaShanZheng-Subset.ttf', label: '毛笔字体' }
 ];
+// 示意图字体预览用的小子集（约 800 个常用字，tools/gen_preview_fonts.py 生成，tools/gen_font_js.py --preview 打包成 pvfont-*.js）
+const PV_FONTS = [
+  { key: 'sans', file: './pvfont-sans.js', name: 'NotoSansSC-Preview.ttf', label: '黑体' },
+  { key: 'serif', file: './pvfont-serif.js', name: 'NotoSerifSC-Preview.ttf', label: '宋体' },
+  { key: 'brush', file: './pvfont-brush.js', name: 'MaShanZheng-Preview.ttf', label: '毛笔字体' }
+];
+const PV_DIR = 'preview-fonts';
 const DIR = 'export-fonts';
 const sha256 = buf => crypto.createHash('sha256').update(buf).digest('hex');
 
@@ -25,6 +32,7 @@ exports.main = async (event) => {
     if (!(await isAdmin(OPENID))) return err('无管理员权限');
     if (event.action === 'status') return ok(await registered());
     if (event.action === 'upload') return ok(await upload());
+    if (event.action === 'uploadPreview') return ok(await uploadPreview());
     return err('未知 action');
   } catch (e) {
     console.error('fontsetup', event && event.action, e && e.stack);
@@ -43,7 +51,11 @@ async function registered() {
   let meta = null;
   try { meta = (await db.collection('settings').doc('export_fonts').get()).data; } catch (e) { /* 未登记 */ }
   const fonts = (meta && !meta._openid && meta.fonts) || {};
+  let pvMeta = null;
+  try { pvMeta = (await db.collection('settings').doc('preview_fonts').get()).data; } catch (e) { /* 未登记 */ }
+  const pv = (pvMeta && !pvMeta._openid && pvMeta.fonts) || {};
   return {
+    previewReady: PV_FONTS.every(f => pv[f.key] && pv[f.key].fileID),
     ready: FONTS.every(f => fonts[f.key] && fonts[f.key].fileID),
     fonts: FONTS.map(f => ({ key: f.key, label: f.label, uploaded: !!(fonts[f.key] && fonts[f.key].fileID), size: (fonts[f.key] && fonts[f.key].size) || 0 })),
     updatedAt: (meta && meta.updatedAt) || null
@@ -69,6 +81,28 @@ async function upload() {
   }
   try { await db.createCollection('settings'); } catch (e) { /* 已存在 */ }
   await db.collection('settings').doc('export_fonts').set({ data: { fonts: out, updatedAt: new Date() } });
+  return { uploaded: results };
+}
+
+/** 上传预览小字体到云存储 preview-fonts/，校验后登记到 settings.preview_fonts（export.fontPreview 据此返回临时链接） */
+async function uploadPreview() {
+  const out = {};
+  const results = [];
+  for (const f of PV_FONTS) {
+    let b64;
+    try { b64 = require(f.file); } catch (e) {
+      throw new Error('代码包里没有预览字体数据，请先运行 python tools/gen_font_js.py --preview 再重新部署 fontsetup');
+    }
+    const buf = Buffer.from(b64, 'base64');
+    const hash = sha256(buf);
+    const up = await cloud.uploadFile({ cloudPath: `${PV_DIR}/${f.name}`, fileContent: buf });
+    const back = (await cloud.downloadFile({ fileID: up.fileID })).fileContent;
+    if (!Buffer.isBuffer(back) || back.length !== buf.length || sha256(back) !== hash) throw new Error(`${f.label}预览字体上传后校验失败，请重试`);
+    out[f.key] = { fileID: up.fileID, name: f.name, size: buf.length, sha256: hash };
+    results.push({ key: f.key, label: f.label, size: buf.length });
+  }
+  try { await db.createCollection('settings'); } catch (e) { /* 已存在 */ }
+  await db.collection('settings').doc('preview_fonts').set({ data: { fonts: out, updatedAt: new Date() } });
   return { uploaded: results };
 }
 

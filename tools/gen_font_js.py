@@ -11,7 +11,7 @@ export 首次使用时下载到 /tmp 缓存。fontsetup 是一次性的上传工
   - font-serif.js  思源宋体 Noto Serif SC（可变字体取 wght=500 后子集）
   - font-brush.js  马善政楷书 Ma Shan Zheng（毛笔风格）
 """
-import base64, os
+import base64, os, sys
 
 root = os.path.dirname(__file__)
 out_dir = os.path.join(root, '..', 'cloudfunctions', 'fontsetup')
@@ -20,6 +20,14 @@ FONTS = [
     ('NotoSerifSC-Subset.ttf', 'font-serif.js', '思源宋体 Noto Serif SC (wght 500) GB2312 子集 TrueType（SIL OFL 1.1）'),
     ('MaShanZheng-Subset.ttf', 'font-brush.js', '马善政楷书 Ma Shan Zheng GB2312 子集 TrueType（SIL OFL 1.1，Google Fonts）'),
 ]
+# v3.83.0 --preview：只生成「示意图字体预览」用的小子集模块 pvfont-*.js（来自 tools/fonts/preview/，由 tools/gen_preview_fonts.py 生成），fontsetup 的 uploadPreview 上传
+PREVIEW = [
+    ('preview/NotoSansSC-Preview.ttf', 'pvfont-sans.js', '思源黑体预览子集（约 800 常用字，SIL OFL）'),
+    ('preview/NotoSerifSC-Preview.ttf', 'pvfont-serif.js', '思源宋体预览子集（约 800 常用字，含囍，SIL OFL 1.1）'),
+    ('preview/MaShanZheng-Preview.ttf', 'pvfont-brush.js', '马善政楷书预览子集（约 800 常用字，SIL OFL 1.1）'),
+]
+if '--preview' in sys.argv:
+    FONTS = PREVIEW
 os.makedirs(out_dir, exist_ok=True)
 for src, dst, desc in FONTS:
     data = base64.b64encode(open(os.path.join(root, 'fonts', src), 'rb').read()).decode('ascii')

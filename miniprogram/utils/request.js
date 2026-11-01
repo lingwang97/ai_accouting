@@ -9,7 +9,7 @@ const envVersion = () => {
 const READ_ACTIONS = ['get', 'list', 'query', 'people', 'outList', 'remindList', 'pending', 'pendingStat', 'dashboard',
   'status', 'receipt', 'myReceipts', 'receiptByToken', 'issueQr', 'qrCheck', 'themes', 'check', 'getByAid', 'gen', 'app', 'plan', 'adminGet', 'detail',
   'nameCheck', 'reconcile', 'orgSummary', 'removePreview', 'members', 'pendingMembers', 'getTpl', 'stats', 'trashList',
-  'viewers', 'payCodeReviews', 'inviteInfo', 'advGet', 'coverPhotoUrl',
+  'viewers', 'payCodeReviews', 'inviteInfo', 'advGet', 'coverPhotoUrl', 'fontPreview',
   // export 预览：只生成临时文件，不改礼簿 / 礼金数据（与导出不同，不触发页面强制刷新）
   'bookPreview', 'bookPreviewData',
   // system 只读：ads 读设置；admin*Preview / adminFindHosts / adminLogs / adminPreflight(不带 Fix) 只查不写（adminIndexes 会建索引，不列入）
@@ -257,6 +257,9 @@ module.exports = {
   adminCheckItem: (key, done) => call('system', { action: 'adminCheckItem', key, done }),
   // 一次性：把导出字体上传到云存储（fontsetup 云函数，用完可删；未部署时 silent 由页面提示）
   adminFontsUpload: () => call('fontsetup', { action: 'upload' }, { silent: true }),
+  // v3.83.0 示意图字体预览：fontPreview 返回三份预览小字体的 https 临时链接（不含 fileID）；adminPvFontsUpload 一次性上传预览小字体
+  fontPreview: () => call('export', { action: 'fontPreview' }, { silent: true }),
+  adminPvFontsUpload: () => call('fontsetup', { action: 'uploadPreview' }, { silent: true }),
   // 数据清除（管理员）
   adminPurgePreview: (ownerOpenid, guestRecords) => call('system', { action: 'adminPurgePreview', ownerOpenid, guestRecords: !!guestRecords }),
   adminBackup: ownerOpenid => call('system', { action: 'adminBackup', ownerOpenid }),

@@ -96,6 +96,8 @@
         <button wx:if="{{!pf.colsOk}}" class="btn-primary save" loading="{{pfLoading}}" data-fix="1" bindtap="onPreflight">一键创建缺失集合</button>
         <button wx:if="{{!pf.fontsOk}}" class="btn-primary save" loading="{{fontLoading}}" bindtap="onFontsUpload">上传导出字体</button>
         <view wx:if="{{!pf.fontsOk}}" class="muted small tip">传统礼簿 / 表格 PDF 需要字体。点一次即可（约 11MB，需等几十秒）；需先部署 fontsetup 云函数，上传成功后可在控制台删除它。</view>
+        <button wx:if="{{!pf.pvFontsOk}}" class="btn-outline save" loading="{{fontLoading}}" bindtap="onPvFontsUpload">上传预览字体</button>
+        <view wx:if="{{!pf.pvFontsOk}}" class="muted small tip">导出页示意图实时预览字体用（约 1.2MB，几秒）；不上传也能正常导出，只是示意图不能换字体。需先在项目根目录运行 python tools/gen_font_js.py --preview，再部署 fontsetup 云函数；上传成功后可在控制台删除它。</view>
         <view wx:if="{{pf.manualRuntime}}" class="muted small tip">读不到运行配置的函数（{{pf.manualRuntime}}）：请在云开发控制台「版本与配置」里手动核对超时 / 内存。</view>
       </block>
       <view class="pf-group">手动清单（勾选后记录勾选人和时间）</view>

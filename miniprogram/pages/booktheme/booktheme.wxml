@@ -15,7 +15,7 @@
             <view class="pc-scrim-g" wx:if="{{pv.full && pv.scrim === 'gradient'}}" style="background:linear-gradient(to bottom, rgba(0,0,0,0), {{pv.bg}} 45%)"></view>
             <view class="pc-scrim-b" wx:if="{{pv.full && pv.scrim === 'block'}}" style="background:{{pv.bg}}"></view>
             <view class="pc-in" style="border-color:{{pv.border}}"></view>
-            <view class="pc-mark" wx:if="{{pv.mark}}" style="color:{{pv.border}}">{{pv.mark}}</view>
+            <view class="pc-mark" wx:if="{{pv.mark}}" style="color:{{pv.border}};{{pvf.mark}}">{{pv.mark}}</view>
             <block wx:if="{{pv.corners}}">
               <view class="pc-cn pc-tl" style="color:{{pv.border}}">{{pv.corners[0]}}</view>
               <view class="pc-cn pc-tr" style="color:{{pv.border}}">{{pv.corners[1]}}</view>
@@ -27,26 +27,26 @@
             <view class="pc-photo {{pv.shape === 'oval' ? 'oval' : ''}}" wx:if="{{pv.left}}" style="border-color:{{pv.border}};opacity:{{pv.fade ? 0.5 : 1}}"><image src="{{pv.photo}}" mode="{{pv.photoStyle ? 'scaleToFill' : 'aspectFill'}}" style="{{pv.photoStyle}}" /></view>
             <view class="pc-deco {{pv.left ? 'has-photo' : ''}}" wx:if="{{pv.decoTxt}}" style="color:{{pv.border}}">{{pv.decoTxt}}</view>
             <view class="pc-mid {{pv.left ? 'has-photo' : ''}} {{pv.full ? 'full' : ''}}">
-              <view class="pc-title" style="color:{{pv.border}}">{{pv.title}}</view>
+              <view class="pc-title" style="color:{{pv.border}};{{pvf.main}}">{{pv.title}}</view>
               <view class="pc-line" style="background:{{pv.border}}"></view>
-              <view class="pc-sm" wx:for="{{pv.info}}" wx:key="*this">{{item}}</view>
+              <view class="pc-sm" wx:for="{{pv.info}}" wx:key="*this" style="{{pvf.sub}}">{{item}}</view>
             </view>
-            <view class="pc-foot {{pv.left ? 'has-photo' : ''}}" style="color:{{pv.border}}" wx:if="{{pv.footer}}">{{pv.footer}}</view>
-            <view class="pc-brand {{pv.left ? 'has-photo' : ''}}">慧礼记</view>
+            <view class="pc-foot {{pv.left ? 'has-photo' : ''}}" style="color:{{pv.border}};{{pvf.main}}" wx:if="{{pv.footer}}">{{pv.footer}}</view>
+            <view class="pc-brand {{pv.left ? 'has-photo' : ''}}" style="{{pvf.sub}}">慧礼记</view>
           </view>
         </swiper-item>
         <!-- 内页（右起，本礼簿前几位宾客） -->
         <swiper-item>
           <view class="pc pg" style="border-color:{{pg.line}}">
-            <view class="pc-mark" wx:if="{{pv.mark}}" style="color:{{pg.line}};opacity:.06">{{pv.mark}}</view>
+            <view class="pc-mark" wx:if="{{pv.mark}}" style="color:{{pg.line}};opacity:.06;{{pvf.mark}}">{{pv.mark}}</view>
             <view class="pg-gut" wx:if="{{bind !== 'none'}}" style="{{pg.gut}}"><text>装订边</text></view>
-            <view class="pg-head" style="color:{{pg.line}}">{{pg.head}}</view>
+            <view class="pg-head" style="color:{{pg.line}};{{pvf.main}}">{{pg.head}}</view>
             <view class="pg-grid" style="{{pg.grid}};border-color:{{pg.line}};color:#222">
               <view class="pg-slot" wx:for="{{pg.slots}}" wx:key="i" style="border-color:{{pg.line}}">
-                <view class="pg-nm" style="border-color:{{pg.line}}"><text class="pg-c" wx:for="{{item.name}}" wx:for-item="ch" wx:for-index="ci" wx:key="ci">{{ch}}</text></view>
+                <view class="pg-nm" style="border-color:{{pg.line}}"><text class="pg-c" style="{{pvf.main}}" wx:for="{{item.name}}" wx:for-item="ch" wx:for-index="ci" wx:key="ci">{{ch}}</text></view>
                 <view class="pg-am">
-                  <text class="pg-ca" wx:for="{{item.amt}}" wx:for-item="ch" wx:for-index="ci" wx:key="ci">{{ch}}</text>
-                  <text class="pg-yen" wx:if="{{item.yen}}">{{item.yen}}</text>
+                  <text class="pg-ca" style="{{pvf.sub}}" wx:for="{{item.amt}}" wx:for-item="ch" wx:for-index="ci" wx:key="ci">{{ch}}</text>
+                  <text class="pg-yen" style="{{pvf.sub}}" wx:if="{{item.yen}}">{{item.yen}}</text>
                 </view>
               </view>
             </view>
@@ -57,7 +57,7 @@
           <view wx:if="{{!back.on}}" class="pc pc-none">不含封底</view>
           <view wx:else class="pc" style="background:{{pv.bg}};border-color:{{pv.border}};color:{{pv.text}}">
             <view class="pc-in" style="border-color:{{pv.border}}"></view>
-            <view class="pc-mark" wx:if="{{pv.mark}}" style="color:{{pv.border}}">{{pv.mark}}</view>
+            <view class="pc-mark" wx:if="{{pv.mark}}" style="color:{{pv.border}};{{pvf.mark}}">{{pv.mark}}</view>
             <block wx:if="{{pv.corners}}">
               <view class="pc-cn pc-tl" style="color:{{pv.border}}">{{pv.corners[0]}}</view>
               <view class="pc-cn pc-tr" style="color:{{pv.border}}">{{pv.corners[1]}}</view>
@@ -65,11 +65,11 @@
               <view class="pc-cn pc-br" style="color:{{pv.border}}">{{pv.corners[3]}}</view>
             </block>
             <view class="pc-mid">
-              <view class="pc-title" wx:if="{{bk.foot}}" style="color:{{pv.border}};font-size:36rpx;letter-spacing:6rpx">{{bk.foot}}</view>
+              <view class="pc-title" wx:if="{{bk.foot}}" style="color:{{pv.border}};font-size:36rpx;letter-spacing:6rpx;{{pvf.main}}">{{bk.foot}}</view>
               <view class="pc-line" wx:if="{{bk.foot}}" style="background:{{pv.border}}"></view>
-              <view class="pc-sign" wx:if="{{back.sign}}"><view>{{bk.sign}}</view></view>
+              <view class="pc-sign" wx:if="{{back.sign}}" style="{{pvf.sub}}"><view>{{bk.sign}}</view></view>
             </view>
-            <view class="pc-brand" wx:if="{{back.brand}}">慧礼记</view>
+            <view class="pc-brand" wx:if="{{back.brand}}" style="{{pvf.sub}}">慧礼记</view>
           </view>
         </swiper-item>
       </swiper>
@@ -81,7 +81,7 @@
     </view>
     <image class="dim-loader" wx:if="{{coverSet && coverUrl && !photoDim && !isFuneral}}" src="{{coverUrl}}" bindload="onPhotoLoad" />
     <view class="lock-tip" wx:if="{{lockTip}}">{{lockTip}}</view>
-    <view class="muted tip">示意图仅供参考，点「预览」看真实效果{{pvSample ? '（内页暂无数据，用示例）' : ''}}</view>
+    <view class="muted tip">示意图仅供参考，点「预览」看真实效果{{pvSample ? '（内页暂无数据，用示例）' : ''}}{{pvLoading ? ' · 字体加载中…' : (pvFail ? ' · 示意图暂用系统字体' : '')}}</view>
 
     <!-- ============ 封面标签：样式 → 纹样 → 照片 ============ -->
     <block wx:if="{{cur === 0}}">
@@ -150,7 +150,7 @@
       <view class="section-title">封面纹样</view>
       <view class="chips"><view wx:for="{{decos}}" wx:key="k" class="chip {{deco === item.k ? 'on' : ''}}" data-k="{{item.k}}" bindtap="onDeco">{{item.n}}</view></view>
       <view class="muted tip" wx:if="{{isFuneral}}">白事封面只提供素雅的松枝、白菊线条</view>
-      <view class="muted tip" wx:else>「按事由」：喜事用喜字、寿宴用团寿、满月用月星、乔迁用方胜、其他用回纹带</view>
+      <view class="muted tip" wx:else>「按事由」：喜事用囍字、寿宴用团寿、满月用月星、乔迁用方胜、其他用回纹带</view>
     </view>
 
     <!-- 封面照片（白事不使用）：上传 / 移除立即生效；形状、版式、托底、焦点为草稿，随预览 / 导出 / 只保存样式一起提交 -->
@@ -191,7 +191,8 @@
     <block wx:if="{{cur === 1}}">
       <view class="card cust">
         <view class="section-title">字体</view>
-        <view class="chips"><view wx:for="{{fonts}}" wx:key="k" class="chip {{effFont === item.k ? 'on' : ''}}" data-v="{{item.k}}" bindtap="onFontPick">{{item.n}}{{item.locked ? " · 会员" : ""}}</view></view>
+        <view class="chips"><view wx:for="{{fonts}}" wx:key="k" class="chip {{effFont === item.k ? 'on' : ''}} {{tryFont === item.k ? 'try' : ''}}" data-v="{{item.k}}" bindtap="onFontPick">{{item.n}}{{item.locked ? " · 会员" : ""}}</view></view>
+        <view class="muted tip" wx:if="{{tryFont}}">试看中：示意图暂按该字体显示，并未选中（会员功能）；点其他字体或切换标签即恢复</view>
         <view class="muted tip" wx:if="{{!isFuneral && themeKey !== 'custom'}}">选择字体会把当前主题转为「在预设基础上修改」{{premiumOk ? '' : '（会员功能）'}}</view>
         <view class="muted tip">字体用于封面标题和全部内页</view>
       </view>

@@ -9,6 +9,7 @@ const plan = require('../../utils/plan.js');
 const vip = require('../../utils/vip.js');
 const imgc = require('../../utils/imgcompress.js');
 const orgtext = require('../../utils/orgtext.js');
+const pvfont = require('../../utils/pvfont.js');
 
 const VIP_TIP = '该功能为会员功能，开通后可使用';
 
@@ -55,6 +56,9 @@ const PAGE = {
     sheet: '',               // 确认面板：'' | 'export' | 'preview'
     org: false,              // 机构模式：礼簿称场次
     fontName: '黑体', effFont: 'sans',
+    pvf: { main: '', sub: '', mark: '' }, // 示意图字体（font-family 样式；没加载到为空 = 系统字体）
+    pvLoading: false, pvFail: false,
+    tryFont: '',             // 会员字体试看（只改示意图，不选中；切标签 / 选别的字体即恢复）
     premiumOk: true,         // 套餐是否开放会员主题（features.pdfThemePremium；缺项视为开放）
     lockTip: '',             // 套餐未开放时的说明
     presets: pt.LIST,
@@ -78,6 +82,7 @@ const PAGE = {
 
   onLoad(options) {
     theme.early(this); // 首帧前同步套主题色（v3.70.1）
+    this._pvLoaded = {};
     this.setData({ id: options.bookId || '' });
     this.load();
   },
@@ -161,8 +166,8 @@ const PAGE = {
     } catch (e) { /* 用示例 */ }
   },
 
-  onSwipe(e) { this.setData({ cur: e.detail.current }); },
-  onTab(e) { this.setData({ cur: Number(e.currentTarget.dataset.i) }); },
+  onSwipe(e) { this.setData({ cur: e.detail.current, tryFont: '' }); this.syncPvFonts(); },
+  onTab(e) { this.setData({ cur: Number(e.currentTarget.dataset.i), tryFont: '' }); this.syncPvFonts(); },
 
   /** 当前生效的配置（用于预览） */
   effective() {
@@ -195,6 +200,7 @@ const PAGE = {
     const upd = { custErr: err, pv, lockTip: this.lockTip(), effFont: ef, fontName: (pt.FONTS.find(f => f.k === ef) || {}).n || '黑体', effMark: e.mark || '', markName: e.mark || '无', cropAdj: !pt.isDefaultCrop(d.coverCrop) };
     if (pv) { upd.pg = this.pageOf(e, d.isFuneral ? pt.GREY.main : e.main); upd.bk = this.backOf(e, pv); }
     this.setData(upd);
+    this.syncPvFonts();
   },
 
   /** 角饰示意：用字符近似（实际为矢量图形）；无 / 双线不画 */
@@ -458,8 +464,13 @@ const PAGE = {
   onFontPick(e) {
     const v = e.currentTarget.dataset.v;
     const d = this.data;
-    if (v === this.effective().font) return;
-    if (v !== 'sans' && !d.premiumOk) return vip.explain('PDF 字体', VIP_TIP);
+    if (v !== 'sans' && !d.premiumOk) { // 会员字体：示意图可以试看，但不能选中（导出仍按免费样式）
+      this.setData({ tryFont: v });
+      this.refresh();
+      return vip.explain('PDF 字体', VIP_TIP);
+    }
+    if (d.tryFont) this.setData({ tryFont: '' }); // 选了可用的字体：结束试看，示意图回到已选字体
+    if (v === this.effective().font) return this.refresh();
     if (d.isFuneral) { this.setData({ 'fun.font': v }); return this.refresh(); }
     if (d.themeKey !== 'custom') {
       if (!d.premiumOk) return vip.explain('PDF 主题', VIP_TIP);
@@ -580,6 +591,28 @@ const PAGE = {
     this.cropRender();
   },
   onCropEnd(e) { this.cropBase(e.touches || []); },
+
+  /** 示意图字体：按 PDF 的分工套用（标题 / 落款 / 姓名用主字体，小字与金额用 sub，水印见 pvfont.keysFor）；加载中轻提示，失败回退系统字体 */
+  async syncPvFonts() {
+    const e = this.effective();
+    const main = this.data.tryFont || e.font || 'sans';
+    const mark = e.mark || '';
+    const keys = pvfont.keysFor(main, mark);
+    const sig = `${main}|${mark}`;
+    if (sig === this._pvSig) return;
+    this._pvSig = sig;
+    if (keys.some(k => this._pvLoaded[k] === undefined)) this.setData({ pvLoading: true });
+    const fam = {};
+    await Promise.all(keys.map(async k => { fam[k] = await pvfont.load(k, this._pvLoaded); }));
+    if (sig !== this._pvSig) return; // 期间又换了字体，以最新的为准
+    const mainFam = fam[main];
+    const subFam = main === 'brush' ? fam.sans : mainFam;
+    const markFam = (mark === '囍' || main === 'brush') ? fam.serif : mainFam;
+    this.setData({
+      pvLoading: false, pvFail: keys.some(k => !fam[k]),
+      pvf: { main: pvfont.css(mainFam), sub: pvfont.css(subFam), mark: pvfont.css(markFam) }
+    });
+  },
 
   /** 草稿快照：主题 / 纹样 / 尾页 / 装订 / 封面照片展示设置（这些在导出或「保存样式」时才保存）；与进页面时一致就不算改动 */
   snap() {
