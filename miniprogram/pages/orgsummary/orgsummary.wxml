@@ -28,7 +28,7 @@
       <view class="muted small" wx:if="{{item.dutyText}}">礼台：{{item.dutyText}}</view>
       <view class="muted small" wx:if="{{item.staffText}}">登记 / 确认：{{item.staffText}}</view>
     </view>
-    <view class="muted center pad" wx:if="{{!loading && list.length === 0}}">该月份没有场次（按礼簿的办事日期统计）</view>
+    <view class="muted center pad" wx:if="{{!loading && list.length === 0}}">该月没有场次</view>
   </block>
 
   <block wx:else>
@@ -38,7 +38,7 @@
         <text><text class="muted">{{item.count}} 份 · </text><text class="money">￥{{item.sumStr}}</text></text>
       </view>
       <view class="muted center" wx:if="{{!loading && staff.length === 0}}">暂无已入簿的礼金</view>
-      <view class="muted small tip">按"确认收到 / 礼台记账"的人统计，便于和各礼台核对现金</view>
+      <view class="muted small tip">按确认收到 / 礼台记账的人统计，便于核对现金</view>
     </view>
   </block>
 </view>

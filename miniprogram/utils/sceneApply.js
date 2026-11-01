@@ -23,7 +23,7 @@ function askApply(type, bookId) {
   return new Promise(resolve => {
     wx.showModal({
       title: '套用场景样式',
-      content: `是否将这本礼簿的电子回执和打印小票设为「${scene.label}」样式？（${scene.receipt.title}${type === 'funeral' ? '，素色无红章' : ''}）`,
+      content: `电子回执和打印小票改为「${scene.label}」样式？`,
       confirmText: '套用',
       cancelText: '暂不',
       success: async res => {

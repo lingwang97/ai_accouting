@@ -1,9 +1,9 @@
 <wxs module="o" src="/utils/orgtext.wxs"></wxs>
 <view class="container" style="{{themeStyle}}">
   <picker wx:if="{{books.length}}" range="{{books}}" range-key="name" value="{{bookIdx}}" bindchange="onPickBook">
-    <view class="book-tip muted">记入{{orgMode ? '场次' : '礼簿'}}：<text class="book-name">{{bookIdx >= 0 ? books[bookIdx].name : '请选择'}} ▾</text> · 入簿即生效</view>
+    <view class="book-tip muted">记入{{orgMode ? '场次' : '礼簿'}}：<text class="book-name">{{bookIdx >= 0 ? books[bookIdx].name : '请选择'}} ▾</text></view>
   </picker>
-  <view wx:else class="book-tip muted">{{o.t("记入当前礼簿", orgMode)}}：<text class="book-name">{{bookName || o.t("默认礼簿", orgMode)}}</text> · 入簿即生效</view>
+  <view wx:else class="book-tip muted">{{o.t("记入当前礼簿", orgMode)}}：<text class="book-name">{{bookName || o.t("默认礼簿", orgMode)}}</text></view>
   <!-- 打印机状态（v3.65.2）：已连接时入簿自动打印小票；未连接点一下重连，未配对去配对 -->
   <view class="pr-row {{printerStatus}}" bindtap="onPrinterTap">
     <text class="pr-text">{{printerStatus === 'connected' ? '打印机已连接，入簿自动打印小票' : (printerStatus === 'paired' ? '打印机未连接，入簿不会打印' : '未配对打印机，入簿不打印小票')}}</text>
@@ -15,7 +15,7 @@
   <view class="card batch-switch">
     <view>
       <view>批次录入</view>
-      <view class="muted">一次登记多位{{funeral ? "致奠人" : "随礼人"}}，每人单独入簿、各打一张小票</view>
+      <view class="muted">每人单独入簿、各打一张小票</view>
     </view>
     <switch checked="{{batchMode}}" bindchange="onBatchMode" color="{{primary}}" />
   </view>
@@ -27,7 +27,7 @@
         <view class="chip {{payMethod === 'wechat' ? 'on' : ''}}" data-m="wechat" bindtap="onPayMethod">微信</view>
         <view class="chip {{payMethod === 'mixed' ? 'on' : ''}}" wx:if="{{batchMode}}" data-m="mixed" bindtap="onPayMethod">转账+现金</view>
       </view>
-      <view class="muted" wx:if="{{payMethod === 'wechat'}}">宾客当面向主家收款码转账，看到到账后再登记，登记即入簿</view>
+      <view class="muted" wx:if="{{payMethod === 'wechat'}}">看到到账后再登记，登记即入簿</view>
       <view class="muted" wx:if="{{payMethod === 'mixed'}}">在下方名单里为每位选「转账」或「现金」</view>
     </view>
     <batch-list wx:if="{{batchMode}}" id="batch" quick="{{quick}}" mixed="{{payMethod === 'mixed'}}" bindchange="onBatchChange" />

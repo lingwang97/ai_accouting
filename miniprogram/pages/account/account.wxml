@@ -2,7 +2,7 @@
   <!-- 主家：记账人提交的收款码，采用后才生效 -->
   <view class="card review" wx:for="{{reviews}}" wx:key="target">
     <view class="section-title">待确认的收款码 · {{item.name}}</view>
-    <view class="muted">记账人「{{item.by}}」提交了新的收款码。请核对是否为你本人的微信收款码，采用后宾客随礼转到新收款码。</view>
+    <view class="muted">记账人「{{item.by}}」提交了新收款码。请核对是你本人的收款码，采用后宾客转账到新码。</view>
     <view class="rv-imgs">
       <view class="rv-col">
         <image class="rv-img" src="{{item.curUrl}}" mode="aspectFit" data-url="{{item.curUrl}}" bindtap="onPreview" />
@@ -24,7 +24,7 @@
       <view class="section-title">主家称呼</view>
       <input class="input" placeholder="建议真实姓名,如：张三" maxlength="20" value="{{accountName}}" bindinput="onNameInput" />
     </block>
-    <view class="muted" wx:else>你只负责部分礼簿：可以为「{{accountName}}」上传新的收款码，主家确认采用后才生效，确认前宾客仍转到原收款码。</view>
+    <view class="muted" wx:else>你可为「{{accountName}}」上传新收款码，主家确认后生效，确认前仍用原码。</view>
 
     <view class="section-title" style="margin-top:28rpx">微信个人收款码</view>
     <view class="paycode-box" bindtap="onChoosePayCode">
@@ -41,7 +41,7 @@
   <view class="card" wx:if="{{!codeOnly}}">
     <view class="section-title">快捷礼金</view>
     <input class="input" placeholder="用逗号分隔，如：100,200,300,500,600,800,1000,1500,2000" value="{{quickText}}" bindinput="onQuickInput" />
-    <view class="muted" style="margin-top:12rpx">宾客随礼时可一键选择，清空后不显示快捷金额<text class="link-inline" wx:if="{{quickText}}" bindtap="onClearQuick">清空</text>；礼簿名称请到「工作台 → 礼簿管理」设置；主题色请到「我的 → 主题色」</view>
+    <view class="muted" style="margin-top:12rpx">宾客随礼时可一键选择<text class="link-inline" wx:if="{{quickText}}" bindtap="onClearQuick">清空</text></view>
   </view>
 
   <button class="btn-primary" loading="{{saving || uploading}}" bindtap="onSave">{{codeOnly ? '提交主家确认' : '保存'}}</button>

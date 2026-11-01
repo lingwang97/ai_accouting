@@ -27,7 +27,7 @@
             class="color-dot {{item === primary ? 'on' : ''}}"
             style="background:{{item}}" data-c="{{item}}" bindtap="onPickColor" />
     </view>
-    <view class="muted">礼簿码、工作台、按钮和底部菜单都会使用该颜色；白事礼簿始终自动使用素灰色，不受此设置影响</view>
+    <view class="muted">用于礼簿码、工作台、按钮和底部菜单；白事礼簿固定素灰</view>
   </view>
 
   <button class="btn-primary" loading="{{saving}}" disabled="{{saving || primary === saved}}" bindtap="onSave">保存</button>

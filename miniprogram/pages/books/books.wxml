@@ -1,6 +1,6 @@
 <wxs module="o" src="/utils/orgtext.wxs"></wxs>
 <view class="page" style="{{themeStyle}}">
-  <view class="book-tip muted" wx:if="{{!viewer}}">{{o.t("宾客扫礼簿码随礼时记入「当前礼簿」；办新的事（满月、乔迁…）新建一本，各自统计、导出。", orgMode)}}</view>
+  <view class="book-tip muted" wx:if="{{!viewer}}">{{o.t("宾客扫码随礼记入「当前礼簿」；办新的事请新建一本", orgMode)}}</view>
 
   <loading show="{{loading && !current && !list.length}}" rows="4" />
 

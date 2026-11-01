@@ -125,7 +125,7 @@ Page({
     if (this.data.recalcing || !this.data.id) return;
     wx.showModal({
       title: '重算合计',
-      content: '将按这本礼簿全部已入簿的记录重新计算份数与合计，不会修改任何礼金记录。确定重算吗？',
+      content: '按这本礼簿全部已入簿的记录重新计算份数与合计，不改礼金记录。确定重算？',
       confirmText: '重算',
       success: async r => {
         if (!r.confirm) return;
@@ -157,7 +157,7 @@ Page({
       if (pendingPayCode) {
         // 记账人上传的本场收款码：主家确认采用后才生效
         await new Promise(resolve => wx.showModal({
-          title: '收款码待主家确认', content: '礼簿已保存，新收款码待主家确认后生效', showCancel: false, complete: resolve
+          title: '收款码待主家确认', content: '礼簿已保存，新收款码待主家确认', showCancel: false, complete: resolve
         }));
       } else {
         wx.showToast({ title: id ? '已保存' : '已创建', icon: 'success' });

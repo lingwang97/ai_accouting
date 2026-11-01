@@ -487,7 +487,7 @@ Page({
     const record = this.data.list[idx];
     wx.showModal({
       title: '重置二维码',
-      content: '重置后，这笔已打印小票上的二维码立即失效，需要补打新小票。确定重置吗？',
+      content: '重置后已打印小票上的二维码立即失效，需补打。确定重置？',
       confirmText: '重置',
       success: async res => {
         if (!res.confirm) return;
@@ -504,7 +504,7 @@ Page({
     const record = this.data.list[idx];
     wx.showModal({
       title: '解除认领',
-      content: '解除后，对方的「我的随礼记录」里将不再显示这笔。如担心被他人认领，可再「重置二维码」。',
+      content: '解除后，对方不再看到这笔。担心被人认领可再「重置二维码」。',
       confirmText: '解除',
       success: async res => {
         if (!res.confirm) return;

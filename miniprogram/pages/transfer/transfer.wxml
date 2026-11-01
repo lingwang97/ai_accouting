@@ -4,7 +4,7 @@
   <block wx:if="{{!loading}}">
     <view class="card">
       <view class="section-title">移交给主家</view>
-      <view class="muted intro">{{orgMode ? '场次是你替别人建的？可以把选中的场次' : '礼簿是你替别人建的？可以把选中的礼簿'}}（含全部礼金记录、回执样式、存档）移交给真正的主家，没选的留在你这里。全选即整体移交，主家信息、收款码、已印好的礼簿码一起转给对方。</view>
+      <view class="muted intro">把你替别人建的{{orgMode ? '场次' : '礼簿'}}移交给真正的主家，没选的留在你这里。全选则主家信息、收款码、已印礼簿码一并转给对方。</view>
 
       <view class="pick-head">
         <text class="muted">{{orgMode ? '选择场次' : '选择礼簿'}}</text>
@@ -26,7 +26,7 @@
         <switch checked="{{stayClerk}}" bindchange="onStayClerk" color="{{primary}}" />
       </view>
 
-      <view class="transfer-warn">移交卡只发给接收人本人！拿到卡片的人点开即可接收你选中的全部{{orgMode ? '场次' : '礼簿'}}，请勿转发到群里。</view>
+      <view class="transfer-warn">移交卡只发给接收人本人！拿到的人点开即可接收所选全部{{orgMode ? '场次' : '礼簿'}}，请勿转发到群。</view>
       <!-- 先生成移交卡片，再出现发送按钮（同礼簿共享，v3.78.2）：未生成时转发只会是普通首页卡片 -->
       <button wx:if="{{!transferToken}}" class="btn-primary" style="margin-top:20rpx" bindtap="onMakeTransfer">生成移交卡片</button>
       <block wx:else>

@@ -110,7 +110,7 @@ Page({
     else {
       wx.showModal({
         title: '没连上打印机',
-        content: '请确认打印机已开机、手机蓝牙已打开，并靠近打印机后再试；也可以去「打印机」页重新配对。',
+        content: '请确认打印机已开机、蓝牙已打开并靠近，或去「打印机」页重新配对。',
         confirmText: '去配对',
         cancelText: '知道了',
         success: r => { if (r.confirm) wx.navigateTo({ url: '/pages/printer/printer' }); }

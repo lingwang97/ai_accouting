@@ -23,13 +23,13 @@
     </view>
   </view>
 
-  <view class="notify-tip" wx:if="{{roleReady && !canConfirm}}">你没有「确认收礼」权限，只能查看待确认礼金，由主家或其他记账人确认</view>
+  <view class="notify-tip" wx:if="{{roleReady && !canConfirm}}">你没有「确认收礼」权限，只能查看</view>
   <view class="notify-tip" wx:elif="{{notifyTip}}" bindtap="onSubscribe">🔔 {{notifyTip}} <text class="nt-go">开启 ›</text></view>
 
   <!-- 宾客登记后没点「我已完成转账」：常见于转完账直接回聊天，主家核对微信到账后可直接入簿 -->
   <view class="card stall" wx:if="{{canConfirm && stalled.length}}">
     <view class="stall-title">宾客未点「我已完成转账」（{{stalled.length}}）</view>
-    <view class="muted small">宾客可能转完账就离开了，也可能还在转账（3 分钟内登记的不会出现在这里）。请核对微信是否收到：收到的点「已收到」入簿，确实没收到的点「未收到」</view>
+    <view class="muted small">请核对微信是否收到：收到点「已收到」，没收到点「未收到」。3 分钟内登记的暂不显示</view>
     <view class="stall-row" wx:for="{{stalled}}" wx:key="_id" wx:if="{{stallAll || index < 3}}">
       <view class="stall-info">
         <view class="stall-name"><text class="payer">{{item.nameStr}}</text><text class="dup-tag" wx:if="{{item.suspectDup}}">疑似重复</text><text class="money">￥{{item.amountStr}}</text></view>
@@ -48,7 +48,7 @@
   <!-- 宾客申诉（v3.74.0）：被标「未收到」的宾客说确实转了，请主家再核对微信到账 -->
   <view class="card stall" wx:if="{{canConfirm && appeals.length}}">
     <view class="stall-title">宾客申诉（{{appeals.length}}）</view>
-    <view class="muted small">宾客说这笔已经转账，请再核对微信；核对到的点「确认入簿」，确实没有的点「维持未收到」（宾客不能再申诉）</view>
+    <view class="muted small">宾客称已转账，请再核对微信：有则「确认入簿」，没有则「维持未收到」（宾客不能再申诉）</view>
     <view class="stall-row" wx:for="{{appeals}}" wx:key="_id">
       <view class="stall-info">
         <view class="stall-name"><text class="payer">{{item.nameStr}}</text><text class="money">￥{{item.amountStr}}</text></view>
@@ -86,7 +86,7 @@
   <!-- 最近 24 小时内标记「未收到」的：点错了可撤销 -->
   <view class="card stall" wx:if="{{canConfirm && rejected.length}}">
     <view class="stall-title rej-head" bindtap="onRejFold">最近标记「未收到」{{rejected.length}} 笔<text class="rej-arrow">{{rejFold ? '展开 ›' : '收起 ˄'}}</text></view>
-    <view class="muted small" wx:if="{{!rejFold}}">24 小时内可撤销，撤销后回到标记前的状态</view>
+    <view class="muted small" wx:if="{{!rejFold}}">24 小时内可撤销</view>
     <view class="stall-row" wx:for="{{rejected}}" wx:key="_id" wx:if="{{!rejFold}}">
       <view class="stall-info">
         <view class="stall-name"><text class="payer">{{item.nameStr}}</text><text class="money">￥{{item.amountStr}}</text></view>
@@ -176,7 +176,6 @@
         </view>
         <view class="muted">{{current.timeStr}} {{current.mixed ? '转账+现金' : (current.payMethod === 'cash' ? '宾客现金' : '已转账')}}</view>
       </view>
-      <view class="tip muted">{{current.mixed ? '请核对微信转账与现金合计与上面的金额一致' : (current.payMethod === 'cash' ? '请清点现金与上面的金额一致' : '请核对微信已收到上面的金额')}}</view>
       <button class="btn-primary btn-big" disabled="{{busy}}" bindtap="onCardOk">确认收到</button>
       <button class="btn-danger btn-big" disabled="{{busy}}" bindtap="onCardNo">没收到</button>
       <view class="link center mismatch" bindtap="onCardMismatch">金额不一致？按实际到账入簿</view>

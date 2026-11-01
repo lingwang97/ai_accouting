@@ -15,7 +15,7 @@ async function confirmSwitch({ orgMode, fromName, toName }) {
   const to = cut(toName, 12);
   const first = await modal({
     title: '切换当前礼簿',
-    content: `切换后，礼簿码、宾客扫码随礼、礼台记账和记账人都会改记到新礼簿「${to}」。办事当天正在收礼时不建议切换；同一天办多场请使用机构模式。`,
+    content: `切换后礼簿码、扫码随礼、礼台记账和记账人都改记到「${to}」。办事当天不建议切换，同天多场请用机构模式。`,
     confirmText: '继续',
     cancelText: '取消'
   });

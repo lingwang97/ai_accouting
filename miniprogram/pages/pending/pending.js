@@ -260,7 +260,7 @@ Page({
     }
     const ok = await new Promise(resolve => wx.showModal({
       title: '确认未收到',
-      content: `${g.payerName} ￥${g.amountStr} 已被自动取消。确认微信里没有收到这笔转账？确认后从这一栏移除。`,
+      content: `${g.payerName} ￥${g.amountStr} 已自动取消。确认微信没收到？确认后从此栏移除。`,
       confirmText: '未收到',
       confirmColor: '#FA5151',
       success: r => resolve(r.confirm),

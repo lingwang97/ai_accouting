@@ -29,7 +29,7 @@
       <view class="card batch-switch">
         <view>
           <view>批次录入</view>
-          <view class="muted">帮多人一起登记（如一家人、同事一起{{act}}），每人单独记入礼簿，按合计转一笔账</view>
+          <view class="muted">多人一起登记，每人单独入簿，按合计转一笔</view>
         </view>
         <switch checked="{{batchMode}}" bindchange="onBatchMode" color="{{primary}}" />
       </view>
@@ -71,7 +71,6 @@
             <view class="chip {{payMethod === 'mixed' ? 'on' : ''}}" wx:if="{{batchMode}}" data-m="mixed" bindtap="onPayMethod">转账+现金</view>
           </view>
           <view class="muted" wx:if="{{payMethod === 'cash'}}">现金请当面交给主家或礼台，无需扫码转账</view>
-          <view class="muted" wx:if="{{payMethod === 'mixed'}}">转账部分扫码转一笔，现金当面交给礼台</view>
         </view>
       </view>
       <button class="btn-primary" loading="{{submitting}}" bindtap="onConfirmTransfer">{{payMethod === 'cash' ? '确认' + act + '（现金）' : '确认' + act}}</button>
@@ -127,9 +126,8 @@
         <view class="muted items" wx:if="{{record.itemsStr}}">{{record.itemsStr}}</view>
         <view class="cash-tip" wx:if="{{record.payMethod === 'cash'}}">请将现金 ￥{{record.amountStr}} 当面交给主家或礼台</view>
         <view class="cash-tip" wx:if="{{record.mixed}}">转账 ￥{{record.payStr}} 已完成，请将现金 ￥{{record.cashStr}} 当面交给礼台</view>
-        <view class="muted tip" wx:if="{{!pollTimeout}}">主家确认收到后本页会自动显示回执。也可以先离开，主家确认后到首页「我的随礼记录」查看回执</view>
-        <view class="muted tip" wx:else>主家可能正在忙，已暂停自动查询。你可以先离开，主家确认后到首页「我的随礼记录」查看回执；也可点下方「刷新状态」再看看</view>
-        <view class="muted tip pull-tip">下拉可立即刷新</view>
+        <view class="muted tip" wx:if="{{!pollTimeout}}">主家确认后本页自动显示回执，也可先离开，稍后在首页「我的随礼记录」查看</view>
+        <view class="muted tip" wx:else>已暂停自动查询。可先离开，稍后在「我的随礼记录」查看，或点「刷新状态」</view>
       </view>
       <button class="btn-outline" bindtap="onRefresh">刷新状态</button>
     </block>
@@ -151,7 +149,6 @@
         <view class="muted">{{who}}：{{record.payerName}} · 主家：{{account.accountName}}</view>
       </view>
       <button wx:if="{{receiptModel}}" class="btn-primary btn-receipt" loading="{{savingReceipt}}" bindtap="onSaveReceipt">保存回执到相册</button>
-      <view class="muted center tip">回执也可在首页「我的随礼记录」中随时查看</view>
       <view class="host-cta" wx:if="{{!isFuneral}}" bindtap="goHostEntry">我家也要办事？免费创建电子礼簿，宾客扫码随礼自动记账 ›</view>
       <ad-slot slot="paySuccess" book-type="{{account.book.type || 'other'}}" />
     </block>

@@ -104,7 +104,7 @@ Page({
     const v = viewRecord(o.record);
     wx.showModal({
       title: `有一笔未完成的${this.data.act}`,
-      content: `${v.payerName} ￥${v.payStr}：已经转账了吗？转了请点「继续」，再点「我已完成转账」。`,
+      content: `${v.payerName} ￥${v.payStr} 已转账了吗？已转请点「继续」，再点「我已完成转账」。`,
       confirmText: '继续',
       cancelText: '不用了',
       success: r => {
@@ -275,7 +275,7 @@ Page({
     return new Promise(resolve => {
       wx.showModal({
         title: `你刚登记过${this.data.act === '登记' ? '' : '这笔'}`,
-        content: `${dup.minutes} 分钟前已登记 ${dup.name} ￥${fmt.money(dup.amount)}（${st}）。确定要再登记一笔吗？同一笔${this.data.isFuneral ? '奠仪' : '礼金'}不要重复登记。`,
+        content: `${dup.minutes} 分钟前已登记 ${dup.name} ￥${fmt.money(dup.amount)}（${st}）。确定再登记一笔${this.data.isFuneral ? '奠仪' : '礼金'}？`,
         confirmText: '再登记',
         cancelText: '不用了',
         success: r => {

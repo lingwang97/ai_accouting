@@ -74,7 +74,7 @@
   <view class="mask {{inTab ? 'mg-tab-mask' : ''}}" wx:if="{{appeal}}" catchtouchmove="noop" bindtap="onAppealClose">
     <view class="sheet {{inTab ? 'mg-tab-sheet' : ''}}" catchtap="noop">
       <view class="sheet-title">申请主家再核对</view>
-      <view class="muted mg-ap-sub">{{appeal.name}} ￥{{appeal.amountStr}}。每笔只能申请一次，主家会在「待确认」里看到你的说明；也可以同时点「分享给主家」联系他。</view>
+      <view class="muted mg-ap-sub">{{appeal.name}} ￥{{appeal.amountStr}}。每笔只能申请一次，主家会在「待确认」看到你的说明，也可点「分享给主家」。</view>
       <textarea class="mg-ap-input" cursor-spacing="140" maxlength="50" placeholder="说明（选填，50 字内），如：转账时间、转账备注" value="{{appeal.note}}" bindinput="onAppealNote" />
       <input class="mg-ap-ref" cursor-spacing="100" maxlength="6" placeholder="微信转账单号后几位（选填）" value="{{appeal.ref}}" bindinput="onAppealRef" />
       <view class="sheet-btns">
@@ -89,6 +89,6 @@
     <view class="ne-sub">{{loadErr}}，请检查网络后重试</view>
     <view class="ne-btn">点此重试</view>
   </view>
-  <view class="muted center mg-empty" wx:elif="{{!loading && empty}}">{{keyword ? '没有找到「' + keyword + '」' : '暂无随礼记录。扫码随礼后，等待确认、已入簿等进度都会出现在这里；需用登记时的同一个微信查看'}}</view>
+  <view class="muted center mg-empty" wx:elif="{{!loading && empty}}">{{keyword ? '没有找到「' + keyword + '」' : '暂无随礼记录。扫码随礼后进度会显示在这里，需用登记时的同一微信查看'}}</view>
   <loading show="{{loading && !list.length && !waiting.length && !rejected.length && !cancelled.length}}" rows="3" />
 </view>

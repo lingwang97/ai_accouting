@@ -21,7 +21,7 @@
     <view class="section-title">本场主家称呼</view>
     <input class="input" placeholder="如：张府（宾客页、回执、小票显示）" maxlength="20" value="{{hostName}}" bindinput="onHostName" />
     <view class="section-title gap">本场收款码</view>
-    <view class="muted" style="margin-bottom:16rpx">上传本场主家的微信收款码，宾客的钱直接转给主家；不上传则用机构的收款码</view>
+    <view class="muted" style="margin-bottom:16rpx">上传本场主家的收款码，宾客直接转给主家；不传则用机构收款码</view>
     <image wx:if="{{payCodePreview}}" class="paycode" src="{{payCodePreview}}" mode="aspectFit" />
     <view wx:elif="{{hasPayCode}}" class="muted">✓ 已设置本场收款码</view>
     <view class="pc-ops">
@@ -32,7 +32,7 @@
 
   <view class="card" wx:if="{{id}}">
     <view class="section-title">合计数据</view>
-    <view class="muted" style="margin-bottom:16rpx">礼簿页的份数与合计与明细对不上时，可按全部已入簿记录重新计算（不会修改任何礼金记录）</view>
+    <view class="muted" style="margin-bottom:16rpx">份数或合计与明细对不上时，可重新计算（不改礼金记录）</view>
     <button class="btn-outline pc-btn" loading="{{recalcing}}" bindtap="onRecalc">重算合计</button>
   </view>
 

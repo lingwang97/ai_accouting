@@ -4,7 +4,7 @@
   <block wx:if="{{model}}">
     <receipt-view model="{{model}}" />
     <view class="card claim" wx:if="{{claim === 'open'}}">
-      <view class="muted">这笔随礼是礼台代为登记的。放入后，可在「我的随礼记录」里随时查看这张回执。</view>
+      <view class="muted">礼台代登记的随礼，放入后可在「我的随礼记录」查看。</view>
       <button class="btn-primary save" loading="{{claiming}}" bindtap="onClaim">放入我的随礼记录</button>
     </view>
     <view class="claim-tip" wx:if="{{claim === 'mine'}}" bindtap="goMine">已在你的「我的随礼记录」中 ›</view>

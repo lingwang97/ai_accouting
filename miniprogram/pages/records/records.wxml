@@ -98,7 +98,7 @@
     </view>
   </view>
 
-  <view class="muted center pad" wx:if="{{dupOn && dupTruncated}}">重名较多，仅显示部分，可配合搜索缩小范围</view>
+  <view class="muted center pad" wx:if="{{dupOn && dupTruncated}}">仅显示部分，可用搜索缩小范围</view>
   <view class="net-err" wx:if="{{!loading && list.length === 0 && loadErr}}" bindtap="onRetryLoad">
     <view class="ne-title">礼簿没加载出来</view>
     <view class="ne-sub">{{loadErr}}，请检查网络后重试</view>
@@ -118,7 +118,7 @@
   <view class="mask tab-mask" wx:if="{{amend}}" catchtap="onAmendClose" catchtouchmove="noop">
     <view class="sheet tab-sheet" catchtap="noop">
       <view class="sheet-title">修改礼金记录</view>
-      <view class="muted small amend-tip">金额改动会同步更新{{unit}}合计，每次修改都有记录</view>
+      <view class="muted small amend-tip">改金额会同步更新合计，并留有修改记录</view>
       <view class="field"><view class="muted small">姓名</view><input class="input" maxlength="20" value="{{amend.name}}" data-k="name" bindinput="onAmendInput" /></view>
       <view class="field"><view class="muted small">金额（元）</view><input class="input" type="digit" maxlength="11" value="{{amend.amount}}" data-k="amount" bindinput="onAmendInput" /></view>
       <view class="field"><view class="muted small">关系</view><picker range="{{amendRels}}" value="{{amend.relIdx}}" bindchange="onAmendRel"><view class="input">{{amendRels[amend.relIdx]}} ▾</view></picker></view>

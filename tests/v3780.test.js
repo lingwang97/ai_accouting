@@ -105,7 +105,7 @@ test('前端：卡片「切换礼簿」仅共享 ≥2 本，空状态提示卡 +
   assert.ok(sw.includes('list.length > 6 ? 5 : 6') && sw.includes('共享给我的场次…') && sw.includes('共享给我的礼簿…')); // 最多 6 项
   assert.ok(!sw.includes('bookSetActive'), '不改主家的当前礼簿');
   const w = rd('miniprogram/pages/index/index.wxml');
-  assert.ok(w.includes('主家暂未共享') && w.includes('或共享已取消，可联系主家重新共享'));
+  assert.ok(w.includes('主家未共享') && w.includes('请联系主家'));
   assert.ok(w.includes('bindtap="goMine">切换身份'));
   assert.ok(/class="book-card" wx:if="\{\{!viewerEmpty\}\}"/.test(w));
   assert.ok(j.includes('goExportBook()') && j.includes("'/pages/export/export' + (b ? `?bookId=${b._id}` : '')"));

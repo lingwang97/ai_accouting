@@ -87,7 +87,7 @@ Page({
     if (!b || this.data.recalcing) return;
     wx.showModal({
       title: '重算合计',
-      content: '将按这本礼簿全部已入簿的记录重新计算份数与合计（不是只算当前筛选的日期），不会修改任何礼金记录。确定重算吗？',
+      content: '按这本礼簿全部已入簿的记录重新计算份数与合计，不改礼金记录。确定重算？',
       confirmText: '重算',
       success: async r => {
         if (!r.confirm) return;

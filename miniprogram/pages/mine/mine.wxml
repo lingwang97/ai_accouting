@@ -14,8 +14,7 @@
       <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar"><image class="avatar" src="{{avatarSrc || '/assets/avatar-default.png'}}" mode="aspectFill" binderror="onAvatarError" /></button>
       <view class="info">
         <view class="name">{{user.nickname}}</view>
-        <view class="muted" wx:if="{{avatarBad}}">点头像可重新选择</view>
-        <view class="muted small" wx:else>点头像可更换</view>
+        <view class="muted small">点头像可更换</view>
         <view class="muted">{{account ? (role === 'clerk' ? (account.orgMode ? '礼台人员' : '记账人') + ' · 为「' + account.accountName + '」记账' : (role === 'viewer' ? '家人共享 · 查看「' + account.accountName + '」的礼簿' : '主家：' + account.accountName)) : '尚未完善主家信息'}}</view>
         <view class="plan-tag" wx:if="{{planText}}">{{planText}}</view>
       </view>
@@ -71,7 +70,7 @@
           <image class="mi-icon" src="/assets/icons/export-m.svg" /><text class="mi-text">导出与备份</text><text class="arrow">›</text>
         </view>
         <view class="menu-item" bindtap="goTrash" wx:if="{{role === 'owner'}}">
-          <image class="mi-icon" src="/assets/icons/trash-m.svg" /><text class="mi-text">回收站</text><text class="arrow"><text class="muted">删除的礼簿可恢复</text> ›</text>
+          <image class="mi-icon" src="/assets/icons/trash-m.svg" /><text class="mi-text">回收站</text><text class="arrow">›</text>
         </view>
         <!-- 高级功能：机构模式、新礼金提醒、高峰模式等；所有有账户身份的角色都显示，无权限的项目在页内置灰并说明 -->
         <view class="menu-item" bindtap="goAdvanced">

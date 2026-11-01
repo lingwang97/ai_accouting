@@ -42,7 +42,7 @@
     </block>
     <block wx:else>
       <button class="btn-primary" bindtap="onScan">扫描蓝牙打印机</button>
-      <view class="muted pad">支持 BLE 蓝牙热敏打印机（芯烨/汉印/佳博等）。如搜不到，点右上"显示全部设备"。</view>
+      <view class="muted pad">支持蓝牙热敏打印机（芯烨/汉印/佳博）。搜不到请点「显示全部设备」</view>
     </block>
   </view>
 </view>

@@ -182,7 +182,7 @@ Page({
       theme.apply(this);
       if (pendingPayCode) {
         this.setData({ pendingNote: true });
-        wx.showModal({ title: '已提交主家确认', content: '新收款码待主家确认后生效', showCancel: false });
+        wx.showModal({ title: '已提交主家确认', content: '新收款码待主家确认', showCancel: false });
       } else {
         wx.showToast({ title: '保存成功', icon: 'success' });
       }

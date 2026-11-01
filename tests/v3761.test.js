@@ -87,7 +87,7 @@ test('askDup 文案：喜事转账保持原文案；现金改「礼台还没确�
     return log.modals[0];
   };
   let m = run({ act: '随礼', isFuneral: false, payMethod: 'wechat' });
-  assert.ok(m.content.includes('还没点「我已完成转账」') && m.content.includes('同一笔礼金不要重复登记'));
+  assert.ok(m.content.includes('还没点「我已完成转账」') && m.content.includes('确定再登记一笔礼金？'));
   assert.strictEqual(m.title, '你刚登记过这笔');
   m = run({ act: '随礼', isFuneral: false, payMethod: 'cash' });
   assert.ok(m.content.includes('礼台还没确认') && !m.content.includes('我已完成转账'));

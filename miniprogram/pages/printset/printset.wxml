@@ -56,7 +56,7 @@
         <view class="chip {{amountSize === 'normal' ? 'on' : ''}}" data-v="normal" bindtap="onAmountSize">正常</view>
       </view></view>
     <view class="row"><text class="lbl">二维码</text>
-      <text class="muted flex1">致谢语下打印小程序码，扫码可查看电子回执（默认关；开启后每张小票多打几秒）</text>
+      <text class="muted flex1">致谢语下打印小程序码，扫码看电子回执（默认关，每张多打几秒）</text>
       <switch checked="{{qr}}" bindchange="onQr" color="{{primary}}" /></view>
     <block wx:if="{{qr}}">
       <view class="row"><text class="lbl">打印方式</text>
@@ -64,13 +64,13 @@
           <view class="chip on">图片方式（小程序码）</view>
           <view class="chip disabled">原生指令（未启用）</view>
         </view></view>
-      <view class="row"><text class="lbl"></text><text class="muted flex1">小程序码永久有效，任何人扫码都能打开；礼台登记的记录先认先得。原生指令仅适用于普通链接二维码（需备案域名配置），暂未启用。打印比文字稍慢。</text></view>
+      <view class="row"><text class="lbl"></text><text class="muted flex1">小程序码永久有效，任何人扫码可打开；礼台登记的记录先认先得</text></view>
       <view class="row wrap"><text class="lbl"></text>
         <view class="btn btn-outline btn-sm" bindtap="onQrTest">{{qrTesting ? "打印中…" : "打印测试码"}}</view>
-        <text class="muted qr-note">打印一张指向首页的真实小程序码，用微信扫一扫测识别率</text></view>
+        <text class="muted qr-note">打印一张指向首页的小程序码，测识别率</text></view>
       <view class="row wrap"><text class="lbl"></text>
         <view class="btn btn-outline btn-sm" bindtap="onQrCheck">{{qrChecking ? "检测中…" : "检测小程序码生成"}}</view>
-        <text class="muted qr-note">真实小票没有二维码时先点这里看原因（只检测，不打印）</text></view>
+        <text class="muted qr-note">小票没有二维码时点这里看原因（不打印）</text></view>
     </block>
     <view class="row"><text class="lbl">花边</text>
       <view class="chips">
@@ -83,12 +83,12 @@
       </view></view>
     <block wx:if="{{border !== 'off'}}">
       <view class="row"><text class="lbl">左右字符</text>
-        <text class="muted flex1">每行首尾各印一个小符号；关闭则只印上下花纹带，正文宽度不变</text>
+        <text class="muted flex1">每行首尾印小符号，关闭则只印上下花纹</text>
         <switch checked="{{borderSide}}" bindchange="onBorderSide" color="{{primary}}" /></view>
-      <view class="row"><text class="lbl"></text><text class="muted flex1">花边是图案，每张小票多打约半秒到一秒，批量打印会累加；开启左右字符后每行少 2 个汉字。白事一律用素雅线。{{qr ? '二维码两侧没有字符。' : ''}}</text></view>
+      <view class="row"><text class="lbl"></text><text class="muted flex1">花边每张多打约 1 秒，批量会累加；左右字符会让每行少 2 个汉字。白事固定素雅线。{{qr ? '二维码两侧没有字符。' : ''}}</text></view>
       <view class="row wrap"><text class="lbl"></text>
         <view class="btn btn-outline btn-sm" bindtap="onBorderTest">{{borderTesting ? "打印中…" : "打印花边测试"}}</view>
-        <text class="muted qr-note">按当前设置印一张示例小票（不入簿），用来确认花纹和符号能否打出</text></view>
+        <text class="muted qr-note">按当前设置印一张示例小票（不入簿）</text></view>
     </block>
     <view class="row"><text class="lbl">纸宽</text>
       <view class="chips">
@@ -109,7 +109,7 @@
       <view class="chips">
         <view wx:for="{{bottomOpts}}" wx:key="*this" class="chip {{feedBottom === item ? 'on' : ''}}" data-n="{{item}}" bindtap="onFeedBottom">{{item}}</view>
       </view></view>
-    <view class="muted">下方留白太少撕纸时容易撕坏字；默认上 1 行、下 5 行</view>
+    <view class="muted">下方留白太少易撕坏字，默认上 1 行、下 5 行</view>
   </view>
 
   <!-- 字段排版 -->

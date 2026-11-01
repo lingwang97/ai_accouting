@@ -218,7 +218,7 @@ Page({
         app.globalData.justSetup = false;
         wx.showModal({
           title: '礼簿已创建',
-          content: '下一步：出示礼簿码，宾客用微信扫码就能随礼，礼金自动记到这本礼簿。',
+          content: '下一步：出示礼簿码，宾客扫码即可随礼。',
           confirmText: '去出示',
           cancelText: '稍后',
           success: res => { if (res.confirm) this.goQrcode(); }
@@ -452,7 +452,7 @@ Page({
       this.setData({ notifyTip: '' });
       wx.showModal({
         title: '已开启新礼金提醒',
-        content: '宾客转账后你会收到微信服务通知。建议勾选「总是保持以上选择」，之后每次确认礼金自动续订。',
+        content: '宾客转账后会通知你。请勾选「总是保持以上选择」，之后自动续订。',
         showCancel: false
       });
     } else {

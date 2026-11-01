@@ -32,7 +32,7 @@
       <view class="row sub"><text>宾客现金</text><text><text class="muted">{{r.guestCash.count}} 份 · </text>￥{{r.guestCash.sumStr}}</text></view>
       <view class="row mixed" wx:if="{{r.mixed.batches}}"><text>其中转账+现金 {{r.mixed.batches}} 批</text><text>￥{{r.mixed.sumStr}}</text></view>
       <view class="row sub" wx:if="{{r.mixed.batches}}"><text>转账部分 / 现金部分</text><text>￥{{r.mixed.wechatStr}} / ￥{{r.mixed.cashStr}}</text></view>
-      <view class="muted small tip">点钞以「现金合计」为准；转账+现金批次已拆分计入微信与现金</view>
+      <view class="muted small tip">点钞以「现金合计」为准，混合批次已拆分计入</view>
     </view>
 
     <!-- 待处理 -->

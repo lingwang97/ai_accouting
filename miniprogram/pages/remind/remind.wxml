@@ -1,5 +1,5 @@
 <view class="container" style="{{themeStyle}}">
-  <view class="tip muted">到期在「往来」提醒你；订阅后到提醒时间再发微信通知</view>
+  <view class="tip muted">到期在「往来」提醒，订阅后还会发微信通知</view>
   <view class="card">
     <view class="field">
       <text class="label">对方姓名 *</text>
@@ -28,7 +28,6 @@
         <picker class="tr-day" mode="date" value="{{remindDay}}" start="{{today}}" end="{{date}}" bindchange="onRemindDay"><view class="input">{{remindDay || '选择日期'}}</view></picker>
         <picker class="tr-time" mode="time" value="{{remindTime}}" bindchange="onRemindTime"><view class="input">{{remindTime}}</view></picker>
       </view>
-      <view class="muted small">到这个时间（5 分钟内）发送微信通知，并在「往来」顶部提醒</view>
     </view>
     <view class="field">
       <text class="label">地点</text>

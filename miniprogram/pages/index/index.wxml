@@ -32,12 +32,12 @@
       </view>
     </block>
     <!-- 没有可记的礼簿 -->
-    <view class="warn-card" wx:if="{{noBook === 'ended'}}">{{o.t("你负责的礼簿已结束（归档、删除或移交），暂时不能出示礼簿码和登记，请联系主家重新安排", account.orgMode)}}</view>
-    <view class="warn-card" wx:elif="{{noBook === 'none' && !readonly}}" bindtap="goBooks">{{o.t("还没有当前礼簿：请先在「礼簿管理」里新建或选择一本，宾客的礼金才知道记到哪里 ›", account.orgMode)}}</view>
+    <view class="warn-card" wx:if="{{noBook === 'ended'}}">{{o.t("礼簿已结束，暂不能出示礼簿码和登记，请联系主家", account.orgMode)}}</view>
+    <view class="warn-card" wx:elif="{{noBook === 'none' && !readonly}}" bindtap="goBooks">{{o.t("还没有当前礼簿，去「礼簿管理」新建或选择 ›", account.orgMode)}}</view>
 
     <!-- 当前礼簿 -->
     <view class="warn-card empty-card" wx:if="{{viewerEmpty}}">
-      <view>主家暂未共享{{account.orgMode ? '场次' : '礼簿'}}给你，或共享已取消，可联系主家重新共享</view>
+      <view>主家未共享{{account.orgMode ? '场次' : '礼簿'}}给你，请联系主家</view>
       <view class="btn btn-primary" style="margin-top:20rpx" hover-class="btn-hover" bindtap="goMine">切换身份</view>
     </view>
     <view class="book-card" wx:if="{{!viewerEmpty}}" bindtap="goRecords">
@@ -172,7 +172,6 @@
     <!-- 选了「办事收礼」、还没建好主家信息：接着创建 -->
     <view class="card setup-card" wx:if="{{setupCard}}">
       <view class="sc-title">开始办事 · 3 步</view>
-      <view class="muted">完成后就能出示礼簿码，宾客扫码随礼自动记账</view>
       <view class="sc-row {{setupCard.name ? 'done' : ''}}"><text class="sc-dot">{{setupCard.name ? '✓' : '1'}}</text>主家称呼</view>
       <view class="sc-row {{setupCard.code ? 'done' : ''}}"><text class="sc-dot">{{setupCard.code ? '✓' : '2'}}</text>微信收款码</view>
       <view class="sc-row {{setupCard.book ? 'done' : ''}}"><text class="sc-dot">{{setupCard.book ? '✓' : '3'}}</text>第一本礼簿</view>
@@ -211,7 +210,7 @@
     <view class="card host-entry">
       <view>
         <view class="he-title">我是主家，要办事收礼</view>
-        <view class="muted">创建礼簿，宾客扫码随礼自动记账、打印回执</view>
+        <view class="muted">创建礼簿，宾客扫码随礼自动记账</view>
       </view>
       <button wx:if="{{loggedIn}}" class="btn btn-primary he-btn" bindtap="goSetup">创建礼簿</button>
       <button wx:else class="btn btn-primary he-btn" bindtap="goLogin">登录</button>

@@ -180,7 +180,7 @@ Page({
       if (notify.enabled() && !notify.subscribeFailShown()) {
         wx.showModal({
           title: '未开启提醒',
-          content: '没有同意订阅，提醒没有开启。如果没有弹出授权窗口，或之前勾选过「总是保持以上选择」并选了拒绝，请点右上角「···」→ 设置 → 通知管理，打开「接收通知」，并把本提醒设为允许，然后再试。',
+          content: '未开启提醒。请点右上角「···」→ 设置 → 通知管理，打开「接收通知」并允许本提醒，再试一次。',
           showCancel: false, confirmText: '知道了'
         });
       }

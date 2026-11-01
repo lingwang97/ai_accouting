@@ -67,7 +67,7 @@
       <view class="pv-tab {{cur === 2 ? 'on' : ''}}" data-i="2" bindtap="onTab">封底</view>
     </view>
     <view class="lock-tip" wx:if="{{lockTip}}">{{lockTip}}</view>
-    <view class="muted tip">示意图，字体和细节以「预览」或导出为准；内页为本礼簿前几位宾客{{pvSample ? '（暂无数据，用示例）' : ''}}</view>
+    <view class="muted tip">示意图，以预览或导出为准；内页为本礼簿前几位宾客{{pvSample ? '（暂无数据，用示例）' : ''}}</view>
 
     <!-- 喜事：预设 + 自定义 -->
     <view class="card" wx:if="{{!isFuneral}}">
@@ -118,7 +118,7 @@
     <!-- 白事：颜色固定素灰，只能改字体、角饰、水印、标题、落款 -->
     <view class="card cust" wx:if="{{isFuneral}}">
       <view class="section-title">白事礼簿样式</view>
-      <view class="muted">颜色固定为素灰，不可更换；其余可按需设置</view>
+      <view class="muted">白事颜色固定素灰</view>
       <view wx:if="{{defTip}}" class="def-tip">{{defTip}}</view>
       <view class="cust-lb">字体</view>
       <view class="chips"><view wx:for="{{fonts}}" wx:key="k" class="chip {{fun.font === item.k ? 'on' : ''}}" data-f="font" data-v="{{item.k}}" bindtap="onFun">{{item.n}}{{item.locked ? " · 会员" : ""}}</view></view>
@@ -156,11 +156,11 @@
       <view class="cust-lb">装订</view>
       <view class="chips"><view wx:for="{{binds}}" wx:key="k" class="chip {{bind === item.k ? 'on' : ''}}" data-k="{{item.k}}" bindtap="onBind">{{item.n}}</view></view>
       <view class="muted tip">{{bindTip}}</view>
-      <view class="muted tip">已生成的存档 PDF 不会自动更新；之后新归档或重新生成的存档会按这里的设置</view>
+      <view class="muted tip">已生成的存档不会更新，之后新归档的按此设置</view>
     </view>
 
     <view class="muted tip" wx:if="{{!canSave}}">你没有管理礼簿权限，本次选择的主题只用于这次导出，不会保存</view>
-    <view class="muted tip" wx:else>确认导出后，主题会记在这本礼簿上，下次进入自动带出；礼簿归档存档也使用该主题</view>
+    <view class="muted tip" wx:else>导出后主题会记在本礼簿，下次自动带出</view>
   </block>
 
   <view class="bottom-bar" wx:if="{{book && !kb}}">
