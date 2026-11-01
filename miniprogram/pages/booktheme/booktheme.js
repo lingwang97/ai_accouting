@@ -57,7 +57,7 @@ const PAGE = {
     org: false,              // 机构模式：礼簿称场次
     fontName: '黑体', effFont: 'sans',
     pvf: { main: '', sub: '', mark: '' }, // 示意图字体（font-family 样式；没加载到为空 = 系统字体）
-    pvLoading: false, pvFail: false,
+    pvLoading: false, pvFail: false, pvNone: false,
     tryFont: '',             // 会员字体试看（只改示意图，不选中；切标签 / 选别的字体即恢复）
     premiumOk: true,         // 套餐是否开放会员主题（features.pdfThemePremium；缺项视为开放）
     lockTip: '',             // 套餐未开放时的说明
@@ -605,11 +605,12 @@ const PAGE = {
     const fam = {};
     await Promise.all(keys.map(async k => { fam[k] = await pvfont.load(k, this._pvLoaded); }));
     if (sig !== this._pvSig) return; // 期间又换了字体，以最新的为准
+    const noneFont = pvfont.state() === 'none'; // 管理员还没上传预览字体（不是加载故障）
     const mainFam = fam[main];
     const subFam = main === 'brush' ? fam.sans : mainFam;
     const markFam = (mark === '囍' || main === 'brush') ? fam.serif : mainFam;
     this.setData({
-      pvLoading: false, pvFail: keys.some(k => !fam[k]),
+      pvLoading: false, pvNone: noneFont, pvFail: !noneFont && keys.some(k => !fam[k]),
       pvf: { main: pvfont.css(mainFam), sub: pvfont.css(subFam), mark: pvfont.css(markFam) }
     });
   },

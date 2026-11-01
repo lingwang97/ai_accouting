@@ -423,7 +423,8 @@ function previewTheme(book, event) {
 }
 
 /**
- * 示意图字体预览（v3.83.0）：返回三份预览小字体（约 800 个常用字的子集）的 https 临时链接，不返回 fileID / 云存储路径。
+ * 示意图字体预览（v3.83.0）：返回三份预览小字体（约 800 个常用字的子集）的 https 临时链接；v3.83.1 起同时返回 fileID（前端用 wx.cloud.downloadFile 下载到本地再加载，
+ * 直接让 loadFontFace 加载临时链接在真机上跨域失败）。字体不是敏感数据（存储本来就是所有用户可读），仍只对能打开导出页的身份开放；不返回 openid
  * 权限：能打开导出页的身份（主家、有导出权限的记账人、家人共享）；没有账户的返回错误。字体由 fontsetup 的 uploadPreview 上传并登记在 settings.preview_fonts
  */
 async function fontPreview(ctx) {
@@ -437,7 +438,7 @@ async function fontPreview(ctx) {
   try {
     const r = await cloud.getTempFileURL({ fileList: keys.map(k => fonts[k].fileID) });
     (r.fileList || []).forEach((f, i) => {
-      if (f && f.status === 0 && /^https:\/\//.test(String(f.tempFileURL || ''))) out[keys[i]] = { url: String(f.tempFileURL), v: String(fonts[keys[i]].sha256 || '').slice(0, 8), size: Number(fonts[keys[i]].size) || 0 };
+      if (f && f.status === 0 && /^https:\/\//.test(String(f.tempFileURL || ''))) out[keys[i]] = { url: String(f.tempFileURL), fileID: String(fonts[keys[i]].fileID), v: String(fonts[keys[i]].sha256 || '').slice(0, 8), size: Number(fonts[keys[i]].size) || 0 };
     });
   } catch (e) { console.warn('fontPreview failed', e && (e.errMsg || e.message)); }
   return ok({ ready: Object.keys(out).length > 0, fonts: out });

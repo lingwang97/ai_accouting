@@ -119,7 +119,7 @@ function seedAcc(opts = {}) {
 }
 const callExport = async (openid, body) => { state.openid = openid; return quiet(() => loadFunction('export').main(body)); };
 
-test('fontPreview：只返回 https 临时链接（不含 fileID / 路径）；主家、有导出权限的记账人、家人共享可取；无导出权限与无账户拒绝', async () => {
+test('fontPreview：返回 https 临时链接 + fileID（v3.83.1，前端 downloadFile 用）；主家、有导出权限的记账人、家人共享可取；无导出权限与无账户拒绝', async () => {
   seedAcc();
   const origTmp = sdk.getTempFileURL;
   sdk.getTempFileURL = async o => ({ fileList: o.fileList.map(f => ({ fileID: f, status: 0, tempFileURL: 'https://bucket.tcb.qcloud.la/' + f.split('/').pop() + '?sign=x' })) });
@@ -128,10 +128,11 @@ test('fontPreview：只返回 https 临时链接（不含 fileID / 路径）；�
     assert.strictEqual(r.code, 0, r.msg);
     assert.strictEqual(r.data.ready, true);
     assert.deepStrictEqual(Object.keys(r.data.fonts).sort(), ['brush', 'sans', 'serif']);
-    Object.values(r.data.fonts).forEach(f => { assert.ok(/^https:\/\//.test(f.url)); assert.deepStrictEqual(Object.keys(f).sort(), ['size', 'url', 'v']); });
+    Object.values(r.data.fonts).forEach(f => { assert.ok(/^https:\/\//.test(f.url)); assert.deepStrictEqual(Object.keys(f).sort(), ['fileID', 'size', 'url', 'v']); assert.ok(/^cloud:\/\//.test(f.fileID)); });
+    assert.strictEqual(r.data.fonts.sans.fileID, 'cloud://env.b/preview-fonts/NotoSansSC-Preview.ttf', 'fileID 与登记一致');
     assert.strictEqual(r.data.fonts.sans.v, 'aaaaaaaa');
     const json = JSON.stringify(r.data);
-    assert.ok(!json.includes('cloud://') && !json.includes('fileID') && !/openid/i.test(json), '不返回 fileID / 云存储路径 / openid');
+    assert.ok(!/openid/i.test(json) && !json.includes('sha256') && !json.includes('_id'), '不返回 openid / sha256 / 文档内部字段');
     assert.strictEqual((await callExport('u-c2', { action: 'fontPreview' })).code, 0, '有导出权限的记账人');
     assert.strictEqual((await callExport('u-v', { action: 'fontPreview' })).code, 0, '家人共享');
     r = await callExport('u-c1', { action: 'fontPreview' });
@@ -372,6 +373,7 @@ test('会员用户选字体：正常选中（不是试看）；字体加载失�
     await new Promise(r => setTimeout(r, 20));
     assert.strictEqual(inst.data.pvLoading, false);
     assert.strictEqual(inst.data.pvFail, true, '加载失败');
+    assert.strictEqual(inst.data.pvNone, false, '加载失败不是没上传');
     assert.deepStrictEqual(inst.data.pvf, { main: '', sub: '', mark: '' }, '回退系统字体');
   } finally { restore(); }
 });
@@ -388,11 +390,131 @@ test('示意图字体套用：标题 / 落款 / 姓名用主字体，小字与�
   has('letter-spacing:6rpx;{{pvf.main}}');
   has('class="pc-sign" wx:if="{{back.sign}}" style="{{pvf.sub}}"');
   assert.strictEqual((w.match(/\{\{pvf\.mark\}\}/g) || []).length, 3, '封面 / 内页 / 封底三处水印');
-  has('{{pvLoading ? \' · 字体加载中…\' : (pvFail ? \' · 示意图暂用系统字体\' : \'\')}}');
+  has('{{pvLoading ? \' · 字体加载中…\' : (pvNone ? \' · 预览字体未上传，示意图暂用系统字体\' : (pvFail ? \' · 字体加载失败，示意图暂用系统字体\' : \'\'))}}');
   has("{{tryFont === item.k ? 'try' : ''}}");
   has('试看中：示意图暂按该字体显示，并未选中（会员功能）');
   const js = read('miniprogram/pages/booktheme/booktheme.js');
   assert.ok(js.includes('this.syncPvFonts();\n  },\n') && js.includes("this.setData({ cur: Number(e.currentTarget.dataset.i), tryFont: '' })"));
   assert.ok(!js.includes('tryFont') || !/buildParams\(\) \{[\s\S]*?tryFont[\s\S]*?return params;/.test(js), 'buildParams 不含试看字体');
   assert.ok(/VERSION: '3\.\d+\.\d+'/.test(read('miniprogram/config.js')));
+});
+
+// ---------- v3.83.1：下载到本地再加载（真机直接加载云存储临时链接跨域失败） ----------
+function mkWx(opt = {}) {
+  const files = new Map(opt.files || []);
+  const log = { download: [], copy: [], read: [], unlink: [], faces: [] };
+  const wxm = {
+    getAccountInfoSync: () => ({ miniProgram: { envVersion: 'release' } }),
+    env: { USER_DATA_PATH: 'wxfile://usr' },
+    cloud: { downloadFile: o => { log.download.push(o.fileID); if (opt.dlFail) return o.fail({ errMsg: 'downloadFile:fail' }); o.success({ tempFilePath: 'wxfile://tmp/' + o.fileID.split('/').pop() }); } },
+    getFileSystemManager: () => ({
+      access: o => (files.has(o.path) ? o.success({}) : o.fail({ errMsg: 'access:fail no such file' })),
+      copyFile: o => { log.copy.push(o.destPath); if (opt.copyFail) return o.fail({ errMsg: 'copyFile:fail exceed' }); files.set(o.destPath, 1); o.success({}); },
+      readFile: o => { log.read.push(o.filePath); if (opt.badCache && o.filePath.startsWith('wxfile://usr/') && !opt.badCache.done) { opt.badCache.done = true; return o.fail({ errMsg: 'readFile:fail corrupt' }); } o.success({ data: 'B64(' + o.filePath.split('/').pop() + ')' }); },
+      readdir: o => o.success({ files: [...files.keys()].filter(k => k.startsWith('wxfile://usr/')).map(k => k.slice('wxfile://usr/'.length)) }),
+      unlink: o => { log.unlink.push(o.filePath); files.delete(o.filePath); if (o.success) o.success({}); }
+    }),
+    loadFontFace: o => { log.faces.push(o.source); if (opt.dataFail && o.source.includes('data:font')) return o.fail({ errMsg: 'loadFontFace:fail data' }); if (opt.allFail) return o.fail({ errMsg: 'loadFontFace:fail' }); o.success({}); }
+  };
+  return { wxm, files, log };
+}
+const FM = v => ({ sans: { url: 'https://h/sans.ttf', fileID: 'cloud://e.b/preview-fonts/sans.ttf', v }, serif: { url: 'https://h/serif.ttf', fileID: 'cloud://e.b/preview-fonts/serif.ttf', v: 'z' + v } });
+const quietWarn = async fn => { const w = console.warn; console.warn = () => {}; try { return await fn(); } finally { console.warn = w; } };
+// 用 mkWx 的假环境重新加载 pvfont（freshPvfont 会替换 wx.loadFontFace，这里再把整套假环境放回去）
+function pvWith(m, meta) {
+  global.wx = m.wxm;
+  const pv = freshPvfont(async () => meta, m.wxm.loadFontFace);
+  return pv;
+}
+
+test('pvfont v3.83.1：fileID 下载到 USER_DATA_PATH 再读 base64 用 data URI 加载；本地命中不再下载；版本变化清理旧文件', async () => {
+  const saved = global.wx;
+  try {
+    const m = mkWx(); global.wx = m.wxm;
+    let pv = pvWith(m, { ready: true, fonts: FM('aaaa') });
+    assert.strictEqual(await pv.load('sans', {}), 'hljpv-sans-aaaa');
+    assert.deepStrictEqual(m.log.download, ['cloud://e.b/preview-fonts/sans.ttf']);
+    assert.deepStrictEqual(m.log.copy, ['wxfile://usr/pvfont-sans-aaaa.ttf'], '文件名带版本');
+    assert.deepStrictEqual(m.log.read, ['wxfile://usr/pvfont-sans-aaaa.ttf']);
+    assert.strictEqual(m.log.faces[0], 'url("data:font/ttf;base64,B64(pvfont-sans-aaaa.ttf)")', 'data URI');
+    // 新页面：本地命中，不再下载
+    assert.strictEqual(await pv.load('sans', {}), 'hljpv-sans-aaaa');
+    assert.strictEqual(m.log.download.length, 1, '本地缓存命中');
+    assert.strictEqual(m.log.faces.length, 2);
+    // 版本变化：下载新版本，旧文件被清理
+    m.files.set('wxfile://usr/pvfont-serif-zold.ttf', 1); m.files.set('wxfile://usr/other.txt', 1);
+    pv = pvWith(m, { ready: true, fonts: FM('bbbb') });
+    assert.strictEqual(await pv.load('sans', {}), 'hljpv-sans-bbbb');
+    assert.strictEqual(m.log.download.length, 2);
+    assert.ok(m.log.unlink.includes('wxfile://usr/pvfont-sans-aaaa.ttf'), '旧版本被删');
+    assert.ok(!m.log.unlink.includes('wxfile://usr/other.txt') && !m.log.unlink.includes('wxfile://usr/pvfont-serif-zold.ttf'), '只清理同一个字体的旧版本');
+    assert.ok(m.files.has('wxfile://usr/pvfont-sans-bbbb.ttf') && !m.files.has('wxfile://usr/pvfont-sans-aaaa.ttf'));
+    assert.strictEqual(pv.state(), 'ok');
+  } finally { global.wx = saved; }
+});
+
+test('pvfont v3.83.1：写入缓存失败用临时文件；缓存文件损坏重新下载；data URI 失败退回 https 链接；全部失败返回空并打 errMsg', async () => {
+  const saved = global.wx;
+  try {
+    await quietWarn(async () => {
+      // 写入失败（空间不足）：直接读下载下来的临时文件
+      let m = mkWx({ copyFail: true });
+      let pv = pvWith(m, { ready: true, fonts: FM('aaaa') });
+      assert.strictEqual(await pv.load('sans', {}), 'hljpv-sans-aaaa');
+      assert.deepStrictEqual(m.log.read, ['wxfile://tmp/sans.ttf']);
+      // 缓存文件损坏：读失败 -> 删除并重新下载一次
+      m = mkWx({ files: [['wxfile://usr/pvfont-sans-aaaa.ttf', 1]], badCache: {} });
+      pv = pvWith(m, { ready: true, fonts: FM('aaaa') });
+      assert.strictEqual(await pv.load('sans', {}), 'hljpv-sans-aaaa');
+      assert.strictEqual(m.log.download.length, 1, '损坏后重新下载');
+      assert.strictEqual(m.log.read.length, 2);
+      // data URI 方式失败：退回原来的 https 链接
+      m = mkWx({ dataFail: true });
+      pv = pvWith(m, { ready: true, fonts: FM('aaaa') });
+      assert.strictEqual(await pv.load('sans', {}), 'hljpv-sans-aaaa');
+      assert.strictEqual(m.log.faces[m.log.faces.length - 1], 'url("https://h/sans.ttf")');
+      // 下载失败：直接试 https 链接
+      m = mkWx({ dlFail: true });
+      pv = pvWith(m, { ready: true, fonts: FM('aaaa') });
+      assert.strictEqual(await pv.load('sans', {}), 'hljpv-sans-aaaa');
+      assert.deepStrictEqual(m.log.faces, ['url("https://h/sans.ttf")']);
+    });
+    // 全部失败 -> ''，errMsg 打到 console
+    const m = mkWx({ allFail: true });
+    const warns = []; const ow = console.warn; console.warn = (...a) => warns.push(a.join(' '));
+    try {
+      const pv = pvWith(m, { ready: true, fonts: FM('aaaa') });
+      assert.strictEqual(await pv.load('sans', {}), '');
+    } finally { console.warn = ow; }
+    assert.ok(warns.some(w => w.includes('loadFontFace:fail')), '失败的 errMsg 打到 console：' + warns.join('|'));
+  } finally { global.wx = saved; }
+});
+
+test('pvfont v3.83.1：state 区分没上传（none）与取元信息失败（error）；示意图提示分开（pvNone / pvFail）', async () => {
+  const saved = global.wx;
+  try {
+    await quietWarn(async () => {
+      let m = mkWx();
+      let pv = pvWith(m, { ready: false, fonts: {} });
+      await pv.load('sans', {}); assert.strictEqual(pv.state(), 'none');
+      m = mkWx();
+      global.wx = m.wxm; pv = freshPvfont(async () => { throw new Error('net'); }, m.wxm.loadFontFace);
+      await pv.load('sans', {}); assert.strictEqual(pv.state(), 'error');
+    });
+    const req = require('../miniprogram/utils/request.js');
+    // 页面：没上传 -> pvNone；已上传但加载失败 -> pvFail
+    let ctx = loadPage({ loadFontFace: o => o.fail({ errMsg: 'x' }) });
+    req.fontPreview = async () => ({ ready: false, fonts: {} });
+    try {
+      ctx.inst.refresh = function () { return this.syncPvFonts(); };
+      await ctx.inst.refresh();
+      assert.strictEqual(ctx.inst.data.pvNone, true); assert.strictEqual(ctx.inst.data.pvFail, false);
+    } finally { ctx.restore(); }
+    ctx = loadPage({ loadFontFace: o => o.fail({ errMsg: 'x' }) });
+    req.fontPreview = async () => ({ ready: true, fonts: { sans: { url: 'https://h/s', v: 'a' } } });
+    try {
+      await quietWarn(async () => { ctx.inst.refresh = function () { return this.syncPvFonts(); }; await ctx.inst.refresh(); });
+      assert.strictEqual(ctx.inst.data.pvNone, false); assert.strictEqual(ctx.inst.data.pvFail, true);
+    } finally { ctx.restore(); }
+  } finally { global.wx = saved; }
 });

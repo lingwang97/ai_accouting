@@ -81,7 +81,7 @@
     </view>
     <image class="dim-loader" wx:if="{{coverSet && coverUrl && !photoDim && !isFuneral}}" src="{{coverUrl}}" bindload="onPhotoLoad" />
     <view class="lock-tip" wx:if="{{lockTip}}">{{lockTip}}</view>
-    <view class="muted tip">示意图仅供参考，点「预览」看真实效果{{pvSample ? '（内页暂无数据，用示例）' : ''}}{{pvLoading ? ' · 字体加载中…' : (pvFail ? ' · 示意图暂用系统字体' : '')}}</view>
+    <view class="muted tip">示意图仅供参考，点「预览」看真实效果{{pvSample ? '（内页暂无数据，用示例）' : ''}}{{pvLoading ? ' · 字体加载中…' : (pvNone ? ' · 预览字体未上传，示意图暂用系统字体' : (pvFail ? ' · 字体加载失败，示意图暂用系统字体' : ''))}}</view>
 
     <!-- ============ 封面标签：样式 → 纹样 → 照片 ============ -->
     <block wx:if="{{cur === 0}}">
