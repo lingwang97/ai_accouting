@@ -60,7 +60,7 @@ async function preview(db, openid, opts = {}) {
 async function fileIds(db, openid, ownPayCode) {
   const files = [];
   const accs = (await db.collection('accounts').where({ ownerOpenid: openid }).limit(10).get()).data;
-  const books = (await db.collection('books').where({ ownerOpenid: openid }).field({ _id: true, payCodeFileID: true, pendingPayCode: true, coverPhoto: true }).limit(1000).get()).data;
+  const books = (await db.collection('books').where({ ownerOpenid: openid }).field({ _id: true, _openid: true, payCodeFileID: true, pendingPayCode: true, coverPhoto: true }).limit(1000).get()).data;
   const prefix = (accs[0] && accs[0].payCodeFileID && accs[0].payCodeFileID.split('/paycodes/')[0]) || '';
   accs.forEach(a => {
     if (ownPayCode(a.payCodeFileID, openid)) files.push(a.payCodeFileID);
@@ -69,8 +69,8 @@ async function fileIds(db, openid, ownPayCode) {
   books.forEach(b => {
     if (ownPayCode(b.payCodeFileID, openid)) files.push(b.payCodeFileID);
     if (b.pendingPayCode && b.pendingPayCode.fileID) files.push(b.pendingPayCode.fileID);
-    // 封面照片（v3.79.0）：covers/ 目录下的文件
-    if (b.coverPhoto && !b._openid && /^cloud:\/\/[^/]+\/covers\//.test(String(b.coverPhoto.fileID || ''))) files.push(b.coverPhoto.fileID);
+    // 封面照片（v3.79.0）：covers/ 目录下的文件；礼簿文档或照片字段带 _openid 的（前端伪造）忽略（v3.83.3 起 field 里取 _openid，原来取不到、判断不生效）
+    if (b.coverPhoto && !b._openid && !b.coverPhoto._openid && /^cloud:\/\/[^/]+\/covers\//.test(String(b.coverPhoto.fileID || ''))) files.push(b.coverPhoto.fileID);
   });
   // 礼簿码：qrcodes/{主家信息 id 或 礼簿 id}-{版本}.png
   if (prefix) {

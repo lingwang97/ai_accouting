@@ -161,7 +161,7 @@ module.exports = {
   bookGetTpl: bookId => call('books', { action: 'getTpl', bookId }),
   // v3.79.0 封面照片：fileID 不传只改形状，'' 移除；coverPhotoUrl 取预览用的临时链接
   bookSetCover: (bookId, fileID, shape, extra) => call('books', Object.assign({ action: 'setCoverPhoto', bookId, fileID, shape }, extra || {})), // extra：layout / scrim / focus（v3.80.0）
-  bookCoverUrl: bookId => call('books', { action: 'coverPhotoUrl', bookId }, { silent: true }),
+  bookCoverUrl: (bookId, fileID) => call('books', { action: 'coverPhotoUrl', bookId, ...(fileID ? { fileID } : {}) }, { silent: true }), // fileID：核对这张照片是否已保存（返回 is，v3.83.3）
   bookSaveTpl: (bookId, tpls) => call('books', { action: 'saveTpl', bookId, ...tpls }),
   purgeAccount: () => call('account', { action: 'purge', confirm: 'DELETE' }),
   inviteCreate: (type, opts, callOpts) => call('account', { action: 'createInvite', type, ...(opts || {}) }, callOpts),
@@ -257,7 +257,7 @@ module.exports = {
   adminCheckItem: (key, done) => call('system', { action: 'adminCheckItem', key, done }),
   // 一次性：把导出字体上传到云存储（fontsetup 云函数，用完可删；未部署时 silent 由页面提示）
   adminFontsUpload: () => call('fontsetup', { action: 'upload' }, { silent: true }),
-  // v3.83.0 示意图字体预览：fontPreview 返回三份预览小字体的 https 临时链接（不含 fileID）；adminPvFontsUpload 一次性上传预览小字体
+  // v3.83.0 示意图字体预览：fontPreview 返回三份预览小字体的 https 临时链接与 fileID（v3.83.1 起前端按 fileID 下载到本地再加载）；adminPvFontsUpload 一次性上传预览小字体
   fontPreview: () => call('export', { action: 'fontPreview' }, { silent: true }),
   adminPvFontsUpload: () => call('fontsetup', { action: 'uploadPreview' }, { silent: true }),
   // 数据清除（管理员）

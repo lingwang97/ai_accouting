@@ -62,7 +62,7 @@ test('imgcompress.cover：上限 1.5MB（1.2MB 压一次就够；超过 1.5MB �
     assert.strictEqual(await imgc.cover('a.jpg', 6 * 1024 * 1024), 'a.jpg.q80.q60');
   } finally { delete global.wx; }
   // 服务端上限与审核不变
-  assert.ok(/COVER_MAX = 4 \* 1024 \* 1024/.test(read('cloudfunctions/books/index.js')));
+  assert.ok(/COVER_MAX = 1\.6 \* 1024 \* 1024/.test(read('cloudfunctions/books/index.js'))); // v3.83.3 由 4MB 收紧
   assert.ok(/IMG_MAX = 1024 \* 1024/.test(read('tools/cloud-shared/secure.js')));
 });
 
@@ -139,7 +139,7 @@ test('coverPhotoUrl 返回版式 / 托底 / 焦点（不含云存储路径）', 
   sdk.getTempFileURL = async o => ({ fileList: o.fileList.map(f => ({ fileID: f, status: 0, tempFileURL: 'https://tmp.example/x' })) });
   try {
     const r = await call(L, { action: 'coverPhotoUrl', bookId: 'b1' });
-    assert.deepStrictEqual({ ...r.data }, { url: 'https://tmp.example/x', shape: 'oval', layout: 'full', scrim: 'gradient', crop: { x: 0, y: 1, z: 1 } });
+    assert.deepStrictEqual({ ...r.data }, { url: 'https://tmp.example/x', is: false, shape: 'oval', layout: 'full', scrim: 'gradient', crop: { x: 0, y: 1, z: 1 } }); // is：v3.83.3
   } finally { L.log.restore(); sdk.getTempFileURL = async () => ({ fileList: [] }); }
 });
 

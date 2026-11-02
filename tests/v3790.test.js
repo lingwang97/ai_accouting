@@ -237,7 +237,7 @@ test('list 返回 coverPhoto 只有形状、不含 fileID；pdfDeco 随 pdfTheme
     assert.ok(/^https:\/\/tmp\.example\//.test(r.data.url));
     assert.strictEqual(r.data.shape, 'oval');
     r = await call(L, OWNER, { action: 'coverPhotoUrl', bookId: 'bf' });
-    assert.deepStrictEqual(r.data, { url: '', shape: 'rect', layout: 'left', scrim: 'gradient', crop: { x: 0.5, y: 0.5, z: 1 } });
+    assert.deepStrictEqual(r.data, { url: '', is: false, shape: 'rect', layout: 'left', scrim: 'gradient', crop: { x: 0.5, y: 0.5, z: 1 } }); // is：v3.83.3
   } finally { L.log.restore(); }
 });
 

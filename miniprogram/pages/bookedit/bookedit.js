@@ -14,6 +14,7 @@ Page({
     date: '',
     location: '',
     origType: '',
+    hadCover: false,    // 已设封面照片（改成白事时提示会移除，v3.83.3）
     scenes: scenes.SCENES.map(s => ({ type: s.type, label: s.label })),
     saving: false,
     orgMode: false,     // 机构模式：可设本场主家与收款码
@@ -44,7 +45,7 @@ Page({
       const { list } = await req.bookList();
       const b = list.find(x => x._id === options.id);
       if (!b) throw new Error('礼簿不存在');
-      this.setData({ loadFailed: false, id: b._id, name: b.name, type: b.type, date: b.date, location: b.location || '', origType: b.type, hostName: b.hostName || '', hasPayCode: !!b.hasPayCode });
+      this.setData({ loadFailed: false, id: b._id, name: b.name, type: b.type, date: b.date, location: b.location || '', origType: b.type, hadCover: !!b.coverPhoto, hostName: b.hostName || '', hasPayCode: !!b.hasPayCode });
     } catch (e) {
       this.setData({ loadFailed: true });
     }
@@ -152,6 +153,14 @@ Page({
       // 新建：询问是否设为当前（设为当前后，宾客扫主礼簿码的礼金会记到这本）
       const setActive = id ? undefined : await this.askSetActive(name);
       if (setActive === null) return;
+      // 改成白事且已设封面照片：云端会随保存移除照片，先说明（v3.83.3）
+      if (id && type === 'funeral' && origType !== 'funeral' && this.data.hadCover) {
+        const go = await new Promise(resolve => wx.showModal({
+          title: '改为白事', content: '白事礼簿不使用封面照片，已设置的照片会移除。', confirmText: '继续', cancelText: '取消',
+          success: r => resolve(!!r.confirm), fail: () => resolve(false)
+        }));
+        if (!go) return;
+      }
       const { book, pendingPayCode } = await req.bookSave({ _id: id || undefined, name, type, date, location, setActive, ...org });
       printer.clearTemplateCache(); // 新建即设为当前礼簿 / 事由类型可能变化
       if (pendingPayCode) {

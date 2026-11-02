@@ -501,7 +501,7 @@ async function loadCoverPhoto(book, features, funeral, print, ov) {
     const buf = (await cloud.downloadFile({ fileID: cp.fileID })).fileContent;
     const jpg = buf && buf.length > 8 && buf[0] === 0xff && buf[1] === 0xd8;
     const png = buf && buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
-    if ((jpg || png) && buf.length <= 4 * 1024 * 1024) {
+    if ((jpg || png) && buf.length <= 1.6 * 1024 * 1024) { // 与 books 的 COVER_MAX 一致（v3.83.3 由 4MB 收紧）
       return { want: true, photo: { buf, shape: themes.sanitizeShape(cp.shape), layout: themes.sanitizeLayout(cp.layout), scrim: themes.sanitizeScrim(cp.scrim), crop: themes.coverView(cp).crop, fade: print === 'fade' } };
     }
     console.warn('cover photo unusable', buf && buf.length);

@@ -399,6 +399,7 @@ const PAGE = {
         this.setData({ photoBusy: true });
         wx.showLoading({ title: '正在上传…', mask: true });
         let fileID = '';
+        let kept = false; // 网络失败且核对是否已保存也失败：不删文件（v3.83.3）
         try {
           const path = await imgc.cover(f.tempFilePath, f.size);
           if (!path) { wx.hideLoading(); wx.showToast({ title: '照片太大，请换一张', icon: 'none' }); return; }
@@ -407,14 +408,27 @@ const PAGE = {
             filePath: path, success: resolve, fail: reject
           }));
           fileID = up.fileID;
-          await req.bookSetCover(d.id, fileID, d.coverShape, { layout: d.coverLayout, scrim: d.coverScrim, crop: pt.CROP_DEFAULT }); // 新照片裁剪位置回到默认
-          wx.hideLoading();
-          this.setData({ coverSet: true, coverUrl: path, coverCrop: { ...pt.CROP_DEFAULT }, photoDim: null });
-          this.refresh();
-          this.warnSmall(path);
+          const done = () => {
+            wx.hideLoading();
+            this.setData({ coverSet: true, coverUrl: path, coverCrop: { ...pt.CROP_DEFAULT }, photoDim: null });
+            this.refresh();
+            this.warnSmall(path);
+          };
+          try {
+            await req.bookSetCover(d.id, fileID, d.coverShape, { layout: d.coverLayout, scrim: d.coverScrim, crop: pt.CROP_DEFAULT }); // 新照片裁剪位置回到默认
+          } catch (e) {
+            if (!req.isNetErr(e)) throw e; // 云端明确拒绝（格式 / 审核 / 权限）：照旧删文件
+            // v3.83.3：网络失败时云端可能已经保存了，先核对；核对也失败就不删（宁可留一个文件，也不让礼簿指向已删的照片）
+            let saved = null;
+            try { saved = !!(await req.bookCoverUrl(d.id, fileID)).is; } catch (e2) { saved = null; }
+            if (saved === true) return done();
+            if (saved === null) kept = true;
+            throw e;
+          }
+          done();
         } catch (e) {
           wx.hideLoading();
-          if (fileID) wx.cloud.deleteFile({ fileList: [fileID] }).catch(() => {}); // 没保存成功的文件尽量删掉
+          if (fileID && !kept) wx.cloud.deleteFile({ fileList: [fileID] }).catch(() => {}); // 确认没保存的文件尽量删掉（网络错误的提示已由 request.js 弹出）
           if (!fileID) wx.showToast({ title: '上传失败', icon: 'none' });
         } finally {
           this.setData({ photoBusy: false });

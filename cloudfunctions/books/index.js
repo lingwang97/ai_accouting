@@ -80,7 +80,7 @@ exports.main = async (event, context) => {
       case 'recalc': return await recalc(OWNER, String(event.bookId || ''));
       case 'getTpl': return await getTpl(OWNER, account, event.bookId);
       case 'setCoverPhoto': return await setCoverPhoto(OWNER, OPENID, event.bookId, event.fileID, { shape: event.shape, layout: event.layout, scrim: event.scrim, focus: event.focus, crop: event.crop });
-      case 'coverPhotoUrl': return await coverPhotoUrl(OWNER, event.bookId);
+      case 'coverPhotoUrl': return await coverPhotoUrl(OWNER, event.bookId, event.fileID);
       case 'saveTpl': return await saveTpl(OWNER, event.bookId, event.receiptTpl, event.printTpl, OPENID);
       default: return err('未知 action');
     }
@@ -263,8 +263,11 @@ async function save(openid, account, input, ctx, caller) {
   }
 
   if (input._id) {
-    const res = await books.where({ _id: String(input._id), ownerOpenid: openid }).update({ data: b });
+    // 改成白事（v3.83.3）：白事礼簿不使用封面照片，已设置的照片随这次保存移除并删除文件
+    const dropPhoto = b.type === 'funeral' && old.coverPhoto && !old.coverPhoto._openid ? old.coverPhoto : null;
+    const res = await books.where({ _id: String(input._id), ownerOpenid: openid }).update({ data: dropPhoto ? { ...b, coverPhoto: _.remove() } : b });
     if (res.stats.updated !== 1) return err('礼簿不存在');
+    if (dropPhoto) await dropCover(dropPhoto.fileID);
     // 改名 / 改事由后同步到账目冗余字段，保证筛选与导出一致（未改时跳过，避免整本改写）
     if (b.name !== old.name || b.type !== old.type) {
       await records.where({ ownerOpenid: openid, bookId: String(input._id) })
@@ -597,12 +600,14 @@ async function saveTpl(openid, bookId, receiptTpl, printTpl, caller) {
 
 
 // ===== 传统礼簿封面照片（v3.79.0）=====
-const COVER_MAX = 4 * 1024 * 1024; // 封面照片文件上限（前端已压缩到 1MB 内，这里兜底）
+const COVER_MAX = 1.6 * 1024 * 1024; // 封面照片文件上限（前端压到 1.5MB 内，这里留一点余量兜底；v3.83.3 由 4MB 收紧）
 const imgKind = b => (b && b.length > 4 && b[0] === 0xff && b[1] === 0xd8 ? 'jpg' : (b && b.length > 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47 ? 'png' : ''));
 
-/** 删除封面照片文件（尽力而为，只删本人 covers/ 下的文件） */
-async function dropCover(fileID, openid) {
-  if (!fileID || !ownCover(fileID, openid)) return;
+/** 是否为 covers/ 目录下的文件（库里的 coverPhoto.fileID 写入时已校验归属，删除时只认目录，v3.83.3） */
+const isCoverFile = f => /^cloud:\/\/[^/]+\/covers\//.test(String(f || ''));
+/** 删除封面照片文件（尽力而为，只删 covers/ 下的文件；记账人上传的旧照片也能删掉，v3.83.3） */
+async function dropCover(fileID) {
+  if (!fileID || !isCoverFile(fileID)) return;
   try { await cloud.deleteFile({ fileList: [fileID] }); } catch (e) { /* 忽略 */ }
 }
 
@@ -650,7 +655,7 @@ async function setCoverPhoto(openid, caller, bookId, fileID, input) {
   if (fileID === '' || fileID === null) { // 移除
     if (!old) return ok({ coverPhoto: null });
     await books.doc(book._id).update({ data: { coverPhoto: _.remove() } });
-    await dropCover(old.fileID, openid);
+    await dropCover(old.fileID);
     return ok({ coverPhoto: null });
   }
   if (book.type === 'funeral') return err('白事礼簿不使用封面照片');
@@ -668,32 +673,36 @@ async function setCoverPhoto(openid, caller, bookId, fileID, input) {
   }
   let plan = null;
   try { plan = await P.planOf(db, openid); } catch (e) { /* 读套餐失败：按开放处理 */ }
-  if (!P.featureOpen(plan && plan.features, 'coverPhoto')) { await dropCover(fileID, caller); return err('封面照片为会员功能，开通后可使用'); }
+  if (!P.featureOpen(plan && plan.features, 'coverPhoto')) { await dropCover(fileID); return err('封面照片为会员功能，开通后可使用'); }
   // 格式 / 大小：只收 JPG / PNG（pdfkit 只能嵌入这两种），不合格删掉刚上传的文件
   let buf = null;
   try { buf = (await cloud.downloadFile({ fileID })).fileContent; } catch (e) { /* 下面统一提示 */ }
-  if (!buf || !imgKind(buf)) { await dropCover(fileID, caller); return err('照片格式不支持，请换一张 JPG 或 PNG 照片'); }
-  if (buf.length > COVER_MAX) { await dropCover(fileID, caller); return err('照片太大，请换一张小一点的'); }
+  if (!buf || !imgKind(buf)) { await dropCover(fileID); return err('照片格式不支持，请换一张 JPG 或 PNG 照片'); }
+  if (buf.length > COVER_MAX) { await dropCover(fileID); return err('照片太大，请换一张小一点的'); }
   const bad = await S.checkImage(cloud, fileID); // 内容安全（失败放行；>1MB 跳过；违规时 checkImage 已删文件）
   if (bad) return bad;
   // 换了一张新照片：裁剪位置 / 缩放回到默认（旧的是针对旧照片调的），除非这次同时传了新的
   if ((!old || old.fileID !== fileID) && input.crop === undefined && input.focus === undefined) v.crop = { ...CROP_DEFAULT };
   await books.doc(book._id).update({ data: { coverPhoto: _.set(coverDoc(fileID, v)) } });
-  if (old) await dropCover(old.fileID, openid);
+  if (old) await dropCover(old.fileID);
   return ok({ coverPhoto: v });
 }
 
-/** 封面照片的临时链接（供主题页预览；有「管理礼簿」权限者可取，不返回云存储路径） */
-async function coverPhotoUrl(openid, bookId) {
+/**
+ * 封面照片的临时链接（供主题页预览；有「管理礼簿」权限者可取，不返回云存储路径）
+ * fileID（可选，v3.83.3）：前端上传后保存请求网络失败时，用它核对这张照片是否其实已经保存（is=true），只回布尔值
+ */
+async function coverPhotoUrl(openid, bookId, fileID) {
   const book = await getBook(openid, String(bookId || ''));
-  if (!book || !book.coverPhoto || book.coverPhoto._openid || !book.coverPhoto.fileID) return ok({ url: '', ...coverView(null) });
+  if (!book || !book.coverPhoto || book.coverPhoto._openid || !book.coverPhoto.fileID) return ok({ url: '', is: false, ...coverView(null) });
+  const is = !!fileID && String(fileID) === book.coverPhoto.fileID;
   let url = '';
   try {
     const r = await cloud.getTempFileURL({ fileList: [book.coverPhoto.fileID] });
     const f = r.fileList && r.fileList[0];
     url = f && f.status === 0 ? String(f.tempFileURL || '') : '';
   } catch (e) { /* 取不到不影响使用 */ }
-  return ok({ url, ...coverView(book.coverPhoto) });
+  return ok({ url, is, ...coverView(book.coverPhoto) });
 }
 
 async function getBook(openid, bookId) {

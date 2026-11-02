@@ -302,7 +302,10 @@ async function bookPreview(keyword) {
   return ok({ list });
 }
 
-/** 删除一本礼簿及其礼金记录、存档与礼簿码文件；需输入礼簿名称确认 */
+/** 礼簿的封面照片字段是否指向 covers/ 目录下的文件（伪造的带 _openid 的忽略；v3.83.3 清除 / 删除礼簿时一并删文件） */
+const isCoverFile = cp => !!(cp && typeof cp === 'object' && !cp._openid && /^cloud:\/\/[^/]+\/covers\//.test(String(cp.fileID || '')));
+
+/** 删除一本礼簿及其礼金记录、存档、封面照片与礼簿码文件；需输入礼簿名称确认 */
 async function purgeBook(admin, bookId, confirmName) {
   if (!/^[a-zA-Z0-9_-]{1,64}$/.test(bookId)) return err('参数错误');
   let book;
@@ -311,6 +314,7 @@ async function purgeBook(admin, bookId, confirmName) {
   const files = [];
   if (book.archivePdf && book.archivePdf.fileID) files.push(book.archivePdf.fileID);
   if (ownPayCode(book.payCodeFileID, book.ownerOpenid)) files.push(book.payCodeFileID);
+  if (!book._openid && isCoverFile(book.coverPhoto)) files.push(book.coverPhoto.fileID); // 封面照片（v3.83.3）
   const acc = (await db.collection('accounts').where({ ownerOpenid: book.ownerOpenid }).limit(1).get()).data[0];
   const prefix = acc && acc.payCodeFileID ? acc.payCodeFileID.split('/paycodes/')[0] : '';
   if (prefix) ['develop', 'trial', 'release'].forEach(env => files.push(`${prefix}/qrcodes/${bookId}-${env}.png`));
@@ -477,7 +481,7 @@ async function wipeAll(admin, doIt, e) {
         rows.forEach(r => {
           if (col === 'exports' && !r._openid) ids.push(r.fileID);
           if (col === 'accounts') { ids.push(r.payCodeFileID); if (r.pendingPayCode) ids.push(r.pendingPayCode.fileID); }
-          if (col === 'books') { ids.push(r.payCodeFileID); if (r.archivePdf) ids.push(r.archivePdf.fileID); }
+          if (col === 'books') { ids.push(r.payCodeFileID); if (r.archivePdf) ids.push(r.archivePdf.fileID); if (!r._openid && isCoverFile(r.coverPhoto)) ids.push(r.coverPhoto.fileID); } // 封面照片（v3.83.3）
           if (col === 'trash_books') (r.files || []).forEach(f => ids.push(f));
         });
         const list = ids.filter(Boolean);

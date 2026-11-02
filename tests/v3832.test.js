@@ -134,5 +134,5 @@ test('照片加载失败提示、封底落款 placeholder 缩短、保存中文�
   assert.ok(WXML.includes('binderror="onPhotoErr"') && JS.includes('onPhotoErr() {') && JS.includes("title: '照片加载失败，请重新选择'"));
   assert.ok(WXML.includes('placeholder="自动：沿用封面落款或默认"'));
   assert.ok(WXML.includes("{{saving ? '保存中' : (dirty ? '保存样式' : '已保存')}}"));
-  assert.ok(/VERSION: '3\.83\.2'/.test(read('miniprogram/config.js')));
+  assert.ok(/VERSION: '3\.83\.([2-9]|\d{2})'/.test(read('miniprogram/config.js')));
 });
