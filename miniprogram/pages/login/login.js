@@ -2,21 +2,52 @@
 const req = require('../../utils/request.js');
 const theme = require('../../utils/theme.js');
 const avatarUtil = require('../../utils/avatar.js');
+const privacy = require('../../utils/privacy.js');
 
 Page({
   data: {
     nickname: '',
     avatar: '',
     submitting: false,
+    agreed: false, // 我已阅读并同意《隐私说明》：默认不勾选，勾过一次记在本地（v3.84.0）
     themeStyle: ''
   },
 
-  onLoad() { theme.early(this); }, // 首帧前同步套主题色（v3.70.1）
+  onLoad() { theme.early(this); this.setData({ agreed: privacy.localAgreed() }); }, // 首帧前同步套主题色（v3.70.1）
 
   onShow() { this.setData({ themeStyle: theme.styleOf(theme.current()) }); theme.applyNav(); }, // 白事礼簿的灰色主题与其他页一致
 
   onChooseAvatar(e) {
+    if (!this.data.agreed) return; // 防御：未同意时不接收头像
     this.setData({ avatar: e.detail.avatarUrl });
+  },
+
+  /** 勾选 / 取消勾选《隐私说明》 */
+  toggleAgree() { this.setAgreed(!this.data.agreed); },
+  setAgreed(v) {
+    privacy.setLocalAgreed(v);
+    this.setData({ agreed: v });
+  },
+  /** 未同意时弹窗请用户选择；返回是否已同意（点头像 / 昵称 / 登录都走这里） */
+  askAgree() {
+    if (this.data.agreed) return Promise.resolve(true);
+    return new Promise(resolve => {
+      wx.showModal({
+        title: '温馨提示',
+        content: '请先阅读并同意《隐私说明》',
+        confirmText: '同意',
+        cancelText: '取消',
+        success: res => {
+          if (res.confirm) this.setAgreed(true);
+          resolve(!!res.confirm);
+        },
+        fail: () => resolve(false)
+      });
+    });
+  },
+  /** 点头像 / 昵称框：同意后才能进入微信的头像、昵称选择 */
+  async onNeedAgree() {
+    if (await this.askAgree()) wx.showToast({ title: '已同意，请再点一次设置', icon: 'none' });
   },
 
   onNicknameInput(e) {
@@ -36,6 +67,7 @@ Page({
 
   async onSubmit() {
     if (this.data.submitting) return;
+    if (!(await this.askAgree())) return; // 未同意《隐私说明》不登录
     const nickname = (this.data.nickname || '').trim();
     if (!nickname) {
       wx.showToast({ title: '请填写昵称', icon: 'none' });

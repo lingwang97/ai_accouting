@@ -1,6 +1,7 @@
 {
   "navigationBarTitleText": "回执样式",
   "usingComponents": {
-    "loading": "/components/loading/loading"
+    "loading": "/components/loading/loading",
+    "privacy-popup": "/components/privacy-popup/index"
   }
 }

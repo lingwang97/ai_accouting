@@ -288,3 +288,4 @@
   </view>
   <loading show="{{loading}}" type="overlay" />
 </view>
+<privacy-popup />

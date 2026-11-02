@@ -83,6 +83,7 @@
     ],
     "custom": true
   },
+  "__usePrivacyCheck__": true,
   "style": "v2",
   "lazyCodeLoading": "requiredComponents",
   "sitemapLocation": "sitemap.json"

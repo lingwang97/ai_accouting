@@ -13,12 +13,26 @@
   </view>
 
   <view class="card form">
-    <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
+    <!-- 未同意《隐私说明》前，头像 / 昵称不触发微信隐私接口：先弹同意提示（v3.84.0） -->
+    <button wx:if="{{agreed}}" class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
+      <image class="avatar" src="{{avatar || '/assets/avatar-default.png'}}" mode="aspectFill" binderror="onAvatarError" />
+    </button>
+    <button wx:else class="avatar-btn" bindtap="onNeedAgree">
       <image class="avatar" src="{{avatar || '/assets/avatar-default.png'}}" mode="aspectFill" binderror="onAvatarError" />
     </button>
     <view class="muted avatar-tip">点击设置头像</view>
-    <input class="input" type="nickname" placeholder="请输入昵称" value="{{nickname}}" bindinput="onNicknameInput" bindblur="onNicknameBlur" bindnicknamereview="onNicknameReview" />
+    <view class="nick-wrap">
+      <input class="input" type="{{agreed ? 'nickname' : 'text'}}" disabled="{{!agreed}}" placeholder="请输入昵称" value="{{nickname}}" bindinput="onNicknameInput" bindblur="onNicknameBlur" bindnicknamereview="onNicknameReview" />
+      <view class="nick-mask" wx:if="{{!agreed}}" bindtap="onNeedAgree"></view>
+    </view>
     <button class="btn-primary" loading="{{submitting}}" bindtap="onSubmit">登录 / 注册</button>
-    <view class="muted small agree-tip">登录即表示了解<text class="agree-link" bindtap="goPrivacy">《隐私说明》</text></view>
+    <view class="agree-row">
+      <view class="agree-hit" bindtap="toggleAgree" role="checkbox" aria-checked="{{agreed}}">
+        <view class="ck {{agreed ? 'on' : ''}}"><text wx:if="{{agreed}}">✓</text></view>
+        <text class="agree-txt">我已阅读并同意</text>
+      </view>
+      <text class="agree-link" catchtap="goPrivacy">《隐私说明》</text>
+    </view>
   </view>
 </view>
+<privacy-popup />

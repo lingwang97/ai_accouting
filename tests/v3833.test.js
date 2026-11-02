@@ -163,5 +163,5 @@ test('低4：purge.fileIds 的封面条件同时看礼簿与照片字段的 _ope
 });
 
 test('版本号 3.83.3', () => {
-  assert.ok(/VERSION: '3\.83\.3'/.test(read('miniprogram/config.js')));
+  assert.ok(/VERSION: '3\.(83\.([3-9]|\d{2})|8[4-9]\.\d+)'/.test(read('miniprogram/config.js')));
 });

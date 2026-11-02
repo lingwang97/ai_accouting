@@ -4,3 +4,4 @@
   <view class="host-cta" wx:if="{{loaded}}" bindtap="goHostEntry">我家也要办事？免费创建电子礼簿，宾客扫码随礼自动记账 ›</view>
   <ad-slot slot="myreceipts" />
 </view>
+<privacy-popup />

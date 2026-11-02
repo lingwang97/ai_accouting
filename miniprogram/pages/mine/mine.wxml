@@ -112,3 +112,4 @@
   </block>
   <view class="version muted" bindlongpress="onShowOpenid">{{versionText}}</view>
 </view>
+<privacy-popup />

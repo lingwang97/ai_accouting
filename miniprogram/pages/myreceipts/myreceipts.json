@@ -3,6 +3,7 @@
   "enablePullDownRefresh": true,
   "usingComponents": {
     "my-gifts": "/components/my-gifts/index",
-    "ad-slot": "/components/ad-slot/index"
+    "ad-slot": "/components/ad-slot/index",
+    "privacy-popup": "/components/privacy-popup/index"
   }
 }

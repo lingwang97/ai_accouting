@@ -1,0 +1,17 @@
+<view class="mask" wx:if="{{visible}}" style="{{themeStyle}}" catchtouchmove="noop">
+  <view class="box">
+    <view class="ttl">隐私保护提示</view>
+    <scroll-view class="body" scroll-y>
+      <view class="p">为了向你提供相册保存、选择图片、扫码、蓝牙打印等功能，需要获取你的授权。请先阅读以下说明，再选择是否同意。</view>
+      <view class="p">你可以随时拒绝；拒绝后相关功能暂时无法使用，其他功能不受影响。</view>
+      <view class="links">
+        <text class="link" bindtap="openContract" wx:if="{{canContract}}">《{{contractName}}》</text>
+        <text class="link" bindtap="goPrivacy">《隐私说明》</text>
+      </view>
+    </scroll-view>
+    <view class="btns">
+      <button class="b b-no" bindtap="onDisagree">拒绝</button>
+      <button class="b b-ok" id="agree-btn" open-type="agreePrivacyAuthorization" bindagreeprivacyauthorization="onAgree">同意</button>
+    </view>
+  </view>
+</view>

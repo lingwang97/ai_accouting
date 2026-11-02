@@ -67,3 +67,4 @@
   </view>
   <loading show="{{pageLoading}}" type="overlay" />
 </view>
+<privacy-popup />

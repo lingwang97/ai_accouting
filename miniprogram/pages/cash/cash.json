@@ -2,6 +2,7 @@
   "navigationBarTitleText": "礼台记账",
   "usingComponents": {
     "batch-list": "/components/batch-list/index",
-    "loading": "/components/loading/loading"
+    "loading": "/components/loading/loading",
+    "privacy-popup": "/components/privacy-popup/index"
   }
 }

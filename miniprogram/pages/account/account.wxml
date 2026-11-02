@@ -48,3 +48,4 @@
   <view class="clear-form" wx:if="{{!codeOnly}}" bindtap="onClearForm">清空重填</view>
   <loading show="{{pageLoading}}" type="overlay" />
 </view>
+<privacy-popup />

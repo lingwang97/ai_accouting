@@ -39,3 +39,4 @@
   <view wx:if="{{loadFailed}}" class="load-fail" bindtap="onRetryLoad">礼簿加载失败，点此重试（加载成功前不能保存）</view>
   <button class="btn-primary" disabled="{{loadFailed}}" loading="{{saving}}" bindtap="onSave">{{id ? '保存' : '创建礼簿'}}</button>
 </view>
+<privacy-popup />

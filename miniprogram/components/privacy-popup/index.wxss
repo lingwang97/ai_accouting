@@ -1,0 +1,15 @@
+/* 颜色取页面主题变量（喜事红 / 白事灰 / 机构色），没有时退回默认红 */
+.mask { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 10000; background: rgba(0, 0, 0, .5); display: flex; align-items: center; justify-content: center; padding: 0 48rpx; padding-bottom: env(safe-area-inset-bottom); box-sizing: border-box; }
+.box { width: 100%; max-width: 620rpx; max-height: 80vh; background: #fff; border-radius: 24rpx; padding: 40rpx 36rpx 32rpx; box-sizing: border-box; display: flex; flex-direction: column; }
+.ttl { font-size: 34rpx; font-weight: 700; color: #333; text-align: center; margin-bottom: 20rpx; }
+.body { flex: 1; min-height: 0; max-height: 52vh; }
+.p { font-size: 28rpx; line-height: 1.6; color: #555; margin-bottom: 16rpx; }
+.links { margin-bottom: 8rpx; }
+.link { display: inline-block; font-size: 28rpx; color: #576B95; padding: 8rpx 0; margin-right: 12rpx; }
+.btns { display: flex; margin-top: 24rpx; }
+.b { flex: 1; margin: 0; padding: 0; height: 84rpx; line-height: 84rpx; font-size: 30rpx; border-radius: 12rpx; }
+.b::after { border: none; }
+.b:not(:last-child) { margin-right: 20rpx; }
+button.b:not([size=mini]) { width: auto; }
+.b-no { background: #f2f3f5; color: #666; }
+.b-ok { background: var(--primary, #C8161D); color: #fff; }

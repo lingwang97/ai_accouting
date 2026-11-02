@@ -5,6 +5,7 @@
   "usingComponents": {
     "loading": "/components/loading/loading",
     "receipt-view": "/components/receipt-view/index",
-    "ad-slot": "/components/ad-slot/index"
+    "ad-slot": "/components/ad-slot/index",
+    "privacy-popup": "/components/privacy-popup/index"
   }
 }

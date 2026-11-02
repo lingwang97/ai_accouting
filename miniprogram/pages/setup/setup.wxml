@@ -64,3 +64,4 @@
     <button class="btn btn-lg btn-primary" loading="{{saving}}" bindtap="onNext">{{step < steps.length - 1 ? '下一步' : (payCodeFileID ? '完成，进入工作台' : '完成')}}</button>
   </view>
 </view>
+<privacy-popup />

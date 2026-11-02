@@ -170,3 +170,4 @@
   </view>
   <canvas type="2d" id="receiptCanvas" class="offscreen"></canvas>
 </view>
+<privacy-popup />

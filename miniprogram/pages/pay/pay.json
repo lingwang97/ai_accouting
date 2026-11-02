@@ -7,6 +7,7 @@
     "loading": "/components/loading/loading",
     "receipt-view": "/components/receipt-view/index",
     "batch-list": "/components/batch-list/index",
-    "ad-slot": "/components/ad-slot/index"
+    "ad-slot": "/components/ad-slot/index",
+    "privacy-popup": "/components/privacy-popup/index"
   }
 }

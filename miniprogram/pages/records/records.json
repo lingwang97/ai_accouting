@@ -1,4 +1,7 @@
 {
   "navigationBarTitleText": "礼簿",
-  "enablePullDownRefresh": true
+  "enablePullDownRefresh": true,
+  "usingComponents": {
+    "privacy-popup": "/components/privacy-popup/index"
+  }
 }
