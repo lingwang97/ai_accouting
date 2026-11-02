@@ -348,6 +348,8 @@ Page({
 
   /** 常见问题：教程页第 4 分页，默认展开「宾客常见问题」 */
   goFaq() { wx.navigateTo({ url: '/pages/guide/guide?tab=faq&cat=guest' }); },
+  /** 隐私说明（v3.84.2）：宾客无需登录也能查看 */
+  goPrivacy() { wx.navigateTo({ url: '/pages/privacy/privacy' }); },
 
   /** 取消本次转账（尚未转账时） */
   onCancel() {

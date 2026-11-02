@@ -709,7 +709,8 @@ async function getBook(openid, bookId) {
   if (!/^[a-zA-Z0-9_-]{1,64}$/.test(String(bookId || ''))) return null;
   try {
     const b = (await books.doc(bookId).get()).data;
-    return b && b.ownerOpenid === openid ? b : null;
+    // 礼簿只由云函数写入（不带 _openid）；带 _openid 的是客户端伪造的文档，一律当不存在（v3.84.2：防止借伪造礼簿的 coverPhoto 删除他人照片）
+    return b && b.ownerOpenid === openid && !b._openid ? b : null;
   } catch (e) {
     return null;
   }

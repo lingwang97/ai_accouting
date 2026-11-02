@@ -205,6 +205,7 @@
     <view class="my-receipts">
       <text class="mr-link" bindtap="goMyReceipts">我的随礼记录 ›</text>
       <text class="mr-link" bindtap="goFaq">常见问题 ›</text>
+      <text class="mr-link" bindtap="goPrivacy">隐私说明 ›</text>
     </view>
 
     <view class="card host-entry">

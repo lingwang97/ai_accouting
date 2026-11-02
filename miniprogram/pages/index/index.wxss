@@ -111,7 +111,7 @@
   font-size: 24rpx; font-weight: 600; margin-right: 20rpx;
 }
 .my-receipts { text-align: center; color: var(--link); font-size: 28rpx; padding: 8rpx 0 28rpx; }
-.mr-link { display: inline-block; padding: 12rpx 28rpx; }
+.mr-link { display: inline-block; padding: 12rpx 20rpx; } /* v3.84.2 三个链接：小屏一行放得下，放不下自动换行 */
 /* 工作台底部常驻的教程入口（底部留白由 .page.tab-page 的 padding 提供） */
 .guide-foot { text-align: center; color: var(--text-3); font-size: 24rpx; padding: 24rpx 0 8rpx; }
 .host-entry { display: flex; align-items: center; justify-content: space-between; }

@@ -8,27 +8,10 @@ const ROOT = path.join(__dirname, '..');
 const read = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const MP = 'miniprogram/';
 
-/** 加载一份干净的 utils/privacy.js（隔离模块状态），wx 用传入的假对象 */
-function loadPrivacy(wxObj) {
-  const key = require.resolve(path.join(ROOT, MP, 'utils/privacy.js'));
-  delete require.cache[key];
-  const prev = global.wx;
-  global.wx = wxObj;
-  const m = require(key);
-  return {
-    m,
-    restore() {
-      if (prev === undefined) delete global.wx; else global.wx = prev;
-      delete require.cache[key];
-    }
-  };
-}
-
 /** 加载登录页：捕获 Page 定义，用假 wx / getApp */
 function loadLogin(opts) {
   const key = require.resolve(path.join(ROOT, MP, 'pages/login/login.js'));
-  const pkey = require.resolve(path.join(ROOT, MP, 'utils/privacy.js'));
-  delete require.cache[key]; delete require.cache[pkey];
+  delete require.cache[key];
   const store = Object.assign({}, opts.storage || {});
   const prev = { wx: global.wx, Page: global.Page, getApp: global.getApp };
   const modals = [];
@@ -50,7 +33,7 @@ function loadLogin(opts) {
     page, modals, store,
     restore() {
       ['wx', 'Page', 'getApp'].forEach(k => { if (prev[k] === undefined) delete global[k]; else global[k] = prev[k]; });
-      delete require.cache[key]; delete require.cache[pkey];
+      delete require.cache[key];
     }
   };
 }
@@ -72,19 +55,22 @@ test('登录页：勾选框默认未勾选', () => {
   } finally { L.restore(); }
 });
 
-test('登录页：勾选后记在本地，下次进入保持勾选；取消勾选清除记录', () => {
+test('登录页：勾选只在本页有效，不写本地；v3.84.2 起旧的本地记录也不再生效（每次进入都不勾选）', () => {
   const L = loadLogin({});
   try {
     L.page.onLoad();
     L.page.toggleAgree();
     assert.strictEqual(L.page.data.agreed, true);
-    assert.strictEqual(L.store.privacyAgreed, true);
+    assert.strictEqual(L.store.privacyAgreed, undefined, '不再记在本地');
     L.page.toggleAgree();
     assert.strictEqual(L.page.data.agreed, false);
-    assert.strictEqual(L.store.privacyAgreed, undefined);
   } finally { L.restore(); }
   const L2 = loadLogin({ storage: { privacyAgreed: true } });
-  try { L2.page.onLoad(); assert.strictEqual(L2.page.data.agreed, true); } finally { L2.restore(); }
+  try {
+    L2.page.onLoad();
+    assert.strictEqual(L2.page.data.agreed, false, '旧版本留下的本地记录不让框默认勾上');
+    assert.strictEqual(L2.store.privacyAgreed, undefined, '顺带清掉旧记录');
+  } finally { L2.restore(); }
 });
 
 test('登录页：未同意点登录被拦截——弹窗文案与按钮合规；取消则不登录；同意则勾上并继续', async () => {
@@ -108,7 +94,6 @@ test('登录页：未同意点登录被拦截——弹窗文案与按钮合规�
     L2.page.setData({ nickname: '' }); // 同意后继续走原有校验（昵称为空只提示，不会越过）
     await L2.page.onSubmit();
     assert.strictEqual(L2.page.data.agreed, true, '点同意就勾上');
-    assert.strictEqual(L2.store.privacyAgreed, true);
   } finally { L2.restore(); }
 });
 
@@ -155,11 +140,7 @@ test('v3.84.1：页面不再挂 privacy-popup', () => {
   assert.deepStrictEqual(bad.map(p => path.relative(ROOT, p)), []);
 });
 
-test('privacy.js 只保留本地同意记录；没有 wx 存储接口也不抛', () => {
-  const P = loadPrivacy({});
-  try {
-    assert.deepStrictEqual(Object.keys(P.m).sort(), ['LOCAL_KEY', 'localAgreed', 'setLocalAgreed']);
-    assert.strictEqual(P.m.localAgreed(), false);
-    assert.doesNotThrow(() => P.m.setLocalAgreed(true));
-  } finally { P.restore(); }
+test('v3.84.2：utils/privacy.js 已删除，没有页面再引用', () => {
+  assert(!fs.existsSync(path.join(ROOT, MP, 'utils/privacy.js')));
+  assert(!/utils\/privacy/.test(read(MP + 'pages/login/login.js')));
 });

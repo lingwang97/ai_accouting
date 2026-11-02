@@ -435,6 +435,7 @@ Page({
     this.setData({ guideTip: false });
   },
   goFaq() { wx.navigateTo({ url: '/pages/guide/guide?tab=faq&cat=guest' }); }, // 宾客首页：常见问题
+  goPrivacy() { wx.navigateTo({ url: '/pages/privacy/privacy' }); }, // 宾客首页：隐私说明（v3.84.2）
   goMyReceipts() { wx.navigateTo({ url: '/pages/myreceipts/myreceipts' }); }, // 宾客首页
 
   /** 转发给好友 / 分享到朋友圈：落地首页（宾客扫码随礼，主家创建礼簿） */

@@ -2,18 +2,21 @@
 const req = require('../../utils/request.js');
 const theme = require('../../utils/theme.js');
 const avatarUtil = require('../../utils/avatar.js');
-const privacy = require('../../utils/privacy.js');
 
 Page({
   data: {
     nickname: '',
     avatar: '',
     submitting: false,
-    agreed: false, // 我已阅读并同意《隐私说明》：默认不勾选，勾过一次记在本地（v3.84.0）
+    agreed: false, // 我已阅读并同意《隐私说明》：每次进入登录页都不勾选，由用户自己勾选（v3.84.2 起不再记住上次的勾选）
     themeStyle: ''
   },
 
-  onLoad() { theme.early(this); this.setData({ agreed: privacy.localAgreed() }); }, // 首帧前同步套主题色（v3.70.1）
+  onLoad() {
+    theme.early(this); // 首帧前同步套主题色（v3.70.1）
+    this.setData({ agreed: false });
+    try { wx.removeStorageSync('privacyAgreed'); } catch (e) { /* v3.84.0~v3.84.1 留下的本地勾选记录，已不再使用 */ }
+  },
 
   onShow() { this.setData({ themeStyle: theme.styleOf(theme.current()) }); theme.applyNav(); }, // 白事礼簿的灰色主题与其他页一致
 
@@ -25,8 +28,7 @@ Page({
   /** 勾选 / 取消勾选《隐私说明》 */
   toggleAgree() { this.setAgreed(!this.data.agreed); },
   setAgreed(v) {
-    privacy.setLocalAgreed(v);
-    this.setData({ agreed: v });
+    this.setData({ agreed: !!v });
   },
   /** 未同意时弹窗请用户选择；返回是否已同意（点头像 / 昵称 / 登录都走这里） */
   askAgree() {

@@ -74,6 +74,8 @@
         </view>
       </view>
       <button class="btn-primary" loading="{{submitting}}" bindtap="onConfirmTransfer">{{payMethod === 'cash' ? '确认' + act + '（现金）' : '确认' + act}}</button>
+      <!-- 隐私说明入口（v3.84.2）：只说明用途并给出链接，不把提交当作对隐私说明的认可 -->
+      <view class="pv-note">填写的姓名与{{isFuneral ? '奠仪' : '礼金'}}仅用于主家记账，详见<text class="pv-link" bindtap="goPrivacy">《隐私说明》</text></view>
     </block>
 
     <!-- 第 2 步：扫收款码转账 -->

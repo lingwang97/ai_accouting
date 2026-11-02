@@ -28,11 +28,11 @@
 .avatar-btn::after { border: none; }
 .avatar { width: 140rpx; height: 140rpx; border-radius: 50%; background: #eee; }
 .avatar-tip { margin-bottom: 28rpx; }
-.agree-row { margin-top: 24rpx; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; font-size: 26rpx; color: var(--text-2, #666); }
-.agree-hit { display: flex; align-items: center; padding: 12rpx 0; }
+.agree-row { margin-top: 4rpx; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; font-size: 26rpx; color: var(--text-2, #666); }
+.agree-hit { display: flex; align-items: center; min-height: 88rpx; padding: 0 4rpx; box-sizing: border-box; } /* 点击区约 88rpx 高，勾选框本身仍是 36rpx（v3.84.2） */
 .ck { width: 36rpx; height: 36rpx; box-sizing: border-box; border: 2rpx solid #bbb; border-radius: 8rpx; margin-right: 12rpx; display: flex; align-items: center; justify-content: center; font-size: 24rpx; line-height: 1; color: #fff; flex-shrink: 0; }
 .ck.on { background: var(--primary); border-color: var(--primary); }
-.agree-link { color: var(--link); padding: 12rpx 0; }
+.agree-link { color: var(--link); display: inline-block; line-height: 40rpx; padding: 24rpx 4rpx; }
 .nick-wrap { position: relative; }
 .nick-mask { position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: 2; }
 .input { margin-bottom: 32rpx; text-align: center; }
