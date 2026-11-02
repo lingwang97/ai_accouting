@@ -1,4 +1,4 @@
-// v3.84.0：隐私授权合规（微信审核「默认自动同意」被拒）——登录页勾选、未同意拦截、官方隐私弹窗、低基础库静默兼容
+// v3.84.0 / v3.84.1：隐私授权合规（微信审核「默认自动同意」被拒）——登录页勾选、未同意拦截、官方隐私弹窗、低基础库静默兼容
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
@@ -129,94 +129,37 @@ test('登录页：未同意时头像按钮不是 chooseAvatar、昵称框禁用�
   } finally { L.restore(); }
 });
 
-test('app.json 有 __usePrivacyCheck__；app.js 启动时接管隐私授权事件', () => {
-  const j = JSON.parse(read(MP + 'app.json'));
-  assert.strictEqual(j.__usePrivacyCheck__, true);
-  const a = read(MP + 'app.js');
-  assert(/utils\/privacy\.js'\)\.init\(\)/.test(a));
-  assert(a.indexOf("privacy.js').init()") < a.indexOf('if (!wx.cloud)'), '在基础库检查之前注册');
-});
-
-test('隐私弹窗组件：agreePrivacyAuthorization 按钮 + agree / disagree 回调 + 隐私说明入口', () => {
-  const w = read(MP + 'components/privacy-popup/index.wxml');
-  assert(/open-type="agreePrivacyAuthorization"/.test(w));
-  assert(/bindagreeprivacyauthorization="onAgree"/.test(w));
-  assert(/id="agree-btn"/.test(w));
-  assert(/bindtap="onDisagree"/.test(w) && /bindtap="goPrivacy"/.test(w) && /openContract/.test(w));
-  const js = read(MP + 'components/privacy-popup/index.js');
-  assert(/buttonId: 'agree-btn', event: 'agree'/.test(js));
-  assert(/event: 'disagree'/.test(js));
-  assert(/typeof wx\.openPrivacyContract === 'function'/.test(js), '没有官方接口时不显示入口');
-  const css = read(MP + 'components/privacy-popup/index.wxss');
-  assert(/var\(--primary/.test(css), '颜色跟随主题');
-  assert(!/\bgap\s*:/.test(css), '不用 gap');
-});
-
-test('所有触发隐私接口的页面都挂了 privacy-popup', () => {
-  const APIS = /wx\.(chooseMedia|chooseImage|saveImageToPhotosAlbum|getClipboardData|setClipboardData|openBluetoothAdapter|scanCode)\b|open-type="chooseAvatar"|type="nickname"|receipt\.saveImage\(|printer\.(printRecord|printQrTest|printTest|printBorderSample)|ble\.(openAdapter|connect)/;
-  const dir = path.join(ROOT, MP, 'pages');
-  const bad = [];
-  let hit = 0;
-  const walk = d => {
+test('v3.84.1：不再接管隐私授权——app.js 不注册 onNeedPrivacyAuthorization，app.json 无 __usePrivacyCheck__', () => {
+  const walk = (d, out) => {
     for (const n of fs.readdirSync(d)) {
       const p = path.join(d, n);
-      if (fs.statSync(p).isDirectory()) { walk(p); continue; }
-      if (!/\.(js|wxml)$/.test(n)) continue;
-      const src = fs.readFileSync(p, 'utf8');
-      if (!APIS.test(src)) continue;
-      hit++;
-      const base = p.replace(/\.(js|wxml)$/, '');
-      const w = fs.readFileSync(base + '.wxml', 'utf8');
-      const j = JSON.parse(fs.readFileSync(base + '.json', 'utf8'));
-      if (!/<privacy-popup\s*\/>/.test(w) || !(j.usingComponents || {})['privacy-popup']) bad.push(path.relative(ROOT, base));
+      if (fs.statSync(p).isDirectory()) { if (n !== 'node_modules') walk(p, out); } else if (/\.(js|wxml|json)$/.test(n)) out.push(p);
     }
+    return out;
   };
-  walk(dir);
-  assert(hit >= 10, '应扫到足够多的页面，实际 ' + hit);
-  assert.deepStrictEqual([...new Set(bad)], []);
+  const bad = walk(path.join(ROOT, MP), []).filter(p => /onNeedPrivacyAuthorization|privacy\.init\(|agreePrivacyAuthorization/.test(fs.readFileSync(p, 'utf8')).valueOf() && !p.endsWith('privacy.js'));
+  assert.deepStrictEqual(bad.map(p => path.relative(ROOT, p)), []);
+  assert.strictEqual(JSON.parse(read(MP + 'app.json')).__usePrivacyCheck__, undefined);
+  assert(!fs.existsSync(path.join(ROOT, MP, 'components/privacy-popup')), '自定义弹窗组件已删除');
 });
 
-test('低基础库（无 onNeedPrivacyAuthorization）：init 静默返回 false，不报错', () => {
+test('v3.84.1：页面不再挂 privacy-popup', () => {
+  const walk = (d, out) => {
+    for (const n of fs.readdirSync(d)) {
+      const p = path.join(d, n);
+      if (fs.statSync(p).isDirectory()) walk(p, out); else if (/\.(wxml|json)$/.test(n)) out.push(p);
+    }
+    return out;
+  };
+  const bad = walk(path.join(ROOT, MP), []).filter(p => /privacy-popup/.test(fs.readFileSync(p, 'utf8')));
+  assert.deepStrictEqual(bad.map(p => path.relative(ROOT, p)), []);
+});
+
+test('privacy.js 只保留本地同意记录；没有 wx 存储接口也不抛', () => {
   const P = loadPrivacy({});
   try {
-    assert.strictEqual(P.m.supported(), false);
-    assert.doesNotThrow(() => assert.strictEqual(P.m.init(), false));
-    assert.strictEqual(P.m.localAgreed(), false, '没有 getStorageSync 也不抛');
+    assert.deepStrictEqual(Object.keys(P.m).sort(), ['LOCAL_KEY', 'localAgreed', 'setLocalAgreed']);
+    assert.strictEqual(P.m.localAgreed(), false);
     assert.doesNotThrow(() => P.m.setLocalAgreed(true));
-  } finally { P.restore(); }
-});
-
-test('有接口时：init 注册回调；事件交给当前弹窗；弹窗晚登记时接手排队事件', () => {
-  let cb = null;
-  const P = loadPrivacy({ onNeedPrivacyAuthorization: f => { cb = f; } });
-  try {
-    assert.strictEqual(P.m.init(), true);
-    assert.strictEqual(typeof cb, 'function');
-    const got = [];
-    const inst = { open: (r, info) => got.push([r, info]) };
-    P.m.setCurrent(inst);
-    const r1 = () => {};
-    cb(r1, { referrer: 'x' });
-    assert.strictEqual(got.length, 1);
-    assert.strictEqual(got[0][0], r1);
-    P.m.clearCurrent(inst);
-    const r2 = () => {};
-    cb(r2, {});
-    const inst2 = { open: r => got.push([r]) };
-    P.m.setCurrent(inst2);
-    assert.strictEqual(got[got.length - 1][0], r2);
-    P.m.clearCurrent(inst2);
-  } finally { P.restore(); }
-});
-
-test('没人接手时 resolve 收到 disagree（不会一直挂起）', async () => {
-  let cb = null;
-  const P = loadPrivacy({ onNeedPrivacyAuthorization: f => { cb = f; } });
-  try {
-    P.m.init();
-    let r = null;
-    cb(x => { r = x; }, {});
-    await new Promise(res => setTimeout(res, 2200));
-    assert.deepStrictEqual(r, { event: 'disagree' });
   } finally { P.restore(); }
 });

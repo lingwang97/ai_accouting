@@ -2,7 +2,6 @@
   "navigationBarTitleText": "一键对账",
   "enablePullDownRefresh": true,
   "usingComponents": {
-    "loading": "/components/loading/loading",
-    "privacy-popup": "/components/privacy-popup/index"
+    "loading": "/components/loading/loading"
   }
 }

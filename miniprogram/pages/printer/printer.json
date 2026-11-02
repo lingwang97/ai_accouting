@@ -1,6 +1,3 @@
 {
-  "navigationBarTitleText": "蓝牙打印",
-  "usingComponents": {
-    "privacy-popup": "/components/privacy-popup/index"
-  }
+  "navigationBarTitleText": "蓝牙打印"
 }

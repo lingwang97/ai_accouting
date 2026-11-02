@@ -1,7 +1,6 @@
 {
   "navigationBarTitleText": "传统礼簿导出",
   "usingComponents": {
-    "loading": "/components/loading/loading",
-    "privacy-popup": "/components/privacy-popup/index"
+    "loading": "/components/loading/loading"
   }
 }

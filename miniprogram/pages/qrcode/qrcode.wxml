@@ -37,4 +37,3 @@
 
 <!-- 台卡离屏画布 -->
 <canvas type="2d" id="card" class="card-canvas"></canvas>
-<privacy-popup />

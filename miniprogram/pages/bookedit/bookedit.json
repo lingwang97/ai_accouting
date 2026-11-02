@@ -1,6 +1,3 @@
 {
-  "navigationBarTitleText": "编辑礼簿",
-  "usingComponents": {
-    "privacy-popup": "/components/privacy-popup/index"
-  }
+  "navigationBarTitleText": "编辑礼簿"
 }

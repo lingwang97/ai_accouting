@@ -16,7 +16,6 @@ App({
     identityVer: 0     // 切换身份次数；页面据此丢弃上一身份的数据
   },
   onLaunch() {
-    require('./utils/privacy.js').init(); // 微信隐私授权接管（基础库 2.32.3 以下无此接口，静默跳过）
     if (!wx.cloud) {
       console.error('基础库过低，请升级微信后使用云开发能力');
       return;

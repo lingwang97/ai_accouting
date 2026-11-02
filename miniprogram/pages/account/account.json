@@ -1,7 +1,6 @@
 {
   "navigationBarTitleText": "主家信息",
   "usingComponents": {
-    "loading": "/components/loading/loading",
-    "privacy-popup": "/components/privacy-popup/index"
+    "loading": "/components/loading/loading"
   }
 }
