@@ -9,3 +9,6 @@
 - [admin折叠/预热/延期/FAQ评估 10-28](project_admin_warm_faq_eval.md) — 待选A/B，要点见文件
 - [新礼金提醒默认关闭 v3.66.3](project_gift_notify.md) — users.giftNotify 按人开启，高级功能页开关；部署 account/payment/records
 - [内容安全审核 v3.71.0](project_content_security.md) — secure.js 失败放行，覆盖清单见 §200，控制台须开 openapi 权限；pay 轮询退避
+- [未收到追溯与申诉 v3.73/3.74](project_reject_trace_appeal.md) — my-gifts 共用组件、appealStatus 字段、复用入簿模板、均未上传
+- [未收到模板+申诉跨礼簿 v3.77.0](project_reject_trace_appeal.md) — 见该文件末行，438b7a0，未上传
+- [封面照片+纹样 v3.79.0](project_cover_photo.md) — books.coverPhoto/pdfTheme.deco，123023e，白事无照片；1C 整页为待选增强

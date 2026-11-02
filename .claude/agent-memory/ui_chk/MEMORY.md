@@ -60,3 +60,38 @@ v3.67.3(5f6b407)：FAQ 长答案分句+pre-wrap；theme.applyNav；警示色变�
 ## 2026-10-29 上线前检查 v3.71.0（只读，未改代码，编号 Y1-Y9）
 已核实无问题（别再报）：modal 按钮字数/success toast/actionSheet 项数全合规；无 flex gap；各页 onLoad 已调 theme.early（pay/qrcode/receipt 宾客页刻意不调）；index .page.tab-page 留白在；mock 示意图 CSS 均带省略；advanced 去掉刷新卡后布局正常；v3.71.0 违规提示=toast 17 字 icon none（可两行）；pay 等待页 pollTimeout 文案/刷新状态正常。
 本次问题：Y1 index.wxss:118 `.he-btn{margin-left}` 被 `button.btn:not([size=mini])` 压掉（宾客首页「我是主家」卡文字贴按钮）；Y2 login 页无隐私说明/协议入口（隐私页只在 我的→隐私与数据，未登录进不去）；Y3 privacy.js 设备权限漏写摄像头扫码、剪贴板、内容安全检测、头像上传云存储；Y4 「联系我们开通会员」在 iOS 上有虚拟商品引导站外购买的审核风险（faq.js:157、advperm.js、request.js:39）；Y5 records.js:66/84/256 「全部礼簿」机构模式未换词；Y6 records 无礼簿时顶部 picker 显示「全部礼簿 ▾」+「暂无礼金记录」引导弱；Y7 mine 头像可点但无提示；Y8 advanced.wxss 残留 .a-opt 等刷新档死样式；Y9 records.wxml:91 首次加载骨架与「加载中…」同时出现。
+
+## 2026-10-30 上线前检查 v3.74.3（只读，未改代码，编号 Z1-Z8）
+Y1/Y2/Y5 已确认修复（he-btn、login 隐私说明、records 机构换词）。modal/toast/actionSheet 字数项数合规，无 flex gap，my-gifts 为 apply-shared 样式生效。
+问题：Z1 v3.74.3 去掉「我的」随礼记录入口后，机构模式主家/记账人(往来 tab 被 hideOrg/hideClerk 隐藏)没有任何入口看随礼记录；Z2 my-gifts 区块标题「主家未确认收到」/kept 文案白事未换词；Z3 index 工作台宫格 g-sub 单行省略，「N 份 ￥X · 申诉 M」大金额/大字体会截掉申诉数；Z4 my-gifts 首次加载 empty 初值 false，骨架屏永不显示；Z5 receipt 加载中灰色主题，喜事先灰后红；Z6 admin pf 手动项算入 warn；Z7 renqing 随礼记录栏无下拉刷新；Z8 pay 失败页文案较长。
+
+## 2026-10-30 最后上线前检查 v3.76.0（只读，fff5af5..HEAD 增量，编号 A1-A5）
+结论：可上线，无必须修。Z1-Z8 修复未回退；modal/toast/actionSheet 合规；无 flex gap；pending sheet 遮罩有 catchtouchmove，下拉刷新不会穿透。
+问题（均 P3）：A1 pay.js askDup 的状态文案对现金随礼写「还没点我已完成转账」不贴切，且「礼金」白事未换词；A2 busyTip 弹窗与 request.js 默认 toast 同时出现，且 content 里「请稍等几秒再试。请过几秒再点」重复；A3 pay 等待页「下拉可立即刷新」在超时态也显示、无样式；A4 pending name-row 在 320 宽+大字体+现金+疑似重复+批次时标签挤压姓名（姓名保底 2em）；A5 index/pay 下拉刷新真机待确认。
+已修复 v3.76.1(93e41ea)：A1 askDup 现金/白事文案；A2 payCreate silent + busyTip 固定文案，非限流错误经 req.showErr 仍提示。复查 v3.76.1：无新问题，A3-A5 留待上线后；待真机：限流弹窗、现金限流、白事 dup 弹窗。别再报 A1/A2。
+
+## 2026-11-01 上线前检查 v3.78.5（只读，93e41ea..0f642b9 增量 + 抽查，编号 B1-B8）
+已核实无问题（别再报）：modal 按钮字数/success toast/actionSheet 项数合规（家人共享 switchViewerBook 最多 6 项）；无 flex gap；filter/sort/share-m/swap-m 图标齐全；transfer 页有 theme.early、非主家有拦截；pending 其他礼簿申诉/未收到折叠逻辑正常；mine 分组卡片无空卡；登录页隐私入口仍在；用户决策（联系我们开通会员、移交主家副标题）未动。
+问题：B1 records 状态四段 seg-item nowrap+flex:1，筛选行右侧排序按钮 flex-shrink:0，小屏/大字体「待确认」等挤出（P2）；B2 家人共享共享礼簿>6 本时，index 最后一项「共享给我的礼簿…」跳 books 页，但 books 页对 viewer 无「选看这本」入口，第 6 本以后选不了（P2，边缘）；B3 books 底栏「礼簿共享」按钮机构模式未换词；viewer 时「其他礼簿」标题未区分（P3）；B4 pending 逐笔大卡去掉了「请核对微信已收到上面的金额」提示（P3）；B5 advanced 峰值模式说明去掉「增加云开发调用量」、回收站天数说明去掉「已在回收站的按原到期日」（P3）；B6 transfer switch color 用 primary 首帧未设（P3）；B7 index.wxml empty-card 无样式（无害）；B8 records 搜索行 320 宽+大字体较挤（待真机）。
+
+## 2026-11-01 最后上线前检查 v3.78.6（只读，0f642b9..4244da9）
+增量仅 3 个前端文件：pending.wxml:179 恢复核对提示（.tip 样式在 pending.wxss:70，正常）、admin.js:26 wipeKeepAdmins 默认 false（开关 checked 同步，一致）、config 版本。modal/toast/actionSheet 复核合规，无 gap。无新问题；B1-B8 状态未变（均未修，B1/B2 P2 可上线后处理）。
+
+## 2026-11-02 检查 v3.83.1（只读，4244da9..HEAD，booktheme 导出页 + pvfont + imgcompress + admin，编号 C1-C13）
+结论：无必须修。modal/toast/actionSheet 合规，无 flex gap，booktheme 有 theme.early，底栏三按钮 26%/34%/flex 在 320 宽够用，sticky z4<底栏5<mask10，裁剪/确认面板有 catchtouchmove。
+问题：C1 裁剪面板（js:521 框最高 620rpx + 九宫格 + 3 按钮）在 SE/8 等小屏超 94vh，按钮要滚动，拖照片可能带动面板滚（建议按 windowHeight 限框高）；C2 会员字体试看每点一次弹 vip.explain 模态盖住示意图（js:467）；C3 pvfont.load 失败 '' 缓存到页面结束，弱网无法重试（pvfont.js:104）；C4 机构模式漏换词：wxml:124/137「礼簿名」、186「白事礼簿」、231「记账人签名栏」、js:241 示意「记账人」；C5 cropRender 每次 touchmove 两次 setData（js:576-591）；P3：示意图小字 4-5pt、吸顶示意图占屏 38% 小屏默认可收起、点击区（pv-fold/pv-tab/crop-zb/fcell）<44pt、.chip.try 加 4rpx 边框抖动、dim-loader 无 binderror 致「照片还在加载」、imgcompress.cover 小图也二次压缩、封底落款 placeholder 过长。
+待真机：loadFontFace data URI（iOS/安卓/鸿蒙 NEXT）、crop 手势与面板滚动、slider bindchanging 回写抖动、enableAlertBeforeUnload 返回提示。
+
+## 已修复 v3.83.2 (38ec0bd)：C1-C13（C7 用户决定保持默认展开，不改）。别再报
+裁剪面板按 windowHeight 限高+sticky 按钮栏；试看只弹一次；pvfont 失败不缓存；export 机构模式封底「礼台人员」/表格「场次」(orgT)；示意图 0.68 缩放；chip 透明边框；JPG<=1.5MB 不二次压缩。坑：bash 里嵌套多个 heredoc 会报 unexpected EOF，大段内容用 Write 工具写文件再执行。
+
+## 2026-11-02 上线前检查 v3.83.2（只读，32b5dc0..38ec0bd + 全量抽查，编号 D）
+C1-C13 复核均已修好（C7 用户决定保留）：裁剪框 _maxH 按窗口高度、sticky 按钮栏含安全区、cropRender 合并 setData、tryHint 只弹一次、pvfont 失败不缓存、orgT 机构换词（前端 wxml + 云函数 export）、chip 透明边框、dim-loader binderror。无新增阻断问题。
+全量抽查合规：modal confirm/cancel 全 <=4 字（admin.js:506 取消订阅 4 字）；success toast <=7 字（已记入礼簿 5、已按实收入簿 6）；actionSheet 均有 6 项上限（index 超 6 取 5+更多、samename SHEET_MAX、records onMore 最多 4）；无 flex gap；除 pay/qrcode/receipt 宾客页外都有 theme.early；tab 页 padding 用 container tab-page 顺序正确；mask 弹层都有 catchtouchmove；login 隐私入口在。
+剩余小项（P3）：D1 真实封面缩略图/裁剪图无 binderror（仅 dim-loader 有）；D2 export 云函数 orgT 改动需部署云函数才生效；D3 示意图小字约 9pt 仍偏小；D4 pv-tab/pv-fold 负 margin 扩大点击区可能与相邻元素点击区重叠。
+
+## 2026-11-02 上线前检查 v3.84.1（只读，38ec0bd..5480a65，编号 E）
+增量仅 login/bookedit/booktheme(云存储核对)/privacy.js/request.js。隐私弹窗组件已删干净：全项目无 privacy-popup、__usePrivacyCheck__、onNeedPrivacyAuthorization 残留（只有 privacy.js 注释）。
+已核实无问题（别再报）：login 勾选框默认不勾、未同意头像 bindtap + 昵称 disabled+遮罩、modal 同意/取消、bookedit「改为白事」继续/取消，全部 <=4 字；全项目 modal 按钮字数/success toast/actionSheet 项数合规，无 flex gap；除 pay/qrcode/receipt 外都有 theme.early；mine 帮助与隐私在 user 块外，未登录也能进隐私页；app.js 启动只做 action:check 静默恢复，不注册。
+问题：E1 privacy 同意标记 privacyAgreed 退出登录/清除数据后不清，再登录页是已勾状态（可能被审核员当成默认勾选）；E2 login agree-hit/agree-link 点击区约 60rpx 高 <88rpx；E3 宾客 pay 页填姓名无隐私说明入口，宾客首页无隐私入口（仅「我的」tab 有）；E4 清单见报告。
+待真机：input type 由 text 动态切 nickname 是否生效；遮罩在 iOS/鸿蒙点击；微信后台「用户隐私保护指引」需与 privacy 页一致。
