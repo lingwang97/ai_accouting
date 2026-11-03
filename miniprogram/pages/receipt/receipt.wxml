@@ -9,6 +9,7 @@
     </view>
     <view class="claim-tip" wx:if="{{claim === 'mine'}}" bindtap="goMine">已在你的「我的随礼记录」中 ›</view>
     <view class="claim-tip" wx:if="{{claim === 'taken'}}">这笔记录已被认领</view>
+    <view class="claim-tip" wx:if="{{mine}}" bindtap="onResub">开启变更提醒：主家修改或作废这笔时通知我 ›</view>
     <button class="btn-primary save" loading="{{saving}}" bindtap="onSave">保存回执到相册</button>
     <view class="host-cta" wx:if="{{!isHost && bookType !== 'funeral'}}" bindtap="goHostEntry">我家也要办事？免费创建电子礼簿 ›</view>
     <ad-slot slot="receipt" book-type="{{bookType}}" />

@@ -68,12 +68,12 @@ test('宾客端与用户可见文案不用「付款 / 支付」（微信菜单�
   assert.deepStrictEqual(bad, []);
 });
 
-test('提审文档：审核备注用第二个微信扫码；索引 32 条与 system INDEXES 一致；触发器只有 warmer / export', () => {
+test('提审文档：审核备注用第二个微信扫码；索引 36 条与 system INDEXES 一致；触发器只有 warmer / export', () => {
   const doc = read('docs/提审与隐私说明.md');
   assert.ok(doc.includes('请用第二个微信扫这个礼簿码'));
   const src = read('cloudfunctions/system/index.js').replace(/\r/g, '');
   const names = [...src.match(/const INDEXES = \[([\s\S]*?)\n\];/)[1].matchAll(/\['(\w+)', '(\w+)'/g)].map(m => m[1] + '|' + m[2]);
-  assert.strictEqual(names.length, 32);
+  assert.strictEqual(names.length, 36);
   names.forEach(n => { const [c, i] = n.split('|'); assert.ok(doc.includes(`| ${c} | ${i} |`), n); });
   for (const fn of fs.readdirSync(path.join(ROOT, 'cloudfunctions'))) {
     const p = path.join(ROOT, 'cloudfunctions', fn, 'config.json');

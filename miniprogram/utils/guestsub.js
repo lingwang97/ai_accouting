@@ -5,8 +5,9 @@ const { GUEST_NOTIFY_TMPL_ID, GUEST_REJECT_TMPL_ID } = require('../config.js');
 
 const NONE = { guestNotify: false, guestRejectNotify: false };
 
-function ask() {
-  const ids = [GUEST_NOTIFY_TMPL_ID, GUEST_REJECT_TMPL_ID].filter(Boolean);
+// only === 'reject'：只订阅「记账提醒」模板（变更提醒，v3.85.0）；默认两个一起订阅
+function ask(only) {
+  const ids = (only === 'reject' ? [GUEST_REJECT_TMPL_ID] : [GUEST_NOTIFY_TMPL_ID, GUEST_REJECT_TMPL_ID]).filter(Boolean);
   if (!ids.length || typeof wx.requestSubscribeMessage !== 'function') return Promise.resolve({ ...NONE });
   return new Promise(resolve => {
     try {

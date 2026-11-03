@@ -1232,7 +1232,7 @@ async function purge(openid, confirm) {
   // 与管理员「数据清除」共用（tools/cloud-shared/purge.js）；用户自己注销时保留套餐开通记录
   let res;
   try {
-    res = await Purge.run(db, cloud, openid, { ownPayCode });
+    res = await Purge.run(db, cloud, openid, { ownPayCode, snapshot: true }); // 删记录前先给宾客留随礼凭证（v3.85.0）
   } catch (e) {
     console.error('purge 失败', e.errCode, e.message);
     return err('清除未完成，请稍后重试（已清除的部分不会恢复）');

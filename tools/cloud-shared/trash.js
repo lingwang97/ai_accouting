@@ -5,8 +5,11 @@
 // 回收站保留 TRASH_DAYS 天：期间可恢复（原样放回，仍为已归档），也可手动彻底删除；到期由 warmer 定时永久删除（连同文件）。
 // 移动是分批的：单次调用超过时间预算时返回 done=false，再调用一次接着移（trashStatus 记录进度：moving / restoring / done）。
 
+const Snap = require('./snapshot.js');
+
 const TRASH_DAYS = 15;
 const BUDGET_MS = 12 * 1000; // 单次调用最多移动这么久（books 云函数超时 20 秒）
+const SNAP_MS = 8 * 1000; // 删除前给宾客留凭证（snapshot.js）单次最多这么久，没做完返回 false，前端再调用一次接着做
 const ENVS = ['develop', 'trial', 'release'];
 
 /** 把 from 集合里满足 cond 的文档原样（_id 不变）移到 to 集合；超时返回 false，移完返回 true */
@@ -37,6 +40,8 @@ async function ensure(db, name) {
 async function moveToTrash(db, owner, bookId, book, extra, days) {
   await ensure(db, 'trash_books');
   await ensure(db, 'trash_records');
+  // 先给这本礼簿里有宾客身份的随礼人留凭证（v3.85.0）：主家删除礼簿不能让宾客的随礼记录跟着消失；首次调用才做（续跑时已做完）
+  if (book && !(await Snap.snapshotRecords(db, owner, { bookId }, Date.now() + SNAP_MS))) return false;
   const deadline = Date.now() + BUDGET_MS;
   const tb = db.collection('trash_books');
   if (book) {
@@ -64,7 +69,10 @@ async function restore(db, owner, bookId) {
     await tb.doc(bookId).update({ data: { trashStatus: 'restoring', restoringAt: new Date() } });
   }
   const done = await moveDocs(db, 'trash_records', 'records', { ownerOpenid: owner, bookId }, deadline);
-  if (done) await tb.doc(bookId).remove();
+  if (done) {
+    await tb.doc(bookId).remove();
+    await Snap.dropWhere(db, { ownerOpenid: owner, bookId }); // 记录放回后以 records 为准，删掉这本的凭证快照，避免宾客那边重复显示
+  }
   return { done };
 }
 

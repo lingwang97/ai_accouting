@@ -27,3 +27,9 @@ button.mg-op2:not([size=mini]) { margin-left: 20rpx; }
 /* 底部菜单页（往来）：遮罩止于自定义底部菜单上沿，弹层底部不再叠加安全区（菜单已占用）（v3.74.1） */
 .mask.mg-tab-mask { bottom: calc(50px + env(safe-area-inset-bottom)); }
 .sheet.mg-tab-sheet { max-height: 80vh; padding-bottom: 32rpx; }
+.mg-strike { text-decoration: line-through; }
+.mg-new { margin-left: 12rpx; padding: 2rpx 12rpx; border-radius: 999rpx; background: var(--danger, #FA5151); color: #fff; font-size: 20rpx; font-weight: normal; }
+.mg-amended { color: var(--warn, #C25E00); }
+.mg-chg { margin-top: 6rpx; }
+.mg-exp { margin-top: 6rpx; font-size: 24rpx; }
+.mg-resub { margin-right: 28rpx; color: #888; }

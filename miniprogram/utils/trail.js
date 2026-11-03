@@ -2,13 +2,13 @@
 const fmt = require('./format.js');
 
 const REASON = { nofound: '未查到到账', amount: '金额不符', nomatch: '转账人对不上', other: '其他原因' };
-const ACT = { reject: '标记未收到', unreject: '撤销未收到', appeal: '宾客申请再核对', accept: '核对后入簿', keep: '维持未收到' };
+const ACT = { reject: '标记未收到', unreject: '撤销未收到', appeal: '宾客申请再核对', accept: '核对后入簿', keep: '维持未收到', amend: '修改了金额 / 姓名', void: '作废', corr_ask: '申请更正', corr_agree: '同意更正', corr_decline: '拒绝更正' };
 const WHO = { owner: '主家', clerk: '记账人', guest: '宾客' };
 
 /** 一条日志：时间 + 谁 + 做了什么（+ 原因 / 说明 / 单号后几位） */
 function lineOf(e) {
   const who = e.who === 'guest' ? '宾客' : (e.name || WHO[e.who] || '');
-  const extra = [REASON[e.reason] || '', e.note || '', e.ref ? '单号后 ' + e.ref : ''].filter(Boolean).join('；');
+  const extra = [REASON[e.reason] || '', e.note || '', e.why || '', e.ref ? '单号后 ' + e.ref : ''].filter(Boolean).join('；');
   return `${fmt.dateTime(e.at)} ${who} ${ACT[e.act] || e.act}${extra ? `（${extra}）` : ''}`;
 }
 

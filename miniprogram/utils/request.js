@@ -227,6 +227,12 @@ module.exports = {
   // 主家 / 记账人处理申诉：decision accept 入簿（amount 为实际金额）/ keep 维持未收到（note 为给宾客的回复）
   payResolveAppeal: (rid, decision, amount, note) => call('payment', { action: 'resolveAppeal', rid, decision, ...(amount ? { amount } : {}), ...(note ? { note } : {}) }).then(dropDash),
   payAmend: (rid, fields, opts) => call('payment', { action: 'amend', rid, ...fields }, opts).then(dropDash),
+  // 入簿超过 72 小时后「申请更正」（v3.85.0）：fields { kind: amount | name | void, newAmount, newName, reason }，随礼人同意后才生效
+  payCorrect: (rid, fields) => call('payment', { action: 'correct', rid, ...fields }).then(dropDash),
+  // 随礼人同意 / 拒绝更正申请；删除自己保留的凭证；重新订阅「记账提醒」（变更提醒）
+  payCorrectReply: (rid, decision) => call('payment', { action: 'correctReply', rid, decision }),
+  payDeleteVoucher: rids => call('payment', { action: 'deleteVoucher', rids }),
+  payResub: (rid, sub) => call('payment', { action: 'resub', rid, envVersion: envVersion(), ...guestsub.flags(sub) }),
   // 单条记录详情（主家 / 记账人）：确认、修改超时后核对最新状态（v3.75.1）
   recordDetail: (rid, opts) => call('records', { action: 'detail', rid }, opts),
   recordList: (d, opts) => call('records', { action: 'list', ...d }, opts),

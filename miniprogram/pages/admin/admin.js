@@ -13,7 +13,7 @@ const FUNC_LABEL = {
 };
 
 /** 必需集合（与云端 collections.js 一致；手机端试读用） */
-const COLS_OF = () => ['users', 'accounts', 'records', 'print_templates', 'books', 'gifts_out', 'exports', 'members', 'invites', 'settings', 'subscriptions', 'reminders', 'person_alias', 'admin_logs', 'book_codes', 'trash_books', 'trash_records', 'rate_limits', 'sys_config'];
+const COLS_OF = () => ['users', 'accounts', 'records', 'print_templates', 'books', 'gifts_out', 'exports', 'members', 'invites', 'settings', 'subscriptions', 'reminders', 'person_alias', 'admin_logs', 'book_codes', 'trash_books', 'trash_records', 'rate_limits', 'sys_config', 'guest_receipts'];
 
 /** 清单显示：勾选时间转成日期 */
 const fmtChecklist = list => (list || []).map(x => ({ ...x, atStr: x.at ? fmt.day(x.at) : '' }));

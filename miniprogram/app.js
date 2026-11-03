@@ -73,11 +73,29 @@ App({
           this.globalData.remindDot = d.remindDue === true; // 往来页红点（只算到期未处理）
           this.globalData.appealN = this.globalData.account ? (d.appeal || 0) : 0; // 宾客申诉待处理数（v3.74.0，计入「工作台」角标）
           this.setBadge(this.globalData.account ? n : 0);
+          this.checkGiftDot();
           resolve(n);
         },
         fail: () => resolve(0)
       });
     });
+  },
+
+  /** 我的随礼记录红点（v3.85.0）：有待我确认的更正申请，或有主家修改 / 作废还没看过；最多每 10 分钟查一次，进入「我的随礼记录」时由组件刷新 */
+  checkGiftDot(force) {
+    if (!this.globalData.user) return;
+    const now = Date.now();
+    if (!force && now - (this._giftAt || 0) < 10 * 60 * 1000) return;
+    this._giftAt = now;
+    require('./utils/request.js').myReceipts({ silent: true })
+      .then(res => this.setGiftDot(require('./utils/giftdot.js').of(res)))
+      .catch(() => {});
+  },
+
+  setGiftDot(on) {
+    if (!!this.globalData.giftDot === !!on) return;
+    this.globalData.giftDot = !!on;
+    this.refreshTabBar();
   },
 
   /** 切换身份 / 接受邀请后：清掉与主家相关的缓存，各页面重新加载 */
@@ -98,6 +116,8 @@ App({
     this._accountChecked = false;
     try { require('./utils/printer.js').clearTemplateCache(); } catch (e) { /* 忽略 */ }
     this.globalData.remindDot = false;
+    this.globalData.giftDot = false;
+    this._giftAt = 0;
     this.setBadge(0);
   },
 

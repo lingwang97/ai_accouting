@@ -31,6 +31,11 @@ exports.main = async (event, context) => {
   if (left() > (hourly ? 40 : 15) * 1000) {
     try { await require('./guestnotify.js').create(db, cloud).retryPending(10, deadline - (hourly ? 35 : 10) * 1000); } catch (e) { console.warn('入簿通知补发失败', e.message); }
   }
+  // 记录变更（v3.85.0）：修改 / 作废超过 10 分钟后合并通知宾客（复用「记账提醒」模板，一次性额度）；超过 7 天没处理的更正申请置为过期
+  if (left() > 12 * 1000) {
+    try { await require('./guestnotify.js').create(db, cloud).sendChanges(20, deadline - 8 * 1000); } catch (e) { console.warn('变更通知失败', e.message); }
+    try { await expireCorrections(); } catch (e) { console.warn('更正申请过期处理失败', e.message); }
+  }
   // 每小时第一轮：永久删除回收站里超过保留期的礼簿（每次最多 5 本，没删完的下个小时继续）
   if (new Date().getMinutes() < 5) {
     const trash = require('./trash.js');
@@ -135,6 +140,14 @@ async function pushReminders(deadline) {
   }
 }
 
+/** 更正申请（records.corrState = pending）超过 CORR_MS（7 天）没处理：置为 expired，原记录不变（v3.85.0；correction 里的 state 以 corrState 为准） */
+async function expireCorrections() {
+  const _ = db.command;
+  const { CORR_MS } = require('./status.js');
+  const res = await db.collection('records').where({ corrState: 'pending', corrAt: _.lt(new Date(Date.now() - CORR_MS)) }).update({ data: { corrState: 'expired', corrDecidedAt: new Date() } });
+  return (res.stats && res.stats.updated) || 0;
+}
+
 /** 删除过期的小程序码一次性凭据（有效期 60 秒，这里只删 10 分钟前的，不会和正在进行的生成冲突） */
 async function cleanNonces() {
   const _ = db.command;
@@ -180,4 +193,4 @@ async function hasPaidSubscription() {
 }
 
 // 仅供本地测试
-exports._test = { cleanNonces, cleanRateLimits, hasPeak };
+exports._test = { cleanNonces, cleanRateLimits, hasPeak, expireCorrections };

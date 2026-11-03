@@ -3,7 +3,7 @@
 // 新增集合时：加到 COLLECTIONS；用户数据要同时加到 purge.js 的 targets，否则（不属于用户的）写进 NOT_PURGED 并说明原因。
 // tests/collections.test.js 会检查这三处是否一致。
 
-const COLLECTIONS = ['users', 'accounts', 'records', 'print_templates', 'books', 'gifts_out', 'exports', 'members', 'invites', 'settings', 'subscriptions', 'reminders', 'person_alias', 'admin_logs', 'book_codes', 'trash_books', 'trash_records', 'rate_limits', 'sys_config'];
+const COLLECTIONS = ['users', 'accounts', 'records', 'print_templates', 'books', 'gifts_out', 'exports', 'members', 'invites', 'settings', 'subscriptions', 'reminders', 'person_alias', 'admin_logs', 'book_codes', 'trash_books', 'trash_records', 'rate_limits', 'sys_config', 'guest_receipts'];
 
 /** 不由 purge.targets 清除的集合及原因（清除账户时不需要 / 另有处理） */
 const NOT_PURGED = {

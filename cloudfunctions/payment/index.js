@@ -4,7 +4,7 @@
 const cloud = require('wx-server-sdk');
 const { ok, err, failOf, bjDay, bjTime } = require('./common.js');
 const S = require('./secure.js'); // 内容安全审核（tools/cloud-shared/secure.js，失败放行）
-const { REC, MEMBER, UNREJECT_MS, COUNTED } = require('./status.js');
+const { REC, MEMBER, UNREJECT_MS, COUNTED, CORR_MS, editDeadline, editCut } = require('./status.js');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
@@ -48,14 +48,14 @@ async function mainInner(event, context) {
   try {
     await ensureCol('records');
     // 收款方操作：身份只解析一次；家人共享（只读）不能做任何收款方操作
-    const OWNER_ACTIONS = ['cashEntry', 'confirm', 'confirmBatch', 'reject', 'unreject', 'resolveAppeal', 'dismissStall', 'void', 'amend', 'issueQr', 'resetToken', 'unclaim', 'qrCheck'];
+    const OWNER_ACTIONS = ['cashEntry', 'confirm', 'confirmBatch', 'reject', 'unreject', 'resolveAppeal', 'dismissStall', 'void', 'amend', 'correct', 'issueQr', 'resetToken', 'unclaim', 'qrCheck'];
     const ctx = OWNER_ACTIONS.includes(event.action) ? await resolveCtx(db, OPENID) : null;
     if (ctx && readonly(ctx)) return err('家人共享为只读，不能修改');
     // 记账人按权限：礼台记账 / 确认收礼 / 作废；amend（修改已入簿礼金）确认收礼或作废任一即可
     // issueQr（打印小票时取小程序码）：能打印小票的人都可以——「礼簿码与打印」（records.markPrinted 同一权限），或确认收礼 / 礼台记账后直接打印（v3.58.1）
-    const NEED = { cashEntry: 'desk', confirm: 'confirm', confirmBatch: 'confirm', reject: 'confirm', unreject: 'confirm', resolveAppeal: 'confirm', dismissStall: 'confirm', void: 'void', amend: ['confirm', 'void'], issueQr: ['show', 'confirm', 'desk'], resetToken: 'members', unclaim: 'members', qrCheck: 'style' };
+    const NEED = { cashEntry: 'desk', confirm: 'confirm', confirmBatch: 'confirm', reject: 'confirm', unreject: 'confirm', resolveAppeal: 'confirm', dismissStall: 'confirm', void: 'void', amend: ['confirm', 'void'], correct: ['confirm', 'void'], issueQr: ['show', 'confirm', 'desk'], resetToken: 'members', unclaim: 'members', qrCheck: 'style' };
     if (ctx && ![].concat(NEED[event.action]).some(p => can(ctx, p))) {
-      const label = { amend: '修改礼金', issueQr: '礼簿码与打印' }[event.action] || { desk: '礼台记账', confirm: '确认收礼', void: '作废', members: '管理', style: '修改回执与打印样式' }[NEED[event.action]];
+      const label = { amend: '修改礼金', correct: '申请更正', issueQr: '礼簿码与打印' }[event.action] || { desk: '礼台记账', confirm: '确认收礼', void: '作废', members: '管理', style: '修改回执与打印样式' }[NEED[event.action]];
       return err('你没有「' + label + '」权限');
     }
     switch (event.action) {
@@ -69,6 +69,10 @@ async function mainInner(event, context) {
       case 'myReceipts': return await myReceipts(OPENID);
       // 宾客对「主家未确认收到」申请再核对（v3.74.0）：每笔 1 次，主家在待确认页「宾客申诉」处理
       case 'appeal': return await appeal(OPENID, event);
+      // 超过 72 小时的更正申请：随礼人本人同意 / 拒绝（v3.85.0）；删除自己保留的凭证；重新订阅「记账提醒」（变更提醒）
+      case 'correctReply': return await correctReply(OPENID, event);
+      case 'deleteVoucher': return await deleteVoucher(OPENID, event);
+      case 'resub': return await resub(OPENID, event);
       // 小票二维码（v3.57.0）：宾客扫码查看回执 / 放入「我的随礼记录」
       case 'receiptByToken': return await receiptByToken(OPENID, event.token);
       case 'claimReceipt': return await claimReceipt(OPENID, event.token);
@@ -94,8 +98,9 @@ async function mainInner(event, context) {
       case 'resolveAppeal': return await resolveAppeal(ctx, event);
       // 撤销「未收到」：24 小时内回到标记前的状态
       case 'unreject': return await unreject(ctx, String(event.rid || ''));
-      // 修改已入簿礼金（金额 / 姓名 / 关系 / 备注）
+      // 修改已入簿礼金（金额 / 姓名 / 关系 / 备注）：入簿 72 小时内可直接改；超期用 correct 申请更正，随礼人同意后才生效（v3.85.0）
       case 'amend': return await amend(ctx, event);
+      case 'correct': return await correct(ctx, event);
       // 「宾客未点完成」里已被自动取消的：主家核对确实没收到，从这一栏移除（整批）
       case 'dismissStall': return await dismissStall(ctx, String(event.rid || ''));
       case 'void': return await ownerUpdate(ctx, event.rid, [REC.PAID], REC.VOID);
@@ -869,7 +874,7 @@ async function receipt(openid, rid, batch) {
   // 合并批次回执（列出同批全部随礼人）：只给扫码登记这一批的宾客本人和主家 / 记账人；
   // 认领人只认领了自己那张小票，不能借 batch 看到同批其他人的姓名和金额（v3.58.1）
   const whole = batch && (rec.payerOpenid === openid || (await isStaff(openid, rec)));
-  return ok(await receiptView(rec, whole));
+  return ok({ ...(await receiptView(rec, whole)), mine: rec.payerOpenid === openid }); // mine：宾客本人扫码登记的，回执页可开启变更提醒（v3.85.0）
 }
 
 /** 回执内容：记录（可合并批次）+ 主家称呼 + 该礼簿的回执样式 */
@@ -913,6 +918,8 @@ async function receiptView(rec, batch) {
 const WAITING_DAYS = 3;
 /** 「主家未确认收到」一栏保留 30 天（v3.73.0），已取消的看最近 3 天 */
 const REJECTED_DAYS = 30;
+/** 「已作废」「有更新」保留 30 天（v3.85.0） */
+const VOIDED_DAYS = 30;
 
 /** 宾客时间线上的一条日志的文字（不含操作人，统一写「主家」） */
 function trailText(e, funeral) {
@@ -926,8 +933,30 @@ function trailText(e, funeral) {
     case 'appeal': return '你提交了「请再核对」' + (e.note ? `（${e.note}）` : '');
     case 'accept': return '主家核对后确认入簿';
     case 'keep': return '主家核对后维持未收到' + (e.note ? `（${e.note}）` : '');
+    case 'amend': {
+      const c = e.changes || {};
+      const parts = [];
+      if (c.amount) parts.push(`金额 ${c.amount[0]} → ${c.amount[1]} 元`);
+      if (c.payerName) parts.push(`姓名「${c.payerName[0]}」→「${c.payerName[1]}」`);
+      return parts.length ? '主家更正了' + parts.join('，') : '';
+    }
+    case 'void': return '主家作废了这笔记录';
+    case 'corr_ask': {
+      const what = e.kind === 'amount' ? `把金额更正为 ${e.newAmount} 元` : (e.kind === 'name' ? `把姓名更正为「${e.newName}」` : '作废这笔记录');
+      return `主家申请${what}` + (e.why ? `（理由：${e.why}）` : '');
+    }
+    case 'corr_agree': return '你同意了这次更正';
+    case 'corr_decline': return '你拒绝了这次更正，记录保持不变';
     default: return '';
   }
+}
+
+/** 修改相关的日志（修改、作废、更正申请 / 同意 / 拒绝），已入簿的行用 */
+const CHANGE_ACTS = ['amend', 'void', 'corr_ask', 'corr_agree', 'corr_decline'];
+function changeLines(r) {
+  const funeral = r.bookType === 'funeral';
+  return (Array.isArray(r.trail) ? r.trail : []).filter(e => CHANGE_ACTS.includes(e.act))
+    .map(e => ({ at: e.at, text: trailText(e, funeral) })).filter(x => x.text);
 }
 
 /** 宾客可见的时间线：登记 → 点转账 → 日志（按时间升序） */
@@ -948,7 +977,8 @@ function guestTimeline(r) {
 async function myReceipts(openid) {
   const now = Date.now();
   // 本人扫码付款的 + 小票二维码认领的（礼台登记的）
-  const [res, wres, rres, cres] = await Promise.all([
+  const mine = _.or([{ payerOpenid: openid }, { claimedOpenid: openid }]);
+  const [res, wres, rres, cres, vres, corres, sres] = await Promise.all([
     records.where(_.and([{ status: REC.PAID }, _.or([{ payerOpenid: openid }, { claimedOpenid: openid }])]))
       .orderBy('paidAt', 'desc').limit(50).get(),
     records.where({
@@ -959,7 +989,13 @@ async function myReceipts(openid) {
     records.where({ payerOpenid: openid, status: REC.REJECTED, rejectedAt: _.gte(new Date(now - REJECTED_DAYS * 86400000)) })
       .orderBy('rejectedAt', 'desc').limit(50).get(),
     records.where({ payerOpenid: openid, status: REC.CANCELLED, createdAt: _.gte(new Date(now - WAITING_DAYS * 86400000)) })
-      .orderBy('createdAt', 'desc').limit(20).get()
+      .orderBy('createdAt', 'desc').limit(20).get(),
+    // 主家作废的（v3.85.0，近 30 天）、等我确认的更正申请、主家删簿 / 注销后保留给我的凭证
+    records.where(_.and([{ status: REC.VOID, voidedAt: _.gte(new Date(now - VOIDED_DAYS * 86400000)) }, mine]))
+      .orderBy('voidedAt', 'desc').limit(50).get(),
+    records.where(_.and([{ status: REC.PAID, corrState: 'pending', corrAt: _.gte(new Date(now - CORR_MS)) }, mine]))
+      .orderBy('corrAt', 'desc').limit(20).get(),
+    db.collection('guest_receipts').where({ guestOpenid: openid }).orderBy('snapshotAt', 'desc').limit(100).get().catch(() => ({ data: [] }))
   ]);
   // 批次合成一行（同一批的状态一致；取批次里宾客自己那条的时间线）
   const group = data => {
@@ -970,7 +1006,7 @@ async function myReceipts(openid) {
       if (g) { g.names.push(r.payerName); g.fen += Math.round(r.amount * 100); return; }
       const row = {
         _id: r._id, aid: r.aid, hostName: r.hostName || '', status: r.status, names: [r.payerName], fen: Math.round(r.amount * 100),
-        createdAt: r.createdAt, transferredAt: r.transferredAt || null, rejectedAt: r.rejectedAt || null, reason: r.rejectReason || '', note: r.rejectNote || '',
+        createdAt: r.createdAt, transferredAt: r.transferredAt || null, rejectedAt: r.rejectedAt || null, voidedAt: r.voidedAt || null, reason: r.rejectReason || '', note: r.rejectNote || '',
         appealStatus: r.appealStatus || '', appealN: Number(r.appealN) || 0, appealReply: r.appealReply || '',
         funeral: r.bookType === 'funeral', auto: !!r.autoCancelled, timeline: guestTimeline(r)
       };
@@ -982,7 +1018,8 @@ async function myReceipts(openid) {
   const waitRows = group(wres.data);
   const rejRows = group(rres.data);
   const canRows = group(cres.data);
-  const aids = [...new Set(res.data.map(r => r.aid).concat(waitRows.map(r => r.aid), rejRows.map(r => r.aid), canRows.map(r => r.aid)))];
+  const voidRows = group(vres.data);
+  const aids = [...new Set(res.data.map(r => r.aid).concat(waitRows.map(r => r.aid), rejRows.map(r => r.aid), canRows.map(r => r.aid), voidRows.map(r => r.aid), corres.data.map(r => r.aid)))];
   const names = {};
   if (aids.length) {
     const acc = await accounts.where({ _id: _.in(aids.slice(0, 100)) }).field({ accountName: true }).get();
@@ -993,18 +1030,54 @@ async function myReceipts(openid) {
     payerName: w.names.length > 1 ? `${w.names[0]} 等 ${w.names.length} 人` : w.names[0],
     amount: w.fen / 100,
     accountName: w.hostName || names[w.aid] || '',
-    createdAt: w.createdAt, transferredAt: w.transferredAt, rejectedAt: w.rejectedAt,
+    createdAt: w.createdAt, transferredAt: w.transferredAt, rejectedAt: w.rejectedAt, voidedAt: w.voidedAt,
     reasonText: [REJECT_REASONS[w.reason] || '', w.note].filter(Boolean).join('：'),
     // 申请再核对：被标未收到、没申诉过（每笔 1 次）；已申诉的显示处理进度
     canAppeal: w.status === REC.REJECTED && !w.appealStatus && !w.appealN,
     appealStatus: w.appealStatus, appealReply: w.appealReply,
     funeral: w.funeral, auto: w.auto, timeline: w.timeline
   });
+  // 已入簿的行：被修改过的标「已更正」并带修改记录（v3.85.0）
+  const list = res.data.map(r => ({
+    ...receiptRecord(r), accountName: r.hostName || names[r.aid] || '',
+    amended: (Number(r.amendN) || 0) > 0 && !!r.amendedAt, lastChangeAt: r.amendedAt || null, changes: changeLines(r), own: r.payerOpenid === openid
+  }));
+  const voided = voidRows.slice(0, 20).map(show);
+  // 等我确认的更正申请（每条记录一张卡片，不按批次合并）：只给随礼人看主家称呼、金额、新值与理由，不含记账人
+  const corrections = corres.data.filter(r => r.correction).map(r => ({
+    _id: r._id, kind: r.correction.kind, newAmount: r.correction.newAmount, newName: r.correction.newName || '', reason: r.correction.reason || '',
+    at: r.corrAt, expireAt: new Date(new Date(r.corrAt).getTime() + CORR_MS), payerName: r.payerName, amount: r.amount,
+    accountName: r.hostName || names[r.aid] || '', themeName: r.themeName || '', funeral: r.bookType === 'funeral'
+  }));
+  // 主家删簿 / 注销后保留给我的凭证：已经能在实时记录里看到的（回收站恢复、还没删）不重复显示；批次合成一行，只读
+  const live = new Set([].concat(res.data, wres.data, rres.data, cres.data, vres.data, corres.data).map(r => r._id));
+  const vBatch = {};
+  const vouchers = [];
+  sres.data.filter(s => !live.has(s._id)).forEach(s => {
+    const g = s.batchId ? vBatch[s.batchId] : null;
+    if (g) { g.ids.push(s._id); g.names.push(s.payerName); g.fen += Math.round(s.amount * 100); return; }
+    const row = {
+      _id: s._id, ids: [s._id], status: s.status, names: [s.payerName], fen: Math.round(s.amount * 100), hostName: s.hostName || '', themeName: s.themeName || '',
+      paidAt: s.paidAt || null, voidedAt: s.voidedAt || null, rejectedAt: s.rejectedAt || null, funeral: s.bookType === 'funeral',
+      snapshotAt: s.snapshotAt, timeline: guestTimeline(s)
+    };
+    if (s.batchId) vBatch[s.batchId] = row;
+    vouchers.push(row);
+  });
+  const lastChange = [].concat(
+    list.filter(r => r.amended && r.lastChangeAt).map(r => r.lastChangeAt),
+    voided.map(r => r.voidedAt), corrections.map(r => r.at)
+  ).map(x => new Date(x).getTime()).filter(x => x > 0).reduce((a, b) => Math.max(a, b), 0);
   return ok({
-    list: res.data.map(r => ({ ...receiptRecord(r), accountName: r.hostName || names[r.aid] || '' })),
+    list,
     waiting: waitRows.slice(0, 20).map(show),
     rejected: rejRows.slice(0, 20).map(show),
-    cancelled: canRows.slice(0, 10).map(show)
+    cancelled: canRows.slice(0, 10).map(show),
+    voided, corrections, correctionN: corrections.length, lastChangeAt: lastChange,
+    vouchers: vouchers.slice(0, 30).map(v => ({
+      _id: v._id, ids: v.ids, status: v.status, payerName: v.names.length > 1 ? `${v.names[0]} 等 ${v.names.length} 人` : v.names[0], amount: v.fen / 100,
+      accountName: v.hostName, themeName: v.themeName, paidAt: v.paidAt, voidedAt: v.voidedAt, rejectedAt: v.rejectedAt, funeral: v.funeral, timeline: v.timeline
+    }))
   });
 }
 
@@ -1111,6 +1184,15 @@ async function ownerUpdate(ctx, rid, fromList, to, actualAmount, pre, opts) {
   if (viaAppeal && (!r0 || r0.status !== REC.REJECTED || r0.appealStatus !== 'open')) return err('没有待处理的申诉，请刷新');
   if (viaAppeal && to === REC.PAID && r0.bookId && await bookArchived(r0.bookId)) return err(ctx.account && ctx.account.orgMode ? '该场次已归档，请先取消归档' : '该礼簿已归档，请先取消归档');
   const data = { status: to };
+  // 作废只能在入簿 72 小时内（v3.85.0）；写入时间与日志，warmer 10 分钟后合并通知宾客
+  let lockCut = null;
+  if (to === REC.VOID) {
+    if (editDeadline(r0) <= Date.now()) return err(lockMsg(r0, '作废'));
+    lockCut = editCut(Date.now());
+    data.voidedAt = new Date();
+    data.changeNotifyAt = data.voidedAt;
+    data.trail = trailAdd(r0, { who: whoOf(ctx), name: handlerName(ctx), act: 'void' });
+  }
   if (to === REC.PAID) {
     if (viaAppeal) {
       data.appealStatus = 'accepted';
@@ -1149,7 +1231,7 @@ async function ownerUpdate(ctx, rid, fromList, to, actualAmount, pre, opts) {
     ? _.or([{ status: _.in(fromList.filter(s => s !== REC.CANCELLED)) }, { status: REC.CANCELLED, autoCancelled: true }])
     : { status: _.in(fromList) };
   if (to === REC.PAID) data.autoCancelled = _.remove();
-  const res = await records.where(_.and([{ _id: rid, ownerOpenid: openid }, statusCond]))
+  const res = await records.where(_.and([{ _id: rid, ownerOpenid: openid }, statusCond, ...(lockCut ? [{ paidAt: _.gt(lockCut) }] : [])]))
     .update({ data });
   if (res.stats.updated !== 1) return err('当前状态不可操作，请刷新');
   // 状态已改：读回最新记录；读库失败（高峰限流等）不能当成「记录不存在」而漏掉合计累加与打印（v3.75.1），
@@ -1212,6 +1294,7 @@ async function amend(ctx, event) {
   if (!rec || rec.ownerOpenid !== ctx.ownerOpenid) return err('记录不存在');
   if (!canBook(ctx, rec.bookId)) return err('该礼金不在你负责的场次');
   if (rec.status !== REC.PAID) return err('只能修改已入簿的礼金');
+  if (editDeadline(rec) <= Date.now()) return err(lockMsg(rec, '修改'));
 
   const next = {};
   if (event.amount !== undefined && event.amount !== null && event.amount !== '') {
@@ -1251,14 +1334,152 @@ async function amend(ctx, event) {
   if (changes.payerName && rec.payerOpenid && !rec.personKey) {
     data.personKey = `o:${rec.payerOpenid}:${normName(rec.payerName)}`;
   }
-  const res = await records.where(_.and([{ _id: rid, ownerOpenid: ctx.ownerOpenid, status: REC.PAID }, verCond])).update({ data });
-  if (res.stats.updated !== 1) return err('这笔礼金刚被修改或状态已变，请刷新后重试');
+  // 宾客看得到的修改（金额 / 姓名）写进日志，并登记变更时间，warmer 10 分钟后合并通知（v3.85.0）；关系 / 备注只是主家自己的整理，不通知
+  if (changes.amount || changes.payerName) {
+    const gc = {};
+    if (changes.amount) gc.amount = changes.amount;
+    if (changes.payerName) gc.payerName = changes.payerName;
+    data.trail = trailAdd(rec, { who: whoOf(ctx), name: handlerName(ctx), act: 'amend', changes: gc });
+    data.changeNotifyAt = new Date();
+  }
+  const cut = editCut(Date.now());
+  const res = await records.where(_.and([{ _id: rid, ownerOpenid: ctx.ownerOpenid, status: REC.PAID }, verCond, ...(cut ? [{ paidAt: _.gt(cut) }] : [])])).update({ data });
+  if (res.stats.updated !== 1) return err('这笔礼金刚被修改、状态已变或已超过 72 小时，请刷新后重试');
   // 金额变化：礼簿合计加减差额（与入簿 / 作废同一个累加函数）
   if (changes.amount && rec.bookId) {
     await incBookStat(rec.bookId, 0, Math.round(next.amount * 100) - Math.round(rec.amount * 100), rec.paidAt);
   }
   const fresh = await getRecord(rid);
   return ok({ rid, changed: true, record: shown(fresh || { ...rec, ...next, amendLog: log }) });
+}
+
+/** 超过 72 小时不能直接修改 / 作废的提示：有随礼人身份的可以申请更正，没有的（现金礼台没人认领）无法更正 */
+function lockMsg(rec, verb) {
+  return (rec.payerOpenid || rec.claimedOpenid)
+    ? `已超过 72 小时，不能直接${verb}；可点「申请更正」，经随礼人同意后生效`
+    : `已超过 72 小时，不能${verb}（这笔没有绑定随礼人，无法申请更正）`;
+}
+
+// —— 超期更正申请（v3.85.0）——
+// 入簿超过 72 小时后，主家 / 记账人只能对「有随礼人身份」（扫码登记 payerOpenid，或认领了小票二维码 claimedOpenid）的记录发起更正申请：
+// 改金额 / 改姓名 / 作废 + 理由。申请期间原记录不变；随礼人在「我的随礼记录」同意后，用条件原子更新执行（同步礼簿合计、写日志与修改记录），
+// 拒绝或 7 天（CORR_MS）没处理（warmer 置 expired）则保持原样。每笔最多申请 3 次，同时只能有 1 条待处理。
+// 字段：corrState（pending / agreed / declined / expired，查询用）、corrAt、corrN、corrDecidedAt、correction（详情：kind / newAmount / newName / reason / by / at / state / decidedAt）
+const CORR_KINDS = ['amount', 'name', 'void'];
+const CORR_MAX = 3;
+const REASON_MAX = 30;
+
+async function correct(ctx, event) {
+  const rid = String(event.rid || '');
+  if (!validId(rid)) return err('记录不存在');
+  const rec = await getRecord(rid);
+  if (!rec || rec.ownerOpenid !== ctx.ownerOpenid) return err('记录不存在');
+  if (!canBook(ctx, rec.bookId)) return err('该礼金不在你负责的场次');
+  if (rec.status !== REC.PAID) return err('只能更正已入簿的礼金');
+  if (editDeadline(rec) > Date.now()) return err('入簿 72 小时内可以直接修改或作废，不需要申请更正');
+  if (!(rec.payerOpenid || rec.claimedOpenid)) return err(lockMsg(rec, '更正'));
+  if (rec.corrState === 'pending') return err('已有一条更正申请在等待随礼人确认');
+  if ((Number(rec.corrN) || 0) >= CORR_MAX) return err(`这笔已申请过 ${CORR_MAX} 次更正，不能再申请`);
+  const kind = String(event.kind || '');
+  if (!CORR_KINDS.includes(kind)) return err('参数错误');
+  const c = { kind, reason: cleanText(event.reason, REASON_MAX), by: handlerName(ctx), at: new Date(), state: 'pending' };
+  if (!c.reason) return err('请填写更正理由');
+  if (kind === 'amount') {
+    const amt = Math.round(Number(event.newAmount) * 100) / 100;
+    if (!Number.isFinite(amt) || amt <= 0) return err('请填写正确的金额');
+    if (amt > MAX_AMOUNT) return err(MAX_MSG);
+    if (Math.round(amt * 100) === Math.round(rec.amount * 100)) return err('新金额与现在一样，不需要更正');
+    c.newAmount = amt;
+  } else if (kind === 'name') {
+    const name = cleanText(event.newName, 20);
+    if (!name) return err('请填写正确的姓名');
+    if (name === rec.payerName) return err('新姓名与现在一样，不需要更正');
+    c.newName = name;
+  }
+  if (rec.bookId && await bookArchived(rec.bookId)) return err(ctx.account && ctx.account.orgMode ? '该场次已归档，请先取消归档' : '该礼簿已归档，请先取消归档');
+  const bad = await S.checkText(cloud, ctx.user && ctx.user.openid, [c.reason, ...(c.newName ? [c.newName] : [])]);
+  if (bad) return bad;
+  const data = {
+    corrState: 'pending', corrAt: c.at, corrN: (Number(rec.corrN) || 0) + 1, correction: c,
+    trail: trailAdd(rec, { who: whoOf(ctx), name: handlerName(ctx), act: 'corr_ask', kind, why: c.reason, ...(c.newAmount !== undefined ? { newAmount: c.newAmount } : {}), ...(c.newName ? { newName: c.newName } : {}) })
+  };
+  const res = await records.where(_.and([{ _id: rid, ownerOpenid: ctx.ownerOpenid, status: REC.PAID }, { corrState: _.neq('pending') }]))
+    .update({ data });
+  if (!res.stats || res.stats.updated !== 1) return err('当前状态不可申请，请刷新后重试');
+  // 立即通知随礼人到小程序确认（复用「记账提醒」，一次性额度；没额度时靠「我的随礼记录」里的提示）
+  let timer = null;
+  const wait = new Promise(r => { timer = setTimeout(r, GUEST_WAIT_MS); });
+  try { await Promise.race([guestNotify.notifyCorrection(rec), wait]); } catch (e) { console.warn('更正申请通知失败', e.message); }
+  clearTimeout(timer);
+  const fresh = await getRecord(rid);
+  return ok({ rid, record: shown(fresh || { ...rec, ...data }) });
+}
+
+/** 随礼人（本人，payerOpenid 或认领人）同意 / 拒绝更正申请；同意后条件原子更新执行并同步礼簿合计 */
+async function correctReply(openid, event) {
+  const rid = String(event.rid || '');
+  if (!validId(rid)) return err('记录不存在');
+  const decision = event.decision === 'agree' ? 'agree' : (event.decision === 'decline' ? 'decline' : '');
+  if (!decision) return err('参数错误');
+  const rec = await getRecord(rid);
+  if (!rec) return err('记录不存在');
+  if (!(rec.payerOpenid === openid || (rec.claimedOpenid && rec.claimedOpenid === openid))) return err('无权操作');
+  const c = rec.correction;
+  if (rec.corrState !== 'pending' || !c || rec.status !== REC.PAID) return err('这条申请已处理或已失效，请刷新');
+  if (!rec.corrAt || Date.now() - new Date(rec.corrAt).getTime() > CORR_MS) return err('这条申请已过期');
+  const now = new Date();
+  const cond = { _id: rid, status: REC.PAID, corrState: 'pending', corrAt: rec.corrAt };
+  const closed = { ...c, state: decision === 'agree' ? 'agreed' : 'declined', decidedAt: now };
+  if (decision === 'decline') {
+    const res = await records.where(cond).update({ data: { corrState: 'declined', corrDecidedAt: now, correction: closed, trail: trailAdd(rec, { who: 'guest', name: rec.payerName, act: 'corr_decline' }) } });
+    if (!res.stats || res.stats.updated !== 1) return err('这条申请已处理或已失效，请刷新');
+    return ok({ rid, state: 'declined' });
+  }
+  const ver = Number(rec.amendN) || 0;
+  const verCond = ver === 0 ? _.or([{ amendN: 0 }, { amendN: _.exists(false) }]) : { amendN: ver };
+  const changes = {};
+  const data = { corrState: 'agreed', corrDecidedAt: now, correction: closed, amendN: ver + 1, amendedAt: now };
+  if (c.kind === 'amount') {
+    data.amount = c.newAmount;
+    changes.amount = [rec.amount, c.newAmount];
+  } else if (c.kind === 'name') {
+    data.payerName = c.newName;
+    changes.payerName = [rec.payerName, c.newName];
+    if (rec.payerOpenid && !rec.personKey) data.personKey = `o:${rec.payerOpenid}:${normName(rec.payerName)}`;
+  } else {
+    data.status = REC.VOID;
+    data.voidedAt = now;
+  }
+  data.amendLog = (Array.isArray(rec.amendLog) ? rec.amendLog : []).concat([{ at: now, by: '随礼人同意更正', changes: c.kind === 'void' ? { status: ['paid', 'void'] } : changes }]).slice(-AMEND_LOG_MAX);
+  data.trail = trailAdd(rec, { who: 'guest', name: rec.payerName, act: 'corr_agree' });
+  const res = await records.where(_.and([cond, verCond])).update({ data });
+  if (!res.stats || res.stats.updated !== 1) return err('这条申请已处理或已失效，请刷新');
+  if (rec.bookId) {
+    if (c.kind === 'amount') await incBookStat(rec.bookId, 0, Math.round(c.newAmount * 100) - Math.round(rec.amount * 100), rec.paidAt);
+    else if (c.kind === 'void') await incBookStat(rec.bookId, -1, -Math.round(rec.amount * 100), null);
+  }
+  return ok({ rid, state: 'agreed' });
+}
+
+/** 随礼人删除自己保留的凭证（主家删簿 / 注销后留下的 guest_receipts）；只能删自己的，批次可一起删 */
+async function deleteVoucher(openid, event) {
+  const ids = (Array.isArray(event.rids) ? event.rids : [event.rid]).map(x => String(x || '')).filter(validId).slice(0, 20);
+  if (!ids.length) return err('参数错误');
+  let removed = 0;
+  try { removed = (await db.collection('guest_receipts').where({ _id: _.in(ids), guestOpenid: openid }).remove()).stats.removed; } catch (e) { if (!isMissing(e)) throw e; }
+  return ok({ removed });
+}
+
+/** 重新订阅「记账提醒」（变更提醒）：一次性订阅，补一次额度；只对自己登记的记录有效 */
+async function resub(openid, event) {
+  const rid = String(event.rid || '');
+  if (!validId(rid)) return err('记录不存在');
+  const rec = await getRecord(rid);
+  if (!rec || rec.payerOpenid !== openid) return err('无权操作');
+  const flag = guestFlag(event.envVersion, { guestRejectNotify: event.guestRejectNotify === true });
+  if (!flag) return ok({ enabled: false });
+  await records.where({ _id: rid, payerOpenid: openid }).update({ data: flag });
+  return ok({ enabled: true });
 }
 
 /**
@@ -1304,7 +1525,12 @@ const RELATIONS = ['亲戚', '朋友', '同事', '同学', '邻里', '其他'];
 const centStr = rs => String(rs.reduce((t, r) => t + Math.round(r.amount * 100), 0) / 100);
 const validId = s => /^[a-zA-Z0-9_-]{1,64}$/.test(String(s || ''));
 /** 返回给主家 / 记账人前端的记录：去掉各方 openid 与往来人标识（含宾客 openid） */
-const shown = ({ payerOpenid, handlerOpenid, enteredBy, ownerOpenid, personKey, rcptToken, rcptQrKey, rcptQrFileID, claimedOpenid, claimedAt, _openid, guestEnv, ...r }) => (claimedOpenid ? { ...r, claimed: true } : r);
+const shown = ({ payerOpenid, handlerOpenid, enteredBy, ownerOpenid, personKey, rcptToken, rcptQrKey, rcptQrFileID, claimedOpenid, claimedAt, _openid, guestEnv, ...r }) => ({
+  ...r,
+  ...(claimedOpenid ? { claimed: true } : {}),
+  // 72 小时内可直接修改 / 作废的截止时间（毫秒）；canCorrect：超期后能否申请更正（要有随礼人身份）
+  ...(r.status === REC.PAID ? { editUntil: editDeadline(r), canCorrect: !!(payerOpenid || claimedOpenid) } : {})
+});
 
 // —— 小票二维码（v3.57.0 起；v3.58.0 改为小程序码）——
 // token：12 位随机（base62），存 records.rcptToken，任何列表 / 详情接口都不返回；知道 token 的人（持有小票的人）可看这一笔回执。

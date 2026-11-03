@@ -14,3 +14,4 @@
 .done-item .money { flex-shrink: 0; white-space: nowrap; }
 .batch-switch { display: flex; justify-content: space-between; align-items: center; }
 .batch-switch switch { margin-left: 24rpx; }
+.done-tip { margin: 0 0 14rpx; line-height: 1.6; }

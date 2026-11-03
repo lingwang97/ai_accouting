@@ -17,6 +17,7 @@ const db = cloud.database();
 const { resolveCtx } = require('./ctx.js');
 const P = require('./plans.js');
 const Purge = require('./purge.js');
+const Snap = require('./snapshot.js'); // 宾客随礼凭证快照（v3.85.0）：清除测试数据时一并删除
 
 exports.main = async (event, context) => {
   // 上线前检查（v3.72.2）：返回本函数内存 / 超时，带一次性凭据时探测云调用权限，见 meta.js
@@ -333,12 +334,13 @@ async function purgeBook(admin, bookId, confirmName) {
     records += r.stats.removed;
     if (!r.stats.removed) break;
   }
+  const vouchers = await Snap.dropWhere(db, { ownerOpenid: book.ownerOpenid, bookId }); // 宾客随礼凭证（v3.85.0）：管理员清除是清测试数据，不留凭证
   if (book.archivePdf && book.archivePdf.fileID) await db.collection('exports').where({ fileID: book.archivePdf.fileID }).remove();
   await db.collection('books').doc(bookId).remove();
   if (acc && acc.activeBookId === bookId) await db.collection('accounts').doc(acc._id).update({ data: { activeBookId: '' } });
   // 自己选了这一场的机构记账人：清掉选择（只负责这本的记账人在工作台会提示「负责的礼簿已结束」）
   if (acc) await db.collection('members').where({ aid: acc._id, curBookId: bookId }).update({ data: { curBookId: '' } });
-  const removed = [{ label: '礼簿', count: 1 }, { label: '礼金记录', count: records }];
+  const removed = [{ label: '礼簿', count: 1 }, { label: '礼金记录', count: records }, ...(vouchers ? [{ label: '宾客随礼凭证', count: vouchers }] : [])];
   await log(admin, 'purgeBook', { bookId, name: book.name, ownerOpenid: book.ownerOpenid, removed });
   return ok({ removed });
 }
@@ -450,7 +452,8 @@ async function wipeAll(admin, doIt, e) {
     ['打印样式', 'print_templates', not ? { ownerOpenid: not } : null],
     ['同名合并', 'person_alias', not ? { ownerOpenid: not } : null],
     ['套餐订阅', 'subscriptions', not ? { _id: not } : null],
-    ['导出 / 存档', 'exports', not ? { ownerOpenid: not } : null]
+    ['导出 / 存档', 'exports', not ? { ownerOpenid: not } : null],
+    ['宾客随礼凭证', 'guest_receipts', not ? { ownerOpenid: not } : null] // v3.85.0：删礼簿 / 注销时留给宾客的凭证，清除测试数据必须清掉
   ];
   // 不保留管理员时用恒真条件（where({}) 不能直接 remove）
   const condOf = c => c || { _id: _.exists(true) };
@@ -785,7 +788,7 @@ async function fontStatus() {
 }
 
 // —— 数据库索引 ——
-// 共 31 条，docs/提审与隐私说明.md 第三节第 1 条的表按本清单生成（改这里要同步）；direction "1" 升序、"-1" 降序
+// 共 36 条，docs/提审与隐私说明.md 第三节第 1 条的表按本清单生成（改这里要同步）；direction "1" 升序、"-1" 降序
 const INDEXES = [
   ['records', 'owner_status_time', [['ownerOpenid', 1], ['status', 1], ['createdAt', -1]]],
   ['records', 'owner_status_amount', [['ownerOpenid', 1], ['status', 1], ['amount', -1]]], // 礼簿页按金额排序
@@ -818,7 +821,11 @@ const INDEXES = [
   ['exports', 'owner_file', [['ownerOpenid', 1], ['fileID', 1]]],
   ['exports', 'keep_time', [['keep', 1], ['createdAt', 1]]],
   ['reminders', 'owner_done_date', [['ownerOpenid', 1], ['done', 1], ['date', 1]]],
-  ['reminders', 'push', [['pushed', 1], ['notifyDay', 1]]]
+  ['reminders', 'push', [['pushed', 1], ['notifyDay', 1]]],
+  ['records', 'payer_status_void', [['payerOpenid', 1], ['status', 1], ['voidedAt', -1]]], // 我的随礼记录「已作废」（v3.85.0）
+  ['records', 'corr_pending', [['corrState', 1], ['corrAt', 1]]], // warmer 让超过 7 天没处理的更正申请过期（v3.85.0）
+  ['records', 'chg_pending', [['changeNotifyAt', 1]]], // warmer 合并发送修改 / 作废通知（v3.85.0）
+  ['guest_receipts', 'payer_snapshot', [['guestOpenid', 1], ['snapshotAt', -1]]] // 宾客随礼凭证（v3.85.0）
 ];
 
 /**

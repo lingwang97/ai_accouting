@@ -32,7 +32,7 @@ test('purge 条件都只按「本人」限定，不会误删他人数据（_id �
   Purge.targets('o-me', { guestRecords: true }).forEach(([label, col, cond]) => {
     const keys = Object.keys(cond);
     assert.strictEqual(keys.length, 1, label);
-    assert.ok(['ownerOpenid', 'memberOpenid', 'fromOpenid', 'payerOpenid', 'openid', '_id'].includes(keys[0]), label + ' ' + keys[0]);
+    assert.ok(['ownerOpenid', 'memberOpenid', 'fromOpenid', 'payerOpenid', 'guestOpenid', 'openid', '_id'].includes(keys[0]), label + ' ' + keys[0]);
     assert.ok(String(cond[keys[0]]).includes('o-me'), label);
   });
   // 默认不删「作为宾客的随礼」（属于对方礼簿）

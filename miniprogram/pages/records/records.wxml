@@ -47,7 +47,7 @@
       <text class="payer">{{item.nameStr}}<text class="dup-n" wx:if="{{item.dupN}}"> · 同名 {{item.dupN}} 条</text></text>
       <text class="r-right"><text class="cash-tag" wx:if="{{item.payMethod === 'cash'}}">现金</text><text class="xfer-tag" wx:elif="{{item.status === 'transferred' || item.status === 'paid'}}">转账</text><text class="money r-amount">￥{{item.amountStr}}</text></text>
     </view>
-    <view class="muted">{{item.timeStr}}<text wx:if="{{item.relation}}"> · {{item.relation}}</text><text wx:if="{{item.batchId}}"> · 批次录入</text><text wx:if="{{item.remark}}"> · {{item.remark}}</text><text wx:if="{{item.declaredStr}}" class="declared"> · 宾客登记 ￥{{item.declaredStr}}，按实收入簿</text><text wx:if="{{item.amendN}}" class="amended" data-idx="{{index}}" catchtap="onAmendLog"> · 已修改 ›</text><text wx:if="{{item.appealStatus === 'accepted'}}" class="amended" data-idx="{{index}}" catchtap="onTrail"> · 宾客申诉后入簿 ›</text></view>
+    <view class="muted">{{item.timeStr}}<text wx:if="{{item.relation}}"> · {{item.relation}}</text><text wx:if="{{item.batchId}}"> · 批次录入</text><text wx:if="{{item.remark}}"> · {{item.remark}}</text><text wx:if="{{item.declaredStr}}" class="declared"> · 宾客登记 ￥{{item.declaredStr}}，按实收入簿</text><text wx:if="{{item.amendN}}" class="amended" data-idx="{{index}}" catchtap="onAmendLog"> · 已修改 ›</text><text wx:if="{{item.appealStatus === 'accepted'}}" class="amended" data-idx="{{index}}" catchtap="onTrail"> · 宾客申诉后入簿 ›</text><text wx:if="{{!readonly && item.editHint}}" class="declared"> · {{item.editHint}}</text><text wx:if="{{item.corrStr}}" class="amended" data-idx="{{index}}" catchtap="onCorrect"> · {{item.corrStr}}</text></view>
 
     <!-- 待确认：宾客已点"我已完成转账" -->
     <view class="r-actions" wx:if="{{item.status === 'transferred'}}">
@@ -93,7 +93,8 @@
       <!-- 常用操作直接显示；区分备注、作废收进「更多」（窄屏不挤、作废不易误触） -->
       <view class="link" data-id="{{item._id}}" bindtap="onReceipt">回执</view>
       <view class="link" wx:if="{{!readonly && pm.show}}" data-idx="{{index}}" bindtap="onPrint">{{item.printed ? '补打' : '打印'}}</view>
-      <view class="link" wx:if="{{!readonly && pm.amend}}" data-idx="{{index}}" bindtap="onAmend">修改</view>
+      <view class="link" wx:if="{{!readonly && pm.amend && item.editOpen}}" data-idx="{{index}}" bindtap="onAmend">修改</view>
+      <view class="link" wx:if="{{!readonly && pm.amend && !item.editOpen && item.canCorrect && item.corrState !== 'pending'}}" data-idx="{{index}}" bindtap="onCorrect">申请更正</view>
       <view class="link" wx:if="{{!readonly && (pm.tag || pm.void || isOwner)}}" data-idx="{{index}}" bindtap="onMore">更多</view>
     </view>
   </view>
@@ -113,6 +114,27 @@
   <view class="muted center pad" wx:if="{{loading && list.length > 0}}">加载中…</view>
   <view class="to-top" wx:if="{{showTop}}" bindtap="onTop">↑ 顶部</view>
   </block>
+
+  <!-- 超期更正申请（v3.85.0） -->
+  <view class="mask tab-mask" wx:if="{{corr}}" catchtap="onCorrClose" catchtouchmove="noop">
+    <view class="sheet tab-sheet" catchtap="noop">
+      <view class="sheet-title">申请更正</view>
+      <view class="muted small amend-tip">已超过 72 小时，不能直接修改。申请会发给{{corr.who}}，对方在「我的随礼记录」同意后才生效；7 天没处理自动失效，期间原记录不变。</view>
+      <view class="muted small amend-tip">{{corr.name}} ￥{{corr.amountStr}}</view>
+      <view class="seg corr-seg">
+        <view class="seg-item {{corr.kind === 'amount' ? 'on' : ''}}" data-k="amount" bindtap="onCorrKind">改金额</view>
+        <view class="seg-item {{corr.kind === 'name' ? 'on' : ''}}" data-k="name" bindtap="onCorrKind">改姓名</view>
+        <view class="seg-item {{corr.kind === 'void' ? 'on' : ''}}" data-k="void" bindtap="onCorrKind">作废</view>
+      </view>
+      <view class="field" wx:if="{{corr.kind === 'amount'}}"><view class="muted small">更正后的金额（元）</view><input class="input" type="digit" maxlength="11" value="{{corr.newAmount}}" data-k="newAmount" bindinput="onCorrInput" /></view>
+      <view class="field" wx:if="{{corr.kind === 'name'}}"><view class="muted small">更正后的姓名</view><input class="input" maxlength="20" value="{{corr.newName}}" data-k="newName" bindinput="onCorrInput" /></view>
+      <view class="field"><view class="muted small">更正理由（必填，对方可见）</view><input class="input" maxlength="30" placeholder="如：录入时多写了一个零" value="{{corr.reason}}" data-k="reason" bindinput="onCorrInput" /></view>
+      <view class="sheet-btns">
+        <button class="btn btn-outline" bindtap="onCorrClose">取消</button>
+        <button class="btn btn-primary" loading="{{busy}}" bindtap="onCorrSubmit">发出申请</button>
+      </view>
+    </view>
+  </view>
 
   <!-- 修改已入簿礼金 -->
   <view class="mask tab-mask" wx:if="{{amend}}" catchtap="onAmendClose" catchtouchmove="noop">

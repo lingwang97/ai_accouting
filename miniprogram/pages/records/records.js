@@ -15,6 +15,9 @@ const samename = require('../../utils/samename.js');
 const poller = require('../../utils/poller.js');
 const pollcfg = require('../../utils/pollcfg.js');
 const fresh = require('../../utils/fresh.js');
+const editlock = require('../../utils/editlock.js');
+
+const CORR_STATE = { pending: '更正申请：等待随礼人确认', agreed: '随礼人已同意更正', declined: '随礼人拒绝了更正', expired: '更正申请已过期' };
 
 /** 修改是否已生效：最新记录里要改的字段都已是新值（v3.75.1，超时后重试用） */
 function amendDone(cur, fields) {
@@ -468,7 +471,8 @@ Page({
     const pm = this.data.pm;
     const items = [];
     if (pm.tag) items.push(['区分备注', () => this.onNameTag({ currentTarget: { dataset: { idx } } })]);
-    if (pm.void) items.push(['作废', () => this.onVoid({ currentTarget: { dataset: { idx } } })]);
+    const cur = this.data.list[idx];
+    if (pm.void && cur && editlock.stateOf(cur) === 'open') items.push(['作废', () => this.onVoid({ currentTarget: { dataset: { idx } } })]); // 超过 72 小时不能直接作废，走「申请更正」
     // 小票二维码：重置 / 解除认领只有主家本人（服务端同样校验）
     const rec = this.data.list[idx];
     if (this.data.isOwner && rec && rec.status === REC.PAID) {
@@ -540,6 +544,7 @@ Page({
   onAmend(e) {
     const r = this.data.list[e.currentTarget.dataset.idx];
     if (!r || this.data.busy) return;
+    if (editlock.stateOf(r) === 'locked') return this.onCorrect(e); // 超过 72 小时：改为申请更正
     const relIdx = Math.max(0, this.data.amendRels.indexOf(r.relation || ''));
     this.setData({ amend: { rid: r._id, name: r.payerName, amount: String(r.amount), relIdx, remark: r.remark || '', orig: r, hint: r.printed ? '小票已打印过，修改后不会自动重打，需要的话保存后点「补打」' : '' } });
   },
@@ -612,6 +617,42 @@ Page({
   },
   /** 未收到：宾客已申诉，去待确认页核对（其他礼簿的申诉在该页顶部提示条里） */
   onGoAppeal() { wx.navigateTo({ url: '/pages/pending/pending' }); },
+  // —— 超期更正申请（v3.85.0）：入簿超过 72 小时后不能直接改，发申请给随礼人，对方在「我的随礼记录」同意后才生效 ——
+  onCorrect(e) {
+    const r = this.data.list[e.currentTarget.dataset.idx];
+    if (!r || this.data.busy) return;
+    if (!r.canCorrect) return wx.showModal({ title: '不能更正', content: '已超过 72 小时。这笔没有绑定随礼人（现金礼台登记、对方没有扫小票二维码），无法申请更正。', showCancel: false });
+    if (r.corrState === 'pending') return wx.showModal({ title: '等待确认', content: '已经向随礼人发出更正申请，请等对方在「我的随礼记录」里确认；7 天没处理会自动失效。', showCancel: false });
+    this.setData({ corr: { rid: r._id, name: r.payerName, amountStr: r.amountStr, who: r.bookType === 'funeral' ? '致奠人' : '随礼人', kind: 'amount', newAmount: '', newName: '', reason: '' } });
+  },
+  onCorrKind(e) { this.setData({ 'corr.kind': e.currentTarget.dataset.k }); },
+  onCorrInput(e) { this.setData({ [`corr.${e.currentTarget.dataset.k}`]: e.detail.value }); },
+  onCorrClose() { if (!this.data.busy) this.setData({ corr: null }); },
+  async onCorrSubmit() {
+    const c = this.data.corr;
+    if (!c || this.data.busy) return;
+    const reason = String(c.reason || '').trim();
+    const fields = { kind: c.kind, reason };
+    if (c.kind === 'amount') {
+      const amt = Number(String(c.newAmount || '').replace(/[,，\s]/g, ''));
+      if (!(amt > 0)) return wx.showToast({ title: '请填写正确的金额', icon: 'none' });
+      fields.newAmount = amt;
+    } else if (c.kind === 'name') {
+      const name = String(c.newName || '').trim();
+      if (!name) return wx.showToast({ title: '请填写正确的姓名', icon: 'none' });
+      fields.newName = name;
+    }
+    if (!reason) return wx.showToast({ title: '请填写更正理由', icon: 'none' });
+    this.setData({ busy: true });
+    try {
+      await req.payCorrect(c.rid, fields);
+      this.setData({ corr: null });
+      wx.showToast({ title: '已发出申请', icon: 'success' });
+      this.reload();
+    } catch (err) { /* toast 已提示 */ } finally {
+      this.setData({ busy: false });
+    }
+  },
   /** 查看修改记录（最近 20 次） */
   onAmendLog(e) {
     const r = this.data.list[e.currentTarget.dataset.idx];
@@ -630,6 +671,7 @@ Page({
   onVoid(e) {
     const idx = e.currentTarget.dataset.idx;
     const record = this.data.list[idx];
+    if (record && editlock.stateOf(record) === 'locked') return this.onCorrect(e);
     wx.showModal({
       title: '作废礼金记录',
       content: `确定作废 ${record.payerName} 的 ￥${record.amountStr} ？`,
@@ -654,6 +696,7 @@ function decorate(r) {
       reasonStr: [REASON[r.rejectReason] || '', r.rejectNote || ''].filter(Boolean).join('：'),
       canUnreject: !!r.rejectedAt && Date.now() - new Date(r.rejectedAt).getTime() < UNREJECT_MS
     } : {}),
+    ...(r.status === REC.PAID ? { editOpen: editlock.stateOf(r) === 'open', editHint: editlock.hint(r), corrStr: CORR_STATE[r.corrState] || '' } : {}),
     amountStr: fmt.money(r.amount),
     nameStr: samename.nameStr(r.payerName, r.nameTag),
     declaredStr: r.declaredAmount ? fmt.money(r.declaredAmount) : '',

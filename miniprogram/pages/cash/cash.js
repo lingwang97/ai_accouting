@@ -179,7 +179,7 @@ Page({
       const added = (list && list.length ? list : [record]).map(r => ({ ...r, amountStr: fmt.money(r.amount), nameStr: samename.nameStr(r.payerName, r.nameTag) }));
       const done = added.slice().reverse().concat(this.data.done).slice(0, DONE_MAX);
       this._doneFen = (this._doneFen || 0) + added.reduce((s, r) => s + Math.round(r.amount * 100), 0);
-      added.forEach(r => { r.methodStr = r.payMethod === 'cash' ? '现金' : '微信'; });
+      added.forEach(r => { r.methodStr = r.payMethod === 'cash' ? '现金' : '微信'; r.editHint = require('../../utils/editlock.js').hint(r); });
       this.setData({ ...emptyForm(), done, doneCount: this.data.doneCount + added.length, doneSum: fmt.money(this._doneFen / 100), nameFocus: false, amountFocus: false });
       if (this.data.batchMode) this.selectComponent('#batch').reset();
       else setTimeout(() => this.setData({ nameFocus: true }), 50); // 光标回到姓名，直接登记下一位

@@ -68,6 +68,20 @@ function buildReject(g, timeStr) {
   };
 }
 
+/**
+ * 宾客「记录变更」通知内容（v3.85.0）：修改 / 作废（warmer 合并后发）、主家申请更正，复用「记账提醒」模板（与未收到同一模板）
+ * g：同 buildGuest，另有 note（≤20 字，已拼好）
+ */
+function buildChange(g, timeStr) {
+  return {
+    thing4: { value: thingValue([g.hostName, g.themeName].filter(Boolean).join(' '), '慧礼记') },
+    time1: { value: timeStr },
+    amount2: { value: `${(Math.round(Number(g.amount || 0) * 100) / 100).toFixed(2)}元` },
+    thing3: { value: thingValue(g.note, '请点此查看') }
+  };
+}
+const CHANGE_DELAY_MS = 10 * 60 * 1000; // 修改 / 作废后等 10 分钟再合并成一条发（主家改错又马上改回来不重复打扰）
+
 /** 是否需要发：订阅过、宾客本人扫码登记（有 payerOpenid，不是礼台代记 / 经办人自己） */
 const eligible = r => r.guestNotify === true && !!r.payerOpenid && !r.deskEntry && r.payerOpenid !== r.handlerOpenid;
 
@@ -223,7 +237,57 @@ function create(db, cloud) {
     return sent;
   }
 
-  return { sendGuest, notifyGuests, retryPending, notifyRejected };
+  /**
+   * 给宾客发一条「记录变更」通知（v3.85.0）：复用「记账提醒」模板，与未收到共用 guestRejectNotify 的一次性额度，
+   * 先原子置 false 再发（同一次订阅只发一条）；没有额度 / 不是宾客本人扫码的跳过；失败只记日志，不重试。返回 'sent' | 'skip' | 'fail'
+   */
+  async function pushChange(rec, note) {
+    if (!GUEST_REJECT_TMPL_ID || !rec || !rec.payerOpenid || rec.deskEntry || rec.payerOpenid === rec.ownerOpenid || rec.payerOpenid === rec.handlerOpenid) return 'skip';
+    const mark = await records.where({ _id: rec._id, guestRejectNotify: true }).update({ data: { guestRejectNotify: false, guestRejNotifiedAt: new Date() } });
+    if (!mark.stats || !mark.stats.updated) return 'skip';
+    let hostName = rec.hostName || '';
+    if (!hostName && rec.aid) {
+      try { hostName = ((await db.collection('accounts').doc(rec.aid).get()).data || {}).accountName || ''; } catch (e) { /* 只写礼簿名 */ }
+    }
+    try {
+      await cloud.openapi.subscribeMessage.send({
+        touser: rec.payerOpenid,
+        templateId: GUEST_REJECT_TMPL_ID,
+        page: 'pages/myreceipts/myreceipts',
+        miniprogramState: { develop: 'developer', trial: 'trial' }[rec.guestEnv] || 'formal',
+        data: buildChange({ hostName, themeName: rec.themeName || '', amount: rec.amount, note }, bjTime(new Date()))
+      });
+      return 'sent';
+    } catch (e) {
+      console.warn('变更通知发送失败', e.errCode, e.errMsg || e.message);
+      return 'fail';
+    }
+  }
+
+  /** 主家申请更正后立即通知宾客确认（不合并） */
+  const notifyCorrection = rec => pushChange(rec, rec.bookType === 'funeral' ? '申请更正，请到小程序确认' : '主家申请更正，请到小程序确认');
+
+  /**
+   * warmer：把「修改 / 作废」合并后通知宾客。changeNotifyAt 由 amend / void 写入（最后一次变更时间），超过 CHANGE_DELAY_MS 的才发；
+   * 先原子清掉 changeNotifyAt 占位（只有一处能占到），再按当前状态写一句话（作废 / 已更正）。每轮最多 limit 条
+   */
+  async function sendChanges(limit, deadline) {
+    if (!GUEST_REJECT_TMPL_ID) return 0;
+    const res = await records.where({ changeNotifyAt: _.lt(new Date(Date.now() - CHANGE_DELAY_MS)) }).limit(50).get();
+    let n = 0;
+    for (const r of res.data.slice(0, limit || 20)) {
+      if (r._openid) continue;
+      if (deadline && deadline - Date.now() < 5000) break;
+      const claim = await records.where({ _id: r._id, changeNotifyAt: r.changeNotifyAt }).update({ data: { changeNotifyAt: _.remove() } });
+      if (!claim.stats || !claim.stats.updated) continue;
+      const what = r.bookType === 'funeral' ? '奠仪记录' : '这笔记录';
+      const note = r.status === REC.VOID ? `${what}已作废，点此查看` : `${what}已更正，点此查看`;
+      try { if ((await pushChange(r, note)) === 'sent') n++; } catch (e) { console.warn('变更通知失败', e.message); }
+    }
+    return n;
+  }
+
+  return { sendGuest, notifyGuests, retryPending, notifyRejected, pushChange, notifyCorrection, sendChanges };
 }
 
-module.exports = { GUEST_TMPL_ID, GUEST_REJECT_TMPL_ID, MAX_TRIES, STALE_MS, buildGuest, buildReject, thingValue, create };
+module.exports = { GUEST_TMPL_ID, GUEST_REJECT_TMPL_ID, MAX_TRIES, STALE_MS, CHANGE_DELAY_MS, buildGuest, buildReject, buildChange, thingValue, create };

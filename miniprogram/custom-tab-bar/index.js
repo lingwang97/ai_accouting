@@ -8,8 +8,8 @@ const theme = require('../utils/theme.js');
 const TABS = [
   { path: 'pages/index/index', text: '首页', hostText: '工作台', icon: 'home', badge: true },
   { path: 'pages/records/records', text: '礼簿', icon: 'book' },
-  { path: 'pages/renqing/renqing', text: '往来', icon: 'people', dot: true, hideClerk: true, hideOrg: true },
-  { path: 'pages/mine/mine', text: '我的', icon: 'user' }
+  { path: 'pages/renqing/renqing', text: '往来', icon: 'people', dot: true, gdot: true, hideClerk: true, hideOrg: true },
+  { path: 'pages/mine/mine', text: '我的', icon: 'user', gdot: true }
 ];
 
 Component({
@@ -18,6 +18,7 @@ Component({
     selected: '',
     badge: '',
     dot: false,
+    gdot: false,
     color: theme.current().primary,
     iconOn: theme.current().icon
   },
@@ -46,6 +47,7 @@ Component({
           .map(x => ({ ...x, label: isHost && x.hostText ? x.hostText : x.text })),
         selected: cur,
         dot: !!(app && app.globalData.remindDot && app.globalData.user),
+        gdot: !!(app && app.globalData.giftDot && app.globalData.user), // 我的随礼记录有更新 / 待确认的更正申请（v3.85.0）
         badge: n > 0 ? (n > 99 ? '99+' : String(n)) : '',
         color: t.primary,
         iconOn: t.icon

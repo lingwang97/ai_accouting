@@ -1,5 +1,24 @@
 <!-- 我的随礼记录：等待主家确认 / 主家未确认收到 / 已取消 / 已入簿（宾客页与往来页共用） -->
 <view class="mg">
+  <!-- 主家申请更正（入簿超过 72 小时的修改 / 作废，需要我同意才生效） -->
+  <block wx:if="{{corrections.length}}">
+    <view class="section-title mg-title">等你确认的更正申请（{{corrections.length}}）</view>
+    <view class="mg-sub">同意后才会生效，拒绝或 7 天没处理，记录保持原样</view>
+    <view class="card mg-item" wx:for="{{corrections}}" wx:key="_id">
+      <view class="mg-top">
+        <text class="mg-shop ell">{{item.accountName || '主家'}}<text class="muted" wx:if="{{item.themeName}}"> · {{item.themeName}}</text></text>
+        <text class="mg-money">￥{{item.amountStr}}</text>
+      </view>
+      <view class="mg-st warn">主家申请{{item.what}}</view>
+      <view class="mg-reason">理由：{{item.reason}}</view>
+      <view class="muted mg-exp">{{item.atStr}} 提出，{{item.expireStr}} 前未处理自动失效</view>
+      <view class="mg-ops">
+        <button class="btn btn-primary btn-sm" data-id="{{item._id}}" data-d="agree" bindtap="onCorrReply">同意更正</button>
+        <button class="btn btn-outline btn-sm mg-op2" data-id="{{item._id}}" data-d="decline" bindtap="onCorrReply">拒绝</button>
+      </view>
+    </view>
+  </block>
+
   <block wx:if="{{waiting.length}}">
     <view class="section-title mg-title">等待主家确认（{{waiting.length}}）</view>
     <view class="card mg-item" wx:for="{{waiting}}" wx:key="_id" data-id="{{item._id}}" bindtap="onToggle">
@@ -58,15 +77,51 @@
     </view>
   </block>
 
+  <block wx:if="{{voided.length}}">
+    <view class="section-title mg-title">主家已作废（{{voided.length}}）</view>
+    <view class="mg-sub">近 30 天内主家作废的记录，有疑问请直接联系主家</view>
+    <view class="card mg-item" wx:for="{{voided}}" wx:key="_id" data-id="{{item._id}}" bindtap="onToggle">
+      <view class="mg-top">
+        <text class="mg-shop ell">{{item.accountName || '主家'}}<text class="mg-new" wx:if="{{item.isNew}}">新</text></text>
+        <text class="mg-money mg-gray mg-strike">￥{{item.amountStr}}</text>
+      </view>
+      <view class="muted">{{item.payerName}} · 登记于 {{item.regStr}}</view>
+      <view class="mg-st bad {{item.funeral ? 'fun' : ''}}">{{item.stText}}（{{item.timeStr}}）<text class="mg-more">{{openId === item._id ? '收起 ▴' : '经过 ▾'}}</text></view>
+      <view class="mg-detail" wx:if="{{openId === item._id}}" catchtap="noop">
+        <view class="mg-hint">{{item.hint}}</view>
+        <view class="mg-tl" wx:for="{{item.timeline}}" wx:for-item="t" wx:key="atStr"><text class="mg-tl-t">{{t.atStr}}</text>{{t.text}}</view>
+      </view>
+    </view>
+  </block>
+
   <block wx:if="{{list.length}}">
-    <view class="section-title mg-title" wx:if="{{waiting.length || rejected.length || cancelled.length}}">已入簿</view>
+    <view class="section-title mg-title" wx:if="{{waiting.length || rejected.length || cancelled.length || voided.length || corrections.length}}">已入簿</view>
     <view class="card mg-item" wx:for="{{list}}" wx:key="_id" data-id="{{item._id}}" bindtap="onOpen">
       <view class="mg-top">
-        <text class="mg-shop ell">{{item.accountName || '主家'}}<text class="muted" wx:if="{{item.themeName}}"> · {{item.themeName}}</text></text>
+        <text class="mg-shop ell">{{item.accountName || '主家'}}<text class="muted" wx:if="{{item.themeName}}"> · {{item.themeName}}</text><text class="mg-new" wx:if="{{item.isNew}}">新</text></text>
         <text class="mg-money">￥{{item.amountStr}}</text>
       </view>
-      <view class="muted">{{item.timeStr}} · 随礼人 {{item.payerName}}</view>
-      <view class="mg-link">查看回执 ›</view>
+      <view class="muted">{{item.timeStr}} · 随礼人 {{item.payerName}}<text class="mg-amended" wx:if="{{item.amended}}"> · 已更正</text></view>
+      <view class="mg-tl mg-chg" wx:for="{{item.changes}}" wx:for-item="t" wx:key="atStr"><text class="mg-tl-t">{{t.atStr}}</text>{{t.text}}</view>
+      <view class="mg-link"><text class="mg-resub" wx:if="{{item.own}}" data-id="{{item._id}}" catchtap="onResub">开启变更提醒</text>查看回执 ›</view>
+    </view>
+  </block>
+
+  <!-- 主家删除礼簿 / 注销后保留给我的凭证：只有我自己能看到，可随时删除，不能再操作 -->
+  <block wx:if="{{vouchers.length}}">
+    <view class="section-title mg-title">主家已删除礼簿，这是你保留的凭证（{{vouchers.length}}）</view>
+    <view class="mg-sub">只含主家称呼、礼簿名、日期、金额、状态和修改记录，只有你自己能看到，会长期保留，你可以随时删除</view>
+    <view class="card mg-item" wx:for="{{vouchers}}" wx:key="_id" data-id="{{item._id}}" bindtap="onToggle">
+      <view class="mg-top">
+        <text class="mg-shop ell">{{item.accountName || '主家'}}<text class="muted" wx:if="{{item.themeName}}"> · {{item.themeName}}</text></text>
+        <text class="mg-money {{item.status === 'void' ? 'mg-gray mg-strike' : ''}}">￥{{item.amountStr}}</text>
+      </view>
+      <view class="muted">{{item.payerName}} · {{item.timeStr}}</view>
+      <view class="mg-st {{item.status === 'paid' ? '' : 'bad'}} {{item.funeral ? 'fun' : ''}}">{{item.stText}}<text class="mg-more">{{openId === item._id ? '收起 ▴' : '经过 ▾'}}</text></view>
+      <view class="mg-detail" wx:if="{{openId === item._id}}" catchtap="noop">
+        <view class="mg-tl" wx:for="{{item.timeline}}" wx:for-item="t" wx:key="atStr"><text class="mg-tl-t">{{t.atStr}}</text>{{t.text}}</view>
+        <view class="mg-ops"><button class="btn btn-outline btn-sm" data-id="{{item._id}}" catchtap="onVoucherDel">删除这份凭证</button></view>
+      </view>
     </view>
   </block>
 
@@ -90,5 +145,5 @@
     <view class="ne-btn">点此重试</view>
   </view>
   <view class="muted center mg-empty" wx:elif="{{!loading && empty}}">{{keyword ? '没有找到「' + keyword + '」' : '暂无随礼记录。扫码随礼后进度会显示在这里，需用登记时的同一微信查看'}}</view>
-  <loading show="{{loading && !list.length && !waiting.length && !rejected.length && !cancelled.length}}" rows="3" />
+  <loading show="{{loading && !list.length && !waiting.length && !rejected.length && !cancelled.length && !voided.length && !corrections.length && !vouchers.length}}" rows="3" />
 </view>

@@ -7,8 +7,12 @@
 //   本人数据：送礼记录、办事提醒、同名合并记录、作为记账人 / 家人的加入关系、用户信息与头像文件、同名检查频率计数
 //   opts.subscription：套餐订阅（管理员清除时删，用户自己注销时保留开通记录）
 //   opts.guestRecords：他作为宾客在别人礼簿里的随礼记录（属于对方礼簿，默认不删）
+//   opts.snapshot（v3.85.0）：用户自己注销 / 清除时为 true——删记录前先给宾客留凭证（snapshot.js），且不删这些凭证；
+//             管理员清除（没有 snapshot）连同这个主家名下的宾客凭证一起删，保证清除测试数据能清干净
+//   他自己作为宾客的随礼凭证（guest_receipts.guestOpenid）属于他本人的数据，清除时一并删除
 // 每类数据按条件反复删除直到删完，云函数中途超时后再执行一次即可继续。
 
+const Snap = require('./snapshot.js');
 const ENVS = ['develop', 'trial', 'release'];
 const BATCH = 50; // cloud.deleteFile 单次最多 50 个文件
 
@@ -39,6 +43,8 @@ function targets(openid, opts) {
     ['用户信息', 'users', { openid }],
     ['频率限制记录', 'rate_limits', { _id: 'nc_' + openid }] // 宾客同名检查的频率计数（v3.68.1）
   ];
+  list.push(['我的随礼凭证', 'guest_receipts', { guestOpenid: openid }]);
+  if (!opts.snapshot) list.push(['宾客随礼凭证', 'guest_receipts', { ownerOpenid: openid }]);
   if (opts.guestRecords) list.unshift(['作为宾客的随礼', 'records', { payerOpenid: openid }]);
   return list;
 }
@@ -152,6 +158,8 @@ async function run(db, cloud, openid, opts = {}) {
     }
     return total;
   };
+  // 用户自己注销：先给宾客留凭证（幂等，超时后再执行一次会接着做；做完才开始删）
+  if (opts.snapshot) await Snap.snapshotRecords(db, openid, {}, 0);
   // 先删文件（需要读主家信息、礼簿里的文件 id）
   let files = await deleteFiles(cloud, await fileIds(db, openid, opts.ownPayCode || (() => false)));
   // 导出 / 存档文件及登记

@@ -15,6 +15,8 @@ TARGETS = {
     'namecheck.js': ['records', 'payment'],
     'purge.js': ['account', 'system'],
     'trash.js': ['books', 'warmer'],
+    # 宾客随礼凭证快照（v3.85.0）：trash（删礼簿）与 purge（用户注销）删除前留凭证，system 清除测试数据时删除
+    'snapshot.js': ['books', 'warmer', 'account', 'system'],
     'limits.js': ['payment', 'renqing', 'account'],
     # 统一返回格式 / 北京时间：用到 ok、err、bjDay 的云函数
     'common.js': ['account', 'books', 'export', 'login', 'payment', 'qrcode', 'records', 'renqing', 'system', 'warmer'],
