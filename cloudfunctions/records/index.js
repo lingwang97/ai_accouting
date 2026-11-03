@@ -454,6 +454,7 @@ async function checkStatDrift(owner, book, count, fen) {
 
 /** 分页 + 全量汇总；按日/关键词筛选 */
 const DUP_MAX = 100;
+const CHANGED_DAYS = 30; // 「有改动」筛选的时间范围（与宾客「我的随礼记录」的「有变动」一致）
 async function list(openid, event, ctx) {
   const page = Math.max(1, Number(event.page) || 1);
   const pageSize = Math.min(50, Math.max(1, Number(event.pageSize) || 20));
@@ -477,8 +478,12 @@ async function list(openid, event, ctx) {
   // 状态筛选只影响列表行与 listTotal；顶部合计 / 笔数 / 待确认数仍是整本口径
   // confirm = 待确认页同口径（status 'transferred'，行内有确认按钮）；paid = 已入簿；其余 = 全部
   // v3.77.2：rejected = 主家标记「未收到」的（不限 24 小时；「全部」口径不变，仍不含未收到）
-  const stFilter = event.status === 'confirm' ? [REC.TRANSFERRED] : event.status === 'paid' ? [REC.PAID] : event.status === 'rejected' ? [REC.REJECTED] : LISTED.slice();
-  const listCond = withKw({ ...base, status: _.in(stFilter) });
+  // v3.85.2：changed = 「有改动」——近 30 天有过修改 / 作废 / 更正申请的记录（chgAt >= 30 天前，状态为已入簿或已作废），默认按 chgAt 倒序（显式选了「最早」按 chgAt 正序，其他排序不变）。
+  // 不新增索引（records 已 17 条，上限 20）：用 owner_book_status / owner_status_time 的前缀（ownerOpenid + bookId / status），chgAt 只做过滤；
+  // 有改动的记录只占很小一部分，扫描量可忽略。与关系、搜索、重名、日期、记账人场次范围都是同一个 where 里的 AND，天然叠加。
+  const changedOnly = event.status === 'changed';
+  const stFilter = changedOnly ? [REC.PAID, REC.VOID] : event.status === 'confirm' ? [REC.TRANSFERRED] : event.status === 'paid' ? [REC.PAID] : event.status === 'rejected' ? [REC.REJECTED] : LISTED.slice();
+  const listCond = withKw({ ...base, status: _.in(stFilter), ...(changedOnly ? { chgAt: _.gte(new Date(Date.now() - CHANGED_DAYS * 86400000)) } : {}) });
   const pendingCond = withKw({ ...base, status: REC.TRANSFERRED });
 
   // 排序白名单，非法值回落到时间倒序；都带 _id 作第二键，同时间 / 同金额翻页不重不漏
@@ -505,8 +510,8 @@ async function list(openid, event, ctx) {
   else if (sortKey === 'amount_asc') listQ = listQ.orderBy('amount', 'asc').orderBy('_id', 'asc');
   // 按姓名 / 重名：按字符编码排序（不是拼音），同名的挨在一起，同名内按时间
   else if (sortKey === 'name' || sortKey === 'dup') listQ = listQ.orderBy('payerName', 'asc').orderBy('createdAt', 'asc').orderBy('_id', 'asc');
-  else if (sortKey === 'time_asc') listQ = listQ.orderBy('createdAt', 'asc').orderBy('_id', 'asc');
-  else listQ = listQ.orderBy('createdAt', 'desc').orderBy('_id', 'desc');
+  else if (sortKey === 'time_asc') listQ = listQ.orderBy(changedOnly ? 'chgAt' : 'createdAt', 'asc').orderBy('_id', 'asc');
+  else listQ = listQ.orderBy(changedOnly ? 'chgAt' : 'createdAt', 'desc').orderBy('_id', 'desc');
 
   const [totalRes, pendingRes, listTotalRes, sumRes, listRes] = await Promise.all([
     records.where(paidCond).count(),

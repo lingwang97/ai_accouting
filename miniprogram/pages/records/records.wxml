@@ -14,6 +14,7 @@
         <view class="muted">礼金合计</view>
         <view class="sum money {{sum.length >= 12 ? 'long' : ''}}">￥{{sum}}</view>
         <view class="muted">{{total}} 份<text wx:if="{{pendingCount > 0}}" class="pending-hint"> · {{pendingCount}} 份待确认</text></view>
+        <view class="muted small" wx:if="{{stIdx === 4}}">合计与份数仍是整本已入簿的口径，下面是近 30 天有改动的记录</view>
       </view>
     </view>
     <view class="search-row">
@@ -47,6 +48,7 @@
       <text class="payer">{{item.nameStr}}<text class="dup-n" wx:if="{{item.dupN}}"> · 同名 {{item.dupN}} 条</text></text>
       <text class="r-right"><text class="cash-tag" wx:if="{{item.payMethod === 'cash'}}">现金</text><text class="xfer-tag" wx:elif="{{item.status === 'transferred' || item.status === 'paid'}}">转账</text><text class="money r-amount">￥{{item.amountStr}}</text></text>
     </view>
+    <view class="chg-row" wx:if="{{stIdx === 4 && item.chg}}" data-idx="{{index}}" bindtap="onChgLog"><text class="chg-tag {{item.chg.cls}}">{{item.chg.tag}}</text><text class="chg-text">{{item.chg.text}}</text><text class="chg-more"> 经过 ›</text></view>
     <view class="muted">{{item.timeStr}}<text wx:if="{{item.relation}}"> · {{item.relation}}</text><text wx:if="{{item.batchId}}"> · 批次录入</text><text wx:if="{{item.remark}}"> · {{item.remark}}</text><text wx:if="{{item.declaredStr}}" class="declared"> · 宾客登记 ￥{{item.declaredStr}}，按实收入簿</text><text wx:if="{{item.amendN}}" class="amended" data-idx="{{index}}" catchtap="onAmendLog"> · 已修改 ›</text><text wx:if="{{item.appealStatus === 'accepted'}}" class="amended" data-idx="{{index}}" catchtap="onTrail"> · 宾客申诉后入簿 ›</text><text wx:if="{{!readonly && item.editHint}}" class="declared"> · {{item.editHint}}</text><text wx:if="{{item.corrStr}}" class="amended" data-idx="{{index}}" catchtap="onCorrect"> · {{item.corrStr}}</text></view>
 
     <!-- 待确认：宾客已点"我已完成转账" -->

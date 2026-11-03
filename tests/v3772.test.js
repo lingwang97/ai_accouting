@@ -92,8 +92,8 @@ test('foldseen：没见过的记录出现时展开一次；已见过的不再展
 
 test('前端接线：礼簿页四个筛选（320 宽字号）、未收到行（原因 / 申诉 / 处理经过 / 撤销 / 去核对）；待确认页折叠并本机记住；FAQ', () => {
   const js = rd('miniprogram/pages/records/records.js');
-  assert.ok(js.includes("statuses: ['全部', '待确认', '未收到', '已入簿']"));
-  assert.ok(js.includes("const ST_KEYS = ['all', 'confirm', 'rejected', 'paid']"));
+  assert.ok(js.includes("statuses: ['全部', '待确认', '未收到', '已入簿', '有改动']"));
+  assert.ok(js.includes("const ST_KEYS = ['all', 'confirm', 'rejected', 'paid', 'changed']"));
   const wxml = rd('miniprogram/pages/records/records.wxml');
   assert.ok(wxml.includes("item.status === 'rejected'") && wxml.includes('onUnreject') && wxml.includes('onGoAppeal') && wxml.includes('onTrail'));
   assert.ok(wxml.includes('item.canUnreject') && wxml.includes('切换{{unit}}后可撤销'));

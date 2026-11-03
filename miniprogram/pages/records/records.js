@@ -16,6 +16,7 @@ const poller = require('../../utils/poller.js');
 const pollcfg = require('../../utils/pollcfg.js');
 const fresh = require('../../utils/fresh.js');
 const editlock = require('../../utils/editlock.js');
+const chginfo = require('../../utils/chginfo.js');
 
 const CORR_STATE = { pending: '更正申请：等待随礼人确认', agreed: '随礼人已同意更正', declined: '随礼人拒绝了更正', expired: '更正申请已过期' };
 
@@ -29,7 +30,7 @@ function amendDone(cur, fields) {
 const PAGE_SIZE = 20;
 // 「只看重名」不再是排序项（v3.77.3）：独立的「重名」开关，开启时请求 sort:'dup'（云端按姓名排列重名记录）
 const SORT_KEYS = ['time_desc', 'time_asc', 'amount_desc', 'amount_asc', 'name'];
-const ST_KEYS = ['all', 'confirm', 'rejected', 'paid'];
+const ST_KEYS = ['all', 'confirm', 'rejected', 'paid', 'changed']; // 第 5 项「有改动」（v3.85.2）
 const UNREJECT_MS = 24 * 3600 * 1000; // 与服务端一致：标记未收到后 24 小时内可撤销
 const POLL_MS = 10000; // 页面停留时自动刷新待确认转账
 
@@ -56,7 +57,7 @@ Page({
     sorts: ['最新', '最早', '金额高→低', '金额低→高', '按姓名'],
     sortIdx: 0,
     dupOn: false,     // 只看重名开关：开启时排序下拉置灰，显示「按姓名排列」；关闭后恢复 sortIdx
-    statuses: ['全部', '待确认', '未收到', '已入簿'],
+    statuses: ['全部', '待确认', '未收到', '已入簿', '有改动'],
     stIdx: 0,
     loggedIn: true,
     readonly: false,  // 家人共享：只读
@@ -653,6 +654,11 @@ Page({
       this.setData({ busy: false });
     }
   },
+  /** 「有改动」：点开改动详情（完整修改记录 + 处理经过） */
+  onChgLog(e) {
+    const r = this.data.list[e.currentTarget.dataset.idx];
+    if (r) wx.showModal({ title: '改动经过', content: chginfo.detail(r), showCancel: false, confirmText: '知道了' });
+  },
   /** 查看修改记录（最近 20 次） */
   onAmendLog(e) {
     const r = this.data.list[e.currentTarget.dataset.idx];
@@ -697,6 +703,7 @@ function decorate(r) {
       canUnreject: !!r.rejectedAt && Date.now() - new Date(r.rejectedAt).getTime() < UNREJECT_MS
     } : {}),
     ...(r.status === REC.PAID ? { editOpen: editlock.stateOf(r) === 'open', editHint: editlock.hint(r), corrStr: CORR_STATE[r.corrState] || '' } : {}),
+    chg: chginfo.of(r),
     amountStr: fmt.money(r.amount),
     nameStr: samename.nameStr(r.payerName, r.nameTag),
     declaredStr: r.declaredAmount ? fmt.money(r.declaredAmount) : '',
