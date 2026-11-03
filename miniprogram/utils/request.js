@@ -7,7 +7,7 @@ const envVersion = () => {
 
 // 只读 action：其余一律视为写操作，成功后记下时间（页面切回时据此判断是否必须刷新，见 utils/fresh.js）
 const READ_ACTIONS = ['get', 'list', 'query', 'people', 'outList', 'remindList', 'pending', 'pendingStat', 'dashboard',
-  'status', 'receipt', 'myReceipts', 'receiptByToken', 'issueQr', 'qrCheck', 'themes', 'check', 'getByAid', 'gen', 'app', 'plan', 'adminGet', 'detail',
+  'status', 'receipt', 'myReceipts', 'giftStat', 'receiptByToken', 'issueQr', 'qrCheck', 'themes', 'check', 'getByAid', 'gen', 'app', 'plan', 'adminGet', 'detail',
   'nameCheck', 'reconcile', 'orgSummary', 'removePreview', 'members', 'pendingMembers', 'getTpl', 'stats', 'trashList',
   'viewers', 'payCodeReviews', 'inviteInfo', 'advGet', 'coverPhotoUrl', 'fontPreview',
   // export 预览：只生成临时文件，不改礼簿 / 礼金数据（与导出不同，不触发页面强制刷新）
@@ -128,6 +128,9 @@ module.exports = {
   accountGetByAid: (aid, opts) => call('account', { action: 'getByAid', aid }, opts),
   receiptGet: (rid, batch, opts) => call('payment', { action: 'receipt', rid, batch: !!batch }, opts),
   myReceipts: opts => call('payment', { action: 'myReceipts' }, opts),
+  // 分标签分页（v3.85.1）：tab all / paid / waiting / rejected / changed；cursor 为上一页返回的 next
+  myReceiptsTab: (tab, cursor, opts) => call('payment', { action: 'myReceipts', tab, ...(cursor ? { cursor } : {}) }, opts),
+  giftStat: opts => call('payment', { action: 'giftStat' }, opts),
   // 小票二维码（v3.57.0）：issueQr 静默（失败不弹提示，小票照常打印）
   issueQr: rid => call('payment', { action: 'issueQr', rid, envVersion: envVersion() }, { silent: true }),
   receiptByToken: (token, opts) => call('payment', { action: 'receiptByToken', token }, opts),
@@ -257,6 +260,7 @@ module.exports = {
   adminSetPlan: (ownerOpenid, plan, opts) => call('system', { action: 'adminSetPlan', ownerOpenid, plan, ...(opts || {}) }),
   adminFindHosts: keyword => call('system', { action: 'adminFindHosts', keyword }),
   adminIndexes: () => call('system', { action: 'adminIndexes' }),
+  adminBackfill: () => call('system', { action: 'adminBackfill' }), // 回填 records.sortAt / chgAt（v3.85.1）
   adminPreflight: fix => call('system', { action: fix ? 'adminPreflightFix' : 'adminPreflight' }),
   // 上线前手动清单（v3.72.2）：读取 / 勾选
   adminChecklist: () => call('system', { action: 'adminChecklist' }),

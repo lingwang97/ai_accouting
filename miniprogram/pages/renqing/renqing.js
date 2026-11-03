@@ -99,6 +99,7 @@ Page({
   /** 送出的礼：上拉加载更多（每页 50 条） */
   async onReachBottom() {
     const d = this.data;
+    if (d.tab === 'receipts') { const mg = this.selectComponent('#mg'); if (mg) mg.loadMore(); return; } // 随礼记录分页（v3.85.1）
     if (d.tab !== 'out' || d.loading || this._moreBusy || d.outList.length >= d.outTotal) return;
     this._moreBusy = true;
     try {

@@ -17,6 +17,7 @@ const db = cloud.database();
 const { resolveCtx } = require('./ctx.js');
 const P = require('./plans.js');
 const Purge = require('./purge.js');
+const { REC } = require('./status.js');
 const Snap = require('./snapshot.js'); // 宾客随礼凭证快照（v3.85.0）：清除测试数据时一并删除
 
 exports.main = async (event, context) => {
@@ -37,6 +38,7 @@ exports.main = async (event, context) => {
       case 'adminSetPlan': return await guard(OPENID, () => setPlan(OPENID, event.ownerOpenid, event.plan, event, 'admin'));
       case 'adminFindHosts': return await guard(OPENID, () => findHosts(event.keyword));
       case 'adminIndexes': return await guard(OPENID, () => ensureIndexes());
+      case 'adminBackfill': return await guard(OPENID, async () => ok(await backfillSort(15 * 1000)));
       case 'adminPreflight': return await guard(OPENID, () => preflight(false, OPENID, context));
       case 'adminPreflightFix': return await guard(OPENID, () => preflight(true, OPENID, context));
       case 'adminChecklist': return await guard(OPENID, async () => ok({ list: await checklist() }));
@@ -788,7 +790,7 @@ async function fontStatus() {
 }
 
 // —— 数据库索引 ——
-// 共 36 条，docs/提审与隐私说明.md 第三节第 1 条的表按本清单生成（改这里要同步）；direction "1" 升序、"-1" 降序
+// 共 33 条（records 17 条），docs/提审与隐私说明.md 第三节第 1 条的表按本清单生成（改这里要同步）；direction "1" 升序、"-1" 降序
 const INDEXES = [
   ['records', 'owner_status_time', [['ownerOpenid', 1], ['status', 1], ['createdAt', -1]]],
   ['records', 'owner_status_amount', [['ownerOpenid', 1], ['status', 1], ['amount', -1]]], // 礼簿页按金额排序
@@ -797,11 +799,10 @@ const INDEXES = [
   ['records', 'owner_book_time', [['ownerOpenid', 1], ['bookId', 1], ['createdAt', -1]]], // 礼簿页按礼簿筛选（默认排序）
   ['records', 'owner_book_name', [['ownerOpenid', 1], ['bookId', 1], ['payerName', 1]]], // 礼簿页按姓名排序 / 只看重名
   ['records', 'owner_book_amount', [['ownerOpenid', 1], ['bookId', 1], ['amount', -1]]], // 礼簿页按礼簿 + 金额排序
-  ['records', 'payer_status_paid', [['payerOpenid', 1], ['status', 1], ['paidAt', -1]]],
-  ['records', 'payer_time', [['payerOpenid', 1], ['createdAt', -1]]],
-  ['records', 'payer_status_time', [['payerOpenid', 1], ['status', 1], ['createdAt', -1]]], // 我的随礼记录「等待主家确认」（v3.66.0）
-  ['records', 'payer_status_rejected', [['payerOpenid', 1], ['status', 1], ['rejectedAt', -1]]], // 我的随礼记录「主家未确认收到」（v3.73.0）
-  ['records', 'claimed_status_paid', [['claimedOpenid', 1], ['status', 1], ['paidAt', -1]]], // 我的随礼记录（小票二维码认领）
+  // 我的随礼记录（v3.85.1 起分标签分页）：六条随礼人侧索引合并成三条（records 自定义索引超过上限 20 会 -501000 index overrun）
+  ['records', 'payer_status_sort', [['payerOpenid', 1], ['status', 1], ['sortAt', -1]]], // 全部 / 已入簿 / 待确认 / 未收到
+  ['records', 'claimed_status_sort', [['claimedOpenid', 1], ['status', 1], ['sortAt', -1]]], // 小票二维码认领的记录
+  ['records', 'payer_chg', [['payerOpenid', 1], ['chgAt', -1]]], // 「有变动」标签、红点（认领人的变动量很小，不另建索引）
   ['records', 'rcpt_token', [['rcptToken', 1]]], // 扫小票二维码按 token 查回执
   ['records', 'batch', [['batchId', 1]]],
   ['records', 'owner_status_appeal', [['ownerOpenid', 1], ['status', 1], ['appealStatus', 1]]], // 宾客申诉跨礼簿计数 / 列表（v3.77.0）
@@ -822,7 +823,6 @@ const INDEXES = [
   ['exports', 'keep_time', [['keep', 1], ['createdAt', 1]]],
   ['reminders', 'owner_done_date', [['ownerOpenid', 1], ['done', 1], ['date', 1]]],
   ['reminders', 'push', [['pushed', 1], ['notifyDay', 1]]],
-  ['records', 'payer_status_void', [['payerOpenid', 1], ['status', 1], ['voidedAt', -1]]], // 我的随礼记录「已作废」（v3.85.0）
   ['records', 'corr_pending', [['corrState', 1], ['corrAt', 1]]], // warmer 让超过 7 天没处理的更正申请过期（v3.85.0）
   ['records', 'chg_pending', [['changeNotifyAt', 1]]], // warmer 合并发送修改 / 作废通知（v3.85.0）
   ['guest_receipts', 'payer_snapshot', [['guestOpenid', 1], ['snapshotAt', -1]]] // 宾客随礼凭证（v3.85.0）
@@ -841,6 +841,17 @@ async function ensureIndexes() {
   const tk = await postJSON('https://api.weixin.qq.com/cgi-bin/stable_token', { grant_type: 'client_credential', appid: APPID, secret });
   if (!tk.access_token) return err(`获取 access_token 失败（${tk.errcode} ${tk.errmsg || ''}），请核对 AppSecret`);
 
+  // 先删旧索引再建新的（v3.85.1）：单个集合索引数量有上限，先建会 -501000 index overrun；不存在的视为已删
+  const dropped = [];
+  for (const [col, names] of Object.entries(DROP_INDEXES)) {
+    for (const name of names) {
+      const r = await postJSON(`https://api.weixin.qq.com/tcb/updateindex?access_token=${tk.access_token}`, {
+        env, collection_name: col, create_indexes: [], drop_indexes: [{ name }]
+      }).catch(e => ({ errcode: -1, errmsg: e.message }));
+      const gone = r.errcode === 0 || /not exist|not found|no such|不存在/i.test(r.errmsg || '');
+      dropped.push({ col, name, ok: gone, removed: r.errcode === 0, msg: gone ? '' : `${r.errcode} ${r.errmsg || ''}` });
+    }
+  }
   // 并行创建（串行 15 次请求最坏会超过函数超时）
   const results = await Promise.all(INDEXES.map(async ([col, name, keys]) => {
     try { await db.createCollection(col); } catch (e) { /* 已存在 */ }
@@ -860,7 +871,53 @@ async function ensureIndexes() {
       failed: results.filter(x => !x.ok).map(x => ({ col: x.col, name: x.name, msg: x.msg }))
     });
   } catch (e) { console.warn('记录索引结果失败', e.message); }
-  return ok({ env, results, created: results.filter(x => x.ok && !x.existed).length, failed: results.filter(x => !x.ok).length });
+  // 老数据回填 sortAt / chgAt（限时，没做完由管理员页继续调用 adminBackfill）
+  let backfill = { done: false, updated: 0 };
+  try { backfill = await backfillSort(12 * 1000); } catch (e) { console.warn('回填失败', e.message); }
+  return ok({
+    env, results, created: results.filter(x => x.ok && !x.existed).length, failed: results.filter(x => !x.ok).length + dropped.filter(x => !x.ok).length,
+    dropped: dropped.filter(x => x.removed).length, droppedFailed: dropped.filter(x => !x.ok), backfill
+  });
+}
+
+/** 要先删掉的旧索引（v3.85.1：随礼人侧六条合并为三条） */
+const DROP_INDEXES = {
+  records: ['payer_status_paid', 'payer_time', 'payer_status_time', 'payer_status_rejected', 'claimed_status_paid', 'payer_status_void']
+};
+
+/**
+ * 老记录的 sortAt（最近一次状态事件时间：入簿 paidAt / 未收到 rejectedAt / 作废 voidedAt，其余 createdAt）与
+ * chgAt（有修改记录、作废、更正申请的记录的最近变动时间）。纯函数，便于测试
+ */
+function backfillOf(r) {
+  const t = x => (x ? new Date(x).getTime() : 0);
+  const created = t(r.createdAt) || Date.now();
+  let sort = created;
+  if (r.status === REC.PAID) sort = t(r.paidAt) || created;
+  else if (r.status === REC.REJECTED) sort = t(r.rejectedAt) || created;
+  else if (r.status === REC.VOID) sort = t(r.voidedAt) || t(r.paidAt) || created;
+  const chg = Math.max(
+    Array.isArray(r.amendLog) && r.amendLog.length ? (t(r.amendedAt) || t(r.paidAt) || created) : 0,
+    r.voidedAt ? t(r.voidedAt) : 0,
+    r.corrState ? (t(r.corrAt) || created) : 0
+  );
+  return { sortAt: new Date(sort), ...(chg ? { chgAt: new Date(chg) } : {}) };
+}
+
+/** 分批补 sortAt / chgAt（每批 100 条、20 并发）；超过时间预算返回 done=false，再调用一次接着做 */
+async function backfillSort(budgetMs) {
+  const deadline = Date.now() + budgetMs;
+  const col = db.collection('records');
+  let updated = 0;
+  for (;;) {
+    const rows = (await col.where({ sortAt: _.exists(false) }).limit(100).get()).data;
+    if (!rows.length) return { done: true, updated };
+    for (let i = 0; i < rows.length; i += 20) {
+      await Promise.all(rows.slice(i, i + 20).map(r => col.where({ _id: r._id, sortAt: _.exists(false) }).update({ data: backfillOf(r) })));
+    }
+    updated += rows.length;
+    if (Date.now() > deadline) return { done: false, updated };
+  }
 }
 
 // —— 内部 action `_wxaCode`：用 AppSecret 走 HTTPS 接口（getwxacodeunlimit）取小程序码图片（payment 的云调用权限缺失时的备用通道）——

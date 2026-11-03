@@ -234,9 +234,19 @@ Page({
     this.setData({ indexing: true, indexResults: [], indexSummary: '' });
     try {
       const r = await req.adminIndexes();
+      // 老数据回填排序字段（v3.85.1）：限时分批，没做完就接着调用
+      let bf = r.backfill || { done: true, updated: 0 };
+      let total = bf.updated || 0;
+      for (let i = 0; !bf.done && i < 40; i++) {
+        this.setData({ indexSummary: `索引已处理，正在补老数据的排序字段…已处理 ${total} 条` });
+        bf = await req.adminBackfill();
+        total += bf.updated || 0;
+      }
+      const dropTip = r.dropped ? `，删除旧索引 ${r.dropped} 条` : '';
+      const bfTip = bf.done ? `，补排序字段 ${total} 条` : `，补排序字段未做完（已 ${total} 条），请再点一次`;
       this.setData({
         indexResults: r.results,
-        indexSummary: r.failed ? `${r.failed} 条失败，见下方原因` : `全部完成：新建 ${r.created} 条，其余已存在`
+        indexSummary: r.failed ? `${r.failed} 条失败，见下方原因${(r.droppedFailed || []).length ? `（含删旧索引失败：${r.droppedFailed.map(x => x.name).join('、')}）` : ''}` : `全部完成：新建 ${r.created} 条${dropTip}，其余已存在${bfTip}`
       });
     } catch (e) { /* toast 已提示 */ } finally {
       this.setData({ indexing: false });

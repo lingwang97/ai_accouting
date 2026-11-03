@@ -28,7 +28,7 @@ async function ensureCol(name) {
 }
 
 // 不改库的 action：其余一律视为写操作，执行后清空本实例的状态缓存（含出错，可能已部分写入）
-const READ_ACTIONS = ['status', 'receipt', 'myReceipts', 'receiptByToken', 'qrCheck', '__meta', '__warm'];
+const READ_ACTIONS = ['status', 'receipt', 'myReceipts', 'giftStat', 'receiptByToken', 'qrCheck', '__meta', '__warm'];
 exports.main = async (event, context) => {
   // 上线前检查（v3.72.2）：返回本函数内存 / 超时，带一次性凭据时探测云调用权限，见 meta.js
   if (event && event.action === '__meta') return await require('./meta.js').handle(cloud, event, context, ['security.msgSecCheck', 'security.imgSecCheck', 'subscribeMessage.send', 'wxacode.getUnlimited']);
@@ -66,7 +66,9 @@ async function mainInner(event, context) {
       case 'cancel': return await payerUpdate(OPENID, event.rid, [{ status: REC.PENDING }], REC.CANCELLED);
       case 'status': return await status(OPENID, event.rid);
       case 'receipt': return await receipt(OPENID, event.rid, event.batch === true);
-      case 'myReceipts': return await myReceipts(OPENID);
+      // 带 tab 参数的是 v3.85.1 起的分标签分页版；不带的是旧版整页接口（旧版小程序仍在用，保持不变）
+      case 'myReceipts': return event.tab ? await myReceiptsTab(OPENID, event) : await myReceipts(OPENID);
+      case 'giftStat': return await giftStat(OPENID);
       // 宾客对「主家未确认收到」申请再核对（v3.74.0）：每笔 1 次，主家在待确认页「宾客申诉」处理
       case 'appeal': return await appeal(OPENID, event);
       // 超过 72 小时的更正申请：随礼人本人同意 / 拒绝（v3.85.0）；删除自己保留的凭证；重新订阅「记账提醒」（变更提醒）
@@ -222,7 +224,8 @@ async function create(openid, event) {
     ...(payMethod === 'cash' ? { transferredAt: now } : {}),
     printed: false,
     payDay,
-    createdAt: now
+    createdAt: now,
+    sortAt: now // 「我的随礼记录」排序用：最近一次状态事件的时间（入簿 paidAt / 未收到 rejectedAt / 作废 voidedAt，其余 createdAt），v3.85.1
   };
   const { ids, batchId, existed } = await addItems(base, items, reqKey);
   // 重复提交（弱网重试）：这些记录上一次已写入，状态可能已推进（已转账 / 已入簿 / 被拒），按库里真实状态返回，不能固定成 pending
@@ -520,6 +523,7 @@ async function cashEntry(openid, ctx, event) {
     printed: false,
     payDay: bjDay(now),
     createdAt: now,
+    sortAt: now,
     transferredAt: now,
     paidAt: now
   };
@@ -1081,6 +1085,124 @@ async function myReceipts(openid) {
   });
 }
 
+// —— 我的随礼记录：分标签分页（v3.85.1）——
+// 标签：all 全部 / paid 已入簿 / waiting 待确认（pending + transferred，3 天）/ rejected 未收到（30 天）/ changed 有变动（chgAt，30 天）。
+// 排序字段 sortAt = 最近一次状态事件时间（入簿 paidAt、未收到 rejectedAt、作废 voidedAt，其余 createdAt）；「有变动」按 chgAt。
+// 每页 TAB_PAGE 条记录（批次在页内合成一行）；cursor = 已读过的记录条数（skip），next 为下一页游标，没有更多为 null。
+// 凭证（guest_receipts）只在「全部」最后一页之后追加。索引：payer_status_sort / claimed_status_sort / payer_chg（认领人的「有变动」量很小，不走专门索引）。
+// 旧数据（没有 sortAt / chgAt）要先在管理员页「一键创建索引」里回填（system.adminBackfill）。
+const GIFT_TABS = ['all', 'paid', 'waiting', 'rejected', 'changed'];
+const TAB_PAGE = 20;
+const DAY_MS = 86400000;
+
+function tabCond(tab, now) {
+  const since = days => new Date(now - days * DAY_MS);
+  switch (tab) {
+    case 'paid': return { status: REC.PAID };
+    case 'waiting': return { status: _.in([REC.TRANSFERRED, REC.PENDING]), sortAt: _.gte(since(WAITING_DAYS)) };
+    case 'rejected': return { status: REC.REJECTED, sortAt: _.gte(since(REJECTED_DAYS)) };
+    case 'changed': return { chgAt: _.gte(since(VOIDED_DAYS)) };
+    default: return _.or([
+      { status: REC.PAID },
+      { status: _.in([REC.REJECTED, REC.VOID]), sortAt: _.gte(since(REJECTED_DAYS)) },
+      { status: _.in([REC.TRANSFERRED, REC.PENDING, REC.CANCELLED]), sortAt: _.gte(since(WAITING_DAYS)) }
+    ]);
+  }
+}
+
+/** 记录 → 宾客可见的行（批次合成一行；有待我确认的更正申请的记录单独成行，因为同意 / 拒绝是按记录的） */
+function giftRows(docs, openid) {
+  const rows = [];
+  const byBatch = {};
+  docs.forEach(r => {
+    const corr = r.status === REC.PAID && r.corrState === 'pending' && r.correction && r.corrAt && Date.now() - new Date(r.corrAt).getTime() <= CORR_MS
+      ? { kind: r.correction.kind, newAmount: r.correction.newAmount, newName: r.correction.newName || '', reason: r.correction.reason || '', at: r.corrAt, expireAt: new Date(new Date(r.corrAt).getTime() + CORR_MS) }
+      : null;
+    const g = r.batchId && !corr ? byBatch[r.batchId] : null;
+    if (g) { g.names.push(r.payerName); g.fen += Math.round(r.amount * 100); g.ids.push(r._id); return; }
+    const row = {
+      _id: r._id, ids: [r._id], status: r.status, aid: r.aid, hostName: r.hostName || '', themeName: r.themeName || '', names: [r.payerName], fen: Math.round(r.amount * 100),
+      createdAt: r.createdAt, transferredAt: r.transferredAt || null, paidAt: r.paidAt || null, rejectedAt: r.rejectedAt || null, voidedAt: r.voidedAt || null, sortAt: r.sortAt || null,
+      reason: r.rejectReason || '', note: r.rejectNote || '', appealStatus: r.appealStatus || '', appealN: Number(r.appealN) || 0, appealReply: r.appealReply || '',
+      funeral: r.bookType === 'funeral', auto: !!r.autoCancelled, own: r.payerOpenid === openid,
+      amended: (Number(r.amendN) || 0) > 0 && !!r.amendedAt, lastChangeAt: r.chgAt || r.amendedAt || r.voidedAt || null, changes: changeLines(r), timeline: guestTimeline(r), corr
+    };
+    if (r.batchId && !corr) byBatch[r.batchId] = row;
+    rows.push(row);
+  });
+  return rows;
+}
+
+async function myReceiptsTab(openid, event) {
+  const tab = GIFT_TABS.includes(event.tab) ? event.tab : 'all';
+  const skip = Math.max(0, Math.min(Math.floor(Number(event.cursor)) || 0, 2000));
+  const mine = _.or([{ payerOpenid: openid }, { claimedOpenid: openid }]);
+  const res = await records.where(_.and([tabCond(tab, Date.now()), mine]))
+    .orderBy(tab === 'changed' ? 'chgAt' : 'sortAt', 'desc').skip(skip).limit(TAB_PAGE + 1).get();
+  const more = res.data.length > TAB_PAGE;
+  const docs = res.data.slice(0, TAB_PAGE);
+  const rows = giftRows(docs, openid);
+  const names = {};
+  const aids = [...new Set(rows.map(r => r.aid).filter(Boolean))];
+  if (aids.length) {
+    const acc = await accounts.where({ _id: _.in(aids.slice(0, 100)) }).field({ accountName: true }).get();
+    acc.data.forEach(a => { names[a._id] = a.accountName; });
+  }
+  const out = rows.map(w => ({
+    _id: w._id, ids: w.ids, status: w.status, aid: w.aid,
+    payerName: w.names.length > 1 ? `${w.names[0]} 等 ${w.names.length} 人` : w.names[0], amount: w.fen / 100,
+    accountName: w.hostName || names[w.aid] || '', themeName: w.themeName,
+    createdAt: w.createdAt, transferredAt: w.transferredAt, paidAt: w.paidAt, rejectedAt: w.rejectedAt, voidedAt: w.voidedAt,
+    reasonText: [REJECT_REASONS[w.reason] || '', w.note].filter(Boolean).join('：'),
+    canAppeal: w.status === REC.REJECTED && w.own && !w.appealStatus && !w.appealN, appealStatus: w.appealStatus, appealReply: w.appealReply,
+    funeral: w.funeral, auto: w.auto, own: w.own, amended: w.amended, lastChangeAt: w.lastChangeAt, changes: w.changes, timeline: w.timeline, corr: w.corr
+  }));
+  const next = more ? skip + TAB_PAGE : null;
+  const body = { tab, rows: out, next };
+  if (tab === 'changed' && skip === 0) body.lastChangeAt = rows.reduce((m, r) => Math.max(m, r.lastChangeAt ? new Date(r.lastChangeAt).getTime() : 0), 0);
+  if (tab === 'all' && next === null) body.vouchers = await giftVouchers(openid);
+  return ok(body);
+}
+
+/** 主家删簿 / 注销后保留给我的凭证：已经能在实时记录里看到的（删除进行中、恢复后）不重复；批次合成一行；只读 */
+async function giftVouchers(openid) {
+  let snaps = [];
+  try { snaps = (await db.collection('guest_receipts').where({ guestOpenid: openid }).orderBy('snapshotAt', 'desc').limit(100).get()).data; } catch (e) { if (!isMissing(e)) throw e; }
+  if (!snaps.length) return [];
+  const live = new Set();
+  const ids = snaps.map(s => s._id);
+  for (let i = 0; i < ids.length; i += 100) {
+    (await records.where({ _id: _.in(ids.slice(i, i + 100)) }).field({ _id: true }).limit(100).get()).data.forEach(r => live.add(r._id));
+  }
+  const byBatch = {};
+  const rows = [];
+  snaps.filter(s => !live.has(s._id)).forEach(s => {
+    const g = s.batchId ? byBatch[s.batchId] : null;
+    if (g) { g.ids.push(s._id); g.names.push(s.payerName); g.fen += Math.round(s.amount * 100); return; }
+    const row = {
+      _id: s._id, ids: [s._id], status: s.status, names: [s.payerName], fen: Math.round(s.amount * 100), hostName: s.hostName || '', themeName: s.themeName || '',
+      paidAt: s.paidAt || null, voidedAt: s.voidedAt || null, rejectedAt: s.rejectedAt || null, funeral: s.bookType === 'funeral', snapshotAt: s.snapshotAt, timeline: guestTimeline(s)
+    };
+    if (s.batchId) byBatch[s.batchId] = row;
+    rows.push(row);
+  });
+  return rows.slice(0, 30).map(v => ({
+    _id: v._id, ids: v.ids, status: v.status, payerName: v.names.length > 1 ? `${v.names[0]} 等 ${v.names.length} 人` : v.names[0], amount: v.fen / 100,
+    accountName: v.hostName, themeName: v.themeName, paidAt: v.paidAt, voidedAt: v.voidedAt, rejectedAt: v.rejectedAt, funeral: v.funeral, timeline: v.timeline
+  }));
+}
+
+/** 红点用的轻量统计：待我确认的更正申请数 + 最近一次变动时间（两次小查询） */
+async function giftStat(openid) {
+  const now = Date.now();
+  const mine = _.or([{ payerOpenid: openid }, { claimedOpenid: openid }]);
+  const [c, l] = await Promise.all([
+    records.where(_.and([{ status: REC.PAID, corrState: 'pending', corrAt: _.gte(new Date(now - CORR_MS)) }, mine])).count(),
+    records.where(_.and([{ chgAt: _.gte(new Date(now - VOIDED_DAYS * DAY_MS)) }, mine])).orderBy('chgAt', 'desc').limit(1).field({ chgAt: true }).get()
+  ]);
+  return ok({ correctionN: c.total, lastChangeAt: l.data[0] && l.data[0].chgAt ? new Date(l.data[0].chgAt).getTime() : 0 });
+}
+
 /** 收据只暴露必要字段 */
 const receiptRecord = r => ({
   _id: r._id, aid: r.aid, payerName: r.payerName, amount: r.amount, remark: r.remark,
@@ -1190,6 +1312,8 @@ async function ownerUpdate(ctx, rid, fromList, to, actualAmount, pre, opts) {
     if (editDeadline(r0) <= Date.now()) return err(lockMsg(r0, '作废'));
     lockCut = editCut(Date.now());
     data.voidedAt = new Date();
+    data.sortAt = data.voidedAt;
+    data.chgAt = data.voidedAt; // 「有变动」标签（v3.85.1）
     data.changeNotifyAt = data.voidedAt;
     data.trail = trailAdd(r0, { who: whoOf(ctx), name: handlerName(ctx), act: 'void' });
   }
@@ -1201,6 +1325,7 @@ async function ownerUpdate(ctx, rid, fromList, to, actualAmount, pre, opts) {
       data.trail = trailAdd(r0, { who: whoOf(ctx), name: handlerName(ctx), act: 'accept' });
     }
     data.paidAt = new Date();
+    data.sortAt = data.paidAt;
     // 记账人：实际确认这笔礼金的人（回执、小票上显示）
     data.handlerOpenid = (ctx.user && ctx.user.openid) || '';
     data.handlerName = handlerName(ctx);
@@ -1219,6 +1344,7 @@ async function ownerUpdate(ctx, rid, fromList, to, actualAmount, pre, opts) {
   // 标记「未收到」：记下时间与标记前的状态，24 小时内可撤销（见 unreject）；限定为读到的当前状态，保证记下的状态准确
   if (to === REC.REJECTED) {
     data.rejectedAt = new Date();
+    data.sortAt = data.rejectedAt;
     data.rejectedBy = handlerName(ctx); // 仅主家 / 记账人可见，不返回宾客
     const why = opts || {};
     if (why.reason) data.rejectReason = why.reason;
@@ -1269,7 +1395,7 @@ async function unreject(ctx, rid) {
     const back = r.rejectedFrom === REC.PENDING ? REC.PENDING : REC.TRANSFERRED;
     // 带状态与时间条件的原子更新：并发撤销或期限刚过时不会误改
     const res = await records.where({ _id: r._id, ownerOpenid: ctx.ownerOpenid, status: REC.REJECTED, rejectedAt: _.gt(cut) })
-      .update({ data: { status: back, rejectedAt: _.remove(), rejectedFrom: _.remove(), rejectedBy: _.remove(), rejectReason: _.remove(), rejectNote: _.remove(), ...APPEAL_CLEAR, trail: trailAdd(r, { who: whoOf(ctx), name: handlerName(ctx), act: 'unreject' }) } });
+      .update({ data: { status: back, sortAt: r.createdAt || new Date(), rejectedAt: _.remove(), rejectedFrom: _.remove(), rejectedBy: _.remove(), rejectReason: _.remove(), rejectNote: _.remove(), ...APPEAL_CLEAR, trail: trailAdd(r, { who: whoOf(ctx), name: handlerName(ctx), act: 'unreject' }) } });
     n += res.stats.updated;
   }));
   if (!n) return err('当前状态不可操作，请刷新');
@@ -1341,6 +1467,7 @@ async function amend(ctx, event) {
     if (changes.payerName) gc.payerName = changes.payerName;
     data.trail = trailAdd(rec, { who: whoOf(ctx), name: handlerName(ctx), act: 'amend', changes: gc });
     data.changeNotifyAt = new Date();
+    data.chgAt = data.changeNotifyAt;
   }
   const cut = editCut(Date.now());
   const res = await records.where(_.and([{ _id: rid, ownerOpenid: ctx.ownerOpenid, status: REC.PAID }, verCond, ...(cut ? [{ paidAt: _.gt(cut) }] : [])])).update({ data });
@@ -1400,7 +1527,7 @@ async function correct(ctx, event) {
   const bad = await S.checkText(cloud, ctx.user && ctx.user.openid, [c.reason, ...(c.newName ? [c.newName] : [])]);
   if (bad) return bad;
   const data = {
-    corrState: 'pending', corrAt: c.at, corrN: (Number(rec.corrN) || 0) + 1, correction: c,
+    corrState: 'pending', corrAt: c.at, chgAt: c.at, corrN: (Number(rec.corrN) || 0) + 1, correction: c,
     trail: trailAdd(rec, { who: whoOf(ctx), name: handlerName(ctx), act: 'corr_ask', kind, why: c.reason, ...(c.newAmount !== undefined ? { newAmount: c.newAmount } : {}), ...(c.newName ? { newName: c.newName } : {}) })
   };
   const res = await records.where(_.and([{ _id: rid, ownerOpenid: ctx.ownerOpenid, status: REC.PAID }, { corrState: _.neq('pending') }]))
@@ -1431,14 +1558,14 @@ async function correctReply(openid, event) {
   const cond = { _id: rid, status: REC.PAID, corrState: 'pending', corrAt: rec.corrAt };
   const closed = { ...c, state: decision === 'agree' ? 'agreed' : 'declined', decidedAt: now };
   if (decision === 'decline') {
-    const res = await records.where(cond).update({ data: { corrState: 'declined', corrDecidedAt: now, correction: closed, trail: trailAdd(rec, { who: 'guest', name: rec.payerName, act: 'corr_decline' }) } });
+    const res = await records.where(cond).update({ data: { corrState: 'declined', corrDecidedAt: now, chgAt: now, correction: closed, trail: trailAdd(rec, { who: 'guest', name: rec.payerName, act: 'corr_decline' }) } });
     if (!res.stats || res.stats.updated !== 1) return err('这条申请已处理或已失效，请刷新');
     return ok({ rid, state: 'declined' });
   }
   const ver = Number(rec.amendN) || 0;
   const verCond = ver === 0 ? _.or([{ amendN: 0 }, { amendN: _.exists(false) }]) : { amendN: ver };
   const changes = {};
-  const data = { corrState: 'agreed', corrDecidedAt: now, correction: closed, amendN: ver + 1, amendedAt: now };
+  const data = { corrState: 'agreed', corrDecidedAt: now, chgAt: now, correction: closed, amendN: ver + 1, amendedAt: now };
   if (c.kind === 'amount') {
     data.amount = c.newAmount;
     changes.amount = [rec.amount, c.newAmount];
@@ -1449,6 +1576,7 @@ async function correctReply(openid, event) {
   } else {
     data.status = REC.VOID;
     data.voidedAt = now;
+    data.sortAt = now;
   }
   data.amendLog = (Array.isArray(rec.amendLog) ? rec.amendLog : []).concat([{ at: now, by: '随礼人同意更正', changes: c.kind === 'void' ? { status: ['paid', 'void'] } : changes }]).slice(-AMEND_LOG_MAX);
   data.trail = trailAdd(rec, { who: 'guest', name: rec.payerName, act: 'corr_agree' });

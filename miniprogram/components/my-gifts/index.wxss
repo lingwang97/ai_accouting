@@ -33,3 +33,10 @@ button.mg-op2:not([size=mini]) { margin-left: 20rpx; }
 .mg-chg { margin-top: 6rpx; }
 .mg-exp { margin-top: 6rpx; font-size: 24rpx; }
 .mg-resub { margin-right: 28rpx; color: #888; }
+/* 顶部标签（v3.85.1）：五个标签，屏宽够就平分，320 宽 / 大字体放不下时可横向滑动，文字不换行不截断 */
+.mg-seg { display: flex; margin: 0 0 16rpx; padding: 6rpx; border-radius: var(--r-s, 16rpx); background: var(--fill, #f0f0f0); overflow-x: auto; white-space: nowrap; }
+.mg-seg-item { position: relative; flex: 1 0 auto; padding: 12rpx 18rpx; text-align: center; font-size: 26rpx; color: var(--text-2, #666); border-radius: 10rpx; white-space: nowrap; }
+.mg-seg-item.on { background: var(--primary); color: #fff; font-weight: 600; }
+.mg-dot { position: absolute; top: 6rpx; right: 10rpx; width: 14rpx; height: 14rpx; border-radius: 50%; background: var(--danger, #FA5151); }
+.mg-corr { margin-top: 10rpx; padding-top: 10rpx; border-top: 1rpx dashed #eee; }
+.mg-more-tip { padding: 20rpx 0; font-size: 24rpx; }

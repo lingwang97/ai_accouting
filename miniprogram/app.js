@@ -87,7 +87,7 @@ App({
     const now = Date.now();
     if (!force && now - (this._giftAt || 0) < 10 * 60 * 1000) return;
     this._giftAt = now;
-    require('./utils/request.js').myReceipts({ silent: true })
+    require('./utils/request.js').giftStat({ silent: true }) // 轻量：两次小查询（v3.85.1）
       .then(res => this.setGiftDot(require('./utils/giftdot.js').of(res)))
       .catch(() => {});
   },

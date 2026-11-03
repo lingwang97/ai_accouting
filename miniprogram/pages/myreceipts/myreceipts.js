@@ -16,6 +16,11 @@ Page({
   },
 
   onLoaded() { if (!this.data.loaded) this.setData({ loaded: true }); },
+  /** 上滑加载更多（v3.85.1：分标签分页） */
+  onReachBottom() {
+    const mg = this.selectComponent('#mg');
+    if (mg) mg.loadMore();
+  },
   onPullDownRefresh() {
     const mg = this.selectComponent('#mg');
     (mg ? mg.reload() : Promise.resolve()).then(() => wx.stopPullDownRefresh(), () => wx.stopPullDownRefresh());
