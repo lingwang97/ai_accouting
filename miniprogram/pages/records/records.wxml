@@ -28,7 +28,7 @@
     <view class="filter-row">
       <view class="st-wrap">
         <scroll-view class="st-seg" scroll-x enable-flex show-scrollbar="{{false}}" scroll-into-view="{{'st' + stIdx}}" scroll-with-animation bindscroll="onStScroll">
-          <view id="{{'st' + index}}" class="seg-item {{stIdx === index ? 'on' : ''}}" wx:for="{{statuses}}" wx:key="*this" data-i="{{index}}" bindtap="onStatus">{{item}}</view>
+          <view id="{{'st' + index}}" class="seg-item {{stIdx === index ? 'on' : ''}}" wx:for="{{statuses}}" wx:key="*this" data-i="{{index}}" bindtap="onStatus"><text class="st-pill">{{item}}</text></view>
         </scroll-view>
         <view class="st-fade" wx:if="{{stFade}}"><text>›</text></view>
       </view>

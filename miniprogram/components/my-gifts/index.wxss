@@ -38,8 +38,10 @@ button.mg-op2:not([size=mini]) { margin-left: 20rpx; }
 .mg-seg-wrap { position: relative; margin: 0 0 16rpx; border-radius: var(--r-s, 16rpx); background: var(--fill, #f0f0f0); overflow: hidden; }
 .mg-seg { display: flex; flex-direction: row; width: 100%; padding: 6rpx; box-sizing: border-box; white-space: nowrap; }
 .mg-seg-fade { position: absolute; right: 0; top: 0; bottom: 0; width: 64rpx; display: flex; align-items: center; justify-content: flex-end; padding-right: 10rpx; box-sizing: border-box; background: linear-gradient(to right, rgba(240, 240, 240, 0), var(--fill, #f0f0f0) 70%); color: #888; font-size: 30rpx; pointer-events: none; }
-.mg-seg-item { position: relative; flex: none; padding: 12rpx 14rpx; border: 0 solid transparent; border-width: 0 10rpx; background-clip: padding-box; text-align: center; font-size: 26rpx; color: var(--text-2, #666); border-radius: 24rpx; white-space: nowrap; }
-.mg-seg-item.on { background: var(--primary); color: #fff; font-weight: 600; }
-.mg-dot { position: absolute; top: 6rpx; right: 10rpx; width: 12rpx; height: 12rpx; border-radius: 50%; background: var(--danger, #FA5151); }
+/* v3.86.6：外层 .mg-seg-item 只管点击区和间距（不带底色）；选中底色画在里面的 .mg-pill 上，宽度 = 文字 + 两边小空白 */
+.mg-seg-item { position: relative; flex: none; padding: 10rpx 6rpx; text-align: center; font-size: 26rpx; color: var(--text-2, #666); white-space: nowrap; }
+.mg-pill { position: relative; display: inline-block; padding: 8rpx 12rpx; line-height: 1.4; border-radius: 999rpx; }
+.mg-seg-item.on .mg-pill { background: var(--primary); color: #fff; font-weight: 600; }
+.mg-dot { position: absolute; top: -2rpx; right: -2rpx; width: 12rpx; height: 12rpx; border-radius: 50%; background: var(--danger, #FA5151); }
 .mg-corr { margin-top: 10rpx; padding-top: 10rpx; border-top: 1rpx dashed #eee; }
 .mg-more-tip { padding: 20rpx 0; font-size: 24rpx; }

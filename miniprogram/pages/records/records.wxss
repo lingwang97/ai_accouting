@@ -15,8 +15,11 @@
 /* v3.86.1：scroll-view 横滑 + 右侧渐变箭头 */
 .filter-row .st-wrap { position: relative; flex: 1; min-width: 0; border-radius: var(--r-s); background: var(--fill); overflow: hidden; }
 .filter-row .st-seg { display: flex; flex-direction: row; width: 100%; padding: 6rpx; box-sizing: border-box; white-space: nowrap; }
-.filter-row .st-seg .seg-item { flex: none; padding: 8rpx 8rpx; border: 0 solid transparent; border-width: 0 6rpx; background-clip: padding-box; font-size: 22rpx; white-space: nowrap; border-radius: 16rpx; text-align: center; }
-.filter-row .st-seg .seg-item.on { background: var(--primary); color: #fff; font-weight: 600; }
+/* v3.86.6：外层 .seg-item 只管点击区和间距（不带底色，盖掉全局 .seg-item.on 的底色）；选中底色画在里面的 .st-pill 上 */
+.filter-row .st-seg .seg-item { flex: none; padding: 8rpx 3rpx; font-size: 22rpx; white-space: nowrap; text-align: center; }
+.filter-row .st-seg .seg-item.on { background: transparent; }
+.filter-row .st-seg .st-pill { display: inline-block; padding: 8rpx 12rpx; line-height: 1.4; border-radius: 999rpx; color: var(--text-2); }
+.filter-row .st-seg .seg-item.on .st-pill { background: var(--primary); color: #fff; font-weight: 600; }
 .st-fade { position: absolute; right: 0; top: 0; bottom: 0; width: 56rpx; display: flex; align-items: center; justify-content: flex-end; padding-right: 8rpx; box-sizing: border-box; background: linear-gradient(to right, rgba(240, 240, 240, 0), var(--fill) 70%); color: #888; font-size: 28rpx; pointer-events: none; }
 .filter-row .rel-btn { margin-left: 16rpx; }
 .record.transferred { border-left: 8rpx solid var(--warn); }
