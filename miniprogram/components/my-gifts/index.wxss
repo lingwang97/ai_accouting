@@ -36,7 +36,7 @@ button.mg-op2:not([size=mini]) { margin-left: 20rpx; }
 /* 顶部标签（v3.85.1）：五个标签，屏宽够就平分，320 宽 / 大字体放不下时可横向滑动，文字不换行不截断 */
 /* v3.86.1：改用 scroll-view 横滑 + 右侧渐变箭头提示还能往右滑 */
 .mg-seg-wrap { position: relative; margin: 0 0 16rpx; border-radius: var(--r-s, 16rpx); background: var(--fill, #f0f0f0); overflow: hidden; }
-.mg-seg { width: 100%; padding: 6rpx; box-sizing: border-box; white-space: nowrap; }
+.mg-seg { display: flex; flex-direction: row; width: 100%; padding: 6rpx; box-sizing: border-box; white-space: nowrap; }
 .mg-seg-fade { position: absolute; right: 0; top: 0; bottom: 0; width: 64rpx; display: flex; align-items: center; justify-content: flex-end; padding-right: 10rpx; box-sizing: border-box; background: linear-gradient(to right, rgba(240, 240, 240, 0), var(--fill, #f0f0f0) 70%); color: #888; font-size: 30rpx; pointer-events: none; }
 .mg-seg-item { position: relative; flex: 1 0 auto; padding: 12rpx 18rpx; text-align: center; font-size: 26rpx; color: var(--text-2, #666); border-radius: 10rpx; white-space: nowrap; }
 .mg-seg-item.on { background: var(--primary); color: #fff; font-weight: 600; }

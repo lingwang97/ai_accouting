@@ -66,6 +66,13 @@ test('F8 records：状态类小标签单独一行，可换行', () => {
   assert.ok(!w.includes('catchtap="onCorrect"> · '));
 });
 
-test('版本号 3.86.1', () => {
-  assert.ok(/VERSION: '3\.86\.1'/.test(read('miniprogram/config.js')));
+test('v3.86.2 横滑标签：scroll-view 带 enable-flex 时 wxss 必须声明 display:flex，否则 5 项会竖排成 5 行', () => {
+  const mg = read('miniprogram/components/my-gifts/index.wxss');
+  const rc = read('miniprogram/pages/records/records.wxss');
+  assert.ok(/\.mg-seg \{[^}]*display: flex;[^}]*flex-direction: row;/.test(mg), 'my-gifts .mg-seg');
+  assert.ok(/\.st-seg \{[^}]*display: flex;[^}]*flex-direction: row;/.test(rc), 'records .st-seg');
+});
+
+test('版本号 3.86.x', () => {
+  assert.ok(/VERSION: '3\.86\.\d+'/.test(read('miniprogram/config.js')));
 });
