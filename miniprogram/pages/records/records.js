@@ -357,12 +357,14 @@ Page({
   onSort(e) {
     if (this.data.dupOn) return;
     this.setData({ sortIdx: Math.min(Math.max(0, Number(e.detail.value) || 0), SORT_KEYS.length - 1) });
+    setTimeout(() => this.measureSt(), 100); // 排序按钮文字变了，状态条宽度跟着变：重新量渐变箭头（v3.86.4）
     this.reload();
     wx.pageScrollTo({ scrollTop: 0, duration: 0 });
   },
 
   onStScroll() { this.measureSt(); },
   measureSt() {
+    if (typeof wx.createSelectorQuery !== 'function') return;
     wx.createSelectorQuery().select('.st-seg').fields({ size: true, scrollOffset: true }, r => {
       if (!r) return;
       const fade = r.scrollWidth > r.width + 2 && r.scrollLeft + r.width < r.scrollWidth - 4;
@@ -381,6 +383,7 @@ Page({
   /** 「重名」开关：点一下只看重名，再点取消（恢复之前选的排序） */
   onDup() {
     this.setData({ dupOn: !this.data.dupOn });
+    setTimeout(() => this.measureSt(), 100); // 「按姓名排列」比排序名长，状态条变窄（v3.86.4）
     this.reload();
     wx.pageScrollTo({ scrollTop: 0, duration: 0 });
   },
