@@ -59,7 +59,6 @@ Page({
     dupOn: false,     // 只看重名开关：开启时排序下拉置灰，显示「按姓名排列」；关闭后恢复 sortIdx
     statuses: ['全部', '待确认', '未收到', '已入簿', '有改动'],
     stIdx: 0,
-    stFade: false,   // 状态条右侧还能滑：显示渐变箭头（v3.86.1）
     loggedIn: true,
     readonly: false,  // 家人共享：只读
     pm: {},           // 当前身份的权限：确认 / 作废 / 打印 / 礼台记账按权限显示
@@ -77,7 +76,6 @@ Page({
 
   async onShow() {
     this._hidden = false;
-    setTimeout(() => this.measureSt(), 300); // 状态条右侧渐变箭头：首屏渲染后量一次（v3.86.1）
     const app = getApp();
     // 已退出登录：立即清空上一个账户的礼簿（不等登录状态恢复）
     if (app.isLoggedOut()) {
@@ -357,19 +355,8 @@ Page({
   onSort(e) {
     if (this.data.dupOn) return;
     this.setData({ sortIdx: Math.min(Math.max(0, Number(e.detail.value) || 0), SORT_KEYS.length - 1) });
-    setTimeout(() => this.measureSt(), 100); // 排序按钮文字变了，状态条宽度跟着变：重新量渐变箭头（v3.86.4）
     this.reload();
     wx.pageScrollTo({ scrollTop: 0, duration: 0 });
-  },
-
-  onStScroll() { this.measureSt(); },
-  measureSt() {
-    if (typeof wx.createSelectorQuery !== 'function') return;
-    wx.createSelectorQuery().select('.st-seg').fields({ size: true, scrollOffset: true }, r => {
-      if (!r) return;
-      const fade = r.scrollWidth > r.width + 2 && r.scrollLeft + r.width < r.scrollWidth - 4;
-      if (fade !== this.data.stFade) this.setData({ stFade: fade });
-    }).exec();
   },
 
   onStatus(e) {
@@ -383,7 +370,6 @@ Page({
   /** 「重名」开关：点一下只看重名，再点取消（恢复之前选的排序） */
   onDup() {
     this.setData({ dupOn: !this.data.dupOn });
-    setTimeout(() => this.measureSt(), 100); // 「按姓名排列」比排序名长，状态条变窄（v3.86.4）
     this.reload();
     wx.pageScrollTo({ scrollTop: 0, duration: 0 });
   },

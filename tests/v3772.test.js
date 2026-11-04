@@ -97,7 +97,7 @@ test('前端接线：礼簿页四个筛选（320 宽字号）、未收到行（�
   const wxml = rd('miniprogram/pages/records/records.wxml');
   assert.ok(wxml.includes("item.status === 'rejected'") && wxml.includes('onUnreject') && wxml.includes('onGoAppeal') && wxml.includes('onTrail'));
   assert.ok(wxml.includes('item.canUnreject') && wxml.includes('切换{{unit}}后可撤销'));
-  assert.ok(/\.st-seg \.seg-item \{[^}]*font-size: 22rpx/.test(rd('miniprogram/pages/records/records.wxss')));
+  assert.ok(/\.st-seg \.seg-item \{[^}]*font-size: 24rpx/.test(rd('miniprogram/pages/records/records.wxss')));
   const pj = rd('miniprogram/pages/pending/pending.js');
   assert.ok(pj.includes("foldseen.next(") && pj.includes("wx.setStorageSync(REJ_FOLD_KEY"));
   assert.ok(/try \{ const f = wx\.getStorageSync\(REJ_FOLD_KEY\)/.test(pj), '读取在 try/catch 里');

@@ -135,7 +135,7 @@ test('前端接线：状态分段 5 项（全部 / 待确认 / 未收到 / 已�
   const wxss = rd('miniprogram/pages/records/records.wxss');
   assert.ok(js.includes("statuses: ['全部', '待确认', '未收到', '已入簿', '有改动']"));
   assert.ok(js.includes("const ST_KEYS = ['all', 'confirm', 'rejected', 'paid', 'changed']"));
-  assert.ok(/<scroll-view class="st-seg" scroll-x/.test(wxml) && /\.st-seg \.seg-item \{[^}]*flex: none[^}]*white-space: nowrap/.test(wxss)); // v3.86.3 起不拉伸；v3.86.1 起改用 scroll-view
+  assert.ok(/\.st-seg \{[^}]*overflow-x: auto/.test(wxss) && /\.st-seg \.seg-item \{[^}]*flex: 1 0 auto[^}]*white-space: nowrap/.test(wxss));
   assert.ok(wxml.includes('stIdx === 4 && item.chg') && wxml.includes('item.chg.tag') && wxml.includes('item.chg.text') && wxml.includes('onChgLog'));
   assert.ok(wxml.includes('合计与份数仍是整本已入簿的口径'));
   assert.ok(js.includes("title: '改动经过'") && /confirmText: '知道了'/.test(js));

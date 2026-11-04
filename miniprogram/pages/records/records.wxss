@@ -11,16 +11,9 @@
 .search-btn { border-radius: 999rpx; flex-shrink: 0; white-space: nowrap; }
 .dup-n { font-size: 22rpx; color: var(--warn); font-weight: normal; }
 .filter-row { display: flex; align-items: center; margin-top: 16rpx; }
-/* 五个状态按钮：不拉伸，每项按文字宽度排列（flex:none），不要改回 flex:1 0 auto；v3.86.4 字号 22rpx、左右 padding 12rpx，默认字号 + 默认排序刚好一行放下，按姓名排列 / 金额高→低 或系统大字体放不下时可横滑 */
-/* v3.86.1：scroll-view 横滑 + 右侧渐变箭头 */
-.filter-row .st-wrap { position: relative; flex: 1; min-width: 0; border-radius: var(--r-s); background: var(--fill); overflow: hidden; }
-.filter-row .st-seg { display: flex; flex-direction: row; width: 100%; padding: 6rpx; box-sizing: border-box; white-space: nowrap; }
-/* v3.86.6：外层 .seg-item 只管点击区和间距（不带底色，盖掉全局 .seg-item.on 的底色）；选中底色画在里面的 .st-pill 上 */
-.filter-row .st-seg .seg-item { flex: none; padding: 8rpx 3rpx; font-size: 22rpx; white-space: nowrap; text-align: center; }
-.filter-row .st-seg .seg-item.on { background: transparent; }
-.filter-row .st-seg .st-pill { display: inline-block; padding: 8rpx 12rpx; line-height: 1.4; border-radius: 999rpx; color: var(--text-2); }
-.filter-row .st-seg .seg-item.on .st-pill { background: var(--primary); color: #fff; font-weight: 600; }
-.st-fade { position: absolute; right: 0; top: 0; bottom: 0; width: 56rpx; display: flex; align-items: center; justify-content: flex-end; padding-right: 8rpx; box-sizing: border-box; background: linear-gradient(to right, rgba(240, 240, 240, 0), var(--fill) 70%); color: #888; font-size: 28rpx; pointer-events: none; }
+/* 五个状态按钮（v3.85.2）：屏宽够就平分，320 宽 / 大字体放不下时可横向滑动，文字不换行不截断（样式同「我的随礼记录」标签条） */
+.filter-row .st-seg { flex: 1; min-width: 0; background: var(--fill); overflow-x: auto; white-space: nowrap; }
+.filter-row .st-seg .seg-item { flex: 1 0 auto; padding: 8rpx 16rpx; font-size: 24rpx; white-space: nowrap; }
 .filter-row .rel-btn { margin-left: 16rpx; }
 .record.transferred { border-left: 8rpx solid var(--warn); }
 .record.pending { opacity: .7; }

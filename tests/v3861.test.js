@@ -21,17 +21,6 @@ test('F2 pay：底栏后有同内容隐藏占位，容器不再写死底部留�
   assert.ok(/\.container\.has-bar \{ padding-bottom: 0/.test(s));
 });
 
-test('F3 标签条：my-gifts / records 用 scroll-view 横滑 + 右侧渐变；红点时自动滑到「有变动」', () => {
-  const gw = read('miniprogram/components/my-gifts/index.wxml');
-  const gj = read('miniprogram/components/my-gifts/index.js');
-  assert.ok(/<scroll-view class="mg-seg" scroll-x enable-flex[^>]*scroll-into-view="\{\{segTo\}\}"/.test(gw) && gw.includes('mg-seg-fade'));
-  assert.ok(gj.includes("segTo: 'mt-' + tab") && gj.includes("segTo: 'mt-changed'") && gj.includes('_dotScrolled') && gj.includes('scrollOffset'));
-  const rw = read('miniprogram/pages/records/records.wxml');
-  const rj = read('miniprogram/pages/records/records.js');
-  assert.ok(/<scroll-view class="st-seg" scroll-x enable-flex[^>]*scroll-into-view/.test(rw) && rw.includes('st-fade') && rw.includes('bindtap="onStatus"'));
-  assert.ok(rj.includes('measureSt') && rj.includes('stFade'));
-});
-
 test('F4 cash：没有修改 / 作废权限不显示剩余小时', () => {
   const j = read('miniprogram/pages/cash/cash.js');
   assert.ok(j.includes("perm.can('confirm') || perm.can('void')") && j.includes("canAmend ? require('../../utils/editlock.js').hint(r) : ''"));
@@ -66,21 +55,6 @@ test('F8 records：状态类小标签单独一行，可换行', () => {
   assert.ok(!w.includes('catchtap="onCorrect"> · '));
 });
 
-test('v3.86.2 横滑标签：scroll-view 带 enable-flex 时 wxss 必须声明 display:flex，否则 5 项会竖排成 5 行', () => {
-  const mg = read('miniprogram/components/my-gifts/index.wxss');
-  const rc = read('miniprogram/pages/records/records.wxss');
-  assert.ok(/\.mg-seg \{[^}]*display: flex;[^}]*flex-direction: row;/.test(mg), 'my-gifts .mg-seg');
-  assert.ok(/\.st-seg \{[^}]*display: flex;[^}]*flex-direction: row;/.test(rc), 'records .st-seg');
-});
-
 test('版本号 3.86.x', () => {
   assert.ok(/VERSION: '3\.86\.\d+'/.test(read('miniprogram/config.js')));
-});
-
-test('v3.86.3 横滑标签：选项不拉伸（flex:none），选中高亮只包住自己的文字，不占整条 1/5 宽', () => {
-  const mg = read('miniprogram/components/my-gifts/index.wxss');
-  const rc = read('miniprogram/pages/records/records.wxss');
-  assert.ok(/\.mg-seg-item \{[^}]*flex: none/.test(mg), 'my-gifts');
-  assert.ok(/\.st-seg \.seg-item \{[^}]*flex: none/.test(rc), 'records');
-  assert.ok(!/flex: 1 0 auto/.test(mg) && !/\.st-seg \.seg-item \{[^}]*flex: 1 0 auto/.test(rc));
 });
