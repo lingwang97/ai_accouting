@@ -15,7 +15,7 @@
 /* v3.86.1：scroll-view 横滑 + 右侧渐变箭头 */
 .filter-row .st-wrap { position: relative; flex: 1; min-width: 0; border-radius: var(--r-s); background: var(--fill); overflow: hidden; }
 .filter-row .st-seg { display: flex; flex-direction: row; width: 100%; padding: 6rpx; box-sizing: border-box; white-space: nowrap; }
-.filter-row .st-seg .seg-item { flex: 1 0 auto; padding: 8rpx 16rpx; font-size: 24rpx; white-space: nowrap; border-radius: 10rpx; text-align: center; }
+.filter-row .st-seg .seg-item { flex: none; margin-right: 4rpx; padding: 8rpx 20rpx; font-size: 24rpx; white-space: nowrap; border-radius: 10rpx; text-align: center; }
 .filter-row .st-seg .seg-item.on { background: var(--primary); color: #fff; font-weight: 600; }
 .st-fade { position: absolute; right: 0; top: 0; bottom: 0; width: 56rpx; display: flex; align-items: center; justify-content: flex-end; padding-right: 8rpx; box-sizing: border-box; background: linear-gradient(to right, rgba(240, 240, 240, 0), var(--fill) 70%); color: #888; font-size: 28rpx; pointer-events: none; }
 .filter-row .rel-btn { margin-left: 16rpx; }

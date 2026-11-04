@@ -76,3 +76,11 @@ test('v3.86.2 横滑标签：scroll-view 带 enable-flex 时 wxss 必须声明 d
 test('版本号 3.86.x', () => {
   assert.ok(/VERSION: '3\.86\.\d+'/.test(read('miniprogram/config.js')));
 });
+
+test('v3.86.3 横滑标签：选项不拉伸（flex:none），选中高亮只包住自己的文字，不占整条 1/5 宽', () => {
+  const mg = read('miniprogram/components/my-gifts/index.wxss');
+  const rc = read('miniprogram/pages/records/records.wxss');
+  assert.ok(/\.mg-seg-item \{[^}]*flex: none/.test(mg), 'my-gifts');
+  assert.ok(/\.st-seg \.seg-item \{[^}]*flex: none/.test(rc), 'records');
+  assert.ok(!/flex: 1 0 auto/.test(mg) && !/\.st-seg \.seg-item \{[^}]*flex: 1 0 auto/.test(rc));
+});
