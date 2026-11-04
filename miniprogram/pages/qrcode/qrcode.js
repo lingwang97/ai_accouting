@@ -1,7 +1,7 @@
 // pages/qrcode/qrcode.js — 我的收款码（UC3）
 // 两种收礼方式（本页顶部切换）：
 //   longpress：原模式，展示登记码，付款方在自己手机上长按收款码转账
-//   screen：店主亮屏双码，上方登记码（小程序码）+ 下方微信收款码，屏幕常亮、亮度最高
+//   screen：店主亮屏双码，上方微信收款码（先转账）+ 下方登记码（小程序码，再登记，v3.86.0 起），屏幕常亮、亮度最高
 // 两种模式都可生成「收款台卡」（双码合成图，保存相册后打印贴摊位）
 const req = require('../../utils/request.js');
 const theme = require('../../utils/theme.js');
@@ -13,7 +13,7 @@ const OFF_PREFIX = require('../../utils/qroff.js').PREFIX; // 本机保存的礼
 const OFF_REFRESH_MS = 24 * 3600 * 1000; // 礼簿码 / 收款码没变时，至少隔一天才重新下载保存一次
 
 const CARD_W = 750;
-const CARD_H = 1240;
+const CARD_H = 1360;
 
 Page({
   data: {
@@ -81,7 +81,7 @@ Page({
         return;
       }
       const primary = theme.current().primary;
-      this.setData({ account, primary });
+      this.setData({ account, primary, org: !!account.orgMode, funeral: getApp().globalData.bookType === 'funeral' });
       this.setNavColor(primary);
       this.lightOn();
 
@@ -135,6 +135,8 @@ Page({
       this.setNavColor(bookPrimary);
       this.setData({
         primary: bookPrimary,
+        org: !!account.orgMode || !!this._bookId,
+        funeral: r.book.type === 'funeral',
         account: { ...account, accountName: name },
         bookName: r.book ? r.book.name : '',
         qrFileID: r.fileID, qrUrl, payCodeUrl: r.payCodeUrl || account.payCodeUrl || '', errMsg: '', offline: false, offChecking: false
@@ -287,7 +289,7 @@ Page({
       wx.hideLoading();
       wx.showModal({
         title: '礼簿台卡已保存到相册',
-        content: '上码登记礼金，下码扫码转账',
+        content: '上块扫收款码转账（备注写姓名），下块扫' + (this.data.org ? '场次码' : '礼簿码') + '登记',
         showCancel: false
       });
     } catch (e) {
@@ -329,18 +331,31 @@ Page({
           }
           ctx.fillText(account.accountName, CARD_W / 2, 92);
 
-          const step = (y, no, text, img) => {
-            ctx.fillStyle = primary;
+          // 先转账、再登记（v3.86.0）：上下两块，不同底色，大号字；白事素灰；机构模式称「场次码」
+          const funeral = !!this.data.funeral;
+          const org = !!this.data.org;
+          const n = parseInt((/^#[0-9a-fA-F]{6}$/.test(primary) ? primary : '#C8161D').slice(1), 16);
+          const soft = [(n >> 16) & 255, (n >> 8) & 255, n & 255].join(',');
+          const blocks = [
+            { y: 156, bg: funeral ? '#EDEDED' : '#E8F7EE', fg: funeral ? '#4A4A4A' : '#0A8F46', t1: '第 1 步：扫收款码转账', t2: '（备注写姓名）', img: payImg },
+            { y: 716, bg: funeral ? '#F7F7F7' : `rgba(${soft},0.10)`, fg: funeral ? '#4A4A4A' : primary, t1: `第 2 步：扫${org ? '场次码' : '礼簿码'}登记`, t2: '（填姓名和金额）', img: qrImg, line: funeral }
+          ];
+          blocks.forEach(b => {
+            ctx.fillStyle = b.bg;
+            ctx.fillRect(30, b.y, CARD_W - 60, 540);
+            if (b.line) { ctx.strokeStyle = '#D9D9D9'; ctx.lineWidth = 2; ctx.strokeRect(30, b.y, CARD_W - 60, 540); }
+            ctx.fillStyle = b.fg;
+            ctx.textAlign = 'center';
+            ctx.font = 'bold 46px sans-serif';
+            ctx.fillText(b.t1, CARD_W / 2, b.y + 64);
             ctx.font = 'bold 36px sans-serif';
-            ctx.fillText(`第${no}步  ${text}`, CARD_W / 2, y);
-            ctx.drawImage(img, (CARD_W - 400) / 2, y + 24, 400, 400);
-          };
-          step(220, '一', '扫码登记姓名和礼金', qrImg);
-          step(720, '二', '微信扫一扫转账随礼', payImg);
+            ctx.fillText(b.t2, CARD_W / 2, b.y + 112);
+            ctx.drawImage(b.img, (CARD_W - 380) / 2, b.y + 136, 380, 380);
+          });
 
           ctx.fillStyle = '#999999';
           ctx.font = '26px sans-serif';
-          ctx.fillText('转账后回到小程序点「我已完成转账」', CARD_W / 2, CARD_H - 66);
+          ctx.fillText('先转账再登记；还没转的，登记后按提示转账', CARD_W / 2, CARD_H - 66);
           ctx.fillStyle = '#BBBBBB';
           ctx.font = '20px sans-serif';
           ctx.fillText('慧礼记 · 扫码随礼 自动记账', CARD_W / 2, CARD_H - 28);

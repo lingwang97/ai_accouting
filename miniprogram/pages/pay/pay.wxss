@@ -56,6 +56,22 @@
 .sr-item:not(:last-child) { margin-right: 12rpx; }
 .sr-num { color: var(--primary); font-weight: 600; margin-right: 4rpx; }
 
+/* 转账了吗？两个大按钮（v3.86.0）：不用 gap；小屏 / 大字体下文字换行，按钮随内容增高 */
+.ask-title { font-size: 34rpx; font-weight: 700; margin-bottom: 16rpx; }
+.ask-row { display: flex; align-items: stretch; }
+.ask-btn { flex: 1; min-width: 0; min-height: 132rpx; box-sizing: border-box; padding: 20rpx 12rpx; text-align: center; border: 2rpx solid var(--border); border-radius: var(--r-s); color: var(--text-2, #555); background: #fff; display: flex; flex-direction: column; justify-content: center; }
+.ask-btn + .ask-btn { margin-left: 16rpx; }
+.ask-btn.on { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); }
+.ask-main { font-size: 32rpx; font-weight: 700; line-height: 1.4; word-break: break-all; }
+.ask-sub { font-size: 24rpx; line-height: 1.4; margin-top: 4rpx; word-break: break-all; }
+.ask-tip { margin-top: 16rpx; font-size: 26rpx; line-height: 1.6; }
+.pf-hint { color: var(--primary); font-size: 26rpx; line-height: 1.6; margin-bottom: 12rpx; }
+.pc-try { font-size: 24rpx; margin-top: 8rpx; }
+/* 转账步骤：「我已完成转账」固定底栏，页面底部留出位置（含安全区） */
+.container.has-bar { padding-bottom: calc(200rpx + env(safe-area-inset-bottom)); }
+.pay-bar-tip { text-align: center; font-size: 26rpx; color: var(--text-3); margin-bottom: 12rpx; }
+.pay-bar button.btn-primary:not([size=mini]) { width: 100%; margin: 0; }
+
 /* 底部低调求助入口：原生 button 去掉默认样式，高度 80rpx 便于点击，不占主流程 */
 .help-row { text-align: center; padding: 8rpx 0 0; }
 button.help-link:not([size=mini]) { display: inline-block; width: auto; margin: 0; padding: 0 24rpx; background: transparent; border: none; border-radius: 0; font-size: 24rpx; line-height: 80rpx; height: 80rpx; min-height: 0; color: var(--text-3); }

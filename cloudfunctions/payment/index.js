@@ -205,6 +205,9 @@ async function create(openid, event) {
   if (payMethod === 'mixed' && !split.wechat) payMethod = 'cash';
   if (payMethod === 'mixed' && !split.cash) payMethod = 'wechat';
   if (payMethod !== 'mixed') items.forEach(x => { delete x.payMethod; });
+  // 先转账后登记（v3.86.0）：宾客在现场先扫收款码转了账、再来登记。只有微信转账 / 含转账部分的「转账+现金」才认，
+  // 现金（含被降为现金的混合）忽略该标记；认了之后记录直接是「已转账」，等主家核对到账（同名、疑似重复检查与限流都照常走上面的流程）
+  const paidFirst = event.paidFirst === true && (payMethod === 'wechat' || payMethod === 'mixed');
 
   // 记入本场礼簿码指定的礼簿，否则记入当前礼簿（旧数据无礼簿时退回旧版主题名）
   const hostName = (book && book.hostName) || ''; // 机构版：本场主家
@@ -213,15 +216,17 @@ async function create(openid, event) {
     hostName,
     ownerOpenid: account.ownerOpenid,
     payerOpenid: openid,
-    // 现金随礼没有「我已完成转账」这一步：在「确认随礼（现金）」时订阅入簿通知（v3.66.1）
-    ...(payMethod === 'cash' ? guestFlag(event.envVersion, event) : {}),
+    // 入簿 / 未收到通知的订阅标记：宾客点「确认随礼」提交时就订阅（现金 v3.66.1；微信转账 v3.86.0 起一并在登记时订阅，
+    // 这样宾客转完账忘了点「我已完成转账」、由主家直接确认入簿时，也能收到入簿通知）
+    ...(guestFlag(event.envVersion, event) || {}),
     bookId: book ? book._id : '',
     bookType: book ? book.type : 'other',
     themeName: book ? book.name : ((account.theme && account.theme.name) || ''),
     payMethod: payMethod === 'mixed' ? 'wechat' : payMethod, // mixed 时每人的 payMethod 在 items 里
     ...(payMethod === 'mixed' ? { batchPay: 'mixed' } : {}),
-    status: payMethod === 'cash' ? REC.TRANSFERRED : REC.PENDING,
-    ...(payMethod === 'cash' ? { transferredAt: now } : {}),
+    status: payMethod === 'cash' || paidFirst ? REC.TRANSFERRED : REC.PENDING,
+    ...(payMethod === 'cash' || paidFirst ? { transferredAt: now } : {}),
+    ...(paidFirst ? { paidFirst: true } : {}),
     printed: false,
     payDay,
     createdAt: now,
@@ -250,6 +255,13 @@ async function create(openid, event) {
   };
   // 宾客自报现金：不推送（可被反复提交刷掉主家的订阅次数），主家与记账人在待确认里看到后当面清点
   if (payMethod === 'cash') return ok({ record });
+  // 先转账后登记：已是「已转账」，不再需要收款码；像点「我已完成转账」一样提醒主家（重复提交 / 提醒失败都不影响结果）
+  if (paidFirst) {
+    if (!existed.every(Boolean)) {
+      try { await notifyOwner({ ...base, ...items[0], _id: ids[0], batchId, amount: items[0].amount }, event.envVersion); } catch (e) { console.warn('新礼金提醒失败', e.message); }
+    }
+    return ok({ record });
+  }
   // 收款码图片由主家上传，云存储默认只有上传者可读：宾客端直接换链接会失败，
   // 这里用云函数（管理员权限）生成临时链接返回给宾客
   let payCodeUrl = '';
@@ -858,6 +870,8 @@ async function statusRead(openid, rid) {
   return ok({
     status: rec.status,
     // 主家标记未收到时选的原因（宾客等待页显示；只有付款人本人能查到状态）
+    // 已取消：区分超时自动取消（宾客仍可补点已转账）与宾客自己取消（不能再补点），宾客端据此决定要不要接着处理（v3.86.0）
+    ...(rec.status === REC.CANCELLED ? { auto: !!rec.autoCancelled } : {}),
     ...(rec.status === REC.REJECTED ? { reasonText: [REJECT_REASONS[rec.rejectReason] || '', rec.rejectNote].filter(Boolean).join('：') } : {}),
     record: {
       _id: rec._id, payerName: rec.payerName, amount: rec.amount,
@@ -966,8 +980,8 @@ function changeLines(r) {
 /** 宾客可见的时间线：登记 → 点转账 → 日志（按时间升序） */
 function guestTimeline(r) {
   const funeral = r.bookType === 'funeral';
-  const t = [{ at: r.createdAt, text: '登记了随礼' }];
-  if (r.transferredAt) t.push({ at: r.transferredAt, text: '点击「我已完成转账」' });
+  const t = [{ at: r.createdAt, text: r.paidFirst ? '先转账，再登记了随礼' : '登记了随礼' }];
+  if (r.transferredAt && !r.paidFirst) t.push({ at: r.transferredAt, text: '点击「我已完成转账」' });
   (Array.isArray(r.trail) ? r.trail : []).forEach(e => { const x = trailText(e, funeral); if (x) t.push({ at: e.at, text: x }); });
   return t.sort((x, y) => new Date(x.at) - new Date(y.at));
 }

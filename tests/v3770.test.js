@@ -255,8 +255,9 @@ test('guestsub.ask：一次请求两个模板，分别返回同意结果；拒�
 
 test('前端接线：随礼 / 申诉的订阅仍在第一个 await 之前；请求带两个标记；待确认页「其他礼簿申诉」提示条；FAQ 与提审文档', () => {
   const pay = rd('miniprogram/pages/pay/pay.js');
-  assert.ok(/const subP = pm === 'cash' \? this\.askGuestNotify\(\) : null;[\s\S]*await subP/.test(pay));
+  // v3.86.0：登记提交时就订阅（所有方式）；点「我已完成转账」时登记时已问过的不再问，仍在第一个 await 之前
   assert.ok(/const subP = this\.askGuestNotify\(\);[\s\S]*await subP/.test(pay));
+  assert.ok(/const subP = this\._subRid === this\.data\.record\._id \? null : this\.askGuestNotify\(\);[\s\S]*await subP/.test(pay));
   assert.ok(/const subP = guestsub\.ask\(\);[\s\S]*await subP/.test(rd('miniprogram/components/my-gifts/index.js')));
   const rq = rd('miniprogram/utils/request.js');
   assert.ok(rq.includes('guestsub.flags(sub)'));

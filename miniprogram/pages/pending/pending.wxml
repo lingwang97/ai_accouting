@@ -29,7 +29,7 @@
   <!-- 宾客登记后没点「我已完成转账」：常见于转完账直接回聊天，主家核对微信到账后可直接入簿 -->
   <view class="card stall" wx:if="{{canConfirm && stalled.length}}">
     <view class="stall-title">宾客未点「我已完成转账」（{{stalled.length}}）</view>
-    <view class="muted small">请核对微信是否收到：收到点「已收到」，没收到点「未收到」。3 分钟内登记的暂不显示</view>
+    <view class="muted small">这些是先登记、没点「我已完成转账」的，请核对微信是否收到：收到点「已收到」，没收到点「未收到」。3 分钟内登记的暂不显示。选了「已转账，现在登记」的宾客会直接出现在上面的待确认里，带「先转后登」标签。宾客转了账没登记？用礼台记账选「微信」补录</view>
     <view class="stall-row" wx:for="{{stalled}}" wx:key="_id" wx:if="{{stallAll || index < 3}}">
       <view class="stall-info">
         <view class="stall-name"><text class="payer">{{item.nameStr}}</text><text class="dup-tag" wx:if="{{item.suspectDup}}">疑似重复</text><text class="money">￥{{item.amountStr}}</text></view>
@@ -122,7 +122,7 @@
     <view class="item {{item.picked ? 'picked' : ''}}" wx:for="{{shown}}" wx:key="_id" data-id="{{item._id}}" bindtap="onPick">
       <view class="check {{item.picked ? 'on' : ''}}" wx:if="{{selectMode}}">{{item.picked ? '✓' : ''}}</view>
       <view class="info">
-        <view class="name-row"><text class="payer">{{item.nameStr}}</text><text class="money amt">￥{{item.amountStr}}</text><text class="cash-tag" wx:if="{{!item.mixed && item.payMethod === 'cash'}}">{{funeral ? "" : "💵 "}}现金</text><text class="dup-tag" wx:if="{{item.suspectDup}}">疑似重复</text></view>
+        <view class="name-row"><text class="payer">{{item.nameStr}}</text><text class="money amt">￥{{item.amountStr}}</text><text class="cash-tag" wx:if="{{!item.mixed && item.payMethod === 'cash'}}">{{funeral ? "" : "💵 "}}现金</text><text class="dup-tag" wx:if="{{item.suspectDup}}">疑似重复</text><text class="pf-tag" wx:if="{{item.paidFirst}}">先转后登</text></view>
         <!-- 批次：同一批的其余几位 -->
         <view class="muted others" wx:if="{{item.batch}}">同批：{{item.othersStr}}</view>
         <!-- 单笔：说明在左、操作在右；批次：说明独占一行，操作在下一行 -->

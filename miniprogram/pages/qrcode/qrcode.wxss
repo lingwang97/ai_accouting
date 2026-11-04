@@ -21,6 +21,18 @@
 }
 .s-qr { width: 440rpx; height: 440rpx; margin: 20rpx auto 8rpx; display: block; }
 .s-loading { padding: 160rpx 0; }
+/* 两块不同底色（v3.86.0）：上块转账（浅绿），下块登记（主题色浅底）；白事均为素灰；大字不用 gap */
+.s-blk { border-radius: 16rpx; padding: 24rpx 16rpx 20rpx; }
+.s-blk + .s-blk { margin-top: 20rpx; }
+.s-blk.a { background: #E8F7EE; }
+.s-blk.b { background: var(--primary-soft); }
+.s-blk.fun.a { background: #EDEDED; }
+.s-blk.fun.b { background: #F7F7F7; border: 2rpx solid #D9D9D9; }
+.s-blk .s-step { display: block; font-size: 40rpx; font-weight: 700; line-height: 1.4; }
+.s-blk.a .s-step { color: #0A8F46; }
+.s-blk.b .s-step { color: var(--primary); }
+.s-blk.fun .s-step { color: #4A4A4A; }
+.s-step-sub { font-size: 32rpx; font-weight: 600; margin-left: 6rpx; }
 .s-divider { border-top: 2rpx dashed #ddd; margin: 24rpx 0; }
 .s-tip { margin-top: 8rpx; }
 .s-ops { display: flex; margin-top: 28rpx; }
@@ -34,7 +46,7 @@ button.s-op:not([size=mini]) { width: auto; font-weight: normal; }
 .s-hint { color: rgba(255, 255, 255, .8); font-size: 22rpx; margin-top: 20rpx; }
 
 /* 台卡画布放到屏幕外 */
-.card-canvas { position: fixed; left: -2000px; top: 0; width: 750px; height: 1240px; }
+.card-canvas { position: fixed; left: -2000px; top: 0; width: 750px; height: 1360px; }
 
 .try { text-align: center; color: var(--link); font-size: 26rpx; padding: 28rpx 0 8rpx; }
 .s-try { color: rgba(255, 255, 255, .9); }

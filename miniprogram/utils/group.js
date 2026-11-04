@@ -28,6 +28,7 @@ function groupRecords(list) {
       ...first,
       batch,
       mixed,
+      paidFirst: recs.some(r => r.paidFirst), // 宾客先转账后登记（v3.86.0）：待确认页标「先转后登」
       suspectDup: recs.some(r => r.suspectDup), // 疑似重复登记（v3.76.0，服务端 records.pending 标记）
       methodLabel: mixed ? '转账+现金' : (first.payMethod === 'cash' ? '现金' : '转账'),
       // 列表说明行：付款方式只写一次（转账+现金写明各多少）

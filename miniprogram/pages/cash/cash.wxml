@@ -27,7 +27,7 @@
         <view class="chip {{payMethod === 'wechat' ? 'on' : ''}}" data-m="wechat" bindtap="onPayMethod">微信</view>
         <view class="chip {{payMethod === 'mixed' ? 'on' : ''}}" wx:if="{{batchMode}}" data-m="mixed" bindtap="onPayMethod">转账+现金</view>
       </view>
-      <view class="muted" wx:if="{{payMethod === 'wechat'}}">看到到账后再登记，登记即入簿</view>
+      <view class="muted" wx:if="{{payMethod === 'wechat'}}">看到到账后再登记，登记即入簿。宾客转了账没登记？用礼台记账选「微信」补录</view>
       <view class="muted" wx:if="{{payMethod === 'mixed'}}">在下方名单里为每位选「转账」或「现金」</view>
     </view>
     <batch-list wx:if="{{batchMode}}" id="batch" quick="{{quick}}" mixed="{{payMethod === 'mixed'}}" bindchange="onBatchChange" />

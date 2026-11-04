@@ -77,6 +77,8 @@ button.btn-big:not([size=mini]) { width: 100%; font-size: 40rpx; font-weight: 60
 .big-cash { font-size: 32rpx; color: var(--warn); font-weight: 600; margin-bottom: 16rpx; }
 /* 疑似重复登记（v3.76.0）：小标签不换行，大字模式整行提示 */
 .dup-tag { flex-shrink: 0; white-space: nowrap; font-size: 22rpx; color: var(--danger, #FA5151); border: 1rpx solid var(--danger, #FA5151); border-radius: 6rpx; padding: 0 8rpx; margin-left: 12rpx; margin-right: 8rpx; }
+/* 宾客先转账后登记（v3.86.0）：提醒主家这笔宾客声明已转账，请核对到账 */
+.pf-tag { flex-shrink: 0; white-space: nowrap; font-size: 22rpx; color: var(--primary); border: 1rpx solid var(--primary); border-radius: 6rpx; padding: 0 8rpx; margin-left: 12rpx; margin-right: 8rpx; }
 .big-dup { font-size: 26rpx; color: var(--danger, #FA5151); margin-bottom: 16rpx; padding: 0 24rpx; }
 
 /* 批次录入 */

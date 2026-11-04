@@ -1,4 +1,4 @@
-<view class="container" style="{{themeStyle}}">
+<view class="container {{step === 'transfer' ? 'has-bar' : ''}}" style="{{themeStyle}}">
   <!-- 读取主家信息期间（扫码冷启动常要 1～2 秒）：显示加载中，不留白屏 -->
   <loading show="{{!account && !loadErr}}" rows="3" />
   <!-- 加载失败 -->
@@ -9,7 +9,15 @@
 
   <block wx:elif="{{account}}">
     <!-- 步骤条 -->
-    <view class="steps">
+    <!-- 先转账后登记（选了「已转账，现在登记」）：1 转账（已完成）→ 2 登记 → 3 入簿 -->
+    <view class="steps" wx:if="{{paidFirst && payMethod !== 'cash'}}">
+      <view class="st done">1 转账</view>
+      <view class="st-line"></view>
+      <view class="st {{step === 'form' ? 'on' : 'done'}}">2 登记</view>
+      <view class="st-line"></view>
+      <view class="st {{step === 'waiting' ? 'on' : (step === 'success' || step === 'failed' ? 'done' : '')}}">3 入簿</view>
+    </view>
+    <view class="steps" wx:else>
       <view class="st {{step === 'form' ? 'on' : 'done'}}">1 登记</view>
       <view class="st-line"></view>
       <view class="st {{step === 'transfer' ? 'on' : (step === 'form' ? '' : 'done')}}">2 转账</view>
@@ -26,6 +34,22 @@
 
     <!-- 第 1 步：填写 -->
     <block wx:if="{{step === 'form'}}">
+      <!-- 转账了吗？（v3.86.0）：现场先转后登更不容易忘；现金随礼不涉及转账，不显示 -->
+      <view class="card ask-card" wx:if="{{payMethod !== 'cash'}}">
+        <view class="ask-title">转账了吗？</view>
+        <view class="ask-row">
+          <view class="ask-btn {{paidFirst ? 'on' : ''}}" data-v="1" bindtap="onPaidFirst">
+            <view class="ask-main">已转账，现在登记</view>
+            <view class="ask-sub">已扫收款码转过账</view>
+          </view>
+          <view class="ask-btn {{!paidFirst ? 'on' : ''}}" data-v="0" bindtap="onPaidFirst">
+            <view class="ask-main">还没转，先登记</view>
+            <view class="ask-sub">登记后再扫码转账</view>
+          </view>
+        </view>
+        <view class="muted ask-tip" wx:if="{{paidFirst}}">请填写刚才转账的金额。提交后等主家核对到账，不用再回来点按钮</view>
+        <view class="muted ask-tip" wx:else>登记后按提示转账，转完回来点「我已完成转账」</view>
+      </view>
       <view class="card batch-switch">
         <view>
           <view>批次录入</view>
@@ -35,6 +59,7 @@
       </view>
       <view class="card">
         <block wx:if="{{batchMode}}">
+          <view class="muted pf-hint" wx:if="{{paidFirst && payMethod !== 'cash'}}">请按刚才转账的金额填写，各人合计要和转账一致（现金部分另交礼台）</view>
           <batch-list first-label="本人" quick="{{account.quickAmounts || []}}" mixed="{{payMethod === 'mixed'}}" bindchange="onBatchChange" />
         </block>
         <block wx:else>
@@ -50,6 +75,7 @@
           </view>
           <view class="field">
             <text class="label">{{isFuneral ? '奠仪' : '礼金'}} *</text>
+            <view class="muted pf-hint" wx:if="{{paidFirst && payMethod !== 'cash'}}">请填写刚才转账的金额</view>
             <view class="chips" wx:if="{{account.quickAmounts && account.quickAmounts.length}}">
               <view class="chip {{amount == item ? 'on' : ''}}" wx:for="{{account.quickAmounts}}" wx:key="*this" data-v="{{item}}" bindtap="onQuick">{{item}}</view>
             </view>
@@ -73,7 +99,7 @@
           <view class="muted" wx:if="{{payMethod === 'cash'}}">现金请当面交给主家或礼台，无需扫码转账</view>
         </view>
       </view>
-      <button class="btn-primary" loading="{{submitting}}" bindtap="onConfirmTransfer">{{payMethod === 'cash' ? '确认' + act + '（现金）' : '确认' + act}}</button>
+      <button class="btn-primary" loading="{{submitting}}" bindtap="onConfirmTransfer">{{payMethod === 'cash' ? '确认' + act + '（现金）' : (paidFirst ? '确认' + act + '（已转账）' : '确认' + act)}}</button>
       <!-- 隐私说明入口（v3.84.2）：只说明用途并给出链接，不把提交当作对隐私说明的认可 -->
       <view class="pv-note">填写的姓名与{{isFuneral ? '奠仪' : '礼金'}}仅用于主家记账，详见<text class="pv-link" bindtap="goPrivacy">《隐私说明》</text></view>
     </block>
@@ -113,10 +139,15 @@
         </view>
         <view class="link-fold" wx:if="{{codeSaved}}" bindtap="onSavePayCode">没找到？重新保存</view>
         <view class="muted">用微信扫一扫识别相册里的收款码，转账给主家</view>
+        <view class="muted pc-try" wx:if="{{payCodeUrl}}">也可以点大图，长按试试识别</view>
         <view class="link-fold" wx:if="{{!onsite}}" bindtap="onSwitchOnsite">在现场？直接扫主家屏幕或台卡上的收款码</view>
       </view>
-      <button class="btn-primary" loading="{{submitting}}" bindtap="onTransferred">我已完成转账</button>
       <button class="btn-text btn-link" bindtap="onCancel">取消本次{{act}}</button>
+      <!-- 固定在底部（v3.86.0）：转完账回来不用翻页找按钮 -->
+      <view class="bottom-bar pay-bar">
+        <view class="pay-bar-tip">转完账请回来点这里</view>
+        <button class="btn-primary" loading="{{submitting}}" bindtap="onTransferred">我已完成转账</button>
+      </view>
     </block>
 
     <!-- 第 3 步：等待收款方确认 -->

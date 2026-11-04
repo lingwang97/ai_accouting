@@ -12,6 +12,7 @@ const guestsub = require('../../utils/guestsub.js');
 
 const paypoll = require('../../utils/paypoll.js'); // 轮询退避：5 秒 → 10 秒 → 20 秒 → 30 秒，最长 10 分钟（v3.71.0 / v3.75.0）
 const NAME_KEY = 'pay_last_name'; // 本机上次随礼用的姓名（宾客常去多家随礼，免得每次重填）
+const REMIND_AWAY_MS = 3000; // 离开转账步骤超过这么久再回来，才提醒「转好了吗？」（v3.86.0）
 const OPEN_KEY = 'pay_open'; // 本机最近一笔未点「我已完成转账」的随礼（{ aid, rid, record, payCodeUrl, at }）
 
 /** 页面展示用：金额文本、批次名单 */
@@ -56,6 +57,7 @@ Page({
     codeSaved: false,    // 宾客手机付款：收款码是否已存入相册
     receiptModel: null,  // 到账后的留存收据
     savingReceipt: false,
+    paidFirst: false,    // 「转账了吗？」选了「已转账，现在登记」（先转账后登记，v3.86.0）；扫码进入默认选中，链接进入默认不选
     who: '随礼人',       // 白事称「致奠人」、动作称「登记」（v3.65.2，与礼簿码页「奠仪」一致）
     act: '随礼',
     amountFocus: false
@@ -79,7 +81,9 @@ Page({
     // 再扫码或从礼簿码页进入随礼页也会被误判为「不在现场」而展开收款码
     let last = '';
     try { last = wx.getStorageSync(NAME_KEY) || ''; } catch (e) { /* 忽略 */ }
-    this.setData({ aid, onsite: true, payerName: typeof last === 'string' ? last : '' });
+    // 进入方式（v3.86.0）：小程序码（scene）或首页扫码（via=scan）= 在现场扫台卡进来，默认「已转账，现在登记」；分享链接 / 记录里进入默认「还没转，先登记」
+    const byScan = !!options.scene || options.via === 'scan';
+    this.setData({ aid, onsite: true, paidFirst: byScan, payerName: typeof last === 'string' ? last : '' });
     this.loadAccount(aid).then(() => this.resumeOpen(aid));
   },
 
@@ -95,7 +99,10 @@ Page({
     try { o = wx.getStorageSync(OPEN_KEY); } catch (e) { /* 忽略 */ }
     if (!o || o.aid !== aid || Date.now() - o.at > 24 * 3600 * 1000 || this.data.step !== 'form') return;
     let status = '';
-    try { status = (await req.payStatus(o.rid, { silent: true })).status; } catch (e) { return; }
+    let auto = false;
+    try { const st = await req.payStatus(o.rid, { silent: true }); status = st.status; auto = !!st.auto; } catch (e) { return; }
+    // 宾客自己取消的记录不能再补点「已转账」（只有超时自动取消的可以），不再提示继续（v3.86.0）
+    if (status === REC.CANCELLED && !auto) return this.clearOpen();
     if (status === REC.TRANSFERRED) {
       this.setData({ record: viewRecord(o.record), step: 'waiting' });
       return this.startPoll();
@@ -123,11 +130,38 @@ Page({
 
   onHide() {
     this.stopPoll();
+    // 登记后在「转账」步骤离开（多半是去微信扫一扫转账）：记下时间，回来时提醒（v3.86.0）
+    if (this.data.step === 'transfer') this._leftAt = Date.now();
   },
 
   onShow() {
     // 付款方去微信转账后返回本页，继续轮询
     if (this.data.step === 'waiting') this.startPoll();
+    // 转账步骤离开又回来：问一句「转好了吗？」，每次离开只问一次，离开不足 3 秒（如系统弹窗）不问
+    if (this.data.step === 'transfer' && this._leftAt) {
+      const away = Date.now() - this._leftAt;
+      this._leftAt = 0;
+      if (away >= REMIND_AWAY_MS) this.askDone();
+    }
+  },
+
+  /** 回来提醒：「转好了吗？」已转账 → 等同点「我已完成转账」；还没转 → 提示转完回来点下方按钮 */
+  askDone() {
+    if (this._asking || this.data.submitting || !this.data.record) return;
+    this._asking = true;
+    const v = this.data.record;
+    wx.showModal({
+      title: '转好了吗？',
+      content: `${v.payerName} ￥${v.payStr}`,
+      confirmText: '已转账',
+      cancelText: '还没转',
+      success: r => {
+        this._asking = false;
+        if (r.confirm) this.onTransferred();
+        else wx.showToast({ title: '转完请回来点下方按钮', icon: 'none' });
+      },
+      fail: () => { this._asking = false; }
+    });
   },
 
   async loadAccount(aid) {
@@ -170,6 +204,8 @@ Page({
     this.setData({ relation: this.data.relation === r ? '' : r });
   },
   onPayMethod(e) { this.setData({ payMethod: e.currentTarget.dataset.m }); },
+  /** 「转账了吗？」两个大按钮（v3.86.0） */
+  onPaidFirst(e) { this.setData({ paidFirst: e.currentTarget.dataset.v === '1' }); },
 
   /** 第 1 步：确认转账 → 创建待转账记录，进入转账步骤 */
   async onConfirmTransfer() {
@@ -192,13 +228,16 @@ Page({
 
     // 转账+现金只填了一位：按这一位的方式提交，不算混合
     const pm = this.data.payMethod === 'mixed' && payload.items && payload.items.length === 1 ? payload.items[0].method : this.data.payMethod;
-    // 现金随礼没有「我已完成转账」这一步：在这里订阅入簿通知（必须在第一个 await 之前）
-    const subP = pm === 'cash' ? this.askGuestNotify() : null;
+    // 先转账后登记：只对微信转账 / 转账+现金有效，现金随礼不带
+    const pf = this.data.paidFirst && pm !== 'cash';
+    // 登记时就订阅入簿通知（v3.86.0，原先微信转账要等点「我已完成转账」才问）：忘了点完成、由主家直接入簿的也能收到通知
+    // 必须在第一个 await 之前；之后点「我已完成转账」不再重复问
+    const subP = this.askGuestNotify();
     this.setData({ submitting: true });
     try {
       const sub = subP ? await subP : null;
       // 幂等键：弱网重试、连点都带同一个 reqId，服务端只记一条；表单内容变了换新的，提交成功后换新的
-      const sig = JSON.stringify([payload, pm]);
+      const sig = JSON.stringify([payload, pm, pf]); // 「已转账」与否也算内容：切换后不能沿用旧 reqId（会拿到上一次的记录）
       if (!this._reqId || this._reqSig !== sig) {
         this._reqId = 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
         this._reqSig = sig;
@@ -206,7 +245,7 @@ Page({
       const reqId = this._reqId;
       let allowDup = false;
       // silent：失败提示由下面 catch 统一处理（限流只弹一个固定说明弹窗，其余错误照常 toast，v3.76.1）
-      const send = () => req.payCreate({ aid: this.data.aid, ...payload, payMethod: pm, reqId, dupCheck: true, ...guestsub.flags(sub), ...(allowDup ? { allowDup: true } : {}) }, { silent: true });
+      const send = () => req.payCreate({ aid: this.data.aid, ...payload, payMethod: pm, reqId, dupCheck: true, ...(pf ? { paidFirst: true } : {}), ...guestsub.flags(sub), ...(allowDup ? { allowDup: true } : {}) }, { silent: true });
       let res = await send();
       // 疑似重复（v3.76.0）：30 分钟内已登记过同名同额，问一下是不是真要再登记一笔（取消则不提交）
       if (res.dupOf) {
@@ -228,6 +267,7 @@ Page({
       if (res.dupOf) return; // 提交期间刚出现的重复：不再追问，本次不登记
       const { record } = res;
       this._reqId = ''; // 已创建，下一次提交换新 reqId
+      this._subRid = record._id; // 这一笔已在登记时问过订阅，点「我已完成转账」时不再问
       if (!payload.items) { try { wx.setStorageSync(NAME_KEY, payload.payerName); } catch (e) { /* 忽略 */ } } // 下次随礼自动填好姓名
       // 现金：不经收款码与转账，直接等待主家确认收到
       if (record.payMethod === 'cash') {
@@ -333,12 +373,19 @@ Page({
   /** 第 2 步：付款方转账完成 → 等待收款方确认 */
   async onTransferred() {
     if (this.data.submitting) return;
-    const subP = this.askGuestNotify(); // 必须在第一个 await 之前（见上）
+    // 登记时已问过订阅的不再问；本机恢复的旧记录（旧版登记时没问）补问一次。必须在第一个 await 之前
+    const subP = this._subRid === this.data.record._id ? null : this.askGuestNotify();
     this.setData({ submitting: true });
     try {
-      const sub = await subP;
-      await req.payTransferred(this.data.record._id, sub);
+      const sub = subP ? await subP : null;
+      const r = await req.payTransferred(this.data.record._id, sub);
       this.clearOpen();
+      // 已被自己取消的记录不能再补点（只有超时自动取消的可以）：不进入空等，回到表单重新登记（v3.86.0）
+      if (r && r.status === REC.CANCELLED) {
+        wx.showToast({ title: '这笔已取消，请重新登记', icon: 'none' });
+        this.setData({ step: 'form', record: null, payCodeUrl: '' });
+        return;
+      }
       this.setData({ step: 'waiting' });
       this.startPoll();
     } catch (e) { /* toast 已提示 */ } finally {
@@ -452,7 +499,7 @@ Page({
   },
 
   onRetry() {
-    this.setData({ step: 'form', record: null, payCodeUrl: '', failReason: '', receiptModel: null, payMethod: 'wechat' });
+    this.setData({ step: 'form', record: null, payCodeUrl: '', failReason: '', receiptModel: null, payMethod: 'wechat', paidFirst: false });
   },
 
   getTempUrl(fileID) {
