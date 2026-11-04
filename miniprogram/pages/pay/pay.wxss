@@ -68,7 +68,8 @@
 .pf-hint { color: var(--primary); font-size: 26rpx; line-height: 1.6; margin-bottom: 12rpx; }
 .pc-try { font-size: 24rpx; margin-top: 8rpx; }
 /* 转账步骤：「我已完成转账」固定底栏，页面底部留出位置（含安全区） */
-.container.has-bar { padding-bottom: calc(200rpx + env(safe-area-inset-bottom)); }
+.container.has-bar { padding-bottom: 0; }
+.pay-bar-ph { position: static; visibility: hidden; box-shadow: none; margin: 24rpx -24rpx 0; pointer-events: none; }
 .pay-bar-tip { text-align: center; font-size: 26rpx; color: var(--text-3); margin-bottom: 12rpx; }
 .pay-bar button.btn-primary:not([size=mini]) { width: 100%; margin: 0; }
 

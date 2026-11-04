@@ -196,10 +196,10 @@
     </view>
 
     <view class="card steps">
-      <view class="step"><text class="num">1</text><text>扫描主家礼簿码</text></view>
-      <view class="step"><text class="num">2</text><text>填写姓名和礼金，确认随礼</text></view>
-      <view class="step"><text class="num">3</text><text>按提示向主家收款码转账</text></view>
-      <view class="step"><text class="num">4</text><text>主家确认收到，礼金入簿并生成回执</text></view>
+      <view class="step"><text class="num">1</text><text>扫主家的收款码转账（备注写姓名）</text></view>
+      <view class="step"><text class="num">2</text><text>再扫礼簿码，填写姓名和礼金登记</text></view>
+      <view class="step"><text class="num">3</text><text>主家核对到账后入簿，并生成回执</text></view>
+      <view class="step step-sub"><text class="muted">还没转账也可以先登记，登记后按提示转账</text></view>
     </view>
 
     <view class="my-receipts">

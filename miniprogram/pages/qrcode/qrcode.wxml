@@ -6,12 +6,12 @@
   <view class="s-card">
     <view class="s-blk a {{funeral ? 'fun' : ''}}">
       <view class="s-step">第 1 步：扫收款码转账<text class="s-step-sub">（备注写姓名）</text></view>
-      <image wx:if="{{payCodeUrl}}" class="s-qr" src="{{payCodeUrl}}" mode="aspectFit" data-url="{{payCodeUrl}}" bindtap="onPreview" />
+      <image wx:if="{{payCodeUrl}}" class="s-qr" style="width:{{qrRpx}}rpx;height:{{qrRpx}}rpx" src="{{payCodeUrl}}" mode="aspectFit" data-url="{{payCodeUrl}}" bindtap="onPreview" />
       <view class="muted s-tip" wx:elif="{{offline}}">收款码没保存到本机，联网后可显示</view>
     </view>
     <view class="s-blk b {{funeral ? 'fun' : ''}}">
       <view class="s-step">第 2 步：扫{{org ? '场次码' : '礼簿码'}}登记<text class="s-step-sub">（填姓名和金额）</text></view>
-      <image wx:if="{{qrUrl}}" class="s-qr" src="{{qrUrl}}" mode="aspectFit" data-url="{{qrUrl}}" bindtap="onPreview" />
+      <image wx:if="{{qrUrl}}" class="s-qr" style="width:{{qrRpx}}rpx;height:{{qrRpx}}rpx" src="{{qrUrl}}" mode="aspectFit" data-url="{{qrUrl}}" bindtap="onPreview" />
       <view wx:elif="{{errMsg}}" class="warn">{{errMsg}}</view>
       <view wx:else class="muted s-loading">生成中…</view>
     </view>

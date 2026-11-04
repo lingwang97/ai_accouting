@@ -148,6 +148,11 @@
         <view class="pay-bar-tip">转完账请回来点这里</view>
         <button class="btn-primary" loading="{{submitting}}" bindtap="onTransferred">我已完成转账</button>
       </view>
+      <!-- 占位：与底栏同内容、同高度（含系统大字体与安全区），隐藏不可点，页面滚到底时「取消本次」不会被底栏盖住（v3.86.1） -->
+      <view class="bottom-bar pay-bar pay-bar-ph">
+        <view class="pay-bar-tip">转完账请回来点这里</view>
+        <button class="btn-primary" disabled>我已完成转账</button>
+      </view>
     </block>
 
     <!-- 第 3 步：等待收款方确认 -->

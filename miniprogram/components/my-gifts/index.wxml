@@ -1,7 +1,10 @@
 <!-- 我的随礼记录（宾客页与往来页共用）：全部 / 已入簿 / 待确认 / 未收到 / 有变动，分页加载（v3.85.1） -->
 <view class="mg">
-  <view class="mg-seg">
-    <view class="mg-seg-item {{tab === item.k ? 'on' : ''}}" wx:for="{{tabs}}" wx:key="k" data-k="{{item.k}}" bindtap="onTab">{{item.t}}<text class="mg-dot" wx:if="{{item.dot}}"></text></view>
+  <view class="mg-seg-wrap">
+    <scroll-view class="mg-seg" scroll-x enable-flex show-scrollbar="{{false}}" scroll-into-view="{{segTo}}" scroll-with-animation bindscroll="onSegScroll">
+      <view id="mt-{{item.k}}" class="mg-seg-item {{tab === item.k ? 'on' : ''}}" wx:for="{{tabs}}" wx:key="k" data-k="{{item.k}}" bindtap="onTab">{{item.t}}<text class="mg-dot" wx:if="{{item.dot}}"></text></view>
+    </scroll-view>
+    <view class="mg-seg-fade" wx:if="{{segFade}}"><text>›</text></view>
   </view>
   <view class="mg-sub" wx:if="{{tab === 'rejected'}}">近 30 天内、用当前微信登记的记录</view>
   <view class="mg-sub" wx:if="{{tab === 'changed'}}">近 30 天内主家修改、作废、申请更正的记录；申请更正需要你同意才生效</view>

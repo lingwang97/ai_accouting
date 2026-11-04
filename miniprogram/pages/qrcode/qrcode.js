@@ -26,10 +26,15 @@ Page({
     errMsg: '',
     offline: false,   // 正显示本机保存的礼簿码（v3.66.0）
     offChecking: false, // 本机保存的码正在联网更新中（v3.66.2：先显示再刷新，不等网络）
-    offlineAt: ''
+    offlineAt: '',
+    qrRpx: 440 // 亮屏双码每个码的边长（rpx），按窗口高度缩放，矮屏两块尽量都显示完整（v3.86.1）
   },
 
   async onLoad(options) {
+    try {
+      const w = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+      this.setData({ qrRpx: qrSize(w.windowHeight * 750 / w.windowWidth) });
+    } catch (e) { /* 取不到窗口尺寸：保持默认大小 */ }
     try {
       const env = wx.getAccountInfoSync().miniProgram.envVersion;
       this.setData({ showTry: env === 'develop' || env === 'trial' });
@@ -382,6 +387,12 @@ Page({
     };
   }
 });
+
+/** 亮屏双码页：除两个码之外的内容约 930rpx（标题、两块文字、提示、按钮、边距），剩下的高度平分给两个码；最小 240rpx 仍可扫，最大 440rpx */
+function qrSize(winRpx) {
+  const v = Math.floor((winRpx - 930) / 2);
+  return Math.max(240, Math.min(440, v));
+}
 
 function downloadCloud(fileID) {
   return new Promise((resolve, reject) => {

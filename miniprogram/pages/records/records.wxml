@@ -26,8 +26,11 @@
       <view class="btn btn-sm btn-primary search-btn" bindtap="onSearch">搜索</view>
     </view>
     <view class="filter-row">
-      <view class="seg st-seg">
-        <view class="seg-item {{stIdx === index ? 'on' : ''}}" wx:for="{{statuses}}" wx:key="*this" data-i="{{index}}" bindtap="onStatus">{{item}}</view>
+      <view class="st-wrap">
+        <scroll-view class="st-seg" scroll-x enable-flex show-scrollbar="{{false}}" scroll-into-view="{{'st' + stIdx}}" scroll-with-animation bindscroll="onStScroll">
+          <view id="{{'st' + index}}" class="seg-item {{stIdx === index ? 'on' : ''}}" wx:for="{{statuses}}" wx:key="*this" data-i="{{index}}" bindtap="onStatus">{{item}}</view>
+        </scroll-view>
+        <view class="st-fade" wx:if="{{stFade}}"><text>›</text></view>
       </view>
       <picker range="{{sorts}}" value="{{sortIdx}}" bindchange="onSort" disabled="{{dupOn}}">
         <view class="rel-btn ft-btn {{dupOn ? 'dis' : (sortIdx > 0 ? 'on' : '')}}"><image class="ft-ic" src="/assets/icons/sort-{{!dupOn && sortIdx > 0 ? (themeIcon || 'r') : 'g'}}.svg" /><text>{{dupOn ? '按姓名排列' : sorts[sortIdx] + ' ▾'}}</text></view>
@@ -49,7 +52,15 @@
       <text class="r-right"><text class="cash-tag" wx:if="{{item.payMethod === 'cash'}}">现金</text><text class="xfer-tag" wx:elif="{{item.status === 'transferred' || item.status === 'paid'}}">转账</text><text class="money r-amount">￥{{item.amountStr}}</text></text>
     </view>
     <view class="chg-row" wx:if="{{stIdx === 4 && item.chg}}" data-idx="{{index}}" bindtap="onChgLog"><text class="chg-tag {{item.chg.cls}}">{{item.chg.tag}}</text><text class="chg-text">{{item.chg.text}}</text><text class="chg-more"> 经过 ›</text></view>
-    <view class="muted">{{item.timeStr}}<text wx:if="{{item.relation}}"> · {{item.relation}}</text><text wx:if="{{item.batchId}}"> · 批次录入</text><text wx:if="{{item.remark}}"> · {{item.remark}}</text><text wx:if="{{item.declaredStr}}" class="declared"> · 宾客登记 ￥{{item.declaredStr}}，按实收入簿</text><text wx:if="{{item.amendN}}" class="amended" data-idx="{{index}}" catchtap="onAmendLog"> · 已修改 ›</text><text wx:if="{{item.appealStatus === 'accepted'}}" class="amended" data-idx="{{index}}" catchtap="onTrail"> · 宾客申诉后入簿 ›</text><text wx:if="{{!readonly && item.editHint}}" class="declared"> · {{item.editHint}}</text><text wx:if="{{item.corrStr}}" class="amended" data-idx="{{index}}" catchtap="onCorrect"> · {{item.corrStr}}</text></view>
+    <view class="muted">{{item.timeStr}}<text wx:if="{{item.relation}}"> · {{item.relation}}</text><text wx:if="{{item.batchId}}"> · 批次录入</text><text wx:if="{{item.remark}}"> · {{item.remark}}</text></view>
+    <!-- 状态类小标签单独一行（v3.86.1）：宾客登记 / 已修改 / 申诉 / 修改倒计时 / 更正申请，放不下自动换行，不再和备注挤成 3-4 行 -->
+    <view class="r-tags" wx:if="{{item.declaredStr || item.amendN || item.appealStatus === 'accepted' || (!readonly && item.editHint) || item.corrStr}}">
+      <text wx:if="{{item.declaredStr}}" class="r-tg declared">宾客登记 ￥{{item.declaredStr}}，按实收入簿</text>
+      <text wx:if="{{item.amendN}}" class="r-tg amended" data-idx="{{index}}" catchtap="onAmendLog">已修改 ›</text>
+      <text wx:if="{{item.appealStatus === 'accepted'}}" class="r-tg amended" data-idx="{{index}}" catchtap="onTrail">宾客申诉后入簿 ›</text>
+      <text wx:if="{{!readonly && item.editHint}}" class="r-tg declared">{{item.editHint}}</text>
+      <text wx:if="{{item.corrStr}}" class="r-tg amended" data-idx="{{index}}" catchtap="onCorrect">{{item.corrStr}} ›</text>
+    </view>
 
     <!-- 待确认：宾客已点"我已完成转账" -->
     <view class="r-actions" wx:if="{{item.status === 'transferred'}}">

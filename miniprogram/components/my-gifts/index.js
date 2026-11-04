@@ -52,7 +52,7 @@ Component({
     inTab: { type: Boolean, value: false }
   },
   data: {
-    tab: 'all', tabs: TABS.map(x => ({ ...x, dot: false })), loading: true, loadErr: '', more: false, moreBusy: false,
+    tab: 'all', segTo: 'mt-all', segFade: false, tabs: TABS.map(x => ({ ...x, dot: false })), loading: true, loadErr: '', more: false, moreBusy: false,
     rows: [], vouchers: [], openId: '', empty: false, emptyText: EMPTY.all, appeal: null
   },
   lifetimes: {
@@ -60,7 +60,8 @@ Component({
       this._cache = {};
       this._seen0 = giftdot.seen(); // 本次进入前看过的变动时间：之后的变动行标「新」
       this.reload();
-    }
+    },
+    ready() { this.measureSeg(); }
   },
   methods: {
     /** 重新拉取当前标签第一页 + 红点（页面 onShow / 下拉刷新时调用）；返回 Promise */
@@ -77,12 +78,25 @@ Component({
     },
 
     /** 红点：待我确认的更正申请，或有看过之后的新变动（轻量接口 giftStat） */
+    /** 标签条右侧渐变提示：内容比框宽、且还没滑到最右时显示（v3.86.1） */
+    onSegScroll() { this.measureSeg(); },
+    measureSeg() {
+      this.createSelectorQuery().select('.mg-seg').fields({ size: true, scrollOffset: true }, r => {
+        if (!r) return;
+        const fade = r.scrollWidth > r.width + 2 && r.scrollLeft + r.width < r.scrollWidth - 4;
+        if (fade !== this.data.segFade) this.setData({ segFade: fade });
+      }).exec();
+    },
+
     async refreshDot() {
       try {
         const st = await req.giftStat({ silent: true });
         this._stat = st;
         const dot = giftdot.of(st);
-        this.setData({ 'tabs[4].dot': dot && this.data.tab !== 'changed' ? true : (st.correctionN || 0) > 0 });
+        const dot4 = dot && this.data.tab !== 'changed' ? true : (st.correctionN || 0) > 0;
+        this.setData({ 'tabs[4].dot': dot4 });
+        // 「有变动」有红点：标签条自动滑到该项，窄屏不会漏看（每次进入只滑一次，v3.86.1）
+        if (dot4 && !this._dotScrolled && this.data.tab !== 'changed') { this._dotScrolled = true; this.setData({ segTo: 'mt-changed' }); }
         try { getApp().setGiftDot(dot); } catch (e) { /* 忽略 */ }
       } catch (e) { /* 红点取不到不影响列表 */ }
     },
@@ -129,7 +143,7 @@ Component({
     onTab(e) {
       const tab = e.currentTarget.dataset.k;
       if (tab === this.data.tab) return;
-      this.setData({ tab, openId: '', loadErr: '', rows: [], vouchers: [], more: false, empty: false });
+      this.setData({ tab, segTo: 'mt-' + tab, openId: '', loadErr: '', rows: [], vouchers: [], more: false, empty: false });
       if (this._cache[tab]) this.show(tab);
       else this.setData({ loading: true });
       this.loadTab(tab, 0).then(() => this.setData({ loading: false }));

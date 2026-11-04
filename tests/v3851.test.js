@@ -346,7 +346,7 @@ test('前端：五个标签、分页、红点、空状态；320 宽小屏标签�
   const wxss = fs.readFileSync(path.join(ROOT, 'miniprogram/components/my-gifts/index.wxss'), 'utf8');
   ['全部', '已入簿', '待确认', '未收到', '有变动'].forEach(t => assert.ok(js.includes(`'${t}'`), t));
   assert.ok(js.includes('loadMore') && js.includes('myReceiptsTab') && js.includes('giftStat'));
-  assert.ok(/mg-seg \{[^}]*overflow-x: auto/.test(wxss) && /mg-seg-item \{[^}]*white-space: nowrap/.test(wxss));
+  assert.ok(/mg-seg \{[^}]*white-space: nowrap/.test(wxss) && /mg-seg-item \{[^}]*white-space: nowrap/.test(wxss) && /<scroll-view class="mg-seg" scroll-x/.test(wxml)); // v3.86.1 起改用 scroll-view
   assert.ok(wxml.includes('mg-dot') && wxml.includes('emptyText'));
   ['all', 'paid', 'waiting', 'rejected', 'changed'].forEach(k => assert.ok(new RegExp(`${k}:`).test(js.slice(js.indexOf('const EMPTY'))), '空状态文案 ' + k));
   (js.match(/confirmText: [^,\n]+/g) || []).forEach(m => (m.match(/'([^']+)'/g) || []).forEach(l => assert.ok(l.length - 2 <= 4, m)));

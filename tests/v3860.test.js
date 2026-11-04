@@ -350,7 +350,7 @@ test('pay 页面结构：两个大按钮、固定底栏、长按识别提示；s
   assert.ok(w.includes('也可以点大图，长按试试识别'));
   const i = w.indexOf('bindtap="onTransferred"');
   assert.ok(i > 0 && w.lastIndexOf('bottom-bar', i) > w.lastIndexOf('step === \'transfer\'', i), '「我已完成转账」在固定底栏里');
-  assert.ok(/\.container\.has-bar \{[^}]*env\(safe-area-inset-bottom\)/.test(read('miniprogram/pages/pay/pay.wxss')));
+  assert.ok(/\.pay-bar-ph \{[^}]*position: static[^}]*visibility: hidden/.test(read('miniprogram/pages/pay/pay.wxss'))) // v3.86.1 起用同高占位，不再写死留白;
   assert.ok(!/(^|[^-])gap:/m.test(read('miniprogram/pages/pay/pay.wxss')), '不用 gap');
   const js = read('miniprogram/pages/pay/pay.js');
   [...js.matchAll(/(confirmText|cancelText): '([^']+)'/g)].forEach(m => assert.ok(m[2].length <= 4, '按钮文字过长：' + m[2]));
@@ -423,5 +423,5 @@ test('文案：主家待确认「先转后登」标签与说明、礼台补录�
   assert.ok(g.includes('先扫收款码转账') && g.includes('再扫礼簿码登记') && g.includes('还没转？先登记也行'));
   const f = read('miniprogram/pages/guide/faq.js');
   assert.ok(f.includes('现场建议先转账、再登记') && f.includes('我先转了账再登记') && f.includes('登记时选了「已转账，现在登记」'));
-  assert.ok(/VERSION: '3\.86\.0'/.test(read('miniprogram/config.js')));
+  assert.ok(/VERSION: '3\.86\.\d+'/.test(read('miniprogram/config.js')));
 });

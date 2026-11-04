@@ -105,6 +105,7 @@
 .scan-text { color: #fff; font-size: 36rpx; font-weight: 600; margin-top: 28rpx; }
 
 .steps .step { display: flex; align-items: center; padding: 14rpx 0; color: #555; }
+.steps .step-sub { padding: 0 0 6rpx 52rpx; font-size: 26rpx; }
 .num {
   width: 40rpx; height: 40rpx; line-height: 40rpx; text-align: center;
   border-radius: 50%; background: var(--primary-soft); color: var(--primary);

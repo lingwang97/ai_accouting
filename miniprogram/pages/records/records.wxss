@@ -12,8 +12,12 @@
 .dup-n { font-size: 22rpx; color: var(--warn); font-weight: normal; }
 .filter-row { display: flex; align-items: center; margin-top: 16rpx; }
 /* 五个状态按钮（v3.85.2）：屏宽够就平分，320 宽 / 大字体放不下时可横向滑动，文字不换行不截断（样式同「我的随礼记录」标签条） */
-.filter-row .st-seg { flex: 1; min-width: 0; background: var(--fill); overflow-x: auto; white-space: nowrap; }
-.filter-row .st-seg .seg-item { flex: 1 0 auto; padding: 8rpx 16rpx; font-size: 24rpx; white-space: nowrap; }
+/* v3.86.1：scroll-view 横滑 + 右侧渐变箭头 */
+.filter-row .st-wrap { position: relative; flex: 1; min-width: 0; border-radius: var(--r-s); background: var(--fill); overflow: hidden; }
+.filter-row .st-seg { width: 100%; padding: 6rpx; box-sizing: border-box; white-space: nowrap; }
+.filter-row .st-seg .seg-item { flex: 1 0 auto; padding: 8rpx 16rpx; font-size: 24rpx; white-space: nowrap; border-radius: 10rpx; text-align: center; }
+.filter-row .st-seg .seg-item.on { background: var(--primary); color: #fff; font-weight: 600; }
+.st-fade { position: absolute; right: 0; top: 0; bottom: 0; width: 56rpx; display: flex; align-items: center; justify-content: flex-end; padding-right: 8rpx; box-sizing: border-box; background: linear-gradient(to right, rgba(240, 240, 240, 0), var(--fill) 70%); color: #888; font-size: 28rpx; pointer-events: none; }
 .filter-row .rel-btn { margin-left: 16rpx; }
 .record.transferred { border-left: 8rpx solid var(--warn); }
 .record.pending { opacity: .7; }
@@ -72,6 +76,8 @@ button.r-op:not([size=mini]) { width: 160rpx; padding: 0; margin-left: 24rpx; }
 /* 回到顶部：浮在右下，避开底部菜单与安全区 */
 .to-top { position: fixed; right: 24rpx; bottom: calc(50px + env(safe-area-inset-bottom) + 24rpx); z-index: 4; padding: 0 28rpx; line-height: 72rpx; border-radius: 36rpx; background: #fff; color: var(--primary); font-size: 26rpx; box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, .18); }
 .amended { color: var(--primary); }
+.r-tags { display: flex; flex-wrap: wrap; font-size: 24rpx; line-height: 1.5; margin-top: 4rpx; }
+.r-tg { margin-right: 20rpx; padding: 4rpx 0; }
 .amend-tip { margin-bottom: 16rpx; }
 .small { font-size: 24rpx; }
 
