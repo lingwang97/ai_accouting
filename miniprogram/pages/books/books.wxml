@@ -34,7 +34,7 @@
         <view class="btn btn-sm btn-outline" wx:if="{{pm.books}}" data-id="{{item._id}}" catchtap="onSetActive">设为当前</view>
         <view class="btn btn-sm btn-outline" wx:if="{{canExport}}" data-id="{{item._id}}" catchtap="onExport">导出</view>
         <view class="op-link" wx:if="{{pm.books}}" data-id="{{item._id}}" catchtap="onEdit">编辑</view>
-        <view class="op-link gray" wx:if="{{pm.books}}" data-id="{{item._id}}" data-archived="{{false}}" catchtap="onArchive">归档</view>
+        <view class="op-link" wx:if="{{pm.books}}" data-id="{{item._id}}" data-archived="{{false}}" catchtap="onArchive">归档</view>
       </view>
     </view>
   </view>

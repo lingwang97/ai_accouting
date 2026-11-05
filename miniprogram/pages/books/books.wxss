@@ -35,7 +35,6 @@
 .b-ops .btn:not(:first-child), .b-ops .op-link { margin-left: 20rpx; }
 .b-ops .btn { border-radius: 999rpx; }
 .op-link { font-size: 24rpx; color: var(--link); }
-.op-link.gray { color: var(--text-3); }
 
 .fold { text-align: center; color: var(--link); font-size: 26rpx; padding: 16rpx 0 24rpx; }
 .more-export { text-align: center; color: var(--text-3); font-size: 24rpx; padding: 8rpx 0 24rpx; }

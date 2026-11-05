@@ -31,3 +31,10 @@ test('v3.86.7 保留的其他界面修复：F6「开启变更提醒」点击区�
   assert.ok(/\.mg-resub \{[^}]*padding: 18rpx 16rpx/.test(read('components/my-gifts/index.wxss')));
   assert.ok(read('pages/records/records.wxml').includes('class="r-tags"') && /\.r-tags \{/.test(read('pages/records/records.wxss')));
 });
+
+test('v3.86.8 礼簿管理：「归档」和「编辑」同色（不再用 .gray 浅灰）', () => {
+  const w = read('pages/books/books.wxml');
+  const c = read('pages/books/books.wxss');
+  assert.ok(/<view class="op-link" [^>]*onArchive">归档<\/view>/.test(w));
+  assert.ok(!/op-link gray/.test(w) && !/\.op-link\.gray/.test(c));
+});
