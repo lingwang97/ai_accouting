@@ -3,7 +3,7 @@
 // 现在的流程：wx.cloud.downloadFile(fileID)（不需要域名白名单）-> 复制到 USER_DATA_PATH/pvfont-<key>-<v>.ttf（下次直接用，版本变了清理旧文件）
 // -> readFile 成 base64 -> loadFontFace(data URI)；data URI 失败再退回 https 链接。
 // loaded 由调用页面持有，同一页面同一字体只加载一次；没上传 / 加载失败 / 基础库没有 loadFontFace 一律返回 ''，调用方回退系统字体
-const req = require('./request.js');
+const req = require('../../utils/request.js');
 
 const META_TTL = 90 * 60 * 1000;
 let meta = null;

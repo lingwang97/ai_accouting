@@ -48,7 +48,7 @@ test('imgcompress.cover：JPG 且不超过 1.5MB 原样使用；PNG、超限、�
 // ---------- pvfont：失败不缓存，可重试 ----------
 test('pvfont：加载失败的结果不缓存（下次可重试）；成功的仍只加载一次', async () => {
   const req = require('../miniprogram/utils/request.js');
-  const file = path.join(ROOT, 'miniprogram/utils/pvfont.js');
+  const file = path.join(ROOT, 'miniprogram/pages/booktheme/pvfont.js');
   const saved = global.wx;
   global.wx = { getAccountInfoSync: () => ({ miniProgram: { envVersion: 'release' } }) };
   const warn = console.warn; console.warn = () => {};
@@ -93,7 +93,7 @@ test('机构模式用词：页面 wxml 用 o.t，js 用 orgtext；封底示意�
   assert.ok(WXML.includes("o.t('封面标题（不填用礼簿名）', org)") && !/>封面标题（不填用礼簿名）</.test(WXML));
   assert.ok(WXML.includes("o.t('白事礼簿封面不使用照片', org)") && WXML.includes("o.t('记账人签名栏', org)"));
   assert.ok(JS.includes("orgtext.t('记账人', d.org)"));
-  const ot = require('../miniprogram/utils/orgtext.js');
+  const ot = require('../miniprogram/pages/booktheme/orgtext.js');
   assert.strictEqual(ot.t('记账人签名栏', true), '礼台人员签名栏');
   assert.strictEqual(ot.t('白事礼簿封面不使用照片', true), '白事场次封面不使用照片');
   assert.strictEqual(ot.t('封面标题（不填用礼簿名）', true), '封面标题（不填用场次名）');

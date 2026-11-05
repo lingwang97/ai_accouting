@@ -38,3 +38,14 @@ test('v3.86.8 礼簿管理：「归档」和「编辑」同色（不再用 .gray
   assert.ok(/<view class="op-link" [^>]*onArchive">归档<\/view>/.test(w));
   assert.ok(!/op-link gray/.test(w) && !/\.op-link\.gray/.test(c));
 });
+
+test('v3.86.9 主包不放只被分包用的 JS：pvfont / orgtext 在 booktheme 分包，vip 在 booktheme 与 receiptset 各一份', () => {
+  ['pvfont.js', 'orgtext.js', 'vip.js'].forEach(f => assert.ok(!fs.existsSync(path.join(root, 'utils', f)), 'utils/' + f + ' 应已移出主包'));
+  ['pvfont.js', 'orgtext.js', 'vip.js'].forEach(f => assert.ok(fs.existsSync(path.join(root, 'pages/booktheme', f)), 'booktheme/' + f));
+  assert.ok(fs.existsSync(path.join(root, 'pages/receiptset/vip.js')));
+  const bt = read('pages/booktheme/booktheme.js');
+  assert.ok(bt.includes("require('./vip.js')") && bt.includes("require('./orgtext.js')") && bt.includes("require('./pvfont.js')"));
+  assert.ok(read('pages/receiptset/receiptset.js').includes("require('./vip.js')"));
+  assert.ok(read('pages/booktheme/pvfont.js').includes("require('../../utils/request.js')"));
+  assert.strictEqual(read('pages/booktheme/vip.js').split('\n').slice(1).join('\n'), read('pages/receiptset/vip.js').split('\n').slice(1).join('\n'), '两份 vip.js 正文一致');
+});

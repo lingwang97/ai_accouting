@@ -6,7 +6,7 @@ const printer = require('../../utils/printer.js');
 const theme = require('../../utils/theme.js');
 const perm = require('../../utils/perm.js');
 const plan = require('../../utils/plan.js');
-const vip = require('../../utils/vip.js');
+const vip = require('./vip.js');
 
 const COLORS = ['#C8161D', '#B8860B', '#C9A227', '#FF7A45', '#07C160', '#333333'];
 const ALL_FIELDS = Object.keys(receipt.FIELD_LABELS);

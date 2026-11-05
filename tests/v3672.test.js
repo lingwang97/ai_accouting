@@ -7,7 +7,7 @@ const { test } = require('./helpers/harness.js');
 const root = path.join(__dirname, '../miniprogram');
 const read = f => fs.readFileSync(path.join(root, f), 'utf8');
 const avatar = require('../miniprogram/utils/avatar.js');
-const orgtext = require('../miniprogram/utils/orgtext.js');
+const orgtext = require('../miniprogram/pages/booktheme/orgtext.js');
 
 test('avatar：临时路径视为无效，cloud:// 与 https 有效', () => {
   assert.strictEqual(avatar.isValid('cloud://env.xx/avatars/a.jpg'), true);

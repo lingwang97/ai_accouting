@@ -248,7 +248,7 @@ test('系统检查与管理员页：预览字体检查项（未上传为提醒�
 // ---------- 前端：pvfont 与示意图 ----------
 function freshPvfont(metaImpl, loadImpl) {
   const req = require('../miniprogram/utils/request.js');
-  const file = path.join(ROOT, 'miniprogram/utils/pvfont.js');
+  const file = path.join(ROOT, 'miniprogram/pages/booktheme/pvfont.js');
   delete require.cache[file];
   req.fontPreview = metaImpl;
   global.wx.loadFontFace = loadImpl;
@@ -290,7 +290,7 @@ test('pvfont：按 PDF 分工选字体；同一页面同一字体只加载一次
     // 基础库没有 loadFontFace
     const pvOld = freshPvfont(async () => ({ ready: true, fonts: META }), undefined);
     assert.strictEqual(await pvOld.load('sans', {}), '');
-  } finally { global.wx = saved; delete require.cache[path.join(ROOT, 'miniprogram/utils/pvfont.js')]; }
+  } finally { global.wx = saved; delete require.cache[path.join(ROOT, 'miniprogram/pages/booktheme/pvfont.js')]; }
 });
 
 function loadPage(wxExtra) {
@@ -299,7 +299,7 @@ function loadPage(wxExtra) {
   global.Page = o => { page = o; };
   global.wx = { getAccountInfoSync: () => ({ miniProgram: { envVersion: 'release' } }), getStorageSync: () => '', cloud: {}, showToast() {}, showModal(o) { global.__modal = o; }, ...wxExtra };
   global.getApp = () => ({ globalData: {} });
-  ['miniprogram/pages/booktheme/booktheme.js', 'miniprogram/utils/pvfont.js', 'miniprogram/utils/vip.js'].forEach(f => { delete require.cache[path.join(ROOT, f)]; });
+  ['miniprogram/pages/booktheme/booktheme.js', 'miniprogram/pages/booktheme/pvfont.js', 'miniprogram/pages/booktheme/vip.js'].forEach(f => { delete require.cache[path.join(ROOT, f)]; });
   require(path.join(ROOT, 'miniprogram/pages/booktheme/booktheme.js'));
   const inst = Object.assign({}, page, { data: JSON.parse(JSON.stringify(page.data)) });
   inst.setData = o => Object.keys(o).forEach(k => { if (k.includes('.')) { const [a, b] = k.split('.'); inst.data[a][b] = o[k]; } else inst.data[k] = o[k]; });

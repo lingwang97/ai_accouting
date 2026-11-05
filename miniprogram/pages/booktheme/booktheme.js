@@ -6,10 +6,10 @@ const theme = require('../../utils/theme.js');
 const perm = require('../../utils/perm.js');
 const pt = require('./pdftheme.js');
 const plan = require('../../utils/plan.js');
-const vip = require('../../utils/vip.js');
+const vip = require('./vip.js');
 const imgc = require('../../utils/imgcompress.js');
-const orgtext = require('../../utils/orgtext.js');
-const pvfont = require('../../utils/pvfont.js');
+const orgtext = require('./orgtext.js');
+const pvfont = require('./pvfont.js');
 
 const VIP_TIP = '该功能为会员功能，开通后可使用';
 
