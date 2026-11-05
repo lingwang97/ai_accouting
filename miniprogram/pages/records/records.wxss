@@ -75,6 +75,9 @@ button.r-op:not([size=mini]) { width: 160rpx; padding: 0; margin-left: 24rpx; }
 .r-tags { display: flex; flex-wrap: wrap; font-size: 24rpx; line-height: 1.5; margin-top: 4rpx; }
 .r-tg { margin-right: 20rpx; padding: 4rpx 0; }
 .amend-tip { margin-bottom: 16rpx; }
+/* 超过 72 小时：金额、姓名只读（v3.86.10）；长姓名换行不溢出 */
+.locked-val { color: var(--text-3); word-break: break-all; }
+.corr-entry { display: block; line-height: 72rpx; white-space: normal; margin-bottom: 8rpx; }
 .small { font-size: 24rpx; }
 
 /* 修改弹层：本页是 tab 页，自定义底部菜单盖在弹层之上，遮罩止于菜单上沿，「取消 / 保存」不再被挡住（同往来页） */

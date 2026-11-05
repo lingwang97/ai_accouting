@@ -36,7 +36,9 @@ function probeOne(db, name) {
   });
 }
 
-/** 19 个集合的客户端权限 → 一条检查项 */
+const WRITE_TIP = '试读查不出「仅创建者可读写」（读不到但能写）：请在控制台确认全部集合为「所有用户不可读写」，guest_receipts（宾客随礼凭证）必须设为所有用户不可读写';
+
+/** 各集合的客户端权限 → 一条检查项 */
 async function collections(names) {
   let db;
   try { db = wx.cloud.database(); } catch (e) { db = null; }
@@ -44,9 +46,10 @@ async function collections(names) {
   const res = await Promise.all(names.map(n => probeOne(db, n)));
   const open = names.filter((n, i) => res[i] === 'open');
   const unknown = names.filter((n, i) => res[i] === 'unknown' || res[i] === 'missing');
-  if (open.length) return { group: '数据库', label: '集合权限（手机试读）', status: 'bad', text: '客户端能读到：' + open.join('、'), fix: '云开发控制台 → 数据库 → 这些集合 → 数据权限改为「所有用户不可读写」' };
+  if (open.length) return { group: '数据库', label: '集合权限（手机试读）', status: 'bad', text: '客户端能读到：' + open.join('、'), fix: '云开发控制台 → 数据库 → 这些集合 → 数据权限改为「所有用户不可读写」（guest_receipts 必须设为所有用户不可读写）' };
   if (unknown.length) return { group: '数据库', label: '集合权限（手机试读）', status: 'warn', text: `${names.length - unknown.length} 个已锁；${unknown.join('、')} 未能确认`, fix: '集合不存在先建集合；网络问题重试' };
-  return { group: '数据库', label: '集合权限（手机试读）', status: 'ok', text: `${names.length} 个都读不到，已锁`, fix: '' };
+  // 试读只能发现「客户端可读」；「仅创建者可读写」同样读不到但客户端能新建文档（可伪造凭证等），要在控制台核对（v3.86.10）
+  return { group: '数据库', label: '集合权限（手机试读）', status: 'ok', text: `${names.length} 个都读不到。${WRITE_TIP}`, fix: '' };
 }
 
 function privacy() {

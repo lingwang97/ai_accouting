@@ -8,8 +8,11 @@
 const Snap = require('./snapshot.js');
 
 const TRASH_DAYS = 15;
-const BUDGET_MS = 12 * 1000; // 单次调用最多移动这么久（books 云函数超时 20 秒）
-const SNAP_MS = 8 * 1000; // 删除前给宾客留凭证（snapshot.js）单次最多这么久，没做完返回 false，前端再调用一次接着做
+const BUDGET_MS = 12 * 1000; // 恢复：单次调用最多移动这么久（books 云函数超时 20 秒）
+// 删除（moveToTrash）单次调用的总预算（v3.86.10）：留凭证与移动记录共用同一个截止时间，留出返回余量，低于 books 的 20 秒超时；
+// 留凭证最晚到「截止时间 - MOVE_MIN_MS」就停（没做完返回 false，前端再调用一次接着做），保证移动至少有这么多时间
+const TOTAL_MS = 15 * 1000;
+const MOVE_MIN_MS = 5 * 1000;
 const ENVS = ['develop', 'trial', 'release'];
 
 /** 把 from 集合里满足 cond 的文档原样（_id 不变）移到 to 集合；超时返回 false，移完返回 true */
@@ -41,8 +44,8 @@ async function moveToTrash(db, owner, bookId, book, extra, days) {
   await ensure(db, 'trash_books');
   await ensure(db, 'trash_records');
   // 先给这本礼簿里有宾客身份的随礼人留凭证（v3.85.0）：主家删除礼簿不能让宾客的随礼记录跟着消失；首次调用才做（续跑时已做完）
-  if (book && !(await Snap.snapshotRecords(db, owner, { bookId }, Date.now() + SNAP_MS))) return false;
-  const deadline = Date.now() + BUDGET_MS;
+  const deadline = Date.now() + TOTAL_MS;
+  if (book && !(await Snap.snapshotRecords(db, owner, { bookId }, deadline - MOVE_MIN_MS))) return false;
   const tb = db.collection('trash_books');
   if (book) {
     const { _id, ...doc } = book;
@@ -163,4 +166,4 @@ function filesOf(book, account, ownPayCode) {
   return files;
 }
 
-module.exports = { TRASH_DAYS, moveToTrash, restore, purge, purgeExpired, resumeStuck, filesOf };
+module.exports = { TRASH_DAYS, TOTAL_MS, MOVE_MIN_MS, moveToTrash, restore, purge, purgeExpired, resumeStuck, filesOf };

@@ -738,7 +738,7 @@ const LAUNCH_ITEMS = [
   { key: 'tmpl', label: '订阅消息模板与 config.js 四个模板 ID 及关键词一致', fix: '小程序后台 → 订阅消息 → 我的模板：主家新礼金 NOTIFY_TMPL_ID（thing1/thing4/amount7/time9/thing3）；宾客入簿 GUEST_NOTIFY_TMPL_ID（thing6/amount3/time1/thing8/thing5）；宾客未收到 GUEST_REJECT_TMPL_ID（thing4/time1/amount2/thing3）；亲友办事提醒 REMIND_TMPL_ID（thing2/thing10/time11/thing12/thing4）' },
   { key: 'alarm', label: '云开发告警、数据库自动回档已开启', fix: '云开发控制台 → 运维 / 数据库 → 备份与回档' },
   { key: 'storage', label: '云存储权限保持「所有用户可读，仅创建者可读写」', fix: '云开发控制台 → 存储 → 权限设置' },
-  { key: 'colperm', label: '19 个集合权限均为「所有用户不可读写」', fix: '云开发控制台 → 数据库 → 各集合 → 数据权限（本页「检测集合权限」可自动核对）' },
+  { key: 'colperm', label: '20 个集合权限均为「所有用户不可读写」', fix: '云开发控制台 → 数据库 → 各集合 → 数据权限（本页「检测集合权限」只能查出可读，查不出「仅创建者可读写」；guest_receipts 宾客随礼凭证必须设为所有用户不可读写）' },
   { key: 'e2e', label: '真机全链路：建礼簿 → 第二个微信扫码随礼 → 确认 → 回执 → 导出', fix: '用正式版或体验版走一遍' },
   { key: 'printer', label: '58mm、80mm 打印机各打印一张小票', fix: '我的 → 打印机' },
   { key: 'paycode', label: '收款码上传后用微信扫一扫能识别', fix: '主家信息页上传手机原图后，扫礼簿码进入随礼页扫码' },
@@ -904,7 +904,8 @@ function backfillOf(r) {
   return { sortAt: new Date(sort), ...(chg ? { chgAt: new Date(chg) } : {}) };
 }
 
-/** 分批补 sortAt / chgAt（每批 100 条、20 并发）；超过时间预算返回 done=false，再调用一次接着做 */
+/** 分批补 sortAt / chgAt（每批 100 条、BACKFILL_CONC 并发）；超过时间预算返回 done=false，再调用一次接着做 */
+const BACKFILL_CONC = 8; // v3.86.10 从 20 降到 8，减少对数据库 QPS 的冲击
 async function backfillSort(budgetMs) {
   const deadline = Date.now() + budgetMs;
   const col = db.collection('records');
@@ -912,8 +913,8 @@ async function backfillSort(budgetMs) {
   for (;;) {
     const rows = (await col.where({ sortAt: _.exists(false) }).limit(100).get()).data;
     if (!rows.length) return { done: true, updated };
-    for (let i = 0; i < rows.length; i += 20) {
-      await Promise.all(rows.slice(i, i + 20).map(r => col.where({ _id: r._id, sortAt: _.exists(false) }).update({ data: backfillOf(r) })));
+    for (let i = 0; i < rows.length; i += BACKFILL_CONC) {
+      await Promise.all(rows.slice(i, i + BACKFILL_CONC).map(r => col.where({ _id: r._id, sortAt: _.exists(false) }).update({ data: backfillOf(r) })));
     }
     updated += rows.length;
     if (Date.now() > deadline) return { done: false, updated };

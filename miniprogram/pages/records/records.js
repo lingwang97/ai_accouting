@@ -474,6 +474,8 @@ Page({
     if (pm.tag) items.push(['区分备注', () => this.onNameTag({ currentTarget: { dataset: { idx } } })]);
     const cur = this.data.list[idx];
     if (pm.void && cur && editlock.stateOf(cur) === 'open') items.push(['作废', () => this.onVoid({ currentTarget: { dataset: { idx } } })]); // 超过 72 小时不能直接作废，走「申请更正」
+    // 超过 72 小时：「申请更正」（改金额 / 改姓名 / 作废，随礼人同意后生效）放在「更多」里，占原来「作废」的位置（v3.86.10）
+    else if (pm.amend && cur && cur.status === REC.PAID && editlock.stateOf(cur) === 'locked' && cur.canCorrect && cur.corrState !== 'pending') items.push(['申请更正', () => this.onCorrect({ currentTarget: { dataset: { idx } } })]);
     // 小票二维码：重置 / 解除认领只有主家本人（服务端同样校验）
     const rec = this.data.list[idx];
     if (this.data.isOwner && rec && rec.status === REC.PAID) {
@@ -541,13 +543,32 @@ Page({
     });
   },
 
-  /** 修改已入簿礼金：打开弹层（姓名 / 金额 / 关系 / 备注） */
+  /**
+   * 修改已入簿礼金：打开弹层（姓名 / 金额 / 关系 / 备注）
+   * 超过 72 小时（v3.86.10）：金额、姓名只读（要改走「申请更正」），关系、备注仍可直接改
+   */
   onAmend(e) {
-    const r = this.data.list[e.currentTarget.dataset.idx];
+    const idx = e.currentTarget.dataset.idx;
+    const r = this.data.list[idx];
     if (!r || this.data.busy) return;
-    if (editlock.stateOf(r) === 'locked') return this.onCorrect(e); // 超过 72 小时：改为申请更正
+    const locked = editlock.stateOf(r) === 'locked';
     const relIdx = Math.max(0, this.data.amendRels.indexOf(r.relation || ''));
-    this.setData({ amend: { rid: r._id, name: r.payerName, amount: String(r.amount), relIdx, remark: r.remark || '', orig: r, hint: r.printed ? '小票已打印过，修改后不会自动重打，需要的话保存后点「补打」' : '' } });
+    const who = r.bookType === 'funeral' ? '致奠人' : '随礼人';
+    const lockTip = !locked ? '' : (r.canCorrect
+      ? (r.corrState === 'pending' ? `已超过 72 小时，金额、姓名不能直接改（更正申请正在等${who}确认）；关系、备注仍可修改` : `已超过 72 小时，金额、姓名不能直接改，可点下方「申请更正」；关系、备注仍可修改`)
+      : `已超过 72 小时，金额、姓名不能再改（这笔没有绑定${who}，无法申请更正）；关系、备注仍可修改`);
+    this.setData({ amend: {
+      rid: r._id, idx, name: r.payerName, amount: String(r.amount), amountStr: r.amountStr, relIdx, remark: r.remark || '', orig: r,
+      locked, lockTip, canCorrect: locked && !!r.canCorrect && r.corrState !== 'pending',
+      hint: r.printed && !locked ? '小票已打印过，修改后不会自动重打，需要的话保存后点「补打」' : ''
+    } });
+  },
+  /** 修改弹层里「申请更正」：关掉弹层，打开更正申请 */
+  onAmendToCorrect() {
+    const a = this.data.amend;
+    if (!a || this.data.busy) return;
+    this.setData({ amend: null });
+    this.onCorrect({ currentTarget: { dataset: { idx: a.idx } } });
   },
   onAmendInput(e) { this.setData({ [`amend.${e.currentTarget.dataset.k}`]: e.detail.value }); },
   onAmendRel(e) { this.setData({ 'amend.relIdx': Number(e.detail.value) }); },
@@ -556,11 +577,12 @@ Page({
   async onAmendSave() {
     const a = this.data.amend;
     if (!a || this.data.busy) return;
-    const name = String(a.name || '').trim();
-    const amount = Number(String(a.amount || '').replace(/[,，\s]/g, ''));
+    const o = a.orig;
+    // 超过 72 小时：金额、姓名只读，按原值（不提交）
+    const name = a.locked ? o.payerName : String(a.name || '').trim();
+    const amount = a.locked ? Number(o.amount) : Number(String(a.amount || '').replace(/[,，\s]/g, ''));
     if (!name) return wx.showToast({ title: '请填写姓名', icon: 'none' });
     if (!(amount > 0)) return wx.showToast({ title: '请填写正确的金额', icon: 'none' });
-    const o = a.orig;
     const rel = a.relIdx > 0 ? this.data.amendRels[a.relIdx] : '';
     const fields = {};
     if (name !== o.payerName) fields.payerName = name;

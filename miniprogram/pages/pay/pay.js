@@ -57,7 +57,7 @@ Page({
     codeSaved: false,    // 宾客手机付款：收款码是否已存入相册
     receiptModel: null,  // 到账后的留存收据
     savingReceipt: false,
-    paidFirst: false,    // 「转账了吗？」选了「已转账，现在登记」（先转账后登记，v3.86.0）；扫码进入默认选中，链接进入默认不选
+    paidFirst: null,     // 「转账了吗？」：true 已转账，现在登记（先转账后登记，v3.86.0）/ false 还没转，先登记 / null 还没选（v3.86.10 起不预选，必须自己点一个）
     who: '随礼人',       // 白事称「致奠人」、动作称「登记」（v3.65.2，与礼簿码页「奠仪」一致）
     act: '随礼',
     amountFocus: false
@@ -81,9 +81,8 @@ Page({
     // 再扫码或从礼簿码页进入随礼页也会被误判为「不在现场」而展开收款码
     let last = '';
     try { last = wx.getStorageSync(NAME_KEY) || ''; } catch (e) { /* 忽略 */ }
-    // 进入方式（v3.86.0）：小程序码（scene）或首页扫码（via=scan）= 在现场扫台卡进来，默认「已转账，现在登记」；分享链接 / 记录里进入默认「还没转，先登记」
-    const byScan = !!options.scene || options.via === 'scan';
-    this.setData({ aid, onsite: true, paidFirst: byScan, payerName: typeof last === 'string' ? last : '' });
+    // 「转账了吗？」不预选（v3.86.10）：扫码、分享链接进入都一样，宾客必须自己点一个，避免没转账却默认按「已转账」提交
+    this.setData({ aid, onsite: true, paidFirst: null, payerName: typeof last === 'string' ? last : '' });
     this.loadAccount(aid).then(() => this.resumeOpen(aid));
   },
 
@@ -228,8 +227,12 @@ Page({
 
     // 转账+现金只填了一位：按这一位的方式提交，不算混合
     const pm = this.data.payMethod === 'mixed' && payload.items && payload.items.length === 1 ? payload.items[0].method : this.data.payMethod;
+    // 涉及转账时必须先选「已转账 / 还没转」（v3.86.10 不预选）；在第一个 await 之前拦下，不弹订阅
+    if (pm !== 'cash' && this.data.paidFirst !== true && this.data.paidFirst !== false) {
+      return wx.showModal({ title: '请先选择', content: '请先选择是否已转账：已扫收款码转过账的选「已转账，现在登记」，还没转的选「还没转，先登记」。', showCancel: false, confirmText: '知道了' });
+    }
     // 先转账后登记：只对微信转账 / 转账+现金有效，现金随礼不带
-    const pf = this.data.paidFirst && pm !== 'cash';
+    const pf = this.data.paidFirst === true && pm !== 'cash';
     // 登记时就订阅入簿通知（v3.86.0，原先微信转账要等点「我已完成转账」才问）：忘了点完成、由主家直接入簿的也能收到通知
     // 必须在第一个 await 之前；之后点「我已完成转账」不再重复问
     const subP = this.askGuestNotify();
@@ -499,7 +502,7 @@ Page({
   },
 
   onRetry() {
-    this.setData({ step: 'form', record: null, payCodeUrl: '', failReason: '', receiptModel: null, payMethod: 'wechat', paidFirst: false });
+    this.setData({ step: 'form', record: null, payCodeUrl: '', failReason: '', receiptModel: null, payMethod: 'wechat', paidFirst: null });
   },
 
   getTempUrl(fileID) {

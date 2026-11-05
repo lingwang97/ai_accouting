@@ -15,6 +15,7 @@
 const COL = 'guest_receipts';
 const KEEP = ['paid', 'void', 'rejected']; // 只留有结果的：已入簿 / 已作废 / 主家未收到（含申诉记录）
 const PAGE = 100;
+const CONC = 8; // 快照并发写入数
 
 function isMissing(e) {
   const code = String((e && (e.errCode !== undefined ? e.errCode : e.code)) || '');
@@ -79,11 +80,17 @@ async function snapshotRecords(db, owner, cond, deadline) {
     const rows = (await records.where({ ...cond, ownerOpenid: owner, status: _.in(KEEP) }).orderBy('_id', 'asc').skip(skip).limit(PAGE).get()).data;
     const mine = rows.filter(r => !r._openid && (r.payerOpenid || r.claimedOpenid));
     if (mine.length) {
-      const have = new Set((await col.where({ _id: _.in(mine.map(r => r._id)) }).field({ _id: true }).limit(PAGE).get()).data.map(x => x._id));
+      // 已有的凭证跳过；带 _openid 的是客户端伪造的占位文档（v3.86.10），不算已有，先删掉再写入真凭证
+      const exist = (await col.where({ _id: _.in(mine.map(r => r._id)) }).field({ _id: true, _openid: true }).limit(PAGE).get()).data;
+      const have = new Set(exist.filter(x => !x._openid).map(x => x._id));
+      const forged = new Set(exist.filter(x => x._openid).map(x => x._id));
       const todo = mine.filter(r => !have.has(r._id));
       const now = new Date();
-      for (let i = 0; i < todo.length; i += 20) { // 每组 20 个并发写
-        await Promise.all(todo.slice(i, i + 20).map(async r => col.doc(r._id).set({ data: docOf(r, await hostOf(r), now) })));
+      for (let i = 0; i < todo.length; i += CONC) { // 每组 CONC 个并发写（v3.86.10 从 20 降到 8，减少对数据库 QPS 的冲击）
+        await Promise.all(todo.slice(i, i + CONC).map(async r => {
+          if (forged.has(r._id)) await col.doc(r._id).remove();
+          return col.doc(r._id).set({ data: docOf(r, await hostOf(r), now) });
+        }));
       }
     }
     if (rows.length < PAGE) return true;
@@ -103,4 +110,4 @@ async function dropWhere(db, cond) {
   return total;
 }
 
-module.exports = { COL, KEEP, snapshotRecords, dropWhere, trailOf };
+module.exports = { COL, KEEP, CONC, snapshotRecords, dropWhere, trailOf };

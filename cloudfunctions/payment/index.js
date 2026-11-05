@@ -1013,7 +1013,7 @@ async function myReceipts(openid) {
       .orderBy('voidedAt', 'desc').limit(50).get(),
     records.where(_.and([{ status: REC.PAID, corrState: 'pending', corrAt: _.gte(new Date(now - CORR_MS)) }, mine]))
       .orderBy('corrAt', 'desc').limit(20).get(),
-    db.collection('guest_receipts').where({ guestOpenid: openid }).orderBy('snapshotAt', 'desc').limit(100).get().catch(() => ({ data: [] }))
+    db.collection('guest_receipts').where({ guestOpenid: openid, _openid: _.exists(false) }).orderBy('snapshotAt', 'desc').limit(100).get().catch(() => ({ data: [] })) // 带 _openid 的是客户端伪造的（v3.86.10）
   ]);
   // 批次合成一行（同一批的状态一致；取批次里宾客自己那条的时间线）
   const group = data => {
@@ -1178,10 +1178,10 @@ async function myReceiptsTab(openid, event) {
   return ok(body);
 }
 
-/** 主家删簿 / 注销后保留给我的凭证：已经能在实时记录里看到的（删除进行中、恢复后）不重复；批次合成一行；只读 */
+/** 主家删簿 / 注销后保留给我的凭证（只认云函数写入的，带 _openid 的伪造文档不显示，v3.86.10）：已经能在实时记录里看到的（删除进行中、恢复后）不重复；批次合成一行；只读 */
 async function giftVouchers(openid) {
   let snaps = [];
-  try { snaps = (await db.collection('guest_receipts').where({ guestOpenid: openid }).orderBy('snapshotAt', 'desc').limit(100).get()).data; } catch (e) { if (!isMissing(e)) throw e; }
+  try { snaps = (await db.collection('guest_receipts').where({ guestOpenid: openid, _openid: _.exists(false) }).orderBy('snapshotAt', 'desc').limit(100).get()).data; } catch (e) { if (!isMissing(e)) throw e; }
   if (!snaps.length) return [];
   const live = new Set();
   const ids = snaps.map(s => s._id);
@@ -1417,6 +1417,7 @@ async function unreject(ctx, rid) {
 }
 
 const AMEND_KEYS = ['amount', 'payerName', 'relation', 'remark'];
+// 72 小时锁（v3.85.0）只限制金额、姓名、作废；关系、备注不受锁（v3.86.10）
 const AMEND_LOG_MAX = 20;
 const normName = s => String(s || '').replace(/[\s　]/g, '');
 
@@ -1434,7 +1435,6 @@ async function amend(ctx, event) {
   if (!rec || rec.ownerOpenid !== ctx.ownerOpenid) return err('记录不存在');
   if (!canBook(ctx, rec.bookId)) return err('该礼金不在你负责的场次');
   if (rec.status !== REC.PAID) return err('只能修改已入簿的礼金');
-  if (editDeadline(rec) <= Date.now()) return err(lockMsg(rec, '修改'));
 
   const next = {};
   if (event.amount !== undefined && event.amount !== null && event.amount !== '') {
@@ -1459,6 +1459,9 @@ async function amend(ctx, event) {
     if (!same) changes[k] = [before, next[k]];
   });
   if (!Object.keys(changes).length) return ok({ rid, changed: false, record: shown(rec) });
+  // 72 小时锁只管宾客看得到的金额、姓名（v3.86.10）；关系 / 备注是主家自己的整理，超期仍可改（仍受权限、已入簿、负责场次、未归档限制）
+  const visible = !!(changes.amount || changes.payerName);
+  if (visible && editDeadline(rec) <= Date.now()) return err(lockMsg(rec, '修改金额或姓名'));
 
   if (rec.bookId) {
     let book = null;
@@ -1469,13 +1472,14 @@ async function amend(ctx, event) {
   const ver = Number(rec.amendN) || 0;
   const verCond = ver === 0 ? _.or([{ amendN: 0 }, { amendN: _.exists(false) }]) : { amendN: ver };
   const log = (Array.isArray(rec.amendLog) ? rec.amendLog : []).concat([{ at: new Date(), by: handlerName(ctx), changes }]).slice(-AMEND_LOG_MAX);
-  const data = { amendN: ver + 1, amendedAt: new Date(), amendLog: log };
+  // amendedAt 只在宾客看得到的修改时更新（宾客「已更正」标记看它）；只改关系 / 备注只记 amendLog 与版本号，不通知、不进「有变动」
+  const data = { amendN: ver + 1, amendLog: log, ...(visible ? { amendedAt: new Date() } : {}) };
   Object.keys(changes).forEach(k => { data[k] = next[k]; });
   if (changes.payerName && rec.payerOpenid && !rec.personKey) {
     data.personKey = `o:${rec.payerOpenid}:${normName(rec.payerName)}`;
   }
   // 宾客看得到的修改（金额 / 姓名）写进日志，并登记变更时间，warmer 10 分钟后合并通知（v3.85.0）；关系 / 备注只是主家自己的整理，不通知
-  if (changes.amount || changes.payerName) {
+  if (visible) {
     const gc = {};
     if (changes.amount) gc.amount = changes.amount;
     if (changes.payerName) gc.payerName = changes.payerName;
@@ -1483,7 +1487,7 @@ async function amend(ctx, event) {
     data.changeNotifyAt = new Date();
     data.chgAt = data.changeNotifyAt;
   }
-  const cut = editCut(Date.now());
+  const cut = visible ? editCut(Date.now()) : null; // 只改关系 / 备注不加 paidAt 条件
   const res = await records.where(_.and([{ _id: rid, ownerOpenid: ctx.ownerOpenid, status: REC.PAID }, verCond, ...(cut ? [{ paidAt: _.gt(cut) }] : [])])).update({ data });
   if (res.stats.updated !== 1) return err('这笔礼金刚被修改、状态已变或已超过 72 小时，请刷新后重试');
   // 金额变化：礼簿合计加减差额（与入簿 / 作废同一个累加函数）

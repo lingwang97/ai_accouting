@@ -29,7 +29,7 @@ function loadPay(createImpl, dataExtra) {
   };
   new Function('require', 'Page', 'wx', 'getApp', src)(sandboxRequire, o => { def = o; }, wxStub, () => ({ globalData: {} }));
   const page = Object.assign({}, def, {
-    data: { ...def.data, aid: 'a1', payerName: '张三', amount: '500', payMethod: 'wechat', ...(dataExtra || {}) },
+    data: { ...def.data, aid: 'a1', payerName: '张三', amount: '500', payMethod: 'wechat', paidFirst: false, ...(dataExtra || {}) }, // v3.86.10 起「转账了吗？」不预选，这里按已选「还没转」
     setData(o) { Object.assign(this.data, o); }
   });
   return { page, log };

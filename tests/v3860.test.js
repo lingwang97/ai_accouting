@@ -202,11 +202,38 @@ function loadPay(opts) {
 }
 const fill = (page, extra) => Object.assign(page.data, { payerName: '张三', amount: '500', account: { accountName: '李府' } }, extra || {});
 
-test('pay：进入方式决定默认选项——小程序码 scene / via=scan 默认「已转账」，链接 aid 默认「先登记」', async () => {
-  for (const [opt, want] of [[{ scene: 'acc1' }, true], [{ aid: 'acc1', via: 'scan' }, true], [{ aid: 'acc1' }, false]]) {
+test('pay（v3.86.10）：「转账了吗？」不预选——小程序码 scene / via=scan / 分享链接进入都是 null', async () => {
+  for (const opt of [{ scene: 'acc1' }, { aid: 'acc1', via: 'scan' }, { aid: 'acc1' }]) {
     const h = loadPay();
-    try { h.page.onLoad(opt); await h.tick(); assert.strictEqual(h.page.data.paidFirst, want, JSON.stringify(opt)); } finally { h.done(); }
+    try { h.page.onLoad(opt); await h.tick(); assert.strictEqual(h.page.data.paidFirst, null, JSON.stringify(opt)); } finally { h.done(); }
   }
+});
+
+test('pay（v3.86.10）：没选「已转账 / 还没转」提交 → 弹窗提示先选（按钮不超过 4 字），不登记、不弹订阅；现金不需要选', async () => {
+  let h = loadPay();
+  try {
+    fill(h.page);
+    assert.strictEqual(h.page.data.paidFirst, null);
+    await h.page.onConfirmTransfer();
+    assert.strictEqual(h.calls.create.length, 0, '没选不登记');
+    assert.strictEqual(h.calls.ask, 0, '没选不弹订阅');
+    assert.strictEqual(h.calls.modals.length, 1);
+    assert.ok(/是否已转账/.test(h.calls.modals[0].content));
+    assert.ok([...h.calls.modals[0].confirmText].length <= 4);
+  } finally { h.done(); }
+  h = loadPay();
+  try {
+    fill(h.page, { payMethod: 'cash' });
+    await h.page.onConfirmTransfer();
+    assert.strictEqual(h.calls.create.length, 1, '现金不受影响');
+  } finally { h.done(); }
+  // 重新登记（onRetry）回到未选
+  h = loadPay();
+  try { h.page.data.paidFirst = true; h.page.onRetry(); assert.strictEqual(h.page.data.paidFirst, null); } finally { h.done(); }
+  // wxml：按钮没选时置灰，两个选项都按 === 判断（null 时都不亮）
+  const w = fs.readFileSync(path.join(ROOT, 'miniprogram/pages/pay/pay.wxml'), 'utf8');
+  assert.ok(w.includes("paidFirst === null ? 'btn-dim' : ''"));
+  assert.ok(w.includes("paidFirst === true ? 'on' : ''") && w.includes("paidFirst === false ? 'on' : ''"));
 });
 
 test('pay：选「已转账，现在登记」提交 → 带 paidFirst:true，直接进入等待确认，不出现转账步骤；订阅只问一次', async () => {

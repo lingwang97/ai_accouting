@@ -10,7 +10,7 @@
   <block wx:elif="{{account}}">
     <!-- 步骤条 -->
     <!-- 先转账后登记（选了「已转账，现在登记」）：1 转账（已完成）→ 2 登记 → 3 入簿 -->
-    <view class="steps" wx:if="{{paidFirst && payMethod !== 'cash'}}">
+    <view class="steps" wx:if="{{paidFirst === true && payMethod !== 'cash'}}">
       <view class="st done">1 转账</view>
       <view class="st-line"></view>
       <view class="st {{step === 'form' ? 'on' : 'done'}}">2 登记</view>
@@ -38,17 +38,18 @@
       <view class="card ask-card" wx:if="{{payMethod !== 'cash'}}">
         <view class="ask-title">转账了吗？</view>
         <view class="ask-row">
-          <view class="ask-btn {{paidFirst ? 'on' : ''}}" data-v="1" bindtap="onPaidFirst">
+          <view class="ask-btn {{paidFirst === true ? 'on' : ''}}" data-v="1" bindtap="onPaidFirst">
             <view class="ask-main">已转账，现在登记</view>
             <view class="ask-sub">已扫收款码转过账</view>
           </view>
-          <view class="ask-btn {{!paidFirst ? 'on' : ''}}" data-v="0" bindtap="onPaidFirst">
+          <view class="ask-btn {{paidFirst === false ? 'on' : ''}}" data-v="0" bindtap="onPaidFirst">
             <view class="ask-main">还没转，先登记</view>
             <view class="ask-sub">登记后再扫码转账</view>
           </view>
         </view>
-        <view class="muted ask-tip" wx:if="{{paidFirst}}">请填写刚才转账的金额。提交后等主家核对到账，不用再回来点按钮</view>
-        <view class="muted ask-tip" wx:else>登记后按提示转账，转完回来点「我已完成转账」</view>
+        <view class="muted ask-tip" wx:if="{{paidFirst === true}}">请填写刚才转账的金额。提交后等主家核对到账，不用再回来点按钮</view>
+        <view class="muted ask-tip" wx:elif="{{paidFirst === false}}">登记后按提示转账，转完回来点「我已完成转账」</view>
+        <view class="ask-tip ask-need" wx:else>请先选择一项：已扫收款码转过账的选左边，还没转的选右边</view>
       </view>
       <view class="card batch-switch">
         <view>
@@ -59,7 +60,7 @@
       </view>
       <view class="card">
         <block wx:if="{{batchMode}}">
-          <view class="muted pf-hint" wx:if="{{paidFirst && payMethod !== 'cash'}}">请按刚才转账的金额填写，各人合计要和转账一致（现金部分另交礼台）</view>
+          <view class="muted pf-hint" wx:if="{{paidFirst === true && payMethod !== 'cash'}}">请按刚才转账的金额填写，各人合计要和转账一致（现金部分另交礼台）</view>
           <batch-list first-label="本人" quick="{{account.quickAmounts || []}}" mixed="{{payMethod === 'mixed'}}" bindchange="onBatchChange" />
         </block>
         <block wx:else>
@@ -75,7 +76,7 @@
           </view>
           <view class="field">
             <text class="label">{{isFuneral ? '奠仪' : '礼金'}} *</text>
-            <view class="muted pf-hint" wx:if="{{paidFirst && payMethod !== 'cash'}}">请填写刚才转账的金额</view>
+            <view class="muted pf-hint" wx:if="{{paidFirst === true && payMethod !== 'cash'}}">请填写刚才转账的金额</view>
             <view class="chips" wx:if="{{account.quickAmounts && account.quickAmounts.length}}">
               <view class="chip {{amount == item ? 'on' : ''}}" wx:for="{{account.quickAmounts}}" wx:key="*this" data-v="{{item}}" bindtap="onQuick">{{item}}</view>
             </view>
@@ -99,7 +100,8 @@
           <view class="muted" wx:if="{{payMethod === 'cash'}}">现金请当面交给主家或礼台，无需扫码转账</view>
         </view>
       </view>
-      <button class="btn-primary" loading="{{submitting}}" bindtap="onConfirmTransfer">{{payMethod === 'cash' ? '确认' + act + '（现金）' : (paidFirst ? '确认' + act + '（已转账）' : '确认' + act)}}</button>
+      <!-- 没选「已转账 / 还没转」时按钮置灰，点了弹窗提示先选（v3.86.10） -->
+      <button class="btn-primary {{payMethod !== 'cash' && paidFirst === null ? 'btn-dim' : ''}}" loading="{{submitting}}" bindtap="onConfirmTransfer">{{payMethod === 'cash' ? '确认' + act + '（现金）' : (paidFirst === true ? '确认' + act + '（已转账）' : '确认' + act)}}</button>
       <!-- 隐私说明入口（v3.84.2）：只说明用途并给出链接，不把提交当作对隐私说明的认可 -->
       <view class="pv-note">填写的姓名与{{isFuneral ? '奠仪' : '礼金'}}仅用于主家记账，详见<text class="pv-link" bindtap="goPrivacy">《隐私说明》</text></view>
     </block>

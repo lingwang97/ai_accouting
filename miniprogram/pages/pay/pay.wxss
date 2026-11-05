@@ -65,6 +65,9 @@
 .ask-main { font-size: 32rpx; font-weight: 700; line-height: 1.4; word-break: break-all; }
 .ask-sub { font-size: 24rpx; line-height: 1.4; margin-top: 4rpx; word-break: break-all; }
 .ask-tip { margin-top: 16rpx; font-size: 26rpx; line-height: 1.6; }
+/* 还没选「已转账 / 还没转」（v3.86.10 不预选）：提示用警示色，提交按钮置灰（仍可点，点了弹窗提示先选） */
+.ask-need { color: var(--warn); }
+.btn-dim { opacity: 0.5; }
 .pf-hint { color: var(--primary); font-size: 26rpx; line-height: 1.6; margin-bottom: 12rpx; }
 .pc-try { font-size: 24rpx; margin-top: 8rpx; }
 /* 转账步骤：「我已完成转账」固定底栏，页面底部留出位置（含安全区） */
